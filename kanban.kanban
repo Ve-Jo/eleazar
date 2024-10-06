@@ -1,0 +1,49 @@
+{
+  "lists": [
+    {
+      "id": "c85881a2-5098-44be-a62e-ff8cc32ef963",
+      "title": "TODO",
+      "cards": [
+        {
+          "id": "0b1fa632-1b70-4a47-b565-c72866676877",
+          "listId": "c85881a2-5098-44be-a62e-ff8cc32ef963",
+          "title": "Add music bass filters (which can be added by using equalizer)",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "ecfa25b8-c59b-4f50-b3b7-1bdf41b761e3",
+          "listId": "c85881a2-5098-44be-a62e-ff8cc32ef963",
+          "title": "Music queue sync with database, auto-reconnect on bot restart",
+          "description": "",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        },
+        {
+          "id": "2b14630a-0e8f-48db-86f0-5363d049e7bb",
+          "listId": "c85881a2-5098-44be-a62e-ff8cc32ef963",
+          "title": "Implement a ping command",
+          "description": "The ping command inside help folder as SlashSubCommandBuilder will show current bot ping, ping to lavalink server and bot stats (like total servers and total members from servers). Also, you need to implement bot_stats table in the economy.js file (in which table you should put server count every minute as an array with limit of 40 entries. Also, please count stats for each command total usage and subcommand available in the bot. Also, count users typings during the day and which one of those are bot slash command executions)",
+          "labels": [],
+          "checkboxes": [],
+          "comments": []
+        }
+      ]
+    },
+    {
+      "id": "9580dec2-3e45-4b4f-b948-7bf1ad99e803",
+      "title": "Fixes",
+      "cards": []
+    }
+  ],
+  "archive": {
+    "lists": [],
+    "cards": []
+  },
+  "settings": {
+    "labels": []
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "economy": {
+    "title": "Economy",
+    "balance": "Balance",
+    "balanceValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
+    "dailyBonus": "Daily Bonus",
+    "dailyBonusValue": "```\n💵 {{balance}} (+{{amount}})```",
+    "deposit": "Deposit",
+    "depositValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
+    "withdraw": "Withdraw",
+    "withdrawValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
+    "transfer": "Transfer",
+    "transferValue": "```diff\n- 💵 {{senderBalance}} ({{amount}})\n+ 💵 {{targetBalance}} ({{amount}})```",
+    "transferFooter": "Request made by {{user}}",
+    "userNotFound": "An error occurred while retrieving user data.\n\nThe user is likely not in the database.",
+    "insufficientFunds": "You don't have enough funds in your account.",
+    "invalidAmount": "The amount must be greater than 0.",
+    "dailyCooldown": "You've already claimed your daily bonus today!\n\nNext bonus will be available in:\n`{{time}}`",
+    "shop": {
+      "title": "Shop",
+      "price": "Price",
+      "purchase": "Purchase",
+      "level": "level of",
+      "selectPlaceholder": "Select an upgrade",
+      "buyButton": "Buy",
+      "purchaseMessage": "You bought {{name}} for {{price}}"
+    },
+    "upgrades": {
+      "dailyBonus": {
+        "name": "Daily Bonus",
+        "shortDescription": "Increase daily bonus",
+        "description": "Daily bonus reward increased by {current_multiplier}%"
+      },
+      "crimeCooldown": {
+        "name": "Crime Cooldown",
+        "shortDescription": "Decrease crime cooldown",
+        "description": "Crime cooldown decreased by {current_multiplier} minutes"
+      }
+    },
+    "crimeCooldown": "You need to wait `{{time}}` before attempting another crime.",
+    "insufficientFundsForCrime": "You need at least 1/5 of the target's cash to attempt a crime.",
+    "crimeSuccess": "You successfully stole `{{amount}} 💵` from the target!",
+    "crimeFailure": "You failed the crime and lost `{{amount}} 💵` to the target.",
+    "currentTimestamps": "Current Timestamps",
+    "currentTimestampsValue": "-# `🕒` {{daily}}\n-# `🕒` {{crime}}"
+  },
+  "subcommandNotFound": "Subcommand not found.",
+  "images": {
+    "name": "images",
+    "description": "Choose an image type",
+    "sfw": {
+      "name": "sfw",
+      "description": "Choose a SFW image",
+      "image": "Choose an image"
+    },
+    "nsfw": {
+      "name": "nsfw",
+      "description": "Choose a NSFW image",
+      "image": "Choose an image"
+    }
+  },
+  "cannotSelectSelf": "You cannot select yourself as the target user.",
+  "cannotSelectBot": "You cannot select a bot as the target user.",
+  "imageNotFound": "Sorry, couldn't find a suitable image.",
+  "nsfwChannelOnly": "Sorry, this command is only available in NSFW channels.",
+  "music": {
+    "filterApplied": "Filter {{filter}} applied.\n\nPlease wait a few seconds for the application.",
+    "loopApplied": "Loop mode set to {{type}}.",
+    "notInVoiceChannel": "You must be in a voice channel to use this command!",
+    "noMusicPlaying": "No music is currently playing.",
+    "addedToQueue": "Added {{title}} to the queue.",
+    "addedPlaylist": "Added playlist {{name}} with {{count}} tracks to the queue.",
+    "musicStopped": "Music stopped.",
+    "skippedSong": "Current song skipped.",
+    "currentQueue": "Current queue:",
+    "currentPlaying": "Currently playing: {{title}}",
+    "nextInQueue": "Next:\n{{tracks}}",
+    "volumeSet": "Volume set to {{volume}}.",
+    "errorLoadingTrack": "Error loading track: {{message}}",
+    "noMatchesFound": "No matches found for this request.",
+    "skippingSongError": "An error occurred while skipping the song. Maybe there's no next song in the queue?",
+    "nowPlaying": "Now playing in {{channel}}",
+    "duration": "Duration",
+    "requestedBy": "Requested by",
+    "progress": "Progress",
+    "musicPlayerTitle": "Now playing",
+    "playerSettings": "Player settings",
+    "playerSettingsText": "`🔊 {{volume}}%` `🔄 {{loopType}}`",
+    "footerText": "Requested by {{author}}",
+    "info": "Information",
+    "queue": "Queue",
+    "tts": {
+      "voice": "Voice",
+      "voices": "Voices",
+      "voicesDescription": "Available voices: Jacob, Freddie, Russell, and Gerald.",
+      "ttsError": "An error occurred while processing the TTS request.",
+      "ttsSuccess": "TTS request processed successfully. Voice: {{voice}}, Text: {{text}}"
+    },
+    "skipApplied": "Current song skipped.",
+    "paused": "Music paused.",
+    "pauseResumed": "Music resumed.",
+    "autoplayDisabled": "Autoplay disabled.",
+    "autoplayToggled": "Autoplay {{enabled}}.",
+    "invalidTimeFormat": "Invalid time format. Please use m:ss or ss.",
+    "seekBeyondDuration": "Cannot seek beyond the track's duration.",
+    "seekedTo": "Seeked to {{time}}",
+    "addedPreviousToQueue": "Added previous song to the queue: {{title}}",
+    "autoplay": "Autoplay {{enabled}}",
+    "autoplayApplied": "Autoplay {{enabled}}",
+    "andMoreTracks": "and {{count}} more tracks"
+  },
+  "memer": {
+    "filters": {
+      "affect": "Affect",
+      "beautiful": "Beautiful",
+      "bobross": "Bob Ross",
+      "confusedstonk": "Confused Stonk",
+      "delete": "Delete",
+      "doge": "Doge",
+      "drake": "Drake",
+      "facepalm": "Facepalm",
+      "fail": "Fail",
+      "jail": "Jail",
+      "mms": "MMS",
+      "notstonk": "Not Stonk",
+      "poutine": "Poutine",
+      "rainbow": "Rainbow",
+      "rip": "RIP",
+      "shit": "Shit",
+      "stonk": "Stonk",
+      "tattoo": "Tattoo",
+      "trash": "Trash",
+      "wanted": "Wanted",
+      "wasted": "Wasted"
+    },
+    "invalidImage": "Please provide a valid image file.",
+    "errorApplyingFilter": "An error occurred while applying the meme filter. Please try again later."
+  },
+  "counting": {
+    "setup": {
+      "alreadySet": "Counting channel already set.",
+      "success": "Counting channel set to {{channel}}\n\nStart number: {{number}}\nPin every {{pinoneach}} messages\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}"
+    },
+    "remove": {
+      "success": "Counting channel removed.",
+      "notSet": "Counting channel not set."
+    },
+    "pinoneach": {
+      "success": "Counting channel will pin message on each {{number}} number."
+    },
+    "noSet": "Counting channel not set.",
+    "pinnedroleSet": "Pinned role set to {{role}}.",
+    "noSetPinoneach": "You must set a pinoneach first."
+  },
+  "settings": {
+    "noSettingsFound": "No settings found for this server",
+    "currentValue": "Current: {{currentValue}}{{newValue ? ` -> New: ${newValue}` : ''}}",
+    "invalidSettingName": "Invalid setting name",
+    "settingUpdated": "Setting {{name}} updated to {{value}}",
+    "subcommandNotFound": "Subcommand not found"
+  },
+  "no_perms": "You don't have permissions to use this command."
+}
