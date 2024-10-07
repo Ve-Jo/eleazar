@@ -1,5 +1,5 @@
 import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
-import ImageTemplate from "../../components/ImageTemplate.jsx";
+import Balance from "../../components/Balance.jsx";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
@@ -8,7 +8,7 @@ export default {
     .setDescription("This is a cool test!"),
   async execute(interaction) {
     let timeStart = performance.now();
-    const pngBuffer = await generateImage(ImageTemplate, {
+    const pngBuffer = await generateImage(Balance, {
       username: interaction.user.username,
     });
     let timeEnd = performance.now();

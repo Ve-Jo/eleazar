@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "@twemoji/api": "^15.1.0",
+    "axios": "^1.7.7",
     "chokidar": "^4.0.1",
+    "crypto": "^1.0.1",
     "discord.js": "^14.16.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
@@ -31,6 +35,7 @@
     "react": "^18.3.1",
     "riffy": "^1.0.7-rc.1",
     "satori": "^0.11.1",
+    "server": "react-dom/server",
     "sharp": "^0.33.5",
     "url": "^0.11.4"
   },

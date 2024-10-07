@@ -1,8 +1,14 @@
-import { SlashCommandSubcommandBuilder, EmbedBuilder } from "discord.js";
+import {
+  SlashCommandSubcommandBuilder,
+  EmbedBuilder,
+  AttachmentBuilder,
+} from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
 import prettyMilliseconds from "pretty-ms";
 import cooldownsManager from "../../utils/cooldownsManager.js";
+import Balance from "../../components/Balance.jsx";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -23,6 +29,8 @@ export default {
         .setRequired(false)
     ),
   async execute(interaction) {
+    /*await interaction.deferReply();*/
+
     const user = interaction.options.getMember("user") || interaction.user;
 
     const userData = await EconomyEZ.get(
@@ -30,29 +38,37 @@ export default {
     );
 
     if (!userData) {
-      return interaction.reply({
+      return interaction.editReply({
         content: i18n.__("economy.userNotFound"),
         ephemeral: true,
       });
     }
 
+    console.log(userData);
+    // Generate the balance image
+    const pngBuffer = await generateImage(
+      Balance,
+      {
+        interaction: interaction,
+        database: userData,
+      },
+      { width: 400, height: 200 }
+    );
+
+    const attachment = new AttachmentBuilder(pngBuffer, {
+      name: "balance.png",
+    });
+
     let balance_embed = new EmbedBuilder()
       .setTimestamp()
       .setColor(process.env.EMBED_COLOR)
-      .setThumbnail(user.avatarURL())
+      .setImage("attachment://balance.png")
       .setAuthor({
         name: i18n.__("economy.title"),
         iconURL: user.avatarURL(),
-      })
-      .setFields({
-        name: i18n.__("economy.balance"),
-        value: i18n.__("economy.balanceValue", {
-          balance: userData.balance,
-          bank: userData.bank,
-        }),
       });
 
-    let timestamps_list = ["crime", "daily", "work"];
+    /*let timestamps_list = ["crime", "daily", "work"];
     let timestamps_text = "```diff\n";
     for (const timestamp of timestamps_list) {
       if (timestamp === "work") {
@@ -78,8 +94,11 @@ export default {
     balance_embed.addFields({
       name: i18n.__("economy.currentTimestamps"),
       value: timestamps_text,
-    });
+    });*/
 
-    await interaction.editReply({ embeds: [balance_embed] });
+    await interaction.editReply({
+      embeds: [balance_embed],
+      files: [attachment],
+    });
   },
 };
