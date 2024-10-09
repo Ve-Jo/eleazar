@@ -1,6 +1,12 @@
-import { SlashCommandSubcommandBuilder, EmbedBuilder } from "discord.js";
+import {
+  SlashCommandSubcommandBuilder,
+  EmbedBuilder,
+  AttachmentBuilder,
+} from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
+import Transfer from "../../components/Transfer.jsx";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -49,35 +55,44 @@ export default {
       });
     }
 
+    const updatedUser = {
+      bank: initialUser.bank - amountInt,
+      balance: initialUser.balance + amountInt,
+    };
+
     await EconomyEZ.set(
-      `economy.${interaction.guild.id}.${interaction.user.id}.bank`,
-      {
-        bank: initialUser.bank - amountInt,
-        balance: initialUser.balance + amountInt,
-      }
+      `economy.${interaction.guild.id}.${interaction.user.id}`,
+      updatedUser
     );
 
-    const updatedUser = await EconomyEZ.get(
-      `economy.${interaction.guild.id}.${interaction.user.id}`
+    // Generate the transfer image
+    const pngBuffer = await generateImage(
+      Transfer,
+      {
+        interaction: interaction,
+        database: updatedUser,
+        amount: amountInt,
+        isDeposit: false,
+      },
+      { width: 450, height: 200 }
     );
+
+    const attachment = new AttachmentBuilder(pngBuffer, {
+      name: "withdraw.png",
+    });
 
     let withdraw_embed = new EmbedBuilder()
       .setColor(process.env.EMBED_COLOR)
       .setTimestamp()
-      .setThumbnail(interaction.user.avatarURL())
+      .setImage("attachment://withdraw.png")
       .setAuthor({
         name: i18n.__("economy.title"),
         iconURL: interaction.user.avatarURL(),
-      })
-      .setFields({
-        name: i18n.__("economy.withdraw"),
-        value: i18n.__("economy.withdrawValue", {
-          amount: amountInt,
-          balance: updatedUser.balance,
-          bank: updatedUser.bank,
-        }),
-        inline: true,
       });
-    await interaction.editReply({ embeds: [withdraw_embed] });
+
+    await interaction.editReply({
+      embeds: [withdraw_embed],
+      files: [attachment],
+    });
   },
 };

@@ -1,6 +1,12 @@
-import { SlashCommandSubcommandBuilder, EmbedBuilder } from "discord.js";
+import {
+  SlashCommandSubcommandBuilder,
+  EmbedBuilder,
+  AttachmentBuilder,
+} from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
+import Transfer from "../../components/Transfer.jsx";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -42,41 +48,51 @@ export default {
       });
     }
 
-    if (initialUser.balance < amount) {
+    if (initialUser.balance < amountInt) {
       return interaction.editReply({
         content: i18n.__("economy.insufficientFunds"),
         ephemeral: true,
       });
     }
 
+    const updatedUser = {
+      balance: initialUser.balance - amountInt,
+      bank: initialUser.bank + amountInt,
+    };
+
     await EconomyEZ.set(
-      `economy.${interaction.guild.id}.${interaction.user.id}.balance`,
-      {
-        balance: initialUser.balance - amountInt,
-        bank: initialUser.bank + amountInt,
-      }
+      `economy.${interaction.guild.id}.${interaction.user.id}`,
+      updatedUser
     );
 
-    const updatedUser = await EconomyEZ.get(
-      `economy.${interaction.guild.id}.${interaction.user.id}`
+    // Generate the transfer image
+    const pngBuffer = await generateImage(
+      Transfer,
+      {
+        interaction: interaction,
+        database: updatedUser,
+        amount: amountInt,
+        isDeposit: true,
+      },
+      { width: 450, height: 200 }
     );
+
+    const attachment = new AttachmentBuilder(pngBuffer, {
+      name: "deposit.png",
+    });
 
     let deposit_embed = new EmbedBuilder()
       .setColor(process.env.EMBED_COLOR)
       .setTimestamp()
-      .setThumbnail(interaction.user.avatarURL())
+      .setImage("attachment://deposit.png")
       .setAuthor({
         name: i18n.__("economy.title"),
         iconURL: interaction.user.avatarURL(),
-      })
-      .setFields({
-        name: i18n.__("economy.deposit"),
-        value: i18n.__("economy.depositValue", {
-          amount: amountInt,
-          balance: updatedUser.balance,
-          bank: updatedUser.bank,
-        }),
       });
-    await interaction.editReply({ embeds: [deposit_embed] });
+
+    await interaction.editReply({
+      embeds: [deposit_embed],
+      files: [attachment],
+    });
   },
 };
