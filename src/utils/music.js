@@ -11,17 +11,45 @@ const __dirname = path.dirname(__filename);
 async function init(client) {
   client.lavalink = new LavalinkManager({
     nodes: [
-      /*{
-        id: "testnode",
-        host: "52.91.78.88",
-        port: 2333,
-        authorization: "123",
-        secure: false,
-      },*/
       {
-        id: "patient-contentment",
-        host: "junction.proxy.rlwy.net",
-        port: 46450,
+        id: "lewdhutao",
+        host: "node.lewdhutao.my.eu.org",
+        port: 80,
+        authorization: "youshallnotpass",
+        secure: false,
+      },
+      {
+        id: "fypmoon",
+        host: "nodev4.fypmoon.org",
+        port: 1118,
+        authorization: "fypmoon.org",
+        secure: false,
+      },
+      {
+        id: "clxud",
+        host: "lavalink.clxud.dev",
+        port: 2333,
+        authorization: "youshallnotpass",
+        secure: false,
+      },
+      {
+        id: "serenetia-1",
+        host: "lavalinkv4-id.serenetia.com",
+        port: 80,
+        authorization: "BatuManaBisa",
+        secure: false,
+      },
+      {
+        id: "serenetia-2",
+        host: "lavalinkv4-eu.serenetia.com",
+        port: 80,
+        authorization: "BatuManaBisa",
+        secure: false,
+      },
+      {
+        id: "jxshua",
+        host: "nyc01.jxshua.dev",
+        port: 4000,
         authorization: "youshallnotpass",
         secure: false,
       },
