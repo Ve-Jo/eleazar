@@ -27,7 +27,7 @@ app.get("/:componentName", async (req, res) => {
       `file://${componentPath}?update=${Date.now()}`
     );
 
-    const pngBuffer = await generateImage(Component, { debug: true });
+    const pngBuffer = await generateImage(Component, {}, { debug: false });
 
     res.writeHead(200, {
       "Content-Type": "image/png",

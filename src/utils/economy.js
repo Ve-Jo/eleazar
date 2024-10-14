@@ -135,7 +135,7 @@ class EconomyEZ {
       },
     ];
 
-    const connection = await pool.getConnection();
+    /*const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
@@ -230,7 +230,7 @@ class EconomyEZ {
       console.error("Error initializing tables:", error);
     } finally {
       connection.release();
-    }
+    }*/
   }
 
   static async testDatabaseConnection() {

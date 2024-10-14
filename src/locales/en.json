@@ -37,12 +37,18 @@
         "description": "Crime cooldown decreased by {current_multiplier} minutes"
       }
     },
+
     "crimeCooldown": "You need to wait `{{time}}` before attempting another crime.",
     "insufficientFundsForCrime": "You need at least 1/5 of the target's cash to attempt a crime.",
     "crimeSuccess": "You successfully stole `{{amount}} 💵` from the target!",
     "crimeFailure": "You failed the crime and lost `{{amount}} 💵` to the target.",
     "currentTimestamps": "Current Timestamps",
-    "currentTimestampsValue": "-# `🕒` {{daily}}\n-# `🕒` {{crime}}"
+    "currentTimestampsValue": "-# `🕒` {{daily}}\n-# `🕒` {{crime}}",
+    "selectCrimeTarget": "Which user do you want to attempt a crime against?",
+    "crimeTargetPlaceholder": "Select a user to crime",
+    "noValidTargets": "There are no valid targets for your crime attempt.",
+    "noSelectionMade": "No selection was made. The crime attempt has been cancelled.",
+    "unknownUser": "Unknown User"
   },
   "subcommandNotFound": "Subcommand not found.",
   "images": {

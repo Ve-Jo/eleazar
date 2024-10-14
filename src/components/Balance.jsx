@@ -2,8 +2,6 @@ const Balance = ({ interaction, database }) => {
   const user =
     interaction?.options.getMember("user") || interaction?.user || false;
 
-  console.log(JSON.stringify(user, null, 2));
-
   return (
     <div
       style={{
@@ -27,19 +25,32 @@ const Balance = ({ interaction, database }) => {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <h2 style={{ margin: "0", fontSize: "24px" }}>Balance</h2>
+          <div style={{ display: "flex", flexDirection: "row" }}>
+            <img
+              src={
+                interaction?.guild?.iconURL({
+                  extension: "png",
+                  size: 2048,
+                }) || "https://cdn.discordapp.com/embed/avatars/0.png"
+              }
+              alt="Guild Icon"
+              width={24}
+              height={24}
+              style={{ borderRadius: "5px", marginRight: "10px" }}
+            />
+            <h2 style={{ margin: "0", fontSize: "24px" }}>Balance!</h2>
+          </div>
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "10px",
               marginTop: "10px",
             }}
           >
             <div
               style={{
                 backgroundColor: "rgba(255, 255, 255, 0.2)",
-                borderRadius: "10px",
+                borderRadius: "10px 10px 0 0",
                 padding: "5px 10px",
                 display: "flex",
                 alignItems: "center",
@@ -53,7 +64,7 @@ const Balance = ({ interaction, database }) => {
             <div
               style={{
                 backgroundColor: "rgba(255, 255, 255, 0.2)",
-                borderRadius: "10px",
+                borderRadius: "0 0 10px 10px",
                 padding: "5px 10px",
                 display: "flex",
                 alignItems: "center",
@@ -81,7 +92,7 @@ const Balance = ({ interaction, database }) => {
           <img
             src={
               user
-                ? user?.displayAvatarURL({ extension: "png" })
+                ? user?.displayAvatarURL({ extension: "png", size: 2048 }) // Added size: 2048
                 : "https://cdn.discordapp.com/embed/avatars/0.png"
             }
             alt="User"
@@ -96,6 +107,8 @@ const Balance = ({ interaction, database }) => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-end",
+          marginTop: "8px",
+          width: "100%",
         }}
       >
         <span style={{ fontSize: "14px", opacity: "0.2" }}>

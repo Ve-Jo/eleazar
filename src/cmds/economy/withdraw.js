@@ -74,7 +74,7 @@ export default {
         amount: amountInt,
         isDeposit: false,
       },
-      { width: 450, height: 200 }
+      { width: 400, height: 200 }
     );
 
     const attachment = new AttachmentBuilder(pngBuffer, {

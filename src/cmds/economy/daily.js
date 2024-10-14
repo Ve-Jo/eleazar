@@ -1,8 +1,11 @@
-import { SlashCommandSubcommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import prettyMs from "pretty-ms";
 import i18n from "../../utils/i18n.js";
 import cooldownsManager from "../../utils/cooldownsManager.js";
+import Cooldown from "../../components/Cooldown.jsx";
+import Daily from "../../components/Daily.jsx";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -24,11 +27,26 @@ export default {
     );
 
     if (timeLeft > 0) {
+      const pngBuffer = await generateImage(
+        Cooldown,
+        {
+          interaction,
+          user: interaction.user,
+          nextDaily: timeLeft,
+          emoji: "🎁",
+        },
+        { width: 450, height: 200 }
+      );
+
+      const attachment = new AttachmentBuilder(pngBuffer, {
+        name: "daily_cooldown.png",
+      });
+
       return interaction.editReply({
+        files: [attachment],
         content: i18n.__("economy.dailyCooldown", {
           time: prettyMs(timeLeft, { verbose: true }),
         }),
-        ephemeral: true,
       });
     }
 
@@ -54,36 +72,25 @@ export default {
         Date.now()
       );
 
-      timeLeft = await cooldownsManager.getCooldownTime(
-        interaction.guild.id,
-        interaction.user.id,
-        "daily"
+      const pngBuffer = await generateImage(
+        Daily,
+        {
+          interaction,
+          user: interaction.user,
+          balance: newBalance,
+          amount,
+        },
+        { width: 450, height: 200 }
       );
 
-      let daily_embed = new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTimestamp()
-        .setThumbnail(interaction.user.avatarURL())
-        .setAuthor({
-          name: i18n.__("economy.title"),
-          iconURL: interaction.user.avatarURL(),
-        })
-        .setFields(
-          {
-            name: i18n.__("economy.dailyBonus"),
-            value: i18n.__("economy.dailyBonusValue", {
-              balance: newBalance,
-              amount: amount,
-            }),
-          },
-          {
-            name: i18n.__("economy.nextDaily"),
-            value: i18n.__("economy.nextDailyValue", {
-              time: prettyMs(timeLeft, { verbose: true }), // 24 hours in milliseconds
-            }),
-          }
-        );
-      await interaction.editReply({ embeds: [daily_embed] });
+      const attachment = new AttachmentBuilder(pngBuffer, {
+        name: "daily_claimed.png",
+      });
+
+      await interaction.editReply({
+        files: [attachment],
+        content: i18n.__("economy.dailyBonusClaimed", { amount }),
+      });
     } catch (error) {
       console.error("Error updating balance:", error);
       await interaction.editReply({

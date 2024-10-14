@@ -19,12 +19,19 @@ async function init(client) {
         secure: false,
       },*/
       {
+        id: "patient-contentment",
+        host: "junction.proxy.rlwy.net",
+        port: 46450,
+        authorization: "youshallnotpass",
+        secure: false,
+      },
+      /*{
         id: "local",
         host: "0.0.0.0",
         port: 2333,
         authorization: "123",
         secure: false,
-      },
+      },*/
     ],
     sendToShard: (guildId, payload) =>
       client.guilds.cache.get(guildId)?.shard?.send(payload),
