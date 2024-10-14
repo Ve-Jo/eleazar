@@ -34,7 +34,7 @@ async function init(client) {
     },
     autoSkip: true,
     playerOptions: {
-      clientBasedPositionUpdateInterval: 150,
+      clientBasedPositionUpdateInterval: 1000,
       defaultSearchPlatform: "ytmsearch",
       volumeDecrementer: 0.75,
       minAutoPlayMs: 10_000,
