@@ -12,44 +12,9 @@ async function init(client) {
   client.lavalink = new LavalinkManager({
     nodes: [
       {
-        id: "lewdhutao",
-        host: "node.lewdhutao.my.eu.org",
-        port: 80,
-        authorization: "youshallnotpass",
-        secure: false,
-      },
-      {
-        id: "fypmoon",
-        host: "nodev4.fypmoon.org",
-        port: 1118,
-        authorization: "fypmoon.org",
-        secure: false,
-      },
-      {
-        id: "clxud",
-        host: "lavalink.clxud.dev",
-        port: 2333,
-        authorization: "youshallnotpass",
-        secure: false,
-      },
-      {
-        id: "serenetia-1",
-        host: "lavalinkv4-id.serenetia.com",
-        port: 80,
-        authorization: "BatuManaBisa",
-        secure: false,
-      },
-      {
-        id: "serenetia-2",
-        host: "lavalinkv4-eu.serenetia.com",
-        port: 80,
-        authorization: "BatuManaBisa",
-        secure: false,
-      },
-      {
-        id: "jxshua",
-        host: "nyc01.jxshua.dev",
-        port: 4000,
+        id: "jirayu",
+        host: "lavalink.jirayu.net",
+        port: 13592,
         authorization: "youshallnotpass",
         secure: false,
       },
