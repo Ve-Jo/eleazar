@@ -2,40 +2,28 @@ import mysql from "mysql2/promise";
 import { escape } from "mysql2";
 
 let validTables = [];
-let pool;
 
-function createPool() {
-  return mysql.createPool({
-    uri: process.env.MYSQL_DATABASE,
-    connectionLimit: 10,
-    waitForConnections: true,
-    queueLimit: 0,
-    namedPlaceholders: true,
-    multipleStatements: true,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0,
-  });
-}
-
-async function getConnection() {
-  if (!pool) {
-    pool = createPool();
-  }
-
-  try {
-    const connection = await pool.getConnection();
-    return connection;
-  } catch (error) {
-    if (error.code === "PROTOCOL_CONNECTION_LOST") {
-      console.log("Database connection was closed. Attempting to reconnect...");
-      pool = createPool();
-      return getConnection();
-    }
-    throw error;
-  }
+async function createConnection() {
+  return await mysql.createConnection(process.env.MYSQL_DATABASE);
 }
 
 class EconomyEZ {
+  static async executeQuery(query, params = []) {
+    let connection;
+    try {
+      connection = await createConnection();
+      const [results] = await connection.execute(query, params);
+      return results;
+    } catch (error) {
+      console.error("Error executing query:", error);
+      throw error;
+    } finally {
+      if (connection) {
+        await connection.end();
+      }
+    }
+  }
+
   static async initializeTables() {
     const tables = [
       {
@@ -265,8 +253,8 @@ class EconomyEZ {
 
   static async enableWALMode() {
     try {
-      await pool.execute("SET GLOBAL innodb_flush_log_at_trx_commit = 2");
-      await pool.execute("SET GLOBAL innodb_flush_method = O_DIRECT");
+      await this.executeQuery("SET GLOBAL innodb_flush_log_at_trx_commit = 2");
+      await this.executeQuery("SET GLOBAL innodb_flush_method = O_DIRECT");
       console.log("WAL mode enabled successfully");
     } catch (error) {
       console.error("Failed to enable WAL mode:", error);
@@ -539,7 +527,7 @@ class EconomyEZ {
 
   // Add this new method for batch operations
   static async batchOperation(operations) {
-    const connection = await getConnection();
+    const connection = await createConnection();
     try {
       await connection.beginTransaction();
 
@@ -578,23 +566,7 @@ class EconomyEZ {
       await connection.rollback();
       throw error;
     } finally {
-      connection.release();
-    }
-  }
-
-  static async executeQuery(query, params = []) {
-    let connection;
-    try {
-      connection = await getConnection();
-      const [results] = await connection.execute(query, params);
-      return results;
-    } catch (error) {
-      console.error("Error executing query:", error);
-      throw error;
-    } finally {
-      if (connection) {
-        connection.release();
-      }
+      await connection.end();
     }
   }
 }
@@ -607,4 +579,4 @@ async function initializeDatabase() {
 }
 
 export default EconomyEZ;
-export { getConnection, initializeDatabase };
+export { createConnection, initializeDatabase };

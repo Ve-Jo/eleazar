@@ -16,12 +16,20 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
   ],
   presence: { status: "online" },
-  messageCacheMaxSize: 50,
+  messageCacheMaxSize: 10, // Reduced from 50
   makeCache: Options.cacheWithLimits({
     MessageManager: {
-      maxSize: 50,
-      filter: (message) => message.author.id === client.user.id,
+      maxSize: 10, // Reduced from 50
       sweepInterval: 300,
+      sweepFilter: (message) =>
+        Date.now() - message.createdTimestamp > 60 * 1000, // Only keep messages older than a minute
+    },
+    // Optionally reduce other caches
+    PresenceManager: {
+      maxSize: 50,
+    },
+    VoiceStateManager: {
+      maxSize: 50,
     },
   }),
 });
@@ -38,11 +46,12 @@ await client.login(process.env.DISCORD_TOKEN);
 
 /*startResourceMonitor(5000);*/
 
+// Clear caches regularly to free up memory
 function clearCaches() {
-  client.users.cache.clear();
+  client.users.cache.sweep(() => true);
   client.guilds.cache.forEach((guild) => {
-    guild.roles.cache.clear();
-    guild.channels.cache.clear();
+    guild.roles.cache.sweep(() => true);
+    guild.channels.cache.sweep(() => true);
   });
   console.log("Caches cleared");
 }
