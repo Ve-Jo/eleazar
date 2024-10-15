@@ -4,9 +4,12 @@ FROM oven/bun:latest AS builder
 # Set the working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json bun.lockb* ./
-RUN bun install --production
+# Copy package files
+COPY package.json ./
+COPY bun.lockb ./
+
+# Install dependencies without using a frozen lockfile
+RUN bun install --no-frozen-lockfile
 
 # Copy the rest of the application code
 COPY . .
