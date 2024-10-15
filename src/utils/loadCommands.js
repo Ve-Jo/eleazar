@@ -17,7 +17,7 @@ export async function loadCommands(client) {
         try {
           const command = await import(commandFile);
           if ("data" in command.default && "execute" in command.default) {
-            client.commands.push(command.default);
+            client.commands.set(command.default.data.name, command.default);
             console.log("Loaded command:", command.default.data.name);
           } else {
             console.log(
@@ -35,7 +35,7 @@ export async function loadCommands(client) {
       try {
         const command = await import(filePath);
         if ("data" in command.default && "execute" in command.default) {
-          client.commands.push(command.default);
+          client.commands.set(command.default.data.name, command.default);
           console.log("Loaded command:", command.default.data.name);
         } else {
           console.log(

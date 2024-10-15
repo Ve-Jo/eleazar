@@ -9,7 +9,9 @@ export async function SlashCommandsHandler(client, commands) {
       Routes.applicationCommands(client.user.id)
     );
 
-    const newCommandNames = new Set(commands.map((cmd) => cmd.data.name));
+    const newCommandNames = new Set(
+      Array.from(commands.values()).map((cmd) => cmd.data.name)
+    );
     const commandsToDelete = existingCommands.filter(
       (cmd) => !newCommandNames.has(cmd.name)
     );
@@ -19,9 +21,11 @@ export async function SlashCommandsHandler(client, commands) {
       console.log(`Deleted old command: ${cmd.name}`);
     }
 
+    const commandArray = Array.from(commands.values());
+
     //check if there's no identical command option names and send a warning
-    const commandOptionNames = commands.map((cmd) =>
-      cmd.data.options.map((option) => option.name)
+    const commandOptionNames = commandArray.map(
+      (cmd) => cmd.data.options?.map((option) => option.name) || []
     );
     const uniqueCommandOptionNames = new Set(
       commandOptionNames.flat().filter((name) => name !== null)
@@ -47,14 +51,7 @@ export async function SlashCommandsHandler(client, commands) {
       );
     }
 
-    /*await rest.put(Routes.applicationCommands(client.user.id), {
-      body: commands.map((command) => command.data.toJSON()),
-    });*/
-
-    //if any of the commands hase command.server = true, then send as Router.GuildApplicationCommands
-    console.log("HERE");
-
-    const guildCommands = commands.filter((command) => command.server);
+    const guildCommands = commandArray.filter((command) => command.server);
     if (guildCommands.length > 0) {
       await rest.put(
         Routes.applicationGuildCommands(
@@ -67,8 +64,7 @@ export async function SlashCommandsHandler(client, commands) {
       );
     }
 
-    //filter out the guildCommands from the commands
-    const globalCommands = commands.filter((command) => !command.server);
+    const globalCommands = commandArray.filter((command) => !command.server);
     if (globalCommands.length > 0) {
       await rest.put(Routes.applicationCommands(client.user.id), {
         body: globalCommands.map((command) => command.data.toJSON()),
@@ -77,7 +73,7 @@ export async function SlashCommandsHandler(client, commands) {
 
     console.log(
       `Successfully reloaded application (/) commands. ` +
-        `Added/Updated: ${commands.length}, Deleted: ${commandsToDelete.length}`
+        `Added/Updated: ${commandArray.length}, Deleted: ${commandsToDelete.length}`
     );
   } catch (error) {
     console.error(error);

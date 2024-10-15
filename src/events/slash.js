@@ -12,9 +12,7 @@ export default {
 
     if (!interaction.isChatInputCommand()) return;
 
-    const command = interaction.client.commands.find(
-      (command) => command.data.name === interaction.commandName
-    );
+    const command = interaction.client.commands.get(interaction.commandName);
 
     if (!command) return;
 
@@ -33,7 +31,14 @@ export default {
       await command.execute(interaction);
     } catch (error) {
       console.error(error);
-      await interaction.reply({ content: error.message, ephemeral: true });
+      try {
+        await interaction.reply({ content: error.message, ephemeral: true });
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true,
+        });
+      }
     }
   },
 };
