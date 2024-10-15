@@ -1,19 +1,39 @@
 import mysql from "mysql2/promise";
-import NodeCache from "node-cache";
 import { escape } from "mysql2";
 
-const pool = mysql.createPool({
-  uri: process.env.MYSQL_DATABASE,
-  connectionLimit: 10,
-  waitForConnections: true,
-  queueLimit: 0,
-  namedPlaceholders: true,
-  multipleStatements: true,
-});
-
-const cache = new NodeCache({ stdTTL: 300, checkperiod: 600 });
-
 let validTables = [];
+let pool;
+
+function createPool() {
+  return mysql.createPool({
+    uri: process.env.MYSQL_DATABASE,
+    connectionLimit: 10,
+    waitForConnections: true,
+    queueLimit: 0,
+    namedPlaceholders: true,
+    multipleStatements: true,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  });
+}
+
+async function getConnection() {
+  if (!pool) {
+    pool = createPool();
+  }
+
+  try {
+    const connection = await pool.getConnection();
+    return connection;
+  } catch (error) {
+    if (error.code === "PROTOCOL_CONNECTION_LOST") {
+      console.log("Database connection was closed. Attempting to reconnect...");
+      pool = createPool();
+      return getConnection();
+    }
+    throw error;
+  }
+}
 
 class EconomyEZ {
   static async initializeTables() {
@@ -234,10 +254,12 @@ class EconomyEZ {
   }
 
   static async testDatabaseConnection() {
-    if (pool) {
+    try {
+      await this.executeQuery("SELECT 1");
       await initializeDatabase();
-    } else {
-      console.log("Failed to connect to the database");
+      console.log("Successfully connected to the database");
+    } catch (error) {
+      console.error("Failed to connect to the database:", error);
     }
   }
 
@@ -269,7 +291,7 @@ class EconomyEZ {
 
     if (!userId) {
       // Get all guild data
-      const [result] = await pool.execute(
+      const result = await this.executeQuery(
         `SELECT * FROM ${table} WHERE guild_id = ?`,
         [guildId]
       );
@@ -278,21 +300,15 @@ class EconomyEZ {
 
     await this.ensure(path);
 
-    const cacheKey = `${table}:${guildId}:${userId}`;
-    let userData = cache.get(cacheKey);
-
-    if (!userData) {
-      const [result] = await pool.execute(
-        `SELECT * FROM ${table} WHERE guild_id = ? AND user_id = ?`,
-        [guildId, userId]
-      );
-      userData = result[0] || {}; // Return an empty object if no data found
-      cache.set(cacheKey, userData);
-    }
+    const result = await this.executeQuery(
+      `SELECT * FROM ${table} WHERE guild_id = ? AND user_id = ?`,
+      [guildId, userId]
+    );
+    const userData = result[0] || {}; // Return an empty object if no data found
 
     // If upgradeId is provided, get the specific upgrade level
     if (upgradeId && table === "shop") {
-      const [upgradeResult] = await pool.execute(
+      const upgradeResult = await this.executeQuery(
         `SELECT upgrade_level FROM ${table} WHERE guild_id = ? AND user_id = ? AND upgrade_id = ?`,
         [guildId, userId, upgradeId]
       );
@@ -323,31 +339,28 @@ class EconomyEZ {
           .map((key) => `${key} = ?`)
           .join(", ");
         const values = Object.values(value);
-        await pool.execute(
+        await this.executeQuery(
           `UPDATE ${table} SET ${setClause} WHERE guild_id = ?`,
           [...values, guildId]
         );
       } else {
-        await pool.execute(
+        await this.executeQuery(
           `UPDATE ${table} SET ${field} = ? WHERE guild_id = ?`,
           [value, guildId]
         );
       }
-      cache.del(`${table}:${guildId}`);
       return;
     }
 
     if (typeof value === "object" && value !== null) {
       await this.updateMultipleFields(table, guildId, userId, value);
     } else {
-      await pool.execute(
+      await this.executeQuery(
         `INSERT INTO ${table} (guild_id, user_id, ${field}) VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE ${field} = VALUES(${field})`,
         [guildId, userId, value]
       );
     }
-
-    cache.del(`${table}:${guildId}:${userId}`);
   }
 
   static async updateMultipleFields(table, guildId, userId, updates) {
@@ -358,7 +371,7 @@ class EconomyEZ {
       .map((field) => `${field} = VALUES(${field})`)
       .join(", ");
 
-    await pool.execute(
+    await this.executeQuery(
       `INSERT INTO ${table} (guild_id, user_id, ${fields.join(", ")})
        VALUES (?, ?, ${placeholders})
        ON DUPLICATE KEY UPDATE ${updateClauses}`,
@@ -383,23 +396,21 @@ class EconomyEZ {
     if (!userId) {
       // Remove guild-specific data
       if (field) {
-        await pool.execute(
+        await this.executeQuery(
           `UPDATE ${table} SET ${field} = NULL WHERE guild_id = ?`,
           [guildId]
         );
       } else {
-        await pool.execute(`DELETE FROM ${table} WHERE guild_id = ?`, [
+        await this.executeQuery(`DELETE FROM ${table} WHERE guild_id = ?`, [
           guildId,
         ]);
       }
-      cache.del(`${table}:${guildId}`);
     } else {
       // Remove user-specific data
-      await pool.execute(
+      await this.executeQuery(
         `DELETE FROM ${table} WHERE guild_id = ? AND user_id = ?`,
         [guildId, userId]
       );
-      cache.del(`${table}:${guildId}:${userId}`);
     }
   }
 
@@ -414,11 +425,12 @@ class EconomyEZ {
     }
 
     if (!userId) {
-      await pool.execute(`INSERT IGNORE INTO ${table} (guild_id) VALUES (?)`, [
-        guildId,
-      ]);
+      await this.executeQuery(
+        `INSERT IGNORE INTO ${table} (guild_id) VALUES (?)`,
+        [guildId]
+      );
     } else {
-      await pool.execute(
+      await this.executeQuery(
         `INSERT IGNORE INTO ${table} (guild_id, user_id) VALUES (?, ?)`,
         [guildId, userId]
       );
@@ -428,7 +440,7 @@ class EconomyEZ {
   static async getTableForField(field) {
     const tables = await this.isValidTable();
     for (const table of tables) {
-      const [columns] = await pool.execute(`SHOW COLUMNS FROM ${table}`);
+      const [columns] = await this.executeQuery(`SHOW COLUMNS FROM ${table}`);
       if (columns.some((col) => col.Field === field)) {
         return table;
       }
@@ -438,12 +450,26 @@ class EconomyEZ {
 
   static async isValidTable(table) {
     if (validTables.length === 0) {
-      const [rows] = await pool.execute(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = DATABASE()
-      `);
-      validTables = rows.map((row) => row.TABLE_NAME.toLowerCase());
+      try {
+        const result = await this.executeQuery(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = DATABASE()
+        `);
+
+        if (Array.isArray(result)) {
+          validTables = result.map((row) => row.TABLE_NAME.toLowerCase());
+        } else {
+          console.error(
+            "Unexpected result format from database query:",
+            result
+          );
+          validTables = [];
+        }
+      } catch (error) {
+        console.error("Error fetching valid tables:", error);
+        validTables = [];
+      }
     }
 
     if (!table) {
@@ -503,18 +529,17 @@ class EconomyEZ {
       throw new Error(`Operation resulted in an invalid value: ${newValue}`);
     }
 
-    await pool.execute(
+    await this.executeQuery(
       `UPDATE ${table} SET ${field} = ? WHERE guild_id = ? AND user_id = ?`,
       [newValue, guildId, userId]
     );
 
-    cache.del(`${table}:${guildId}:${userId}`);
     return newValue;
   }
 
   // Add this new method for batch operations
   static async batchOperation(operations) {
-    const connection = await pool.getConnection();
+    const connection = await getConnection();
     try {
       await connection.beginTransaction();
 
@@ -555,12 +580,22 @@ class EconomyEZ {
     } finally {
       connection.release();
     }
+  }
 
-    // Clear relevant cache entries
-    operations.forEach((op) => {
-      const [table, guildId, userId] = op.path.split(".");
-      cache.del(`${table}:${guildId}:${userId}`);
-    });
+  static async executeQuery(query, params = []) {
+    let connection;
+    try {
+      connection = await getConnection();
+      const [results] = await connection.execute(query, params);
+      return results;
+    } catch (error) {
+      console.error("Error executing query:", error);
+      throw error;
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
   }
 }
 
@@ -571,14 +606,5 @@ async function initializeDatabase() {
   console.log("Successfully connected to the database");
 }
 
-// Modify the testDatabaseConnection method
-EconomyEZ.testDatabaseConnection = async function () {
-  if (pool) {
-    await initializeDatabase();
-  } else {
-    console.log("Failed to connect to the database");
-  }
-};
-
 export default EconomyEZ;
-export { pool, initializeDatabase };
+export { getConnection, initializeDatabase };
