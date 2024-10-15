@@ -1,32 +1,16 @@
-# Use a lightweight base image with Bun installed
-FROM oven/bun:latest AS builder
+# Use the official Bun image as the base
+FROM oven/bun:latest
 
-# Set the working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy package files
-COPY package.json ./
+# Copy package.json and bun.lockb (if it exists)
+COPY package.json bun.lockb* ./
 
-# Install dependencies without using the lockfile
-RUN bun install --no-lockfile
+# Install dependencies
+RUN bun install
 
 # Copy the rest of the application code
 COPY . .
 
-# Use a smaller base image for the final build
-FROM alpine:latest
-
-# Install necessary dependencies for running Bun
-RUN apk add --no-cache libstdc++ libc6-compat
-
-# Set the working directory
-WORKDIR /app
-
-# Copy the built application from the builder stage
-COPY --from=builder /app /app
-
-# Expose necessary ports
-EXPOSE 3000
-
-# Define the command to run the bot
 CMD ["bun", "--smol", "."]
