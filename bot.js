@@ -28,9 +28,6 @@ const client = new Client({
     PresenceManager: {
       maxSize: 50,
     },
-    VoiceStateManager: {
-      maxSize: 50,
-    },
   }),
 });
 
