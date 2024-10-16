@@ -51,9 +51,10 @@ export default {
     }
 
     // Fetch the user's upgrade level and multiplier
+    const upgradeId = 1; // Assuming 1 is the ID for the daily bonus upgrade
     const upgradeLevel =
       (await EconomyEZ.get(
-        `shop.${interaction.guild.id}.${interaction.user.id}.upgrade_level`
+        `shop.${interaction.guild.id}.${interaction.user.id}.upgrade_level.${upgradeId}`
       )) || 1;
     const multiplier = 1 + (upgradeLevel - 1) * 0.15; // Assuming each level increases the multiplier by 15%
 
