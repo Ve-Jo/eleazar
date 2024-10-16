@@ -4,8 +4,6 @@ const Transfer = ({ interaction, database, amount, isDeposit }) => {
 
   const arrowDirection = isDeposit ? "🔽" : "🔼";
 
-  amount = 425;
-
   return (
     <div
       style={{

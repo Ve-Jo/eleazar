@@ -1,26 +1,23 @@
-import mysql from "mysql2/promise";
-import { escape } from "mysql2";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.PG_DATABASE_URL,
+});
 
 let validTables = [];
 
 async function createConnection() {
-  return await mysql.createConnection(process.env.MYSQL_DATABASE);
+  return pool;
 }
 
 class EconomyEZ {
   static async executeQuery(query, params = []) {
-    let connection;
     try {
-      connection = await createConnection();
-      const [results] = await connection.execute(query, params);
-      return results;
+      const result = await pool.query(query, params);
+      return result.rows;
     } catch (error) {
       console.error("Error executing query:", error);
       throw error;
-    } finally {
-      if (connection) {
-        await connection.end();
-      }
     }
   }
 
@@ -29,7 +26,7 @@ class EconomyEZ {
       {
         name: "economy",
         query: `CREATE TABLE IF NOT EXISTS economy (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           guild_id VARCHAR(255) NOT NULL,
           user_id VARCHAR(255) NOT NULL,
           latest_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -38,7 +35,7 @@ class EconomyEZ {
           xp INT NOT NULL DEFAULT 0,
           total_xp INT NOT NULL DEFAULT 0,
           level INT NOT NULL DEFAULT 1,
-          UNIQUE KEY guild_user (guild_id, user_id)
+          UNIQUE (guild_id, user_id)
         )`,
         columns: [
           "latest_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
@@ -52,14 +49,14 @@ class EconomyEZ {
       {
         name: "timestamps",
         query: `CREATE TABLE IF NOT EXISTS timestamps (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           guild_id VARCHAR(255) NOT NULL,
           user_id VARCHAR(255) NOT NULL,
           daily BIGINT DEFAULT 0,
           work BIGINT DEFAULT 0,
           crime BIGINT DEFAULT 0,
           message BIGINT DEFAULT 0,
-          UNIQUE KEY guild_user (guild_id, user_id)
+          UNIQUE (guild_id, user_id)
         )`,
         columns: [
           "daily BIGINT DEFAULT 0",
@@ -71,12 +68,12 @@ class EconomyEZ {
       {
         name: "shop",
         query: `CREATE TABLE IF NOT EXISTS shop (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           guild_id VARCHAR(255) NOT NULL,
           user_id VARCHAR(255) NOT NULL,
           upgrade_id INT NOT NULL,
           upgrade_level INT NOT NULL DEFAULT 1,
-          UNIQUE KEY guild_user (guild_id, user_id)
+          UNIQUE (guild_id, user_id, upgrade_id)
         )`,
         columns: [
           "upgrade_id INT NOT NULL",
@@ -86,7 +83,7 @@ class EconomyEZ {
       {
         name: "config",
         query: `CREATE TABLE IF NOT EXISTS config (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           guild_id VARCHAR(255) NOT NULL UNIQUE,
           xp_per_message INT NOT NULL DEFAULT 1,
           xp_per_message_cooldown INT NOT NULL DEFAULT 60,
@@ -101,7 +98,7 @@ class EconomyEZ {
       {
         name: "stats",
         query: `CREATE TABLE IF NOT EXISTS stats (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           user_id VARCHAR(255) NOT NULL UNIQUE,
           guild_id VARCHAR(255) NOT NULL,
           total_messages INT NOT NULL DEFAULT 0,
@@ -117,7 +114,7 @@ class EconomyEZ {
       {
         name: "counting",
         query: `CREATE TABLE IF NOT EXISTS counting (
-          id INT AUTO_INCREMENT PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           guild_id VARCHAR(255) NOT NULL UNIQUE,
           channel_id VARCHAR(255) NOT NULL,
           message INT NOT NULL DEFAULT 1,
@@ -141,22 +138,41 @@ class EconomyEZ {
           "lastwritter VARCHAR(255) NOT NULL DEFAULT '0'",
         ],
       },
+      {
+        name: "economy_config",
+        query: `CREATE TABLE IF NOT EXISTS economy_config (
+          id SERIAL PRIMARY KEY,
+          guild_id VARCHAR(255) NOT NULL UNIQUE,
+          xp_per_message INT NOT NULL DEFAULT 1,
+          xp_per_message_cooldown INT NOT NULL DEFAULT 60,
+          level_xp_multiplier INT NOT NULL DEFAULT 100
+        )`,
+        columns: [
+          "xp_per_message INT NOT NULL DEFAULT 1",
+          "xp_per_message_cooldown INT NOT NULL DEFAULT 60",
+          "level_xp_multiplier INT NOT NULL DEFAULT 100",
+        ],
+      },
     ];
 
-    /*const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    const client = await pool.connect();
+    /*try {
+      await client.query("BEGIN");
 
       for (const table of tables) {
-        await connection.execute(table.query);
+        await client.query(table.query);
         console.log(`Created ${table.name} table`);
 
         // Get existing columns
-        const [existingColumns] = await connection.execute(
-          `SHOW COLUMNS FROM ${table.name}`
+        const res = await client.query(
+          `SELECT column_name, data_type, is_nullable, column_default 
+                                        FROM information_schema.columns 
+                                        WHERE table_name = $1`,
+          [table.name.toLowerCase()]
         );
+        const existingColumns = res.rows;
         const existingColumnMap = new Map(
-          existingColumns.map((col) => [col.Field, col])
+          existingColumns.map((col) => [col.column_name, col])
         );
 
         // Add missing columns and update existing ones
@@ -167,18 +183,21 @@ class EconomyEZ {
           if (existingColumnMap.has(columnName)) {
             // Column exists, check if it needs to be modified
             const existingColumn = existingColumnMap.get(columnName);
-            const existingType = `${existingColumn.Type}${
-              existingColumn.Null === "YES" ? "" : " NOT NULL"
-            }${
-              existingColumn.Default ? ` DEFAULT ${existingColumn.Default}` : ""
-            }`;
+            let existingType = existingColumn.data_type.toUpperCase();
+
+            if (existingColumn.is_nullable === "NO") {
+              existingType += " NOT NULL";
+            }
+            if (existingColumn.column_default) {
+              existingType += ` DEFAULT ${existingColumn.column_default}`;
+            }
 
             if (existingType.toLowerCase() !== columnDefinition.toLowerCase()) {
               try {
-                await connection.execute(`
-                  ALTER TABLE ${table.name} 
-                  MODIFY COLUMN ${columnName} ${columnDefinition}
-                `);
+                await client.query(`ALTER TABLE ${table.name} 
+                                     ALTER COLUMN ${columnName} TYPE ${
+                  columnDefinition.split(" ")[0]
+                } USING ${columnName}::${columnDefinition.split(" ")[0]}`);
                 console.log(`Modified column ${columnName} in ${table.name}`);
               } catch (error) {
                 console.error(
@@ -190,10 +209,8 @@ class EconomyEZ {
           } else {
             // Column doesn't exist, add it
             try {
-              await connection.execute(`
-                ALTER TABLE ${table.name} 
-                ADD COLUMN ${columnName} ${columnDefinition}
-              `);
+              await client.query(`ALTER TABLE ${table.name} 
+                                   ADD COLUMN ${columnName} ${columnDefinition}`);
               console.log(`Added column ${columnName} to ${table.name}`);
             } catch (error) {
               console.error(
@@ -205,12 +222,12 @@ class EconomyEZ {
         }
 
         // Delete columns not in the definition
-        const definedColumnNames = table.columns.map(
-          (col) => col.split(" ")[0]
+        const definedColumnNames = table.columns.map((col) =>
+          col.split(" ")[0].toLowerCase()
         );
         const columnsToDelete = Array.from(existingColumnMap.keys()).filter(
           (col) =>
-            !definedColumnNames.includes(col) &&
+            !definedColumnNames.includes(col.toLowerCase()) &&
             col !== "id" &&
             col !== "guild_id" &&
             col !== "user_id"
@@ -218,10 +235,8 @@ class EconomyEZ {
 
         for (const columnToDelete of columnsToDelete) {
           try {
-            await connection.execute(`
-              ALTER TABLE ${table.name}
-              DROP COLUMN ${columnToDelete}
-            `);
+            await client.query(`ALTER TABLE ${table.name}
+                                 DROP COLUMN ${columnToDelete}`);
             console.log(`Deleted column ${columnToDelete} from ${table.name}`);
           } catch (error) {
             console.error(
@@ -232,12 +247,12 @@ class EconomyEZ {
         }
       }
 
-      await connection.commit();
+      await client.query("COMMIT");
     } catch (error) {
-      await connection.rollback();
+      await client.query("ROLLBACK");
       console.error("Error initializing tables:", error);
     } finally {
-      connection.release();
+      client.release();
     }*/
   }
 
@@ -253,8 +268,8 @@ class EconomyEZ {
 
   static async enableWALMode() {
     try {
-      await this.executeQuery("SET GLOBAL innodb_flush_log_at_trx_commit = 2");
-      await this.executeQuery("SET GLOBAL innodb_flush_method = O_DIRECT");
+      await this.executeQuery("SET synchronous_commit TO OFF");
+      await this.executeQuery("SET work_mem = '64MB'");
       console.log("WAL mode enabled successfully");
     } catch (error) {
       console.error("Failed to enable WAL mode:", error);
@@ -280,7 +295,7 @@ class EconomyEZ {
     if (!userId) {
       // Get all guild data
       const result = await this.executeQuery(
-        `SELECT * FROM ${table} WHERE guild_id = ?`,
+        `SELECT * FROM ${table} WHERE guild_id = $1`,
         [guildId]
       );
       return field ? result[0]?.[field] || null : result;
@@ -288,22 +303,23 @@ class EconomyEZ {
 
     await this.ensure(path);
 
-    const result = await this.executeQuery(
-      `SELECT * FROM ${table} WHERE guild_id = ? AND user_id = ?`,
-      [guildId, userId]
-    );
-    const userData = result[0] || {}; // Return an empty object if no data found
-
-    // If upgradeId is provided, get the specific upgrade level
-    if (upgradeId && table === "shop") {
-      const upgradeResult = await this.executeQuery(
-        `SELECT upgrade_level FROM ${table} WHERE guild_id = ? AND user_id = ? AND upgrade_id = ?`,
+    if (table === "shop") {
+      if (!upgradeId) {
+        throw new Error("upgrade_id is required for shop table");
+      }
+      const result = await this.executeQuery(
+        `SELECT * FROM ${table} WHERE guild_id = $1 AND user_id = $2 AND upgrade_id = $3`,
         [guildId, userId, upgradeId]
       );
-      return upgradeResult[0]?.upgrade_level || 1; // Default to level 1 if not found
+      return field ? result[0]?.[field] || null : result[0] || null;
+    } else {
+      const result = await this.executeQuery(
+        `SELECT * FROM ${table} WHERE guild_id = $1 AND user_id = $2`,
+        [guildId, userId]
+      );
+      const userData = result[0] || {}; // Return an empty object if no data found
+      return field ? userData[field] || null : userData;
     }
-
-    return field ? userData[field] || null : userData;
   }
 
   static async set(path, value) {
@@ -324,17 +340,23 @@ class EconomyEZ {
       // Set guild-specific data
       if (typeof value === "object" && value !== null) {
         const setClause = Object.keys(value)
-          .map((key) => `${key} = ?`)
+          .map((key, index) => `${key} = $${index + 2}`)
           .join(", ");
         const values = Object.values(value);
         await this.executeQuery(
-          `UPDATE ${table} SET ${setClause} WHERE guild_id = ?`,
-          [...values, guildId]
+          `INSERT INTO ${table} (guild_id, ${Object.keys(value).join(", ")}) 
+           VALUES ($1, ${values.map((_, i) => `$${i + 2}`).join(", ")})
+           ON CONFLICT (guild_id) 
+           DO UPDATE SET ${setClause}`,
+          [guildId, ...values]
         );
       } else {
         await this.executeQuery(
-          `UPDATE ${table} SET ${field} = ? WHERE guild_id = ?`,
-          [value, guildId]
+          `INSERT INTO ${table} (guild_id, ${field}) 
+           VALUES ($1, $2)
+           ON CONFLICT (guild_id) 
+           DO UPDATE SET ${field} = $2`,
+          [guildId, value]
         );
       }
       return;
@@ -344,8 +366,10 @@ class EconomyEZ {
       await this.updateMultipleFields(table, guildId, userId, value);
     } else {
       await this.executeQuery(
-        `INSERT INTO ${table} (guild_id, user_id, ${field}) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE ${field} = VALUES(${field})`,
+        `INSERT INTO ${table} (guild_id, user_id, ${field}) 
+         VALUES ($1, $2, $3)
+         ON CONFLICT (guild_id, user_id) 
+         DO UPDATE SET ${field} = $3`,
         [guildId, userId, value]
       );
     }
@@ -354,15 +378,15 @@ class EconomyEZ {
   static async updateMultipleFields(table, guildId, userId, updates) {
     const fields = Object.keys(updates);
     const values = Object.values(updates);
-    const placeholders = fields.map(() => "?").join(", ");
-    const updateClauses = fields
-      .map((field) => `${field} = VALUES(${field})`)
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 3}`)
       .join(", ");
 
     await this.executeQuery(
       `INSERT INTO ${table} (guild_id, user_id, ${fields.join(", ")})
-       VALUES (?, ?, ${placeholders})
-       ON DUPLICATE KEY UPDATE ${updateClauses}`,
+       VALUES ($1, $2, ${fields.map((_, i) => `$${i + 3}`).join(", ")})
+       ON CONFLICT (guild_id, user_id)
+       DO UPDATE SET ${setClause}`,
       [guildId, userId, ...values]
     );
   }
@@ -385,18 +409,18 @@ class EconomyEZ {
       // Remove guild-specific data
       if (field) {
         await this.executeQuery(
-          `UPDATE ${table} SET ${field} = NULL WHERE guild_id = ?`,
+          `UPDATE ${table} SET ${field} = NULL WHERE guild_id = $1`,
           [guildId]
         );
       } else {
-        await this.executeQuery(`DELETE FROM ${table} WHERE guild_id = ?`, [
+        await this.executeQuery(`DELETE FROM ${table} WHERE guild_id = $1`, [
           guildId,
         ]);
       }
     } else {
       // Remove user-specific data
       await this.executeQuery(
-        `DELETE FROM ${table} WHERE guild_id = ? AND user_id = ?`,
+        `DELETE FROM ${table} WHERE guild_id = $1 AND user_id = $2`,
         [guildId, userId]
       );
     }
@@ -406,20 +430,32 @@ class EconomyEZ {
     console.log(`ensure for: ${path}`);
 
     const parts = path.split(".");
-    let [table, guildId, userId] = parts;
+    let [table, guildId, userId, field, upgradeId] = parts;
 
     if (!table || !(await this.isValidTable(table))) {
       throw new Error(`Invalid or missing table: ${table}`);
     }
 
-    if (!userId) {
+    if (table === "shop") {
+      if (!upgradeId) {
+        throw new Error("upgrade_id is required for shop table");
+      }
       await this.executeQuery(
-        `INSERT IGNORE INTO ${table} (guild_id) VALUES (?)`,
+        `INSERT INTO ${table} (guild_id, user_id, upgrade_id, upgrade_level) 
+         VALUES ($1, $2, $3, 1)
+         ON CONFLICT (guild_id, user_id, upgrade_id) DO NOTHING`,
+        [guildId, userId, upgradeId]
+      );
+    } else if (!userId) {
+      await this.executeQuery(
+        `INSERT INTO ${table} (guild_id) VALUES ($1)
+         ON CONFLICT (guild_id) DO NOTHING`,
         [guildId]
       );
     } else {
       await this.executeQuery(
-        `INSERT IGNORE INTO ${table} (guild_id, user_id) VALUES (?, ?)`,
+        `INSERT INTO ${table} (guild_id, user_id) VALUES ($1, $2)
+         ON CONFLICT (guild_id, user_id) DO NOTHING`,
         [guildId, userId]
       );
     }
@@ -428,8 +464,11 @@ class EconomyEZ {
   static async getTableForField(field) {
     const tables = await this.isValidTable();
     for (const table of tables) {
-      const [columns] = await this.executeQuery(`SHOW COLUMNS FROM ${table}`);
-      if (columns.some((col) => col.Field === field)) {
+      const columns = await this.executeQuery(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+        [table]
+      );
+      if (columns.some((col) => col.column_name === field)) {
         return table;
       }
     }
@@ -442,11 +481,11 @@ class EconomyEZ {
         const result = await this.executeQuery(`
           SELECT table_name 
           FROM information_schema.tables 
-          WHERE table_schema = DATABASE()
+          WHERE table_schema = 'public'
         `);
 
         if (Array.isArray(result)) {
-          validTables = result.map((row) => row.TABLE_NAME.toLowerCase());
+          validTables = result.map((row) => row.table_name.toLowerCase());
         } else {
           console.error(
             "Unexpected result format from database query:",
@@ -518,8 +557,11 @@ class EconomyEZ {
     }
 
     await this.executeQuery(
-      `UPDATE ${table} SET ${field} = ? WHERE guild_id = ? AND user_id = ?`,
-      [newValue, guildId, userId]
+      `INSERT INTO ${table} (guild_id, user_id, ${field}) 
+       VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id, user_id) 
+       DO UPDATE SET ${field} = $3`,
+      [guildId, userId, newValue]
     );
 
     return newValue;
@@ -527,9 +569,9 @@ class EconomyEZ {
 
   // Add this new method for batch operations
   static async batchOperation(operations) {
-    const connection = await createConnection();
+    const client = await pool.connect();
     try {
-      await connection.beginTransaction();
+      await client.query("BEGIN");
 
       for (const op of operations) {
         const { type, path, value } = op;
@@ -537,23 +579,26 @@ class EconomyEZ {
 
         if (type === "set") {
           if (typeof value === "object") {
-            const setClause = Object.keys(value)
-              .map((key) => `${key} = ?`)
+            const keys = Object.keys(value);
+            const vals = Object.values(value);
+            const setClause = keys
+              .map((key, index) => `${key} = $${index + 3}`)
               .join(", ");
-            const values = Object.values(value);
-            await connection.execute(
-              `INSERT INTO ${table} (guild_id, user_id, ${Object.keys(
-                value
-              ).join(", ")}) 
-               VALUES (?, ?, ${values.map(() => "?").join(", ")})
-               ON DUPLICATE KEY UPDATE ${setClause}`,
-              [guildId, userId, ...values, ...values]
-            );
+            const query = `
+              INSERT INTO ${table} (guild_id, user_id, ${keys.join(", ")})
+              VALUES ($1, $2, ${keys.map((_, i) => `$${i + 3}`).join(", ")})
+              ON CONFLICT (guild_id, user_id)
+              DO UPDATE SET ${setClause}
+            `;
+            await client.query(query, [guildId, userId, ...vals]);
           } else {
-            await connection.execute(
-              `INSERT INTO ${table} (guild_id, user_id, ${field}) 
-               VALUES (?, ?, ?)
-               ON DUPLICATE KEY UPDATE ${field} = VALUES(${field})`,
+            await client.query(
+              `
+              INSERT INTO ${table} (guild_id, user_id, ${field}) 
+              VALUES ($1, $2, $3)
+              ON CONFLICT (guild_id, user_id)
+              DO UPDATE SET ${field} = EXCLUDED.${field}
+              `,
               [guildId, userId, value]
             );
           }
@@ -561,12 +606,12 @@ class EconomyEZ {
         // Add other operation types as needed
       }
 
-      await connection.commit();
+      await client.query("COMMIT");
     } catch (error) {
-      await connection.rollback();
+      await client.query("ROLLBACK");
       throw error;
     } finally {
-      await connection.end();
+      client.release();
     }
   }
 }
