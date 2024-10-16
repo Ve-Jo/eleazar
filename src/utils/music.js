@@ -25,13 +25,6 @@ async function init(client) {
         authorization: "NAIGLAVA-dash.techbyte.host",
         secure: false,
       },
-      /*{
-        id: "local",
-        host: "0.0.0.0",
-        port: 2333,
-        authorization: "123",
-        secure: false,
-      },*/
     ],
     sendToShard: (guildId, payload) =>
       client.guilds.cache.get(guildId)?.shard?.send(payload),

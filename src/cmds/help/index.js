@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
-import test from "./test.js";
+import commands from "./commands.js";
 
 //this command should send a embed with categories of commands (and also button collector), when user click on category, it should edit current message with new embed (with commands of that category)
 
@@ -11,13 +11,12 @@ export default {
       ru: "Получить помощь с ботом",
       uk: "Отримати допомогу з ботом",
     })
-    .addSubcommand(test.data),
+    .addSubcommand(commands.data),
   server: true,
   async execute(interaction) {
-    if (interaction.options.data[0].name === "test") {
-      test.execute(interaction);
-    } else {
-      const embed = new EmbedBuilder();
+    if (interaction.options.data[0].name === "commands") {
+      await interaction.deferReply();
+      await commands.execute(interaction);
     }
   },
 };
