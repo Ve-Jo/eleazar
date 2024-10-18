@@ -23,10 +23,10 @@ export default {
     .addNumberOption((option) =>
       option
         .setName("start_number")
-        .setDescription("Set start number from what number counting will start")
+        .setDescription("Start number from what number counting will start")
         .setDescriptionLocalizations({
-          ru: "Установите начальное число, с которого будет начинаться счет",
-          uk: "Встановіть початкове число, з якого почнеться рахунок",
+          ru: "Начальное число, с которого будет начинаться счет",
+          uk: "Початкове число, з якого почнеться рахунок",
         })
     )
     .addNumberOption((option) =>
@@ -47,8 +47,8 @@ export default {
         )
         .setRequired(false)
         .setDescriptionLocalizations({
-          ru: "Роль, которую нужно дать пользователю, когда его сообщение закреплено",
-          uk: "Роль, яку потрібно дати користувачу, коли його повідомлення закріплено",
+          ru: "Выдача роли пользователю когда его сообщение закреплено",
+          uk: "Роль яку потрібно дати користувачу, коли його повідомлення закріплено",
         })
     )
     .addBooleanOption((option) =>

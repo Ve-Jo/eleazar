@@ -13,8 +13,8 @@ if (!fs.existsSync(localesDir)) {
 }
 
 i18n.configure({
-  locales: ["ru", "en", "uk"], // Add "uk" here
-  defaultLocale: "ru",
+  locales: ["ru", "en", "uk"],
+  defaultLocale: "en", // Changed this to 'en' for consistency
   directory: localesDir,
   objectNotation: true,
   updateFiles: false,

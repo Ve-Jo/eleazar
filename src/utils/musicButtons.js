@@ -2,7 +2,11 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import i18n from "./i18n.js";
 
 export function createMusicButtons(player) {
-  i18n.setLocale(player.queue.current.userData.requester.locale);
+  // Check if the requester exists and has a locale property
+  const locale = player.queue.current.userData.requester?.locale || "en";
+
+  // Set the locale, falling back to 'en' if the specified locale is not available
+  i18n.setLocale(i18n.getLocales().includes(locale) ? locale : "en");
 
   let autoplay = player.get("autoplay_enabled");
 
