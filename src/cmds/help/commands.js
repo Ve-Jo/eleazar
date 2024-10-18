@@ -18,16 +18,18 @@ export default {
   async execute(interaction) {
     const commands = [];
     const categories = new Set();
+    const locale = interaction.locale;
 
     interaction.client.commands.forEach((command) => {
       if (command.data.options && command.data.options.length > 0) {
-        // This is a command with subcommands
         command.data.options.forEach((subcommand) => {
           const args = subcommand.options
             ? subcommand.options.map(
                 (option) =>
                   `${option.name}${option.required ? "*" : ""}: ${
-                    option.description
+                    option.description_localizations
+                      ? option.description_localizations[locale]
+                      : option.description
                   }`
               )
             : [];
@@ -42,18 +44,24 @@ export default {
             .map((arg) => `<${arg}>`)
             .join(" ")}`;
 
+          let description = subcommand.description;
+          if (
+            subcommand.description_localizations &&
+            subcommand.description_localizations[locale]
+          ) {
+            description = subcommand.description_localizations[locale];
+          }
+
           commands.push({
             title: subcommand.name,
-            description: subcommand.description,
+            description: description,
             category: command.data.name,
             currentValue: [usage, ...args],
           });
 
-          // Add category to the set
           categories.add(command.data.name);
         });
       } else {
-        // This is a top-level command without subcommands
         const args = command.data.options
           ? command.data.options.map(
               (option) =>
@@ -80,13 +88,11 @@ export default {
           currentValue: [usage, ...args],
         });
 
-        // Add category to the set
         categories.add("General");
       }
     });
 
     let highlightedPosition = 0;
-    let mobileMode = true;
     const visibleCount = 1;
 
     const generateCommandImage = async () => {
@@ -96,10 +102,12 @@ export default {
           settings: commands,
           highlightedPosition,
           visibleCount,
-          height: mobileMode ? 900 : 700,
-          width: mobileMode ? 500 : 800,
+          height: 700,
+          width: 600,
+          maxSettingsHided: 4,
+          maxSettingsHidedWidth: 450,
         },
-        { width: mobileMode ? 500 : 800, height: mobileMode ? 900 : 700 }
+        { width: 600, height: 700 }
       );
     };
 
@@ -150,27 +158,12 @@ export default {
         );
     };
 
-    const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("previous")
-        .setLabel("⬆️")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("mobile")
-        .setLabel(mobileMode ? "💻" : "📱")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("next")
-        .setLabel("⬇️")
-        .setStyle(ButtonStyle.Primary)
-    );
-
     const row2 = new ActionRowBuilder().addComponents(createCategoryMenu());
     const row3 = new ActionRowBuilder().addComponents(createSubcommandMenu());
 
     const response = await interaction.editReply({
       ...(await updateMessage()),
-      components: [row1, row2, row3],
+      components: [row2, row3],
     });
 
     const collector = response.createMessageComponentCollector({
@@ -180,18 +173,11 @@ export default {
 
     collector.on("collect", async (i) => {
       if (i.user.id === interaction.user.id) {
-        if (i.customId === "previous") {
-          highlightedPosition =
-            (highlightedPosition - 1 + commands.length) % commands.length;
-        } else if (i.customId === "next") {
-          highlightedPosition = (highlightedPosition + 1) % commands.length;
-        } else if (i.customId === "category") {
+        if (i.customId === "category") {
           const selectedCategory = i.values[0];
           highlightedPosition = commands.findIndex(
             (cmd) => cmd.category === selectedCategory
           );
-        } else if (i.customId === "mobile") {
-          mobileMode = !mobileMode;
         } else if (i.customId === "subcommand") {
           const currentCategory = commands[highlightedPosition].category;
           const subcommandIndex = parseInt(i.values[0]);
@@ -209,7 +195,6 @@ export default {
         await response.edit({
           ...(await updateMessage()),
           components: [
-            row1,
             row2,
             new ActionRowBuilder().addComponents(createSubcommandMenu()),
           ],

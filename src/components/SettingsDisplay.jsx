@@ -3,7 +3,9 @@ const SettingsDisplay = ({
   highlightedPosition,
   visibleCount = 1,
   height = 650,
-  width = 500,
+  width = 600,
+  maxSettingsHided = 5,
+  maxSettingsHidedWidth = 320,
   maxCategoriesDistance = 0,
 }) => {
   if (!settings)
@@ -16,6 +18,30 @@ const SettingsDisplay = ({
       },
       {
         title: "Leveling2",
+        description: "Enable or disable leveling system",
+        currentValue: [
+          "Enabled <bold> </bold>",
+          "Enabled <bold> </bold>",
+          "Enabled <bold> </bold>",
+          "Enabled <bold> </bold>",
+          "Enabled <bold> </bold>",
+        ],
+        category: "General",
+      },
+      {
+        title: "Leveling3",
+        description: "Enable or disable leveling system",
+        currentValue: ["Enabled"],
+        category: "General",
+      },
+      {
+        title: "Leveling3",
+        description: "Enable or disable leveling system",
+        currentValue: ["Enabled"],
+        category: "General",
+      },
+      {
+        title: "Leveling3",
         description: "Enable or disable leveling system",
         currentValue: ["Enabled"],
         category: "General",
@@ -33,16 +59,16 @@ const SettingsDisplay = ({
         category: "Experience",
       },
       {
-        title: "OptionMaybeNextLine",
-        description: "How much XP to give to a user for a message",
-        currentValue: ["10"],
-        category: "Miscellaneous",
-      },
-      {
         title: "XP2",
         description: "How much XP to give to a user for a message",
         currentValue: ["10"],
         category: "Experience",
+      },
+      {
+        title: "OptionMaybeNextLine",
+        description: "How much XP to give to a user for a message",
+        currentValue: ["10"],
+        category: "Miscellaneous",
       },
       {
         title: "LongLongLongOption",
@@ -75,13 +101,13 @@ const SettingsDisplay = ({
       return [settings[highlightedPosition]];
     }
 
-    const visibleCategories = categories.filter((category, index) => {
-      return Math.abs(index - highlightedCategoryIndex) <= 1;
-    });
-
-    return settings.filter((setting) =>
-      visibleCategories.includes(setting.category)
+    const startIndex = Math.max(
+      0,
+      highlightedPosition - Math.floor(visibleCount / 2)
     );
+    const endIndex = Math.min(settings.length, startIndex + visibleCount);
+
+    return settings.slice(startIndex, endIndex);
   };
 
   const visibleSettings = getVisibleSettings();
@@ -110,8 +136,8 @@ const SettingsDisplay = ({
         style={{
           display: "flex",
           flexDirection: "column",
-          marginBottom: position === "top" ? "10px" : "0",
-          marginTop: position === "bottom" ? "10px" : "0",
+          marginBottom: position === "top" ? "5px" : "0",
+          marginTop: position === "bottom" ? "5px" : "0",
         }}
       >
         {Object.entries(groupedSettings).map(([category, categorySettings]) => {
@@ -124,7 +150,7 @@ const SettingsDisplay = ({
               <div
                 key={`category-${category}`}
                 style={{
-                  marginBottom: "10px",
+                  marginTop: "10px",
                   display: "flex",
                   flexDirection: "column",
                 }}
@@ -142,15 +168,46 @@ const SettingsDisplay = ({
                     style={{
                       display: "flex",
                       marginLeft: "auto",
-                      backgroundColor: "rgba(255, 255, 255, 0.5)",
-                      borderRadius: "5px",
-                      padding: "2px 6px",
-                      fontSize: "26px",
-                      fontWeight: "bold",
+                      maxWidth: maxSettingsHidedWidth,
+                      alignItems: "center",
                     }}
                   >
-                    {categorySettings.length}
+                    {categorySettings
+                      .slice(0, maxSettingsHided)
+                      .map((setting, index) => (
+                        <div
+                          key={`category-setting-${index}`}
+                          style={{
+                            backgroundColor: "rgba(255, 255, 255, 0.5)",
+                            borderRadius: "5px",
+                            padding: "2px 6px",
+                            fontSize: "20px",
+                            fontWeight: "bold",
+                            marginLeft: "5px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {setting.title}
+                        </div>
+                      ))}
                   </div>
+                  {categorySettings.length > maxSettingsHided && (
+                    <div
+                      style={{
+                        backgroundColor: "rgba(255, 255, 255, 0.5)",
+                        borderRadius: "5px",
+                        padding: "2px 6px",
+                        display: "flex",
+                        fontSize: "20px",
+                        fontWeight: "bold",
+                        marginLeft: "5px",
+                      }}
+                    >
+                      +{categorySettings.length - maxSettingsHided}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -159,21 +216,10 @@ const SettingsDisplay = ({
               <div
                 key={`category-${category}`}
                 style={{
-                  marginBottom: "10px",
                   display: "flex",
                   flexDirection: "column",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "26px",
-                    opacity: 0.7,
-                    marginBottom: "5px",
-                    display: "flex",
-                  }}
-                >
-                  {category}
-                </div>
                 <div
                   style={{
                     display: "flex",
@@ -227,21 +273,18 @@ const SettingsDisplay = ({
       }}
     >
       {renderBlurredSettings(blurredSettingsTop, "top")}
+
       {visibleSettings.map((setting, index) => {
-        const actualIndex = visibleStartIndex + index;
+        let actualIndex = visibleStartIndex + index;
         return (
           <div
             key={actualIndex}
             style={{
-              backgroundColor:
-                highlightedPosition === actualIndex
-                  ? "rgba(255, 255, 255, 0.3)"
-                  : "rgba(255, 255, 255, 0.3)",
+              backgroundColor: "rgba(255, 255, 255, 0.3)",
               borderRadius: "10px",
               padding: "10px",
               display: "flex",
               flexDirection: "column",
-              marginBottom: "5px",
               border:
                 highlightedPosition === actualIndex
                   ? "5px solid #FFA500"
@@ -254,9 +297,23 @@ const SettingsDisplay = ({
                 fontWeight: "bold",
                 marginBottom: "5px",
                 display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              {setting.title}
+              <span>{setting.title}</span>
+              <div
+                style={{
+                  fontSize: "32px",
+                  fontWeight: "bold",
+                  marginBottom: "5px",
+                  backgroundColor: "#FFA500",
+                  borderRadius: "10px",
+                  padding: "5px 10px",
+                }}
+              >
+                {setting.category}
+              </div>
             </div>
             <div
               style={{
@@ -284,14 +341,30 @@ const SettingsDisplay = ({
                       style={{
                         backgroundColor: "#FFA500",
                         borderRadius: "5px",
-                        padding: "2px 5px",
+                        padding: "5px 5px",
                         display: "flex",
                         fontSize: "24px",
                         fontWeight: "bold",
                         alignSelf: "flex-start",
                       }}
                     >
-                      {value}
+                      {value.split(/(<[^>]+>)/).map((part, partIdx) =>
+                        part.startsWith("<") && part.endsWith(">") ? (
+                          <span
+                            key={partIdx}
+                            style={{
+                              backgroundColor: "#FFD700",
+                              margin: "0 3px",
+                              borderRadius: "5px",
+                              padding: "0 3px",
+                            }}
+                          >
+                            {part}
+                          </span>
+                        ) : (
+                          part
+                        )
+                      )}
                     </div>
                   ))}
                 </div>

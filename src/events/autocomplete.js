@@ -7,9 +7,7 @@ export default {
 
     const { client } = interaction;
 
-    const command = client.commands.find(
-      (command) => command.data.name === interaction.commandName
-    );
+    const command = client.commands.get(interaction.commandName);
 
     if (!command) {
       console.error(
