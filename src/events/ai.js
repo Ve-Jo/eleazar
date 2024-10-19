@@ -1,7 +1,20 @@
 import { Events } from "discord.js";
 import { translate } from "bing-translate-api";
 
-const MODEL = "llama-3.1-70b-versatile";
+let models = {
+  text: [
+    /*"llama-3.2-90b-text-preview",*/
+    "llama-3.1-70b-versatile",
+    "llama3-groq-70b-8192-tool-use-preview",
+  ],
+  vision: ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"],
+};
+
+let modelCooldowns = {
+  text: {},
+  vision: {},
+};
+
 const MAX_CONTEXT_LENGTH = 5;
 const INITIAL_CONTEXT = {
   role: "system",
@@ -55,8 +68,38 @@ function createToolObject(commandName, commandData) {
 
 async function translateText(text, targetLang) {
   try {
+    // Preserve code blocks
+    const codeBlocks = [];
+    text = text.replace(/```[\s\S]*?```/g, (match) => {
+      codeBlocks.push(match);
+      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // Preserve quoted text
+    const quotedTexts = [];
+    text = text.replace(/"([^"]*)"/g, (match, group) => {
+      quotedTexts.push(group);
+      return `__QUOTED_TEXT_${quotedTexts.length - 1}__`;
+    });
+
+    // Translate the modified text
     const result = await translate(text, null, targetLang);
-    return result.translation;
+    let translatedText = result.translation;
+
+    // Restore quoted texts
+    quotedTexts.forEach((quote, index) => {
+      translatedText = translatedText.replace(
+        `__QUOTED_TEXT_${index}__`,
+        `"${quote}"`
+      );
+    });
+
+    // Restore code blocks
+    codeBlocks.forEach((block, index) => {
+      translatedText = translatedText.replace(`__CODE_BLOCK_${index}__`, block);
+    });
+
+    return translatedText;
   } catch (error) {
     console.error("Translation error:", error);
     return text;
@@ -211,6 +254,142 @@ function parseXmlToolCall(xmlString) {
   };
 }
 
+function updateModelCooldown(modelType, modelName, retryAfter) {
+  const cooldownUntil = Date.now() + retryAfter * 1000;
+  modelCooldowns[modelType][modelName] = cooldownUntil;
+}
+
+function getAvailableModel(modelType) {
+  const now = Date.now();
+  for (const model of models[modelType]) {
+    if (
+      !modelCooldowns[modelType][model] ||
+      modelCooldowns[modelType][model] <= now
+    ) {
+      return model;
+    }
+  }
+  return null;
+}
+
+async function handleRateLimit(error, modelType, currentModel) {
+  console.log("Checking for rate limit error:", JSON.stringify(error, null, 2));
+
+  if (
+    error.status === 429 ||
+    (error.error &&
+      error.error.error &&
+      error.error.error.code === "rate_limit_exceeded")
+  ) {
+    console.log(`Rate limited for model ${currentModel}. Swapping model.`);
+
+    let retryAfter = 60;
+    let headers = error.headers || {};
+
+    if (headers["retry-after"]) {
+      retryAfter = parseInt(headers["retry-after"]);
+    } else if (error.error && error.error.error && error.error.error.message) {
+      const match = error.error.error.message.match(
+        /Please try again in (\d+m)?(\d+(?:\.\d+)?s)/
+      );
+      if (match) {
+        const minutes = match[1] ? parseInt(match[1]) : 0;
+        const seconds = parseFloat(match[2]);
+        retryAfter = minutes * 60 + Math.ceil(seconds);
+      }
+    }
+
+    updateModelCooldown(modelType, currentModel, retryAfter);
+
+    // Log rate limit information
+    console.log(`Rate limit info:
+      Retry-After: ${retryAfter} seconds
+      Requests Per Day (RPD) Limit: ${headers["x-ratelimit-limit-requests"]}
+      Tokens Per Minute (TPM) Limit: ${headers["x-ratelimit-limit-tokens"]}
+      Remaining RPD: ${headers["x-ratelimit-remaining-requests"]}
+      Remaining TPM: ${headers["x-ratelimit-remaining-tokens"]}
+      RPD Reset: ${headers["x-ratelimit-reset-requests"]}
+      TPM Reset: ${headers["x-ratelimit-reset-tokens"]}
+      Error Message: ${error.error?.error?.message || "N/A"}
+    `);
+
+    return true;
+  }
+  return false;
+}
+
+// Add this function near the top of the file, after the import statements
+function splitMessage(message, maxLength = 2000) {
+  const chunks = [];
+  let currentChunk = "";
+  let inCodeBlock = false;
+  let codeBlockLanguage = "";
+
+  const lines = message.split("\n");
+  for (const line of lines) {
+    const codeBlockMatch = line.match(/^```(\w+)?/);
+    if (codeBlockMatch) {
+      if (inCodeBlock) {
+        inCodeBlock = false;
+        currentChunk += line + "\n";
+        chunks.push(currentChunk.trim());
+        currentChunk = "";
+        continue;
+      } else {
+        inCodeBlock = true;
+        codeBlockLanguage = codeBlockMatch[1] || "";
+      }
+    }
+
+    if (currentChunk.length + line.length + 1 > maxLength) {
+      if (inCodeBlock) {
+        chunks.push(currentChunk.trim() + "\n```");
+        currentChunk = "```" + codeBlockLanguage + "\n" + line;
+      } else {
+        chunks.push(currentChunk.trim());
+        currentChunk = line;
+      }
+    } else {
+      currentChunk += (currentChunk ? "\n" : "") + line;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+
+  // Ensure the last chunk closes any open code block
+  if (inCodeBlock && !chunks[chunks.length - 1].endsWith("```")) {
+    chunks[chunks.length - 1] += "\n```";
+  }
+
+  return chunks;
+}
+
+// Replace the existing processingMessage.edit calls with this new function
+async function sendResponse(
+  message,
+  processingMessage,
+  content,
+  debugInfo = ""
+) {
+  const chunks = splitMessage(content);
+
+  // Edit the processing message with the first chunk
+  await processingMessage.edit(
+    chunks[0] + (chunks.length === 1 ? debugInfo : "")
+  );
+
+  // Send additional chunks as new messages
+  for (let i = 1; i < chunks.length; i++) {
+    let chunk = chunks[i];
+    if (i === chunks.length - 1) {
+      chunk += debugInfo;
+    }
+    await message.channel.send(chunk);
+  }
+}
+
 export default {
   name: Events.MessageCreate,
   async execute(message) {
@@ -231,26 +410,82 @@ export default {
         translation: translatedMessage,
       } = await translate(messageContent, null, "en");
 
-      if (!context[message.author.id]) {
-        context[message.author.id] = [INITIAL_CONTEXT];
-      }
-      context[message.author.id].push({
-        role: "user",
-        content: translatedMessage,
-      });
-      context[message.author.id] = [
-        INITIAL_CONTEXT,
-        ...context[message.author.id].slice(-MAX_CONTEXT_LENGTH),
-      ];
+      const isVisionRequest = message.attachments.size > 0;
+      const modelType = isVisionRequest ? "vision" : "text";
 
-      const tools = generateToolsFromCommands(message.client);
-      console.log(tools);
-      const response = await message.client.groq.chat.completions.create({
-        model: MODEL,
-        messages: context[message.author.id],
-        tools: tools,
-        tool_choice: "auto",
-      });
+      let tools = [];
+      let messages = [];
+
+      if (isVisionRequest) {
+        const attachment = message.attachments.first();
+        messages.push({
+          role: "user",
+          content: [
+            { type: "text", text: translatedMessage },
+            { type: "image_url", image_url: { url: attachment.url } },
+          ],
+        });
+      } else {
+        if (!context[message.author.id]) {
+          context[message.author.id] = [INITIAL_CONTEXT];
+        }
+        context[message.author.id].push({
+          role: "user",
+          content: translatedMessage,
+        });
+        context[message.author.id] = [
+          INITIAL_CONTEXT,
+          ...context[message.author.id].slice(-MAX_CONTEXT_LENGTH),
+        ];
+        messages = [...context[message.author.id]];
+        tools = generateToolsFromCommands(message.client);
+      }
+
+      let response;
+      let retries = 0;
+      const maxRetries = models[modelType].length * 2; // Increase max retries
+      let currentModel;
+
+      while (retries < maxRetries) {
+        currentModel = getAvailableModel(modelType);
+        if (!currentModel) {
+          console.log(
+            "All models are on cooldown. Waiting for the next available model..."
+          );
+          await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds before checking again
+          continue;
+        }
+
+        console.log(`Attempting to use model: ${currentModel}`);
+
+        try {
+          response = await message.client.groq.chat.completions.create({
+            model: currentModel,
+            messages: messages,
+            tools: isVisionRequest ? [] : tools,
+            tool_choice: isVisionRequest ? "none" : "auto",
+          });
+          console.log(`Successfully got response from model: ${currentModel}`);
+          break;
+        } catch (error) {
+          console.error(`Error with model ${currentModel}:`, error);
+          if (await handleRateLimit(error, modelType, currentModel)) {
+            retries++;
+            console.log(
+              `Retrying after rate limit (Attempt ${retries}/${maxRetries})`
+            );
+            continue;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!response) {
+        throw new Error(
+          "Failed to get a response after trying all available models"
+        );
+      }
 
       let { content: aiContent = "", tool_calls: initialToolCalls = [] } =
         response.choices[0].message;
@@ -297,20 +532,39 @@ export default {
           aiContent.trim(),
           originalLanguage
         );
-        await processingMessage.edit(translatedResponse);
+        const debugInfo = `\n\n[Debug: Model used - ${currentModel}]`;
+        await sendResponse(
+          message,
+          processingMessage,
+          translatedResponse,
+          debugInfo
+        );
         context[message.author.id].push({
           role: "assistant",
           content: aiContent.trim(),
         });
       } else if (commandExecuted) {
-        /*await processingMessage.edit("Command executed successfully.");*/
+        await sendResponse(
+          message,
+          processingMessage,
+          `Command executed successfully.`,
+          `\n\n[Debug: Model used - ${currentModel}]`
+        );
       } else {
-        /*await processingMessage.edit("No valid commands were executed.");*/
+        await sendResponse(
+          message,
+          processingMessage,
+          `No valid commands were executed.`,
+          `\n\n[Debug: Model used - ${currentModel}]`
+        );
       }
     } catch (error) {
       console.error("Error processing request:", error);
-      await processingMessage.edit(
-        "An error occurred while processing your request."
+      await sendResponse(
+        message,
+        processingMessage,
+        `An error occurred while processing your request.`,
+        `\n\n[Debug: Error - ${error.message}]`
       );
     }
   },
