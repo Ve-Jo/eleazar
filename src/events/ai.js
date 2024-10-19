@@ -416,6 +416,11 @@ export default {
       let tools = [];
       let messages = [];
 
+      // Initialize context for the user if it doesn't exist
+      if (!context[message.author.id]) {
+        context[message.author.id] = [INITIAL_CONTEXT];
+      }
+
       if (isVisionRequest) {
         const attachment = message.attachments.first();
         messages.push({
@@ -426,9 +431,6 @@ export default {
           ],
         });
       } else {
-        if (!context[message.author.id]) {
-          context[message.author.id] = [INITIAL_CONTEXT];
-        }
         context[message.author.id].push({
           role: "user",
           content: translatedMessage,
@@ -539,10 +541,18 @@ export default {
           translatedResponse,
           debugInfo
         );
+        // Update context for both text and vision requests
         context[message.author.id].push({
           role: "assistant",
           content: aiContent.trim(),
         });
+        // Ensure context doesn't exceed MAX_CONTEXT_LENGTH
+        if (context[message.author.id].length > MAX_CONTEXT_LENGTH + 1) {
+          context[message.author.id] = [
+            INITIAL_CONTEXT,
+            ...context[message.author.id].slice(-MAX_CONTEXT_LENGTH),
+          ];
+        }
       } else if (commandExecuted) {
         await sendResponse(
           message,
