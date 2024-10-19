@@ -3,7 +3,9 @@ import { loadCommands } from "./src/utils/loadCommands.js";
 import { loadEvents } from "./src/utils/loadEvents.js";
 import { Memer } from "memer.ts";
 import { startResourceMonitor } from "./src/runners/resourceMonitor.js";
+
 import Groq from "groq-sdk";
+import Replicate from "replicate";
 
 console.log("Starting bot...");
 
@@ -40,6 +42,10 @@ client.memer = new Memer();
 
 client.groq = new Groq({
   apiKey: process.env.GROQ_API,
+});
+
+client.replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
 });
 
 await client.login(process.env.DISCORD_TOKEN);
