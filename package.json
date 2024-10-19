@@ -36,6 +36,7 @@
     "pretty-ms": "^9.1.0",
     "rainlink": "^1.0.7",
     "react": "^18.3.1",
+    "replicate": "^1.0.1",
     "riffy": "^1.0.7-rc.1",
     "satori": "^0.11.1",
     "server": "react-dom/server",
