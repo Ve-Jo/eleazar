@@ -4,7 +4,6 @@ import prettyMs from "pretty-ms";
 const COOLDOWNS = {
   crime: BigInt(8 * 60 * 60 * 1000),
   daily: BigInt(24 * 60 * 60 * 1000),
-  s,
 };
 
 const MIN_CRIME_COOLDOWN = BigInt(2 * 60 * 60 * 1000);
