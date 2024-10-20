@@ -13,6 +13,7 @@ export default {
     .addSubcommand(setup.data)
     .addSubcommand(remove.data),
   server: true,
+  ai: false,
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 

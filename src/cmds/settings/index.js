@@ -46,6 +46,7 @@ export default {
         )
     ),
   server: true,
+  ai: false,
   async autocomplete(interaction) {
     const focusedOption = interaction.options.getFocused(true);
     const { name, value } = focusedOption;
