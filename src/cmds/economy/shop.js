@@ -20,6 +20,10 @@ export default {
       uk: "Купити улучшення/ролі",
     }),
   async execute(interaction) {
+    return interaction.editReply({
+      content: "Магазин будет переработан в ближайшее время",
+    });
+
     const locale = interaction.locale || "en";
     const upgrades = await getUpgradesForUser(
       interaction.guildId,

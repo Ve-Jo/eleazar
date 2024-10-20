@@ -181,6 +181,9 @@ async function performCrime(interaction, user, target, guildId) {
   let updatedUserBalance = await EconomyEZ.get(
     `economy.${guildId}.${user.id}.balance`
   );
+  let updatedTargetBalance = await EconomyEZ.get(
+    `economy.${guildId}.${target.id}.balance`
+  );
 
   const pngBuffer = await generateImage(
     Crime,
@@ -188,11 +191,11 @@ async function performCrime(interaction, user, target, guildId) {
       interaction: interaction,
       victim: {
         user: target,
-        balance: targetData.balance,
+        balance: updatedTargetBalance,
       },
       robber: {
         user: user,
-        balance: userData.balance,
+        balance: updatedUserBalance,
       },
       amount: amount,
       success: success,

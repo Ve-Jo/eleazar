@@ -305,7 +305,14 @@ class EconomyEZ {
 
     if (table === "shop") {
       if (!upgradeId) {
-        throw new Error("upgrade_id is required for shop table");
+        console.warn(
+          "Warning: upgrade_id is missing for shop table. Returning all upgrades for the user."
+        );
+        const result = await this.executeQuery(
+          `SELECT * FROM ${table} WHERE guild_id = $1 AND user_id = $2`,
+          [guildId, userId]
+        );
+        return field ? result.map((row) => row[field]) : result;
       }
       const result = await this.executeQuery(
         `SELECT * FROM ${table} WHERE guild_id = $1 AND user_id = $2 AND upgrade_id = $3`,
@@ -365,6 +372,10 @@ class EconomyEZ {
     if (typeof value === "object" && value !== null) {
       await this.updateMultipleFields(table, guildId, userId, value);
     } else {
+      // Convert to bigint if the value is a large number
+      if (typeof value === "number" && value > Number.MAX_SAFE_INTEGER) {
+        value = BigInt(value);
+      }
       await this.executeQuery(
         `INSERT INTO ${table} (guild_id, user_id, ${field}) 
          VALUES ($1, $2, $3)
@@ -438,7 +449,10 @@ class EconomyEZ {
 
     if (table === "shop") {
       if (!upgradeId) {
-        throw new Error("upgrade_id is required for shop table");
+        console.warn(
+          "Warning: upgrade_id is missing for shop table. Using default value of 1."
+        );
+        upgradeId = 1; // Set a default value
       }
       await this.executeQuery(
         `INSERT INTO ${table} (guild_id, user_id, upgrade_id, upgrade_level) 
