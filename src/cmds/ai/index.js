@@ -18,6 +18,7 @@ export default {
   },
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
+
     if (this[subcommand]) {
       await this[subcommand].execute(interaction);
     } else {
