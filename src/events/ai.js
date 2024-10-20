@@ -3,7 +3,7 @@ import { translate } from "bing-translate-api";
 
 let models = {
   text: [
-    /*"llama-3.2-90b-text-preview",*/
+    "llama-3.2-90b-text-preview",
     "llama-3.1-70b-versatile",
     "llama3-groq-70b-8192-tool-use-preview",
   ],
@@ -15,7 +15,7 @@ let modelCooldowns = {
   vision: {},
 };
 
-const MAX_CONTEXT_LENGTH = 5;
+const MAX_CONTEXT_LENGTH = 4;
 const INITIAL_CONTEXT = {
   role: "system",
   content: `You are a discord bot called "Eleazar". You have tons of tools (commands) that you can execute for the user. If user just want to talk with you, try to talk as natural to him as possible.`,
@@ -25,12 +25,17 @@ let context = {};
 
 function generateToolsFromCommands(client) {
   return Array.from(client.commands.values())
-    .filter((command) => command.data)
+    .filter((command) => command.data && command.data.ai !== false)
     .flatMap((command) => {
-      if (command.data.options && command.data.options.length > 0) {
-        return command.data.options.map((subcommand) =>
-          createToolObject(command.data.name, subcommand)
-        );
+      if (
+        command.data.options &&
+        command.data.options.some(
+          (opt) => opt.toJSON && opt.toJSON().type === 1
+        )
+      ) {
+        return command.data.options
+          .filter((subcommand) => subcommand.ai !== false)
+          .map((subcommand) => createToolObject(command.data.name, subcommand));
       }
       return [createToolObject(command.data.name, command.data)];
     });
@@ -40,27 +45,39 @@ function createToolObject(commandName, commandData) {
   const parameters = {};
   if (commandData.options) {
     commandData.options.forEach((option) => {
-      parameters[option.name] = {
-        type: "string",
-        description: option.description,
-      };
+      if (option.required) {
+        parameters[option.name] = {
+          type: option.type === "INTEGER" ? "number" : "string",
+          description: option.description,
+        };
+
+        if (option.choices) {
+          parameters[option.name].enum = option.choices.map(
+            (choice) => choice.value
+          );
+        }
+      }
     });
   }
+
+  // Get the correct description
+  let description = commandData.description;
+  if (commandData.toJSON) {
+    const jsonData = commandData.toJSON();
+    description = jsonData.description || description;
+  }
+
   return {
     type: "function",
     function: {
       name: commandData.name
         ? `${commandName}_${commandData.name}`
         : commandName,
-      description: commandData.description,
+      description: description,
       parameters: {
         type: "object",
         properties: parameters,
-        required: commandData.options
-          ? commandData.options
-              .filter((opt) => opt.required)
-              .map((opt) => opt.name)
-          : [],
+        required: Object.keys(parameters),
       },
     },
   };
@@ -108,10 +125,20 @@ async function translateText(text, targetLang) {
 
 async function executeToolCall(toolCall, message, processingMessage) {
   const { name, arguments: args } = toolCall.function;
-  const [commandName, subcommandName] = name.split("_");
+  const parts = name.split("_");
+  let commandName, subcommandName;
+
+  if (parts.length > 1) {
+    commandName = parts[0];
+    subcommandName = parts.slice(1).join("_");
+  } else {
+    commandName = name;
+    subcommandName = null;
+  }
+
   const command = message.client.commands.get(commandName);
 
-  if (!command) return false;
+  if (!command) return { success: false, response: null };
 
   try {
     const fakeInteraction = await createFakeInteraction(
@@ -119,23 +146,38 @@ async function executeToolCall(toolCall, message, processingMessage) {
       processingMessage,
       commandName,
       subcommandName,
-      args
+      args || "{}" // Pass "{}" if args is falsy
     );
 
-    // Add this check
     if (!fakeInteraction.guild || !fakeInteraction.member) {
       await processingMessage.edit(
         "This command can only be used in a server."
       );
-      return false;
+      return {
+        success: false,
+        response: "This command can only be used in a server.",
+      };
     }
 
-    await command.execute(fakeInteraction);
-    return true;
+    // Log information about the user being passed to the command
+    const userOption = fakeInteraction.options.getUser("user");
+    console.log(
+      "User being passed to command:",
+      userOption ? `${userOption.tag} (${userOption.id})` : "No user provided"
+    );
+
+    const response = await command.execute(fakeInteraction);
+    return {
+      success: true,
+      response: response || "Command executed successfully.",
+    };
   } catch (error) {
     console.error(`Error executing command ${name}:`, error);
     await processingMessage.edit(`Error executing command: ${error.message}`);
-    return false;
+    return {
+      success: false,
+      response: `Error executing command: ${error.message}`,
+    };
   }
 }
 
@@ -203,18 +245,57 @@ async function createFakeInteraction(
 }
 
 function createFakeOptions(subcommandName, args, message) {
+  const parsedArgs = args ? JSON.parse(args) : {};
   return {
     data: [{ name: subcommandName, value: args }],
     getSubcommand: () => subcommandName,
-    getString: (name) => JSON.parse(args)[name],
-    getInteger: (name) => parseInt(JSON.parse(args)[name]),
-    getBoolean: (name) => JSON.parse(args)[name] === "true",
-    getUser: (name) => message.mentions.users.first() || message.author,
-    getMember: (name) =>
-      message.guild.members.cache.get(JSON.parse(args).user) || message.member,
+    getString: (name) => parsedArgs[name] || null,
+    getInteger: (name) =>
+      parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
+    getBoolean: (name) => parsedArgs[name] === "true",
+    getUser: (name) => {
+      if (parsedArgs[name]) {
+        if (
+          parsedArgs[name].startsWith("<@") &&
+          parsedArgs[name].endsWith(">")
+        ) {
+          const userId = parsedArgs[name].replace(/[<@!>]/g, "");
+          return message.client.users.cache.get(userId) || message.author;
+        }
+        // If it's a username, try to find the user in the guild
+        const user = message.guild.members.cache.find(
+          (member) =>
+            member.user.username.toLowerCase() ===
+            parsedArgs[name].replace("@", "").toLowerCase()
+        );
+        return user ? user.user : message.author;
+      }
+      return message.author;
+    },
+    getMember: (name) => {
+      if (parsedArgs[name]) {
+        if (
+          parsedArgs[name].startsWith("<@") &&
+          parsedArgs[name].endsWith(">")
+        ) {
+          const userId = parsedArgs[name].replace(/[<@!>]/g, "");
+          return message.guild.members.cache.get(userId) || message.member;
+        }
+        // If it's a username, try to find the member in the guild
+        return (
+          message.guild.members.cache.find(
+            (member) =>
+              member.user.username.toLowerCase() ===
+              parsedArgs[name].replace("@", "").toLowerCase()
+          ) || message.member
+        );
+      }
+      return message.member;
+    },
     getChannel: (name) =>
-      message.guild.channels.cache.get(JSON.parse(args).channel) ||
-      message.channel,
+      parsedArgs.channel
+        ? message.guild.channels.cache.get(parsedArgs.channel)
+        : message.channel,
   };
 }
 
@@ -467,6 +548,7 @@ export default {
             tools: isVisionRequest ? [] : tools,
             tool_choice: isVisionRequest ? "none" : "auto",
           });
+          console.log(JSON.stringify(tools, null, 2));
           console.log(`Successfully got response from model: ${currentModel}`);
           break;
         } catch (error) {
@@ -517,24 +599,101 @@ export default {
       }
 
       let commandExecuted = false;
-      for (const toolCall of toolCalls) {
-        const success = await executeToolCall(
-          toolCall,
+      let debugInfo = `\n\n[Debug: Model used - ${currentModel}]`;
+      let toolCallResponse = "";
+
+      // Only process the last tool call
+      if (toolCalls.length > 0) {
+        const lastToolCall = toolCalls[toolCalls.length - 1];
+
+        // Add debug information for all tool calls
+        toolCalls.forEach((toolCall, index) => {
+          debugInfo += `\n[Debug: AI suggested tool ${index + 1} of ${
+            toolCalls.length
+          }: "${toolCall.function.name}"]`;
+        });
+
+        // Add detailed debug information about the last tool call
+        const parts = lastToolCall.function.name.split("_");
+        const commandName = parts[0];
+        const subcommandName =
+          parts.length > 1 ? parts.slice(1).join("_") : null;
+
+        const command = message.client.commands.get(commandName);
+
+        debugInfo += `\n\n[Debug: Executing last tool call: "${lastToolCall.function.name}"]`;
+        debugInfo += `\n  Command: ${commandName}`;
+        if (command && command.data) {
+          debugInfo += `\n  Command Description: ${command.data.description}`;
+        }
+
+        if (subcommandName) {
+          debugInfo += `\n  Subcommand: ${subcommandName}`;
+          debugInfo += `\n  Subcommand Description: ${lastToolCall.function.description}`;
+        } else {
+          debugInfo += `\n  Description: ${lastToolCall.function.description}`;
+        }
+
+        debugInfo += `\n  Parameters:`;
+
+        const params = JSON.parse(lastToolCall.function.arguments);
+        const requiredParams =
+          lastToolCall.function?.parameters?.required || [];
+
+        if (Object.keys(params).length > 0) {
+          for (const [key, value] of Object.entries(params)) {
+            debugInfo += `\n    ${key}: ${value}`;
+          }
+
+          // Add information about available enums (choices) for parameters
+          if (
+            lastToolCall.function.parameters &&
+            lastToolCall.function.parameters.properties
+          ) {
+            for (const [paramName, paramDetails] of Object.entries(
+              lastToolCall.function.parameters.properties
+            )) {
+              if (paramDetails.enum) {
+                debugInfo += `\n  Available choices for ${paramName}:`;
+                paramDetails.enum.forEach((choice) => {
+                  debugInfo += `\n    - ${choice}`;
+                });
+              }
+            }
+          }
+        } else {
+          debugInfo += `\n    No parameters provided`;
+        }
+
+        debugInfo += `\n  Raw arguments: ${lastToolCall.function.arguments}`;
+
+        const { success, response } = await executeToolCall(
+          lastToolCall,
           message,
           processingMessage
         );
         if (success) {
           commandExecuted = true;
-          break;
+          toolCallResponse = response;
+          debugInfo += `\n  Result: Command executed successfully`;
+          debugInfo += `\n  Response: ${response}`;
+        } else {
+          debugInfo += `\n  Result: Command execution failed`;
+          debugInfo += `\n  Error: ${response}`;
         }
       }
 
-      if (aiContent.trim()) {
+      if (aiContent.trim() || toolCallResponse) {
+        let finalResponse = aiContent.trim();
+        if (toolCallResponse) {
+          finalResponse +=
+            (finalResponse ? "\n\n" : "") +
+            `Tool response: ${toolCallResponse}`;
+        }
         const translatedResponse = await translateText(
-          aiContent.trim(),
+          finalResponse,
           originalLanguage
         );
-        const debugInfo = `\n\n[Debug: Model used - ${currentModel}]`;
         await sendResponse(
           message,
           processingMessage,
@@ -544,7 +703,7 @@ export default {
         // Update context for both text and vision requests
         context[message.author.id].push({
           role: "assistant",
-          content: aiContent.trim(),
+          content: finalResponse,
         });
         // Ensure context doesn't exceed MAX_CONTEXT_LENGTH
         if (context[message.author.id].length > MAX_CONTEXT_LENGTH + 1) {
@@ -558,14 +717,14 @@ export default {
           message,
           processingMessage,
           `Command executed successfully.`,
-          `\n\n[Debug: Model used - ${currentModel}]`
+          debugInfo
         );
       } else {
         await sendResponse(
           message,
           processingMessage,
           `No valid commands were executed.`,
-          `\n\n[Debug: Model used - ${currentModel}]`
+          debugInfo
         );
       }
     } catch (error) {
