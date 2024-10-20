@@ -9,7 +9,7 @@ export default {
     .addSubcommand(generate_image.data)
     .addSubcommand(transcribe_audio.data),
   generate_image: {
-    cooldown: 35,
+    cooldown: 40,
     execute: generate_image.execute,
   },
   transcribe_audio: {

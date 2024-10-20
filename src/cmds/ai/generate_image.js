@@ -4,10 +4,10 @@ import fetch from "node-fetch";
 export default {
   data: new SlashCommandSubcommandBuilder()
     .setName("generate_image")
-    .setDescription("Generate image by prompt")
+    .setDescription("Generate beautiful image by prompt")
     .setDescriptionLocalizations({
-      ru: "Генерация изображения по запросу",
-      uk: "Генерація зображення за запитом",
+      ru: "Генерация красивого изображения по запросу",
+      uk: "Генерація красивого зображення за запитом",
     })
     .addStringOption((option) =>
       option
