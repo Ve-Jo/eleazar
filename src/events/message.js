@@ -1,5 +1,6 @@
 import { Events } from "discord.js";
 import EconomyEZ from "../utils/economy.js";
+import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
   name: Events.MessageCreate,
@@ -7,6 +8,30 @@ export default {
     if (message.author.bot) return;
 
     const { guild, channel, author } = message;
+
+    // Handle voice message transcription
+    if (message.attachments.size > 0) {
+      const audioAttachment = message.attachments.find((att) =>
+        att.contentType?.startsWith("audio/")
+      );
+      if (audioAttachment) {
+        try {
+          await message.channel.sendTyping();
+          const transcription = await transcribeAudio(
+            message.client,
+            audioAttachment.url
+          );
+          await message.reply(
+            `Transcription of voice message:\n\n${transcription}`
+          );
+        } catch (error) {
+          console.error("Error transcribing voice message:", error);
+          await message.reply(
+            "Sorry, I couldn't transcribe that voice message."
+          );
+        }
+      }
+    }
 
     // Handle counting
     const countingData = (await EconomyEZ.get(`counting.${guild.id}`))[0];
