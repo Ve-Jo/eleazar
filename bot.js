@@ -52,8 +52,7 @@ await client.login(process.env.DISCORD_TOKEN);
 
 /*startResourceMonitor(5000);*/
 
-// Clear caches regularly to free up memory
-function clearCaches() {
+/*function clearCaches() {
   client.users.cache.sweep(() => true);
   client.guilds.cache.forEach((guild) => {
     guild.roles.cache.sweep(() => true);
@@ -62,4 +61,4 @@ function clearCaches() {
   console.log("Caches cleared");
 }
 
-setInterval(clearCaches, 30000);
+setInterval(clearCaches, 30000);*/

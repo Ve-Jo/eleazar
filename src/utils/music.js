@@ -18,13 +18,13 @@ async function init(client) {
         authorization: "youshallnotpass",
         secure: false,
       },
-      {
+      /*{
         id: "natry4",
         host: "lavalink01.techbyte.host",
         port: 2036,
         authorization: "NAIGLAVA-dash.techbyte.host",
         secure: false,
-      },
+      },*/
     ],
     sendToShard: (guildId, payload) =>
       client.guilds.cache.get(guildId)?.shard?.send(payload),

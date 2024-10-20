@@ -20,7 +20,9 @@ export default {
         });
       }
 
-      i18n.setLocale(interaction.user.locale);
+      if (interaction.user.locale) {
+        i18n.setLocale(interaction.user.locale);
+      }
 
       try {
         switch (option) {

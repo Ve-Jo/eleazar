@@ -123,7 +123,12 @@ async function translateText(text, targetLang) {
   }
 }
 
-async function executeToolCall(toolCall, message, processingMessage) {
+async function executeToolCall(
+  toolCall,
+  message,
+  processingMessage,
+  detectedLanguage
+) {
   const { name, arguments: args } = toolCall.function;
   const parts = name.split("_");
   let commandName, subcommandName;
@@ -146,7 +151,8 @@ async function executeToolCall(toolCall, message, processingMessage) {
       processingMessage,
       commandName,
       subcommandName,
-      args || "{}" // Pass "{}" if args is falsy
+      args || "{}",
+      detectedLanguage
     );
 
     if (!fakeInteraction.guild || !fakeInteraction.member) {
@@ -158,13 +164,6 @@ async function executeToolCall(toolCall, message, processingMessage) {
         response: "This command can only be used in a server.",
       };
     }
-
-    // Log information about the user being passed to the command
-    const userOption = fakeInteraction.options.getUser("user");
-    console.log(
-      "User being passed to command:",
-      userOption ? `${userOption.tag} (${userOption.id})` : "No user provided"
-    );
 
     const response = await command.execute(fakeInteraction);
     return {
@@ -186,14 +185,14 @@ async function createFakeInteraction(
   processingMessage,
   commandName,
   subcommandName,
-  args
+  args,
+  detectedLanguage
 ) {
   const fakeOptions = createFakeOptions(subcommandName, args, message);
 
   let freshMember;
   try {
     freshMember = await message.guild.members.fetch(message.author.id);
-    console.log(`Fetched fresh member data for ${message.author.tag}`);
   } catch (error) {
     console.error(
       `Failed to fetch member data for ${message.author.tag}:`,
@@ -208,25 +207,35 @@ async function createFakeInteraction(
     );
   }
 
-  // Add this block to ensure guild and roles are properly set
   const guild = message.guild;
   if (guild) {
-    await guild.roles.fetch(); // Ensure roles are fetched
+    await guild.roles.fetch();
+  }
+
+  let userLocale = ["en", "ru", "uk"].includes(detectedLanguage)
+    ? detectedLanguage
+    : "en";
+
+  message.author.locale = userLocale;
+
+  const channel = message.channel || guild.channels.cache.first();
+
+  if (!channel) {
+    throw new Error("No valid channel found for the interaction");
   }
 
   return {
     user: message.author,
     guild: guild,
-    channel: message.channel,
+    channel: channel,
+    channelId: channel.id,
+    channels: guild.channels,
     member: freshMember,
-    client: {
-      ...message.client,
-    },
-    ...message,
+    client: message.client,
     reply: async (content) => processingMessage.edit(content),
     editReply: async (content) => processingMessage.edit(content),
     deferReply: async () => processingMessage.edit("Processing..."),
-    followUp: async (content) => message.channel.send(content),
+    followUp: async (content) => channel.send(content),
     options: fakeOptions,
     isCommand: () => true,
     commandName: commandName,
@@ -234,9 +243,9 @@ async function createFakeInteraction(
     replied: false,
     ephemeral: false,
     webhook: {
-      send: async (content) => message.channel.send(content),
+      send: async (content) => channel.send(content),
       editMessage: async (messageId, content) => {
-        const msg = await message.channel.messages.fetch(messageId);
+        const msg = await channel.messages.fetch(messageId);
         return msg.edit(content);
       },
     },
@@ -448,25 +457,13 @@ function splitMessage(message, maxLength = 2000) {
 }
 
 // Replace the existing processingMessage.edit calls with this new function
-async function sendResponse(
-  message,
-  processingMessage,
-  content,
-  debugInfo = ""
-) {
+async function sendResponse(message, processingMessage, content) {
   const chunks = splitMessage(content);
 
-  // Edit the processing message with the first chunk
-  await processingMessage.edit(
-    chunks[0] + (chunks.length === 1 ? debugInfo : "")
-  );
+  await processingMessage.edit(chunks[0]);
 
-  // Send additional chunks as new messages
   for (let i = 1; i < chunks.length; i++) {
     let chunk = chunks[i];
-    if (i === chunks.length - 1) {
-      chunk += debugInfo;
-    }
     await message.channel.send(chunk);
   }
 }
@@ -600,87 +597,21 @@ export default {
       }
 
       let commandExecuted = false;
-      let debugInfo = `\n\n[Debug: Model used - ${currentModel}]`;
       let toolCallResponse = "";
 
       // Only process the last tool call
       if (toolCalls.length > 0) {
         const lastToolCall = toolCalls[toolCalls.length - 1];
 
-        // Add debug information for all tool calls
-        toolCalls.forEach((toolCall, index) => {
-          debugInfo += `\n[Debug: AI suggested tool ${index + 1} of ${
-            toolCalls.length
-          }: "${toolCall.function.name}"]`;
-        });
-
-        // Add detailed debug information about the last tool call
-        const parts = lastToolCall.function.name.split("_");
-        const commandName = parts[0];
-        const subcommandName =
-          parts.length > 1 ? parts.slice(1).join("_") : null;
-
-        const command = message.client.commands.get(commandName);
-
-        debugInfo += `\n\n[Debug: Executing last tool call: "${lastToolCall.function.name}"]`;
-        debugInfo += `\n  Command: ${commandName}`;
-        if (command && command.data) {
-          debugInfo += `\n  Command Description: ${command.data.description}`;
-        }
-
-        if (subcommandName) {
-          debugInfo += `\n  Subcommand: ${subcommandName}`;
-          debugInfo += `\n  Subcommand Description: ${lastToolCall.function.description}`;
-        } else {
-          debugInfo += `\n  Description: ${lastToolCall.function.description}`;
-        }
-
-        debugInfo += `\n  Parameters:`;
-
-        const params = JSON.parse(lastToolCall.function.arguments);
-        const requiredParams =
-          lastToolCall.function?.parameters?.required || [];
-
-        if (Object.keys(params).length > 0) {
-          for (const [key, value] of Object.entries(params)) {
-            debugInfo += `\n    ${key}: ${value}`;
-          }
-
-          // Add information about available enums (choices) for parameters
-          if (
-            lastToolCall.function.parameters &&
-            lastToolCall.function.parameters.properties
-          ) {
-            for (const [paramName, paramDetails] of Object.entries(
-              lastToolCall.function.parameters.properties
-            )) {
-              if (paramDetails.enum) {
-                debugInfo += `\n  Available choices for ${paramName}:`;
-                paramDetails.enum.forEach((choice) => {
-                  debugInfo += `\n    - ${choice}`;
-                });
-              }
-            }
-          }
-        } else {
-          debugInfo += `\n    No parameters provided`;
-        }
-
-        debugInfo += `\n  Raw arguments: ${lastToolCall.function.arguments}`;
-
         const { success, response } = await executeToolCall(
           lastToolCall,
           message,
-          processingMessage
+          processingMessage,
+          originalLanguage
         );
         if (success) {
           commandExecuted = true;
           toolCallResponse = response;
-          debugInfo += `\n  Result: Command executed successfully`;
-          debugInfo += `\n  Response: ${response}`;
-        } else {
-          debugInfo += `\n  Result: Command execution failed`;
-          debugInfo += `\n  Error: ${response}`;
         }
       }
 
@@ -695,18 +626,11 @@ export default {
           finalResponse,
           originalLanguage
         );
-        await sendResponse(
-          message,
-          processingMessage,
-          translatedResponse,
-          debugInfo
-        );
-        // Update context for both text and vision requests
+        await sendResponse(message, processingMessage, translatedResponse);
         context[message.author.id].push({
           role: "assistant",
           content: finalResponse,
         });
-        // Ensure context doesn't exceed MAX_CONTEXT_LENGTH
         if (context[message.author.id].length > MAX_CONTEXT_LENGTH + 1) {
           context[message.author.id] = [
             INITIAL_CONTEXT,
@@ -717,15 +641,13 @@ export default {
         await sendResponse(
           message,
           processingMessage,
-          `Command executed successfully.`,
-          debugInfo
+          `Command executed successfully.`
         );
       } else {
         await sendResponse(
           message,
           processingMessage,
-          `No valid commands were executed.`,
-          debugInfo
+          `No valid commands were executed.`
         );
       }
     } catch (error) {
