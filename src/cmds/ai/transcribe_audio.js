@@ -1,33 +1,89 @@
 import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
+import fs from "fs";
+import { pipeline } from "stream/promises";
+import path from "path";
+import ffmpeg from "fluent-ffmpeg";
+import { promisify } from "util";
 
-export async function transcribeAudio(
-  client,
-  audioUrl,
-  language = "auto",
-  translate = false,
-  format = "plain text"
-) {
-  const output = await client.replicate.run(
-    "openai/whisper:cdd97b257f93cb89dede1c7584e3f3dfc969571b357dbcee08e793740bedd854",
-    {
-      input: {
-        audio: audioUrl,
-        language: language,
-        transcription: format,
-        translate: translate,
-      },
+const unlinkAsync = promisify(fs.unlink);
+
+async function convertAudio(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .toFormat("mp3")
+      .on("error", (err) => reject(err))
+      .on("end", () => resolve())
+      .save(outputPath);
+  });
+}
+
+export async function transcribeAudio(client, audioUrl, language = "auto") {
+  try {
+    const response = await fetch(audioUrl);
+    const originalFilePath = `./temp_original_audio_file${path.extname(
+      audioUrl
+    )}`;
+    await pipeline(response.body, fs.createWriteStream(originalFilePath));
+
+    const convertedFilePath = "./temp_converted_audio_file.mp3";
+    await convertAudio(originalFilePath, convertedFilePath);
+
+    try {
+      const transcription = await client.groq.audio.transcriptions.create({
+        file: fs.createReadStream(convertedFilePath),
+        model: "whisper-large-v3-turbo",
+        response_format: "json",
+      });
+
+      await Promise.all([
+        unlinkAsync(originalFilePath),
+        unlinkAsync(convertedFilePath),
+      ]);
+
+      return {
+        text: transcription.text,
+        language: transcription.language,
+        provider: "groq",
+      };
+    } catch (groqError) {
+      console.error("Error using Groq API:", groqError);
+      console.log("Falling back to Replicate API");
+
+      const output = await client.replicate.run(
+        "openai/whisper:cdd97b257f93cb89dede1c7584e3f3dfc969571b357dbcee08e793740bedd854",
+        {
+          input: {
+            audio: audioUrl,
+            language: language,
+          },
+        }
+      );
+
+      await Promise.all([
+        unlinkAsync(originalFilePath),
+        unlinkAsync(convertedFilePath),
+      ]);
+
+      let transcription = "";
+      if (Array.isArray(output.segments)) {
+        transcription = output.segments
+          .map((segment) => segment.text)
+          .join(" ");
+      } else {
+        transcription = output.transcription || "Transcription failed.";
+      }
+
+      return {
+        text: transcription,
+        language: output.language,
+        provider: "replicate",
+      };
     }
-  );
-
-  let transcription = "";
-  if (Array.isArray(output.segments)) {
-    transcription = output.segments.map((segment) => segment.text).join(" ");
-  } else {
-    transcription = output.transcription || "Transcription failed.";
+  } catch (error) {
+    console.error("Error transcribing audio:", error);
+    throw error;
   }
-
-  return transcription;
 }
 
 export default {
@@ -45,31 +101,13 @@ export default {
         .setName("language")
         .setDescription("The language of the audio (default: auto)")
         .setRequired(false)
-    )
-    .addBooleanOption((option) =>
-      option
-        .setName("translate")
-        .setDescription("Translate the transcription to English")
-        .setRequired(false)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("format")
-        .setDescription("Output format (default: plain text)")
-        .addChoices(
-          { name: "Plain Text", value: "plain text" },
-          { name: "SRT", value: "srt" },
-          { name: "VTT", value: "vtt" }
-        )
-        .setRequired(false)
     ),
+
   async execute(interaction) {
     await interaction.deferReply();
 
     const audioAttachment = interaction.options.getAttachment("audio");
     const language = interaction.options.getString("language") || "auto";
-    const translate = interaction.options.getBoolean("translate") || false;
-    const format = interaction.options.getString("format") || "plain text";
 
     if (!audioAttachment.contentType.startsWith("audio/")) {
       return interaction.editReply("Please provide a valid audio file.");
@@ -79,9 +117,7 @@ export default {
       const transcription = await transcribeAudio(
         interaction.client,
         audioAttachment.url,
-        language,
-        translate,
-        format
+        language
       );
 
       if (transcription.length > 2000) {

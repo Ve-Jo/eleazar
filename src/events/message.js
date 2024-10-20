@@ -21,9 +21,17 @@ export default {
             message.client,
             audioAttachment.url
           );
-          await message.reply(
-            `Transcription of voice message:\n\n${transcription}`
-          );
+
+          if (transcription.length > 2000) {
+            const chunks = transcription.match(/.{1,2000}/g);
+            for (const chunk of chunks) {
+              await message.reply(chunk);
+            }
+          } else {
+            await message.reply(
+              `Transcription of voice message:\n\n${transcription.text}\n\n[DEBUG: ${transcription.provider}, ${transcription.language}]`
+            );
+          }
         } catch (error) {
           console.error("Error transcribing voice message:", error);
           await message.reply(
