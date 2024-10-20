@@ -18,7 +18,7 @@ let modelCooldowns = {
 const MAX_CONTEXT_LENGTH = 4;
 const INITIAL_CONTEXT = {
   role: "system",
-  content: `You are a discord bot called "Eleazar". You have tons of tools (commands) that you can execute for the user. If user just want to talk with you, try to talk as natural to him as possible.`,
+  content: `You are a discord bot named "Eleazar" and created by "@vejoy_". You free to share it in case someone wants to contant with you. You have tons of tools (commands) that you can execute for the user. But if user just want to talk with you, try to talk as natural and simplier to him as possible (and not with tons of text).`,
 };
 
 let context = {};
@@ -476,10 +476,11 @@ export default {
   async execute(message) {
     if (message.author.bot) return;
 
-    const botMention = `<@${message.client.user.id}>`;
-    if (!message.content.startsWith(botMention)) return;
+    if (!message.mentions.users.has(message.client.user.id)) return;
 
-    let messageContent = message.content.slice(botMention.length).trim();
+    let messageContent = message.content
+      .replace(`<@${message.client.user.id}>`, "")
+      .trim();
     message.channel.sendTyping();
     const processingMessage = await message.channel.send(
       "Processing your request..."
