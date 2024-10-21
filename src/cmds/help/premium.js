@@ -12,8 +12,6 @@ export default {
     .setName("premium")
     .setDescription("Information about premium features"),
   async execute(interaction) {
-    await interaction.deferReply();
-
     const premiumFeatures = [
       {
         title: "24/7 Music Player",

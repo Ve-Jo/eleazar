@@ -25,6 +25,7 @@ export default {
     const subcommand = interaction.options.getSubcommand();
 
     if (this[subcommand]) {
+      await interaction.deferReply();
       await this[subcommand].execute(interaction);
     } else {
       await interaction.reply({
