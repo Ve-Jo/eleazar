@@ -331,58 +331,40 @@ class EconomyEZ {
 
   static async set(path, value) {
     const parts = path.split(".");
-    let [table, guildId, userId, field] = parts;
+    let [table, guildId, userId, field, upgradeId] = parts;
 
     if (!table || !(await this.isValidTable(table))) {
       throw new Error(`Invalid or missing table: ${table}`);
     }
 
-    // Check if userId is actually a field
-    if (userId && isNaN(userId)) {
-      field = userId;
-      userId = undefined;
-    }
-
-    if (!userId) {
-      // Set guild-specific data
-      if (typeof value === "object" && value !== null) {
-        const setClause = Object.keys(value)
-          .map((key, index) => `${key} = $${index + 2}`)
-          .join(", ");
-        const values = Object.values(value);
-        await this.executeQuery(
-          `INSERT INTO ${table} (guild_id, ${Object.keys(value).join(", ")}) 
-           VALUES ($1, ${values.map((_, i) => `$${i + 2}`).join(", ")})
-           ON CONFLICT (guild_id) 
-           DO UPDATE SET ${setClause}`,
-          [guildId, ...values]
-        );
-      } else {
-        await this.executeQuery(
-          `INSERT INTO ${table} (guild_id, ${field}) 
-           VALUES ($1, $2)
-           ON CONFLICT (guild_id) 
-           DO UPDATE SET ${field} = $2`,
-          [guildId, value]
-        );
-      }
-      return;
-    }
-
-    if (typeof value === "object" && value !== null) {
-      await this.updateMultipleFields(table, guildId, userId, value);
-    } else {
-      // Convert to bigint if the value is a large number
-      if (typeof value === "number" && value > Number.MAX_SAFE_INTEGER) {
-        value = BigInt(value);
+    if (table === "shop") {
+      if (!upgradeId) {
+        throw new Error("Missing upgrade_id for shop table");
       }
       await this.executeQuery(
-        `INSERT INTO ${table} (guild_id, user_id, ${field}) 
-         VALUES ($1, $2, $3)
-         ON CONFLICT (guild_id, user_id) 
-         DO UPDATE SET ${field} = $3`,
-        [guildId, userId, value]
+        `INSERT INTO ${table} (guild_id, user_id, upgrade_id, upgrade_level)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (guild_id, user_id, upgrade_id)
+         DO UPDATE SET upgrade_level = $4`,
+        [guildId, userId, upgradeId, value]
       );
+    } else {
+      // Existing code for other tables
+      if (typeof value === "object" && value !== null) {
+        await this.updateMultipleFields(table, guildId, userId, value);
+      } else {
+        // Convert to bigint if the value is a large number
+        if (typeof value === "number" && value > Number.MAX_SAFE_INTEGER) {
+          value = BigInt(value);
+        }
+        await this.executeQuery(
+          `INSERT INTO ${table} (guild_id, user_id, ${field}) 
+           VALUES ($1, $2, $3)
+           ON CONFLICT (guild_id, user_id) 
+           DO UPDATE SET ${field} = $3`,
+          [guildId, userId, value]
+        );
+      }
     }
   }
 

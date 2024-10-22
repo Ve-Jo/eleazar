@@ -14,7 +14,7 @@ const upgrades = [
   },
   {
     id: 1,
-    emoji: "🕵️",
+    emoji: "⏳",
     name: "crimeCooldown",
     short_description: "crimeCooldownShortDescription",
     description: "crimeCooldownDescription",
@@ -34,24 +34,28 @@ export async function getUpgradesForUser(guildId, userId, locale) {
       (await EconomyEZ.get(
         `shop.${guildId}.${userId}.upgrade_level.${upgrade.id}`
       )) || 1;
+    const price = Math.round(
+      upgrade.price * Math.pow(upgrade.price_increaser, current_level - 1)
+    );
+    const current_multiplier =
+      upgrade.multiplier_increase * (current_level - 1);
+
+    const balance = await EconomyEZ.get(`economy.${guildId}.${userId}.balance`);
+
     return {
-      ...upgrade,
-      name: i18n.__({
-        phrase: `economy.upgrades.${upgrade.name}.name`,
+      title: i18n.__(`economy.upgrades.${upgrade.name}.name`, {
         locale,
       }),
-      short_description: i18n.__({
-        phrase: `economy.upgrades.${upgrade.name}.shortDescription`,
+      description: i18n.__(`economy.upgrades.${upgrade.name}.description`, {
+        current_multiplier: current_multiplier,
         locale,
       }),
-      price:
-        upgrade.price * Math.pow(upgrade.price_increaser, current_level - 1),
-      description: i18n.__({
-        phrase: `economy.upgrades.${upgrade.name}.description`,
-        locale,
-      }),
-      current_level,
-      current_multiplier: upgrade.multiplier_increase * (current_level - 1),
+      currentLevel: current_level,
+      nextLevel: current_level + 1,
+      price: price,
+      progress: Math.min(100, Math.floor((balance / price) * 100)),
+      emoji: upgrade.emoji,
+      id: upgrade.id,
     };
   });
 

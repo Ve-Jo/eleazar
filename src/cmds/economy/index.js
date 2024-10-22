@@ -8,6 +8,7 @@ import deposit from "./deposit.js";
 import withdraw from "./withdraw.js";
 import shop from "./shop.js";
 import crime from "./crime.js";
+import leaderboard from "./leaderboard.js";
 
 export default {
   data: new SlashCommandBuilder()
@@ -23,9 +24,11 @@ export default {
     .addSubcommand(deposit.data)
     .addSubcommand(withdraw.data)
     .addSubcommand(shop.data)
-    .addSubcommand(crime.data),
+    .addSubcommand(crime.data)
+    .addSubcommand(leaderboard.data),
   server: true,
   async execute(interaction) {
+    await interaction.deferReply();
     await EconomyEZ.ensure(
       `economy.${interaction.guild.id}.${interaction.user.id}`
     );
@@ -40,16 +43,16 @@ export default {
       withdraw: withdraw,
       shop: shop,
       crime: crime,
+      leaderboard: leaderboard,
     };
 
     if (!subcommands[subcommand]) {
-      return interaction.reply({
+      return interaction.editReply({
         content: i18n.__("subcommandNotFound"),
         ephemeral: true,
       });
     }
 
-    await interaction.deferReply();
     await subcommands[subcommand].execute(interaction);
   },
 };

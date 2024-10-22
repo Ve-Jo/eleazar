@@ -34,12 +34,12 @@
       "dailyBonus": {
         "name": "Щоденний бонус",
         "shortDescription": "Збільшення щоденного бонусу",
-        "description": "Нагорода в щоденному бонусі збільшена на {current_multiplier}%"
+        "description": "Нагорода в щоденному бонусі збільшена на {{current_multiplier}}%"
       },
       "crimeCooldown": {
         "name": "Зменшення часу очікування злочину",
         "shortDescription": "Зменшення часу очікування злочину",
-        "description": "Час очікування злочину зменшено на {current_multiplier} хвилин"
+        "description": "Час очікування злочину зменшено на {{current_multiplier}} хвилин"
       }
     },
 

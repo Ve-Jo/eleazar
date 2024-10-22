@@ -36,12 +36,12 @@
       "dailyBonus": {
         "name": "Ежедневный бонус",
         "shortDescription": "Увеличение ежедневного бонуса",
-        "description": "Награда в ежедневном бонусе увеличена на {current_multiplier}%"
+        "description": "Награда в ежедневном бонусе увеличена на {{current_multiplier}}%"
       },
       "crimeCooldown": {
         "name": "Снижение времени ожидания преступления",
         "shortDescription": "Сокращение времени ожидания преступления",
-        "description": "Время ожидания преступления сокращено на {current_multiplier} минут"
+        "description": "Время ожидания преступления сокращено на {{current_multiplier}} минут"
       }
     },
 
@@ -117,7 +117,6 @@
       "jail": "Тюрьма",
       "mms": "ММС",
       "notstonk": "Не стонк",
-      "poutine": "Путин",
       "rainbow": "Радуга",
       "rip": "RIP",
       "shit": "Дерьмо",

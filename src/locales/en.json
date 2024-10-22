@@ -29,12 +29,12 @@
       "dailyBonus": {
         "name": "Daily Bonus",
         "shortDescription": "Increase daily bonus",
-        "description": "Daily bonus reward increased by {current_multiplier}%"
+        "description": "Daily bonus reward increased by {{current_multiplier}}%"
       },
       "crimeCooldown": {
         "name": "Crime Cooldown",
         "shortDescription": "Decrease crime cooldown",
-        "description": "Crime cooldown decreased by {current_multiplier} minutes"
+        "description": "Crime cooldown decreased by {{current_multiplier}} minutes"
       }
     },
 

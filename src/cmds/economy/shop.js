@@ -1,15 +1,17 @@
 import {
   SlashCommandSubcommandBuilder,
+  AttachmentBuilder,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  SelectMenuBuilder,
   StringSelectMenuBuilder,
 } from "discord.js";
 import i18n from "../../utils/i18n";
 import { getUpgradesForUser } from "../../utils/shopManager";
 import EconomyEZ from "../../utils/economy";
+import UpgradesDisplay from "../../components/UpgradesDisplay.jsx";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -20,10 +22,6 @@ export default {
       uk: "Купити улучшення/ролі",
     }),
   async execute(interaction) {
-    return interaction.editReply({
-      content: "Магазин будет переработан в ближайшее время",
-    });
-
     const locale = interaction.locale || "en";
     const upgrades = await getUpgradesForUser(
       interaction.guildId,
@@ -31,52 +29,83 @@ export default {
       locale
     );
 
-    console.log(upgrades);
+    let currentUpgrade = 0;
+    let balance = await EconomyEZ.get(
+      `economy.${interaction.guildId}.${interaction.user.id}.balance`
+    );
 
-    let currentIndex = 0;
+    const generateShopImage = async () => {
+      // Ensure all data is properly formatted for Satori
+      const formattedUpgrades = upgrades.map((upgrade) => ({
+        ...upgrade,
+        title: String(upgrade.title),
+        description: String(upgrade.description),
+        currentLevel: Number(upgrade.currentLevel),
+        nextLevel: Number(upgrade.nextLevel),
+        price: Number(upgrade.price),
+        progress: Number(upgrade.progress),
+        emoji: String(upgrade.emoji),
+      }));
 
-    const getUpgradeDescription = (upgrade) => {
-      return `\`\`\`mk\n${upgrade.emoji} "${
-        upgrade.name
-      }"\n${upgrade.description.replace(
-        "{current_multiplier}",
-        upgrade.current_multiplier
-      )}\n\n${i18n.__({ phrase: "economy.shop.price", locale })}: ${
-        upgrade.price
-      } 💵\n${i18n.__({ phrase: "economy.shop.purchase", locale })}: +${
-        upgrade.multiplier_increase
-      }%\n# ${upgrade.current_level} ${i18n.__({
-        phrase: "economy.shop.level",
-        locale,
-      })} ${upgrade.max_level || "∞"}\`\`\``;
+      let formattedBalance = Number(balance);
+
+      return await generateImage(
+        UpgradesDisplay,
+        {
+          interaction: interaction,
+          upgrades: formattedUpgrades,
+          currentUpgrade: Number(currentUpgrade),
+          balance: formattedBalance,
+          width: 600,
+          height: 350,
+        },
+        { width: 600, height: 350 }
+      );
     };
 
-    const shop_embed = new EmbedBuilder()
-      .setColor(process.env.EMBED_COLOR)
-      .setTimestamp()
-      .setThumbnail(interaction.user.avatarURL())
-      .setAuthor({
-        name: i18n.__({ phrase: "economy.shop.title", locale }),
-        iconURL: interaction.user.avatarURL(),
-      })
-      .setDescription(getUpgradeDescription(upgrades[currentIndex]));
+    const updateMessage = async () => {
+      try {
+        const pngBuffer = await generateShopImage();
+        const attachment = new AttachmentBuilder(pngBuffer, {
+          name: "shop.png",
+        });
 
-    const selectMenu = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
+        const embed = new EmbedBuilder()
+          .setTimestamp()
+          .setColor(process.env.EMBED_COLOR)
+          .setImage("attachment://shop.png")
+          .setAuthor({
+            name: i18n.__({ phrase: "economy.shop.title", locale }),
+            iconURL: interaction.user.avatarURL(),
+          });
+
+        return { embeds: [embed], files: [attachment] };
+      } catch (error) {
+        console.error("Error generating shop image:", error);
+        return {
+          content: i18n.__({
+            phrase: "economy.shop.errorGeneratingImage",
+            locale,
+          }),
+        };
+      }
+    };
+
+    const createUpgradeMenu = () => {
+      return new StringSelectMenuBuilder()
         .setCustomId("select-upgrade")
         .setPlaceholder(
           i18n.__({ phrase: "economy.shop.selectPlaceholder", locale })
         )
         .addOptions(
           upgrades.map((upgrade, index) => ({
-            label: upgrade.name,
-            description:
-              `(${upgrade.current_level}) ` + upgrade.short_description,
+            label: upgrade.title,
+            description: `(${upgrade.currentLevel}) ${upgrade.description}`,
             emoji: upgrade.emoji,
             value: index.toString(),
           }))
-        )
-    );
+        );
+    };
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -85,69 +114,100 @@ export default {
         .setStyle(ButtonStyle.Success)
     );
 
-    const message = await interaction.editReply({
-      embeds: [shop_embed],
+    const selectMenu = new ActionRowBuilder().addComponents(
+      createUpgradeMenu()
+    );
+
+    const response = await interaction.editReply({
+      ...(await updateMessage()),
       components: [row, selectMenu],
-      fetchReply: true,
     });
 
-    const filter = (i) => i.user.id === interaction.user.id;
-    const collector = message.createMessageComponentCollector({
-      filter,
+    const collector = response.createMessageComponentCollector({
+      filter: (i) => i.user.id === interaction.user.id,
       time: 60000,
     });
 
     collector.on("collect", async (i) => {
       if (i.customId === "select-upgrade") {
-        currentIndex = parseInt(i.values[0], 10);
+        currentUpgrade = parseInt(i.values[0], 10);
+        await i.deferUpdate();
+        await response.edit({
+          ...(await updateMessage()),
+          components: [row, selectMenu],
+        });
       } else if (i.customId === "buy") {
-        const upgrade = upgrades[currentIndex];
-        const userBalance = await EconomyEZ.get(
-          `economy.${interaction.guildId}.${interaction.user.id}.balance`
-        );
+        const upgrade = upgrades[currentUpgrade];
 
-        if (userBalance < upgrade.price) {
-          await i.update({
+        if (balance < upgrade.price) {
+          await i.reply({
             content: i18n.__({ phrase: "economy.insufficientFunds", locale }),
-            components: [],
+            ephemeral: true,
           });
           return;
         }
 
-        await EconomyEZ.math(
-          `economy.${interaction.guildId}.${interaction.user.id}.balance`,
-          "-",
-          upgrade.price
-        );
-        await EconomyEZ.set(
-          `shop.${interaction.guildId}.${interaction.user.id}.upgrade_id`,
-          upgrade.id
-        );
-        await EconomyEZ.math(
-          `shop.${interaction.guildId}.${interaction.user.id}.upgrade_level`,
-          "+",
-          1
-        );
+        try {
+          // Deduct the price from the user's balance
+          await EconomyEZ.math(
+            `economy.${interaction.guildId}.${interaction.user.id}.balance`,
+            "-",
+            upgrade.price
+          );
 
-        await i.update({
-          content: i18n.__(
-            { phrase: "economy.shop.purchaseMessage", locale },
-            {
-              name: upgrade.name,
-              price: upgrade.price,
-            }
-          ),
-          components: [],
-        });
-        return;
+          // Increment the upgrade level
+          const currentLevel =
+            (await EconomyEZ.get(
+              `shop.${interaction.guildId}.${interaction.user.id}.upgrade_level.${upgrade.id}`
+            )) || 0;
+
+          // Here's the corrected line:
+          await EconomyEZ.set(
+            `shop.${interaction.guildId}.${interaction.user.id}.upgrade_level.${upgrade.id}`,
+            currentLevel + 1
+          );
+
+          await i.reply({
+            content: i18n.__(
+              { phrase: "economy.shop.purchaseMessage", locale },
+              {
+                name: upgrade.title,
+                price: upgrade.price,
+              }
+            ),
+            ephemeral: true,
+          });
+
+          // Update the message with new data
+          const updatedUpgrades = await getUpgradesForUser(
+            interaction.guildId,
+            interaction.user.id,
+            locale
+          );
+          upgrades.splice(0, upgrades.length, ...updatedUpgrades);
+          balance = await EconomyEZ.get(
+            `economy.${interaction.guildId}.${interaction.user.id}.balance`
+          );
+
+          await response.edit({
+            ...(await updateMessage()),
+            components: [
+              row,
+              new ActionRowBuilder().addComponents(createUpgradeMenu()),
+            ],
+          });
+        } catch (error) {
+          console.error("Error during purchase:", error);
+          await i.reply({
+            content: i18n.__({ phrase: "economy.shop.purchaseError", locale }),
+            ephemeral: true,
+          });
+        }
       }
-
-      shop_embed.setDescription(getUpgradeDescription(upgrades[currentIndex]));
-      await i.update({ embeds: [shop_embed], components: [row, selectMenu] });
     });
 
-    collector.on("end", (collected) => {
-      message.edit({ components: [] });
+    collector.on("end", () => {
+      response.edit({ components: [] });
     });
   },
 };

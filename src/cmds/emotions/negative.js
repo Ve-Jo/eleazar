@@ -152,7 +152,7 @@ export default {
     const collector = response.createMessageComponentCollector({
       filter: (i) => i.user.id === interaction.user.id,
       componentType: ComponentType.Button,
-      time: 60000,
+      idle: 60000,
     });
 
     collector.on("collect", async (i) => {
