@@ -26,12 +26,15 @@ const Leaderboard = ({
   }
 
   if (typeof highlightedPosition === "undefined") highlightedPosition = 1;
-  let highlightedUser = users[highlightedPosition - 1];
+  let highlightedUser = users.find(
+    (user, index) => startIndex + index + 1 === highlightedPosition
+  );
 
-  const isHighlightedUserOnCurrentPage =
-    highlightedPosition > startIndex && highlightedPosition <= endIndex;
+  const isHighlightedUserOnCurrentPage = users.some(
+    (user, index) => startIndex + index + 1 === highlightedPosition
+  );
 
-  const renderUserRow = (user, index, isHighlighted) => (
+  const renderUserRow = (user, position, isHighlighted) => (
     <div
       key={user.id}
       style={{
@@ -69,7 +72,7 @@ const Leaderboard = ({
               maxWidth: "24px",
             }}
           >
-            {index + 1}.
+            {position}.
           </div>
         )}
 
@@ -77,20 +80,20 @@ const Leaderboard = ({
           style={{
             display: "flex",
             backgroundColor:
-              index === 0
+              position === 1
                 ? "gold"
-                : index === 1
+                : position === 2
                 ? "silver"
-                : index === 2
+                : position === 3
                 ? "#cd7f32"
                 : !isHighlighted
                 ? "rgba(255, 255, 255, 0.1)"
                 : "transparent",
             borderRadius: isHighlighted
               ? "7px 7px 0px 0px"
-              : index === startIndex
+              : position === startIndex
               ? "10px 10px 0px 0px"
-              : index === endIndex - 1 && !isHighlighted
+              : position === endIndex - 1 && !isHighlighted
               ? "0px 0px 10px 10px"
               : "0px",
             marginLeft: isHighlighted ? "-10px" : "0px",
@@ -121,10 +124,8 @@ const Leaderboard = ({
             >
               <img
                 src={
-                  interaction?.guild?.iconURL({
-                    extension: "png",
-                    size: 2048,
-                  }) || "https://cdn.discordapp.com/embed/avatars/0.png"
+                  user?.avatar ||
+                  "https://cdn.discordapp.com/embed/avatars/0.png"
                 }
                 alt="User Avatar"
                 width={40}
@@ -169,7 +170,7 @@ const Leaderboard = ({
               justifyContent: "flex-end",
             }}
           >
-            ${user.balance.toLocaleString()}
+            ${user.totalBalance.toLocaleString()}
           </div>
         </div>
       </div>
@@ -210,7 +211,7 @@ const Leaderboard = ({
                 margin: "0",
               }}
             >
-              {index + 1}
+              {position}
             </div>
           </div>
           <div
@@ -295,14 +296,14 @@ const Leaderboard = ({
         {users.map((user, index) =>
           renderUserRow(
             user,
-            (currentPage - 1) * 10 + index + 1,
-            (currentPage - 1) * 10 + index + 1 === highlightedPosition
+            startIndex + index + 1,
+            startIndex + index + 1 === highlightedPosition
           )
         )}
-        {!isHighlightedUserOnCurrentPage && (
+        {!isHighlightedUserOnCurrentPage && highlightedUser && (
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ width: "100%", display: "flex" }}>
-              {renderUserRow(highlightedUser, highlightedPosition - 1, true)}
+              {renderUserRow(highlightedUser, highlightedPosition, true)}
             </div>
           </div>
         )}

@@ -21,32 +21,35 @@ export default {
       uk: "Показати топ користувачів за загальним балансом",
     }),
   async execute(interaction) {
-    return interaction.editReply({
-      content: "В разработке",
-    });
     const usersPerPage = 10;
 
-    // Fetch all users' economy data for the current guild
     const guildEconomy = await EconomyEZ.get(`economy.${interaction.guild.id}`);
 
     console.log("Guild Economy Data:", JSON.stringify(guildEconomy, null, 2));
 
-    // Calculate total balance and sort users
-    let allUsers = Object.values(guildEconomy)
-      .filter((userData) => userData && typeof userData === "object")
-      .map(async (userData) => ({
+    let allUsersPromises = guildEconomy.map(async (userData) => {
+      let username;
+      let member;
+      try {
+        member = await interaction.guild.members.fetch(userData.user_id);
+        username = member.user.username;
+      } catch (error) {
+        console.error(`Failed to fetch user ${userData.user_id}:`, error);
+        username = "Unknown User";
+      }
+
+      return {
         id: userData.user_id,
-        name:
-          interaction.guild.members.cache.get(userData.user_id)?.user
-            .username ||
-          (await interaction.guild.members.fetch(userData.user_id)).user
-            .username ||
-          "Unknown User",
+        name: username,
         totalBalance: (userData.balance || 0) + (userData.bank || 0),
         balance: userData.balance || 0,
+        avatar: member?.user?.avatarURL({ extension: "png", size: 128 }),
         bank: userData.bank || 0,
-      }))
-      .sort((a, b) => b.totalBalance - a.totalBalance);
+      };
+    });
+
+    let allUsers = await Promise.all(allUsersPromises);
+    allUsers.sort((a, b) => b.totalBalance - a.totalBalance);
 
     console.log("Processed Users:", JSON.stringify(allUsers, null, 2));
 
@@ -59,7 +62,6 @@ export default {
 
     const totalPages = Math.ceil(allUsers.length / usersPerPage);
 
-    // Find the position of the user who initiated the command
     const userPosition =
       allUsers.findIndex((user) => user.id === interaction.user.id) + 1;
     let currentPage = Math.ceil(userPosition / usersPerPage) || 1;
@@ -70,7 +72,6 @@ export default {
       const endIndex = startIndex + usersPerPage;
       const usersToDisplay = allUsers.slice(startIndex, endIndex);
 
-      // Generate the leaderboard image
       const pngBuffer = await generateImage(
         Leaderboard,
         {
@@ -78,7 +79,7 @@ export default {
           users: usersToDisplay,
           currentPage,
           totalPages,
-          highlightedPosition,
+          highlightedPosition: highlightedPosition,
         },
         { width: 400, height: 755 }
       );
@@ -99,7 +100,6 @@ export default {
         })
         .setTimestamp();
 
-      // Create navigation buttons
       const upButton = new ButtonBuilder()
         .setCustomId("up")
         .setLabel("▲")
@@ -133,7 +133,6 @@ export default {
 
       let components = [buttonRow];
 
-      // Create user select menu only if there are users to display
       if (usersToDisplay.length > 0) {
         const selectOptions = usersToDisplay.map((user, index) => ({
           label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
