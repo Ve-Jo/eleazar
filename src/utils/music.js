@@ -15,13 +15,6 @@ async function init(client) {
     client.lavalink = new LavalinkManager({
       nodes: [
         {
-          id: "lightsout",
-          host: "lavalink4.lightsout.in",
-          port: 40069,
-          authorization: "LightsoutOwnsElves",
-          secure: false,
-        },
-        {
           id: "jirayu",
           host: "lavalink.jirayu.net",
           port: 13592,
