@@ -21,7 +21,7 @@ export default {
     ),
 
   async execute(interaction) {
-    const song = interaction.options.getString("song");
+    let query = interaction.options.getString("song");
 
     let player = await interaction.client.lavalink.createPlayer({
       guildId: interaction.guild.id,
@@ -33,7 +33,7 @@ export default {
 
     interaction.user.locale = interaction.locale;
 
-    let res = await player.search({ query: song }, interaction.user);
+    let res = await player.search({ query: query }, interaction.user);
 
     if (res.loadType === "error") {
       return interaction.editReply(

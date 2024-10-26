@@ -19,10 +19,10 @@ async function init(client) {
         secure: false,
       },
       /*{
-        id: "natry4",
-        host: "lavalink01.techbyte.host",
-        port: 2036,
-        authorization: "NAIGLAVA-dash.techbyte.host",
+        id: "localhost",
+        host: "localhost",
+        port: 2333,
+        authorization: "youshallnotpass",
         secure: false,
       },*/
     ],

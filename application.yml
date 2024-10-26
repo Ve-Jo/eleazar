@@ -1,81 +1,88 @@
-server: # REST and WS server
+server:
   port: 2333
   address: 0.0.0.0
   http2:
-    enabled: true # Whether to enable HTTP/2 support
+    enabled: true
+
 plugins:
   youtube:
-    enabled: true # Whether this source can be used.
-    allowSearch: true # Whether "ytsearch:" and "ytmsearch:" can be used.
-    allowDirectVideoIds: true # Whether just video IDs can match. If false, only complete URLs will be loaded.
-    allowDirectPlaylistIds: true # Whether just playlist IDs can match. If false, only complete URLs will be loaded.
-    # The clients to use for track loading. See below for a list of valid clients.
-    # Clients are queried in the order they are given (so the first client is queried first and so on...)
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true
     clients:
       - MUSIC
-      - ANDROID_TESTSUITE
+      - ANDROID_VR
       - WEB
-      - TVHTML5EMBEDDED
+      - WEBEMBEDDED
   lavasrc:
     sources:
       spotify: true
+      youtube: true
+    spotify:
+      clientId: "c525956aba4945ca8e1f56b3c033cf9c"
+      clientSecret: "c913ba2ccd764a698d6cd903874535ab"
+      countryCode: "US"
+      playlistLoadLimit: 6
+      albumLoadLimit: 50
+      resolveArtistsInSearch: true
+      localFiles: false
+    # applemusic:
+    #  countryCode: "US"
+    #  playlistLoadLimit: 6
+    #  albumLoadLimit: 50
+    # deezer:
+    #  masterDecryptionKey: null
+    twitch:
+      clientId: null
+      clientSecret: null
+    providers:
+      - "spsearch:{QUERY}" # Spotify search
+      - "ytsearch:{QUERY}" # YouTube search as the primary source
+      - "ytmsearch:{QUERY}" # YouTube Music search
+      - "sprec:{QUERY}" # Spotify recommendations
+
 lavalink:
   server:
-    plugins:
-      - dependency: "dev.lavalink.youtube:youtube-plugin:1.8.2"
-        snapshot: false
-      - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.2.0"
-        repository: "https://maven.lavalink.dev/releases"
-        snapshot: false
-    password: "123"
+    password: "youshallnotpass"
     sources:
       youtube: false
       bandcamp: true
       soundcloud: true
       twitch: true
-      spotify: true
+      spotify: false
       vimeo: true
-      nico: true
-      http: true # warning: keeping HTTP enabled without a proxy configured could expose your server's IP address.
-      local: true
-    filters: # All filters are enabled by default
-      volume: true
-      equalizer: true
-      karaoke: true
-      timescale: true
-      tremolo: true
-      vibrato: true
-      distortion: true
-      rotation: true
-      channelMix: true
-      lowPass: true
-    bufferDurationMs: 400 # The duration of the NAS buffer. Higher values fare better against longer GC pauses. Duration <= 0 to disable JDA-NAS. Minimum of 40ms, lower values may introduce pauses.
-    frameBufferDurationMs: 5000 # How many milliseconds of audio to keep buffered
-    opusEncodingQuality: 10 # Opus encoder quality. Valid values range from 0 to 10, where 10 is best quality but is the most expensive on the CPU.
-    resamplingQuality: LOW # Quality of resampling operations. Valid values are LOW, MEDIUM and HIGH, where HIGH uses the most CPU.
-    trackStuckThresholdMs: 10000 # The threshold for how long a track can be stuck. A track is stuck if does not return any audio data.
-    useSeekGhosting: true # Seek ghosting is the effect where whilst a seek is in progress, the audio buffer is read from until empty, or until seek is ready.
-    youtubePlaylistLoadLimit: 6 # Number of pages at 100 each
-    playerUpdateInterval: 15 # How frequently to send player updates to clients, in seconds
+      http: true
+      local: false
+    plugins:
+      - className: "dev.arbjerg.lavalink.plugins.youtube.YoutubePlugin"
+        path: "./plugins/youtube-plugin-1.8.3.jar"
+      - className: "com.github.topi314.lavasrc.plugin.LavaSrcPlugin"
+        path: "./plugins/lavasrc-plugin-4.3.0.jar"
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 5
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    youtubePlaylistLoadLimit: 6
+    playerUpdateInterval: 15
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true
     gc-warnings: true
-    #ratelimit:
-    #  ipBlocks: ["1.0.0.0/8", "..."] # Add your proxy IP range here
-    #  excludedIps: ["...", "..."] # Add specific IPs to exclude from rate limiting
-    #searchTriggersFail: true # Whether a search 429 should trigger marking the ip as failing
-    #retryLimit: -1 # -1 = use default lavaplayer value | 0 = infinity | >0 = retry will happen this numbers times
-    #youtubeConfig: # Required for avoiding all age restrictions by YouTube, some restricted videos still can be played without.
-    #email: "" # Email of Google account
-    #password: "" # Password of Google account
-    #httpConfig: # Useful for blocking bad-actors from ip-grabbing your music node and attacking it, this way only the http proxy will be attacked
-    #proxyHost: "localhost" # Hostname of the proxy, (ip or domain)
-    #proxyPort: 3128 # Proxy port, 3128 is the default for squidProxy
-    #proxyUser: "" # Optional user for basic authentication fields, leave blank if you don't use basic auth
-    #proxyPassword: "" # Password for basic authentication
-
     httpConfig:
       forwardHeaders: true
+    pluginsDir: "./plugins"
+    youtubeConfig:
+      enabled: true
+      allowSearch: true
+      allowDirectVideoIds: true
+      allowDirectPlaylistIds: true
+      clients:
+        - MUSIC
+        - ANDROID_VR
+        - WEB
+        - WEBEMBEDDED
 
 metrics:
   prometheus:
@@ -85,18 +92,15 @@ metrics:
 sentry:
   dsn: ""
   environment: ""
-#  tags:
-#    some_key: some_value
-#    another_key: another_value
 
 logging:
   file:
     path: ./logs/
-
   level:
     root: INFO
-    lavalink: INFO
-
+    lavalink: TRACE
+    com.sedmelluq: TRACE
+    dev.arbjerg.lavalink.plugins: DEBUG
   request:
     enabled: true
     includeClientInfo: true
@@ -104,7 +108,6 @@ logging:
     includeQueryString: true
     includePayload: true
     maxPayloadLength: 10000
-
   logback:
     rollingpolicy:
       max-file-size: 1GB
