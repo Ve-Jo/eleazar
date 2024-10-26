@@ -43,7 +43,14 @@ export default {
             } catch (error) {
               let autoplay = player.get("autoplay_enabled");
               if (autoplay) {
-                await player.seek(player.queue.current.info.duration);
+                if (player.queue.current) {
+                  await player.seek(player.queue.current.info.duration);
+                } else {
+                  return interaction.reply({
+                    content: i18n.__("music.skippingSongError"),
+                    ephemeral: true,
+                  });
+                }
               } else {
                 return interaction.reply({
                   content: i18n.__("music.skippingSongError"),
@@ -97,12 +104,24 @@ export default {
         try {
           updatedButtons = createMusicButtons(player);
         } catch (error) {
+          console.error(error);
           return interaction.reply({
             content: i18n.__("music.errorOccured"),
             ephemeral: true,
           });
         }
-        await interaction.message.edit({ components: [updatedButtons] });
+
+        try {
+          await interaction.message.edit({ components: [updatedButtons] });
+        } catch (error) {
+          console.error("Failed to update message:", error);
+          // If we can't update the message, we'll try to send a new one
+          try {
+            await interaction.channel.send({ components: [updatedButtons] });
+          } catch (sendError) {
+            console.error("Failed to send new message:", sendError);
+          }
+        }
 
         if (option !== "autoplay" && option !== "previous") {
           const replyContent = i18n.__(
@@ -114,12 +133,25 @@ export default {
             }
           );
 
-          interaction
-            .reply({ content: `<@${interaction.user.id}> ${replyContent}` })
-            .then((int) => setTimeout(() => int.delete(), 5000));
+          try {
+            await interaction.reply({
+              content: `<@${interaction.user.id}> ${replyContent}`,
+              ephemeral: true,
+            });
+          } catch (replyError) {
+            console.error("Failed to reply to interaction:", replyError);
+          }
         }
       } catch (error) {
         console.error(error);
+        try {
+          await interaction.reply({
+            content: i18n.__("music.errorOccured"),
+            ephemeral: true,
+          });
+        } catch (replyError) {
+          console.error("Failed to send error message:", replyError);
+        }
       }
     }
   },

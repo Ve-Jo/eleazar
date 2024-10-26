@@ -23,46 +23,67 @@ export default {
   async execute(interaction) {
     let query = interaction.options.getString("song");
 
-    let player = await interaction.client.lavalink.createPlayer({
-      guildId: interaction.guild.id,
-      voiceChannelId: interaction.member.voice.channelId,
-      textChannelId: interaction.channelId,
-    });
-
-    await player.connect();
-
-    interaction.user.locale = interaction.locale;
-
-    let res = await player.search({ query: query }, interaction.user);
-
-    if (res.loadType === "error") {
-      return interaction.editReply(
-        i18n.__("music.errorLoadingTrack", {
-          message: res.exception?.message,
-        })
-      );
+    if (
+      !interaction.client.lavalink ||
+      !interaction.client.lavalink.nodeManager.nodes.size
+    ) {
+      return interaction.editReply(i18n.__("music.noLavalinkNode"));
     }
 
-    if (res.loadType === "empty") {
-      return interaction.editReply(i18n.__("music.noMatchesFound"));
-    }
+    try {
+      let player = await interaction.client.lavalink.createPlayer({
+        guildId: interaction.guild.id,
+        voiceChannelId: interaction.member.voice.channelId,
+        textChannelId: interaction.channelId,
+      });
 
-    if (res.loadType === "playlist") {
-      player.queue.add(res.tracks);
-      await interaction.editReply(
-        i18n.__("music.addedPlaylist", {
-          name: res.playlist.name,
-          count: res.tracks.length,
-        })
-      );
-    } else {
-      const track = res.tracks[0];
-      player.queue.add(track);
-      await interaction.editReply(
-        i18n.__("music.addedToQueue", { title: track.info.title })
-      );
-    }
+      await player.connect();
 
-    if (!player.playing) await player.play();
+      interaction.user.locale = interaction.locale;
+
+      let res = await player.search({ query: query }, interaction.user);
+
+      if (res.loadType === "error") {
+        return interaction.editReply(
+          i18n.__("music.errorLoadingTrack", {
+            message: res.exception?.message,
+          })
+        );
+      }
+
+      if (res.loadType === "empty") {
+        return interaction.editReply(i18n.__("music.noMatchesFound"));
+      }
+
+      if (res.loadType === "playlist") {
+        player.queue.add(res.tracks);
+        await interaction.editReply(
+          i18n.__("music.addedPlaylist", {
+            name: res.playlist.name,
+            count: res.tracks.length,
+          })
+        );
+      } else {
+        const track = res.tracks[0];
+        player.queue.add(track);
+        await interaction.editReply(
+          i18n.__("music.addedToQueue", { title: track.info.title })
+        );
+      }
+
+      if (!player.playing) await player.play();
+    } catch (error) {
+      console.error("Error in play command:", error);
+
+      if (error.message.includes("No available Node was found")) {
+        return interaction.editReply(i18n.__("music.noAvailableNode"));
+      } else if (error.message === "No Lavalink Node was provided") {
+        return interaction.editReply(i18n.__("music.noLavalinkNode"));
+      } else {
+        return interaction.editReply(
+          i18n.__("music.errorOccurred", { error: error.message })
+        );
+      }
+    }
   },
 };

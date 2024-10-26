@@ -4,7 +4,6 @@ import play from "./play.js";
 import stop from "./stop.js";
 import skip from "./skip.js";
 import queue from "./queue.js";
-import volume from "./volume.js";
 import filters from "./filters.js";
 import loop from "./loop.js";
 import autoplay from "./autoplay.js";
@@ -23,7 +22,6 @@ export default {
     .addSubcommand(stop.data)
     .addSubcommand(skip.data)
     .addSubcommand(queue.data)
-    .addSubcommand(volume.data)
     .addSubcommand(filters.data)
     .addSubcommand(loop.data)
     .addSubcommand(autoplay.data)
@@ -46,7 +44,6 @@ export default {
       stop: stop,
       skip: skip,
       queue: queue,
-      volume: volume,
       filters: filters,
       loop: loop,
       autoplay: autoplay,
