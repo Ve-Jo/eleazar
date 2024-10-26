@@ -75,7 +75,12 @@ export default {
     } catch (error) {
       console.error("Error in play command:", error);
 
-      if (error.message.includes("No available Node was found")) {
+      if (
+        error.name === "TimeoutError" ||
+        error.message.includes("timed out")
+      ) {
+        return interaction.editReply(i18n.__("music.connectionTimeout"));
+      } else if (error.message.includes("No available Node was found")) {
         return interaction.editReply(i18n.__("music.noAvailableNode"));
       } else if (error.message === "No Lavalink Node was provided") {
         return interaction.editReply(i18n.__("music.noLavalinkNode"));

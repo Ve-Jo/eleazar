@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 async function init(client) {
   try {
     console.log("Initializing Lavalink Manager...");
+
     client.lavalink = new LavalinkManager({
       nodes: [
         {
@@ -86,10 +87,6 @@ async function init(client) {
       },
     });
 
-    console.log(
-      "LavalinkManager instance created. Attaching event listeners..."
-    );
-
     client.lavalink.nodeManager.on("connect", (node) => {
       console.log(`Node ${node.id} connected successfully!`);
     });
@@ -102,44 +99,7 @@ async function init(client) {
       console.error(`Error on node ${node.id}:`, error);
     });
 
-    console.log("Event listeners attached. Initializing Lavalink...");
-
     await client.lavalink.init({ ...client.user, shards: "auto" });
-
-    console.log("Lavalink initialized. Attempting to connect to nodes...");
-
-    // Attempt to connect to all nodes
-    for (const [nodeId, node] of client.lavalink.nodeManager.nodes) {
-      try {
-        console.log(`Attempting to connect to node: ${nodeId}`);
-        await node.connect();
-        console.log(`Successfully connected to node: ${nodeId}`);
-      } catch (error) {
-        console.error(`Failed to connect to node ${nodeId}:`, error);
-      }
-    }
-
-    console.log(
-      "Connection attempts completed. Checking for connected nodes..."
-    );
-
-    // Wait for a short time to allow nodes to connect
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-
-    const connectedNodes = Array.from(
-      client.lavalink.nodeManager.nodes.values()
-    ).filter((node) => node.connected);
-    console.log(`Connected nodes:`, connectedNodes);
-    console.log(`Number of connected nodes: ${connectedNodes.length}`);
-
-    if (connectedNodes.length === 0) {
-      console.error(
-        "No Lavalink nodes are connected. Please check your Lavalink server and configuration."
-      );
-      throw new Error("No Lavalink nodes connected");
-    }
-
-    console.log("Lavalink initialization completed successfully.");
 
     client.lavalink.on("trackStart", (player, track) => {
       player.set("lastPlayedTrack", track);
