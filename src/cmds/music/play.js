@@ -1,5 +1,7 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import i18n from "../../utils/i18n.js";
+import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
+import { createMusicButtons } from "../../utils/musicButtons.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -61,11 +63,6 @@ export default {
       }
 
       if (res.loadType === "playlist") {
-        /*return interaction.editReply(
-          i18n.__("music.playlistNotSupported", {
-            name: res.playlist.name,
-          })
-        );*/
         const maxPlaylistSize = player.options.maxPlaylistSize || 1024;
         const tracksToAdd = res.tracks.slice(0, maxPlaylistSize);
         player.queue.add(tracksToAdd);
@@ -83,6 +80,25 @@ export default {
         await interaction.editReply(
           i18n.__("music.addedToQueue", { title: track.info.title })
         );
+      }
+
+      // Force update the player message if it exists
+      if (player.nowPlayingMessage && player.queue.current) {
+        const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
+          player.queue.current,
+          player
+        );
+        const updatedButtons = createMusicButtons(player);
+
+        try {
+          await player.nowPlayingMessage.edit({
+            embeds: [embed],
+            files: [attachment],
+            components: [updatedButtons],
+          });
+        } catch (error) {
+          console.error("Error updating player message:", error);
+        }
       }
 
       if (!player.playing) await player.play();

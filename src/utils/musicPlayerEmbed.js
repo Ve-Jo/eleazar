@@ -107,14 +107,14 @@ export async function createOrUpdateMusicPlayerEmbed(
     .setTimestamp();
 
   // You can add additional fields if needed, but most information will be in the image now
-  if (player.queue.tracks && player.queue.tracks.length > 5) {
+  /*if (player.queue.tracks && player.queue.tracks.length > 5) {
     embed.addFields({
       name: i18n.__("music.additionalTracks"),
       value: i18n.__("music.andMoreTracks", {
         count: player.queue.tracks.length - 5,
       }),
     });
-  }
+  }*/
 
   return { embed, attachment };
 }

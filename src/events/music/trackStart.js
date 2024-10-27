@@ -36,7 +36,6 @@ export default {
       components: [updatedButtons],
     });
 
-    // Store the new message in the player object
     player.nowPlayingMessage = message;
   },
 };

@@ -2,13 +2,30 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import i18n from "./i18n.js";
 
 export function createMusicButtons(player) {
-  // Check if the requester exists and has a locale property
   const locale = player.queue.current?.userData?.requester?.locale || "en";
 
-  // Set the locale, falling back to 'en' if the specified locale is not available
   i18n.setLocale(i18n.getLocales().includes(locale) ? locale : "en");
 
-  let autoplay = player.get("autoplay_enabled");
+  let autoplay = false;
+  try {
+    if (typeof player?.get === "function") {
+      autoplay = player.get("autoplay_enabled");
+      if (autoplay !== undefined) {
+        if (player.queue?.current) {
+          player.queue.current.autoplay_enabled = autoplay;
+        }
+      } else {
+        autoplay = player.queue?.current?.autoplay_enabled || false;
+      }
+    } else {
+      autoplay = player.queue?.current?.autoplay_enabled || false;
+    }
+
+    console.log("Final autoplay status:", autoplay);
+  } catch (error) {
+    console.warn("Error accessing autoplay status:", error);
+    autoplay = false;
+  }
 
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()

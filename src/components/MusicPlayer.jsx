@@ -11,6 +11,25 @@ const MusicPlayer = ({
 }) => {
   const defaultAvatar = "https://cdn.discordapp.com/embed/avatars/0.png";
 
+  // Convert milliseconds to seconds for currentTime and duration
+  const currentTimeSeconds = Math.floor(currentTime / 1000);
+  const durationSeconds = Math.floor(duration / 1000);
+
+  const formatTime = (totalSeconds) => {
+    if (!totalSeconds) return "0:00";
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
   // Example variables
   const exampleCurrentSong = {
     title: "Example Song Long Name",
@@ -83,12 +102,6 @@ const MusicPlayer = ({
   duration = duration || currentSong.duration;
   userAvatar = userAvatar || defaultAvatar;
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-  };
-
   const renderSongThumbnails = (previousSong, nextSongs) => {
     if (!previousSong && (!nextSongs || nextSongs.length === 0)) {
       return null;
@@ -106,6 +119,9 @@ const MusicPlayer = ({
       const isPrevious = previousSong && index === 0;
       let leftOffset = 0;
 
+      // Convert duration from milliseconds to seconds
+      const durationInSeconds = Math.floor(song.duration / 1000);
+
       if (previousSong && nextSongs && nextSongs.length <= 5) {
         // Place both previous and next song to the left
         leftOffset = index * (thumbnailWidth - overlap);
@@ -119,7 +135,7 @@ const MusicPlayer = ({
         }
       }
 
-      const opacity = isPrevious ? 0.3 : 1; // Adjust opacity based on index
+      const opacity = isPrevious ? 0.3 : 1;
 
       return (
         <div
@@ -212,7 +228,9 @@ const MusicPlayer = ({
             >
               {song.title}
             </span>
-            <span style={{ display: "flex" }}>{formatTime(song.duration)}</span>
+            <span style={{ display: "flex" }}>
+              {formatTime(durationInSeconds)}
+            </span>
           </div>
         </div>
       );
@@ -405,10 +423,10 @@ const MusicPlayer = ({
           }}
         >
           <span style={{ color: "rgba(0, 0, 0, 0.5)", display: "flex" }}>
-            {formatTime(currentTime)}
+            {formatTime(currentTimeSeconds)}
           </span>
           <span style={{ color: "rgba(0, 0, 0, 0.5)", display: "flex" }}>
-            {formatTime(duration)}
+            {formatTime(durationSeconds)}
           </span>
         </div>
       </div>

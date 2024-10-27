@@ -129,7 +129,6 @@ Secure : false*/
 
     client.lavalink.on("queueEnd", (player) => {
       console.log("Queue ended, triggering autoplay");
-      player.play(); // This will trigger the onEmptyQueue autoPlayFunction
     });
 
     const eventsPath = path.join(__dirname, "../events/music");
