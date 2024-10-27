@@ -7,8 +7,5 @@ cmds = ["bun install --frozen-lockfile"]
 [start]
 cmd = "bun ."
 
-[phases.build]
-cmds = ["bun run build"]
-
 [phases.cache]
 directories = ["node_modules", "bun.lockb"]
