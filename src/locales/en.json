@@ -75,7 +75,7 @@
     "notInVoiceChannel": "You must be in a voice channel to use this command!",
     "noMusicPlaying": "No music is currently playing.",
     "addedToQueue": "Added {{title}} to the queue.",
-    "addedPlaylist": "Added playlist {{name}} with {{count}} tracks to the queue.",
+    "addedPlaylist": "Added playlist '{name}' to the queue ({count} tracks out of {total}, maximum {max} tracks)",
     "musicStopped": "Music stopped.",
     "skippedSong": "Current song skipped.",
     "currentQueue": "Current queue:",

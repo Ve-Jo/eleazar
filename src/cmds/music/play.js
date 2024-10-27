@@ -41,7 +41,12 @@ export default {
 
       interaction.user.locale = interaction.locale;
 
-      let res = await player.search({ query: query }, interaction.user);
+      let res = await Promise.race([
+        player.search({ query: query }, interaction.user),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Search timeout")), 12000)
+        ),
+      ]);
 
       if (res.loadType === "error") {
         return interaction.editReply(
@@ -56,11 +61,20 @@ export default {
       }
 
       if (res.loadType === "playlist") {
-        player.queue.add(res.tracks);
+        /*return interaction.editReply(
+          i18n.__("music.playlistNotSupported", {
+            name: res.playlist.name,
+          })
+        );*/
+        const maxPlaylistSize = player.options.maxPlaylistSize || 1024;
+        const tracksToAdd = res.tracks.slice(0, maxPlaylistSize);
+        player.queue.add(tracksToAdd);
         await interaction.editReply(
           i18n.__("music.addedPlaylist", {
             name: res.playlist.name,
-            count: res.tracks.length,
+            count: tracksToAdd.length,
+            total: res.tracks.length,
+            max: maxPlaylistSize,
           })
         );
       } else {
@@ -77,7 +91,8 @@ export default {
 
       if (
         error.name === "TimeoutError" ||
-        error.message.includes("timed out")
+        error.message.includes("timed out") ||
+        error.message === "Search timeout"
       ) {
         return interaction.editReply(i18n.__("music.connectionTimeout"));
       } else if (error.message.includes("No available Node was found")) {

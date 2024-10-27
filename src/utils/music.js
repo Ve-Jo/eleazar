@@ -15,12 +15,30 @@ async function init(client) {
     client.lavalink = new LavalinkManager({
       nodes: [
         {
+          id: "lavalink01",
+          host: "lavalink01.techbyte.host",
+          port: 2036,
+          authorization: "NAIGLAVA-dash.techbyte.host",
+          secure: false,
+        },
+        /*Host : lavalink4.lightsout.in
+Port : 40069
+Password : "LightsoutOwnsElves"
+Secure : false*/
+        /*{
+          id: "lavalink4",
+          host: "lavalink4.lightsout.in",
+          port: 40069,
+          authorization: "LightsoutOwnsElves",
+          secure: false,
+        },*/
+        /*{
           id: "jirayu",
           host: "lavalink.jirayu.net",
           port: 13592,
           authorization: "youshallnotpass",
           secure: false,
-        },
+        },*/
       ],
       sendToShard: (guildId, payload) =>
         client.guilds.cache.get(guildId)?.shard?.send(payload),
@@ -92,7 +110,17 @@ async function init(client) {
       console.error(`Error on node ${node.id}:`, error);
     });
 
-    await client.lavalink.init({ ...client.user, shards: "auto" });
+    try {
+      await client.lavalink.init({ ...client.user, shards: "auto" });
+    } catch (error) {
+      console.error("Error initializing Lavalink connection:", error);
+      // Instead of throwing, we'll log the error and continue
+      // You might want to set a flag or notify admins here
+      client.lavalink.isInitialized = false;
+      return; // Exit the function early, but don't crash the process
+    }
+
+    client.lavalink.isInitialized = true;
 
     client.lavalink.on("trackStart", (player, track) => {
       player.set("lastPlayedTrack", track);
@@ -131,8 +159,8 @@ async function init(client) {
 
     client.on("raw", (d) => client.lavalink.sendRawData(d));
   } catch (error) {
-    console.error("Error initializing Lavalink:", error);
-    throw error;
+    console.error("Error in Lavalink setup:", error);
+    client.lavalink.isInitialized = false;
   }
 }
 
