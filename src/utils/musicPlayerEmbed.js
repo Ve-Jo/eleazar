@@ -1,7 +1,16 @@
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import i18n from "./i18n.js";
+import { generateImage } from "./imageGenerator.js";
+import MusicPlayer from "../components/MusicPlayer.jsx";
 
-export function createOrUpdateMusicPlayerEmbed(track, player, oldEmbed = null) {
+let lastGeneratedImage = null;
+let lastGeneratedImageTimestamp = 0;
+
+export async function createOrUpdateMusicPlayerEmbed(
+  track,
+  player,
+  oldEmbed = null
+) {
   let locale = track.requester.locale || "en";
   if (locale.includes("-")) {
     locale = locale.split("-")[0];
@@ -12,81 +21,102 @@ export function createOrUpdateMusicPlayerEmbed(track, player, oldEmbed = null) {
     player.activatedFilters = [];
   }
 
+  // Check if there's a previous song
+  const previousSong =
+    player.queue.previous && player.queue.previous.length > 0
+      ? player.queue.previous[0]
+      : undefined;
+
+  const currentTime = Date.now();
+  const timeSinceLastGeneration = currentTime - lastGeneratedImageTimestamp;
+
+  console.log(player.queue.previous);
+
+  // Only generate a new image if more than 5 seconds have passed or if it's the first generation
+  if (!lastGeneratedImage || timeSinceLastGeneration > 5000) {
+    // Generate the music player image
+    const pngBuffer = await generateImage(
+      MusicPlayer,
+      {
+        currentSong: {
+          title: track.info.title,
+          artist: track.info.author,
+          thumbnail: track.info.artworkUrl,
+          addedBy: track.requester.username,
+          addedByAvatar: track.requester.displayAvatarURL({
+            extension: "png",
+            size: 256,
+          }),
+          duration: track.info.duration,
+        },
+        previousSong: previousSong
+          ? {
+              title: previousSong.info.title,
+              duration: previousSong.info.duration,
+              thumbnail: previousSong.info.artworkUrl,
+              addedByAvatar: previousSong.requester.displayAvatarURL({
+                extension: "png",
+                size: 256,
+              }),
+              addedBy: previousSong.requester.username,
+            }
+          : undefined,
+        nextSongs:
+          player.queue.tracks && player.queue.tracks.length > 0
+            ? player.queue.tracks.slice(0, 5).map((t) => ({
+                title: t.info.title,
+                duration: t.info.duration,
+                thumbnail: t.info.artworkUrl,
+                addedByAvatar: t.requester.displayAvatarURL({
+                  extension: "png",
+                  size: 256,
+                }),
+                addedBy: t.requester.username,
+              }))
+            : undefined,
+        queueLength: player.queue.tracks.length,
+        currentTime: player.position,
+        duration: track.info.duration,
+        userAvatar: track.requester.displayAvatarURL({
+          extension: "png",
+          size: 256,
+        }),
+      },
+      { width: 525, height: 200 }
+    );
+
+    lastGeneratedImage = pngBuffer;
+    lastGeneratedImageTimestamp = currentTime;
+  }
+
+  const attachment = new AttachmentBuilder(lastGeneratedImage, {
+    name: "musicplayer.png",
+  });
+
   const embedBase = oldEmbed ? EmbedBuilder.from(oldEmbed) : new EmbedBuilder();
 
   const embed = embedBase
     .setColor(process.env.EMBED_COLOR)
-    .setTitle(`"${track.info.title}" ${track.info.author}`)
-    .setURL(track.info.uri)
-    .setAuthor({ name: i18n.__("music.musicPlayerTitle") })
-    .setImage(track.info.artworkUrl)
+    .setImage("attachment://musicplayer.png")
     .setFooter({
       text: i18n.__("music.footerText", {
         author: track.requester.username,
       }),
-      iconURL: track.requester.displayAvatarURL({ size: 1024 }),
+      iconURL: track.requester.displayAvatarURL({ size: 128 }),
     })
     .setTimestamp();
 
-  const currentTime = formatTime(player.position);
-  const totalTime = formatTime(track.info.duration);
-  const progress = createProgressBar(player.position, track.info.duration, 12);
-
-  embed.setFields({
-    name: i18n.__("music.info"),
-    value: `${progress}\n-# \`${currentTime} / ${totalTime}\` ${i18n.__(
-      "music.playerSettingsText",
-      {
-        volume: player.volume,
-        loopType: player.repeatMode || "off",
-      }
-    )}`,
-    inline: false,
-  });
-
-  if (player.queue.tracks && player.queue.tracks.length > 0) {
-    let next_tracks = player.queue.tracks.map((track, index) => {
-      const duration = formatTime(track.info.duration);
-      return `+ (${duration}) @${track.requester.tag} "${track.info.title}"`;
-    });
-
-    let previous_tracks = [];
-
-    if (player.queue.previous && player.queue.previous.length > 0) {
-      previous_tracks = player.queue.previous.slice(-3).map((track, index) => {
-        const duration = formatTime(track.info.duration);
-        return `- (${duration}) @${track.requester.tag} "${track.info.title}"`;
-      });
-    }
-
-    let all_tracks = [...previous_tracks, ...next_tracks];
-
-    let queueString = "";
-    let trackCount = 0;
-    let remainingTracks = 0;
-
-    for (let track of all_tracks) {
-      if (queueString.length + track.length + 1 > 250) {
-        remainingTracks = all_tracks.length - trackCount;
-        break;
-      }
-      queueString += track + "\n";
-      trackCount++;
-    }
-
-    if (remainingTracks > 0) {
-      queueString += `\n${i18n.__("music.andMoreTracks", {
-        count: remainingTracks,
-      })}`;
-    }
-
+  // You can add additional fields if needed, but most information will be in the image now
+  if (player.queue.tracks && player.queue.tracks.length > 5) {
     embed.addFields({
-      name: i18n.__("music.queue"),
-      value: `\`\`\`diff\n${queueString}\n\`\`\``,
+      name: i18n.__("music.additionalTracks"),
+      value: i18n.__("music.andMoreTracks", {
+        count: player.queue.tracks.length - 5,
+      }),
     });
   }
 
-  return embed;
+  return { embed, attachment };
 }
 
 function formatTime(ms) {
