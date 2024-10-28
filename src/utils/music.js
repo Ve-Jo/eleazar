@@ -35,6 +35,15 @@ async function init(client) {
           authorization: "youshallnotpass",
           secure: false,
         },*/
+        /*{
+          id: "localhost",
+          host: "127.0.0.1",
+          port: 2333,
+          authorization: "youshallnotpass", // Fixed typo in authorization token
+          secure: false,
+          reconnectTimeout: 5000, // Add reconnect timeout to handle connection issues
+          reconnectTries: 3, // Limit reconnection attempts
+        },*/
       ],
       sendToShard: (guildId, payload) =>
         client.guilds.cache.get(guildId)?.shard?.send(payload),
@@ -117,20 +126,61 @@ async function init(client) {
 
     client.lavalink.isInitialized = true;
 
-    client.lavalink.on("trackStart", (player, track) => {
+    client.lavalink.on("trackStart", async (player, track) => {
+      console.log("Track started, storing track info");
       player.set("lastPlayedTrack", track);
-      console.log(`Now playing: ${track.info.title}`);
+
+      // Execute trackStart event
+      const eventModule = await import("../events/music/trackStart.js");
+      if (
+        eventModule.default &&
+        typeof eventModule.default.execute === "function"
+      ) {
+        await eventModule.default.execute(client, player, track);
+
+        // Verify message was stored
+        console.log("After trackStart execution, nowPlayingMessage:", {
+          exists: !!player.nowPlayingMessage,
+          messageId: player.nowPlayingMessage?.id,
+        });
+      }
     });
 
     client.lavalink.on("queueEnd", (player) => {
       console.log("Queue ended, triggering autoplay");
     });
 
+    // Add specific playerUpdate handler
+    client.lavalink.on("playerUpdate", async ({ guildId, state }) => {
+      const player = client.lavalink.getPlayer(guildId);
+      if (player) {
+        console.log("Player state in playerUpdate:", {
+          guildId,
+          hasMessage: !!player.nowPlayingMessage,
+          messageId: player.nowPlayingMessage?.id,
+        });
+
+        const eventModule = await import("../events/music/playerUpdate.js");
+        if (
+          eventModule.default &&
+          typeof eventModule.default.execute === "function"
+        ) {
+          await eventModule.default.execute(client, player);
+        }
+      }
+    });
+
+    // Remove the generic event loader for these specific events
     const eventsPath = path.join(__dirname, "../events/music");
     const eventFiles = fs
       .readdirSync(eventsPath)
-      .filter((file) => file.endsWith(".js"));
+      .filter(
+        (file) =>
+          file.endsWith(".js") &&
+          !["trackStart.js", "playerUpdate.js"].includes(file)
+      );
 
+    // Load other events normally
     for (const file of eventFiles) {
       const filePath = path.join(eventsPath, file);
       const eventModule = await import(filePath);
@@ -142,8 +192,8 @@ async function init(client) {
         const eventName = path.parse(file).name;
         console.log(`Loaded event: ${eventName} (music player)`);
         client.lavalink.on(eventName, (...args) => {
-          console.log(`Executing event: ${eventName}`),
-            eventModule.default.execute(client, ...args);
+          console.log(`Executing event: ${eventName}`);
+          eventModule.default.execute(client, ...args);
         });
       } else {
         console.log(`Invalid event file: ${file}`);
