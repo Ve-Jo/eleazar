@@ -33,7 +33,7 @@ export async function createOrUpdateMusicPlayerEmbed(
   console.log(player.queue.previous);
 
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
-  if (!lastGeneratedImage || timeSinceLastGeneration > 5000) {
+  if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
     const pngBuffer = await generateImage(
       MusicPlayer,

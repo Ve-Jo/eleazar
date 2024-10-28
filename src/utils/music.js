@@ -94,7 +94,8 @@ Secure : false*/
         },
       },
       queueOptions: {
-        maxPreviousTracks: 25,
+        maxPreviousTracks: 1, // Reduce to a smaller number
+        cleanupThreshold: 1000 * 60 * 1, // Clean up tracks older than 1 minute
       },
     });
 
@@ -157,6 +158,18 @@ Secure : false*/
     console.log("Lavalink initialization completed successfully.");
 
     client.on("raw", (d) => client.lavalink.sendRawData(d));
+
+    // Add cleanup for event listeners when player is destroyed
+    client.lavalink.on("playerDestroy", (player) => {
+      // Clean up any stored data
+      if (player) {
+        // Clear timestamps if using the WeakMap implementation
+        playerUpdate.timestamps.delete(player);
+
+        // Clear any other player-specific cached data
+        player.cleanup && player.cleanup();
+      }
+    });
   } catch (error) {
     console.error("Error in Lavalink setup:", error);
     client.lavalink.isInitialized = false;

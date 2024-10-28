@@ -3,29 +3,29 @@ import { Pool } from "pg";
 let pool;
 
 async function createConnection() {
-  try {
+  /*try {
     // First, try to connect to the local database
     pool = new Pool({
       connectionString: process.env.PG_DATABASE_URL_LOCAL,
     });
     await pool.query("SELECT 1");
     console.log("Connected to local database successfully");
-  } catch (localError) {
-    console.log(
-      "Failed to connect to local database, falling back to public URL"
-    );
-    try {
-      // If local connection fails, try the public URL
-      pool = new Pool({
-        connectionString: process.env.PG_DATABASE_URL,
-      });
-      await pool.query("SELECT 1");
-      console.log("Connected to public database successfully");
-    } catch (publicError) {
-      console.error("Failed to connect to both local and public databases");
-      throw publicError;
-    }
+  } catch (localError) {*/
+  console.log(
+    "Failed to connect to local database, falling back to public URL"
+  );
+  try {
+    // If local connection fails, try the public URL
+    pool = new Pool({
+      connectionString: process.env.PG_DATABASE_URL,
+    });
+    await pool.query("SELECT 1");
+    console.log("Connected to public database successfully");
+  } catch (publicError) {
+    console.error("Failed to connect to both local and public databases");
+    throw publicError;
   }
+  /*}*/
   return pool;
 }
 

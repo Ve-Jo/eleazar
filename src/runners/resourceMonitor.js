@@ -1,40 +1,87 @@
+import { filesize } from "filesize";
 import os from "os";
 
-function formatBytes(bytes) {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+let lastRSS = 0;
+let lastCacheStats = {
+  users: 0,
+  guilds: 0,
+  channels: 0,
+  roles: 0,
+  emojis: 0,
+  messages: 0,
+  members: 0,
+};
+
+export function startResourceMonitor(interval = 500, client) {
+  const monitor = async () => {
+    const used = process.memoryUsage();
+    const currentRSS = used.rss;
+
+    if (currentRSS > lastRSS) {
+      console.log(
+        `RSS increased: ${filesize(lastRSS)} -> ${filesize(
+          currentRSS
+        )} (uptime: ${process.uptime()}s)`
+      );
+      //other ram usage
+      const heapUsed = process.memoryUsage().heapUsed;
+      console.log(`Heap used: ${filesize(heapUsed)}`);
+      lastRSS = currentRSS;
+    } else if (currentRSS < lastRSS) {
+      console.log(
+        `RSS decreased: ${filesize(lastRSS)} -> ${filesize(
+          currentRSS
+        )} (uptime: ${process.uptime()}s)`
+      );
+      lastRSS = currentRSS;
+    }
+
+    if (client) {
+      const currentCacheStats = getCacheStats(client);
+
+      Object.keys(currentCacheStats).forEach((key) => {
+        if (currentCacheStats[key] > lastCacheStats[key]) {
+          console.log(
+            `${key} cache increased: ${lastCacheStats[key]} -> ${currentCacheStats[key]}`
+          );
+          lastCacheStats[key] = currentCacheStats[key];
+        }
+      });
+    }
+  };
+
+  // Start monitoring
+  monitor();
+  return setInterval(monitor, interval);
 }
 
-function monitorResources() {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  const memUsage = process.memoryUsage();
-  const cpuUsage = process.cpuUsage();
+function getCacheStats(client) {
+  let stats = {
+    users: client.users.cache.size,
+    guilds: client.guilds.cache.size,
+    channels: 0,
+    roles: 0,
+    emojis: 0,
+    messages: 0,
+    members: 0,
+  };
 
-  console.log("=== Resource Usage ===");
-  console.log(
-    `RAM: ${formatBytes(usedMem)} / ${formatBytes(totalMem)} (${(
-      (usedMem / totalMem) *
-      100
-    ).toFixed(2)}%)`
-  );
-  console.log(
-    `Heap: ${formatBytes(memUsage.heapUsed)} / ${formatBytes(
-      memUsage.heapTotal
-    )}`
-  );
-  console.log(
-    `CPU: User ${cpuUsage.user / 1000000}s, System ${
-      cpuUsage.system / 1000000
-    }s`
-  );
-  console.log("=====================");
+  client.guilds.cache.forEach((guild) => {
+    stats.channels += guild.channels.cache.size;
+    stats.roles += guild.roles.cache.size;
+    stats.emojis += guild.emojis.cache.size;
+    stats.members += guild.members.cache.size;
+
+    guild.channels.cache.forEach((channel) => {
+      if (channel.messages) {
+        stats.messages += channel.messages.cache.size;
+      }
+    });
+  });
+
+  return stats;
 }
 
-export function startResourceMonitor(interval = 60000) {
-  setInterval(monitorResources, interval);
-}
+process.on("unhandledRejection", (error) => {
+  console.error("Unhandled promise rejection:", error);
+});

@@ -2,7 +2,6 @@ import { Client, GatewayIntentBits, Options, Partials } from "discord.js";
 import { loadCommands } from "./src/utils/loadCommands.js";
 import { loadEvents } from "./src/utils/loadEvents.js";
 import { Memer } from "memer.ts";
-import { startResourceMonitor } from "./src/runners/resourceMonitor.js";
 
 import Groq from "groq-sdk";
 import Replicate from "replicate";
@@ -19,18 +18,39 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
   ],
   presence: { status: "online" },
-  /*messageCacheMaxSize: 10, // Reduced from 50
-  makeCache: Options.cacheWithLimits({
-    MessageManager: {
-      maxSize: 10, // Reduced from 50
-      sweepInterval: 300,
-      sweepFilter: (message) =>
-        Date.now() - message.createdTimestamp > 60 * 1000 &&
-        message.author.id !== client.user.id,
+  partials: [
+    /*Partials.Message, Partials.Channel, Partials.GuildMember*/
+  ],
+  sweepers: {
+    messages: {
+      interval: 30000,
+      lifetime: 60000,
     },
-  }),
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],*/
+    users: {
+      interval: 30000,
+      filter: () => (user) =>
+        !client.guilds.cache.some((guild) => guild.members.cache.has(user.id)),
+    },
+    guildMembers: {
+      interval: 30000,
+      filter: () => () => true,
+    },
+  },
 });
+
+setInterval(() => {
+  const now = Date.now();
+  client.channels.cache.forEach((channel) => {
+    if (channel.messages) {
+      channel.messages.cache.sweep((message) => {
+        const lifetime =
+          message.author.id === client.user.id ? 60 * 1000 : 60 * 1000;
+        return now - message.createdTimestamp > lifetime;
+      });
+    }
+  });
+  console.log("Manual message sweep completed");
+}, 60 * 1000);
 
 client.commands = new Map();
 client.events = new Map();

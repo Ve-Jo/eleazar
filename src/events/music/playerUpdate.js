@@ -4,52 +4,42 @@ import ms from "ms";
 
 export default {
   name: "playerUpdate",
-  lastUpdateTimestamp: 0,
+  timestamps: new WeakMap(), // Use WeakMap for player-specific timestamps
   async execute(client, player) {
     if (!player.playing || player.paused) return;
 
     const currentTime = Date.now();
-    if (this.lastUpdateTimestamp === 0) {
-      this.lastUpdateTimestamp = currentTime;
-    } else if (currentTime - this.lastUpdateTimestamp < ms("15s")) return;
-    this.lastUpdateTimestamp = currentTime;
+    const lastUpdate = this.timestamps.get(player) || 0;
+
+    if (currentTime - lastUpdate < ms("15s")) return;
+    this.timestamps.set(player, currentTime);
 
     try {
       if (!player.options.textChannelId) return;
 
-      const channel = await client.channels.fetch(player.options.textChannelId);
-      if (!channel) return;
+      // Only update if we have a stored message reference
+      if (!player.nowPlayingMessage) return;
 
-      const messages = await channel.messages.fetch({ limit: 20 });
-      const lastBotMessage = messages.find(
-        (msg) =>
-          msg.author.id === client.user.id &&
-          msg.embeds.length > 0 &&
-          msg.embeds[0].image?.url.includes("musicplayer.png")
-      );
+      try {
+        const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
+          player.queue.current,
+          player
+        );
 
-      const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
-        player.queue.current,
-        player
-      );
+        const updatedButtons = createMusicButtons(player);
 
-      const updatedButtons = createMusicButtons(player);
-
-      if (lastBotMessage) {
-        await lastBotMessage.edit({
+        await player.nowPlayingMessage.edit({
           embeds: [embed],
           files: [attachment],
           components: [updatedButtons],
         });
-      } else {
-        await channel.send({
-          embeds: [embed],
-          files: [attachment],
-          components: [updatedButtons],
-        });
+      } catch (error) {
+        // If the message no longer exists or can't be edited, delete the reference
+        player.nowPlayingMessage = null;
+        console.error("Error updating player message:", error);
       }
     } catch (error) {
-      console.error("Error updating music player embed:", error);
+      console.error("Error in playerUpdate:", error);
     }
   },
 };

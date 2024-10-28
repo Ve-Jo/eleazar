@@ -12,15 +12,28 @@ export default {
     }
     if (!channel) return;
 
-    // Clear components from the previous music player message
-    if (player.nowPlayingMessage) {
+    // Find and delete any existing music player messages
+    const messages = await channel.messages.fetch({ limit: 20 });
+    const existingPlayerMessages = messages.filter(
+      (msg) =>
+        msg.author.id === client.user.id &&
+        msg.embeds.length > 0 &&
+        msg.embeds[0].image?.url.includes("musicplayer.png")
+    );
+
+    // Delete old player messages
+    if (existingPlayerMessages.size > 0) {
       try {
-        await player.nowPlayingMessage.edit({ components: [] });
+        await channel.bulkDelete(existingPlayerMessages);
       } catch (error) {
-        console.error(
-          "Error clearing components from previous message:",
-          error
-        );
+        // If bulk delete fails (messages too old), delete individually
+        for (const msg of existingPlayerMessages.values()) {
+          try {
+            await msg.delete();
+          } catch (err) {
+            console.error("Error deleting message:", err);
+          }
+        }
       }
     }
 
@@ -36,6 +49,7 @@ export default {
       components: [updatedButtons],
     });
 
+    // Store the new message reference in the player
     player.nowPlayingMessage = message;
   },
 };

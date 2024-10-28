@@ -2,6 +2,7 @@ import { Events } from "discord.js";
 import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
 import EconomyEZ from "../utils/economy.js";
+import { startResourceMonitor } from "../runners/resourceMonitor.js";
 
 export default {
   name: Events.ClientReady,
@@ -18,5 +19,7 @@ export default {
     await SlashCommandsHandler(client, client.commands);
 
     await EconomyEZ.testDatabaseConnection();
+
+    startResourceMonitor(5000, client);
   },
 };
