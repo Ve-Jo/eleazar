@@ -25,6 +25,7 @@ const client = new Client({
     messages: {
       interval: 30000,
       lifetime: 60000,
+      filter: () => (message) => message.author.id !== client.user.id,
     },
     users: {
       interval: 30000,

@@ -43,13 +43,18 @@ export default {
     );
 
     const updatedButtons = createMusicButtons(player);
-    const message = await channel.send({
-      embeds: [embed],
-      files: [attachment],
-      components: [updatedButtons],
-    });
+    try {
+      const message = await channel.send({
+        embeds: [embed],
+        files: [attachment],
+        components: [updatedButtons],
+      });
 
-    // Store the new message reference in the player
-    player.nowPlayingMessage = message;
+      // Store the message reference directly
+      player.nowPlayingMessage = message;
+      console.log("Now playing message created and stored:", message.id);
+    } catch (error) {
+      console.error("Error sending now playing message:", error);
+    }
   },
 };

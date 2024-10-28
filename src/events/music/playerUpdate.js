@@ -1,45 +1,74 @@
 import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
 import { createMusicButtons } from "../../utils/musicButtons.js";
-import ms from "ms";
 
 export default {
   name: "playerUpdate",
-  timestamps: new WeakMap(), // Use WeakMap for player-specific timestamps
   async execute(client, player) {
-    if (!player.playing || player.paused) return;
+    console.log("PlayerUpdate execute called");
 
-    const currentTime = Date.now();
-    const lastUpdate = this.timestamps.get(player) || 0;
-
-    if (currentTime - lastUpdate < ms("15s")) return;
-    this.timestamps.set(player, currentTime);
+    if (!player?.playing || player?.paused) {
+      console.log("Player not playing or is paused");
+      return;
+    }
 
     try {
-      if (!player.options.textChannelId) return;
+      if (!player.options?.textChannelId) {
+        console.log("No text channel ID found");
+        return;
+      }
 
-      // Only update if we have a stored message reference
-      if (!player.nowPlayingMessage) return;
+      // Just use the direct property
+      if (!player.nowPlayingMessage) {
+        console.log("No now playing message found");
+        return;
+      }
+
+      if (!player.queue?.current) {
+        console.log("No current track in queue");
+        return;
+      }
+
+      const now = Date.now();
+      const lastUpdate = player.lastPlayerUpdate || 0;
+      if (now - lastUpdate < 15000) {
+        console.log("Update skipped due to rate limiting");
+        return;
+      }
+      player.lastPlayerUpdate = now;
+
+      const channel = await client.channels.cache.get(
+        player.options.textChannelId
+      );
+      if (!channel) {
+        console.log("Could not find channel");
+        return;
+      }
 
       try {
-        const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
-          player.queue.current,
-          player
-        );
-
-        const updatedButtons = createMusicButtons(player);
-
-        await player.nowPlayingMessage.edit({
-          embeds: [embed],
-          files: [attachment],
-          components: [updatedButtons],
-        });
+        player.nowPlayingMessage = await player.nowPlayingMessage.fetch();
       } catch (error) {
-        // If the message no longer exists or can't be edited, delete the reference
+        console.log("Could not fetch message, it might have been deleted");
         player.nowPlayingMessage = null;
-        console.error("Error updating player message:", error);
+        return;
       }
+
+      console.log("Creating new embed and buttons");
+      const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
+        player.queue.current,
+        player
+      );
+
+      const updatedButtons = createMusicButtons(player);
+
+      await player.nowPlayingMessage.edit({
+        embeds: [embed],
+        files: [attachment],
+        components: [updatedButtons],
+      });
+      console.log("Successfully updated player message");
     } catch (error) {
       console.error("Error in playerUpdate:", error);
+      player.nowPlayingMessage = null;
     }
   },
 };

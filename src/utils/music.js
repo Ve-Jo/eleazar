@@ -21,10 +21,6 @@ async function init(client) {
           authorization: "NAIGLAVA-dash.techbyte.host",
           secure: false,
         },
-        /*Host : lavalink4.lightsout.in
-Port : 40069
-Password : "LightsoutOwnsElves"
-Secure : false*/
         /*{
           id: "lavalink4",
           host: "lavalink4.lightsout.in",
@@ -115,10 +111,8 @@ Secure : false*/
       await client.lavalink.init({ ...client.user, shards: "auto" });
     } catch (error) {
       console.error("Error initializing Lavalink connection:", error);
-      // Instead of throwing, we'll log the error and continue
-      // You might want to set a flag or notify admins here
       client.lavalink.isInitialized = false;
-      return; // Exit the function early, but don't crash the process
+      return;
     }
 
     client.lavalink.isInitialized = true;
@@ -147,9 +141,10 @@ Secure : false*/
       ) {
         const eventName = path.parse(file).name;
         console.log(`Loaded event: ${eventName} (music player)`);
-        client.lavalink.on(eventName, (...args) =>
-          eventModule.default.execute(client, ...args)
-        );
+        client.lavalink.on(eventName, (...args) => {
+          console.log(`Executing event: ${eventName}`),
+            eventModule.default.execute(client, ...args);
+        });
       } else {
         console.log(`Invalid event file: ${file}`);
       }
@@ -159,11 +154,8 @@ Secure : false*/
 
     client.on("raw", (d) => client.lavalink.sendRawData(d));
 
-    // Add cleanup for event listeners when player is destroyed
     client.lavalink.on("playerDestroy", (player) => {
-      // Clean up any stored data
       if (player) {
-        // Clear any other player-specific cached data
         player.cleanup && player.cleanup();
       }
     });
