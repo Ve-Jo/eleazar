@@ -102,7 +102,7 @@ const Daily = ({ interaction, user, balance, amount }) => {
         >
           <img
             src={
-              user?.displayAvatarURL?.({ extension: "png", size: 2048 }) ||
+              user?.displayAvatarURL?.({ extension: "png", size: 256 }) ||
               "https://cdn.discordapp.com/embed/avatars/0.png"
             }
             alt="User"

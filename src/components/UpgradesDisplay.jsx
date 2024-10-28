@@ -335,7 +335,7 @@ const UpgradesDisplay = ({
           <img
             src={
               interaction?.user?.displayAvatarURL({
-                size: 1024,
+                size: 64,
                 extension: "png",
               }) || "https://cdn.discordapp.com/embed/avatars/0.png"
             }

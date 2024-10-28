@@ -53,7 +53,7 @@ const Transfer = ({ interaction, database, amount, isDeposit }) => {
             <img
               src={
                 user
-                  ? user?.displayAvatarURL({ extension: "png", size: 2048 })
+                  ? user?.displayAvatarURL({ extension: "png", size: 256 })
                   : "https://cdn.discordapp.com/embed/avatars/0.png"
               }
               alt="User"

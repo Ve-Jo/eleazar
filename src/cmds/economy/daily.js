@@ -35,7 +35,8 @@ export default {
           nextDaily: timeLeft,
           emoji: "🎁",
         },
-        { width: 450, height: 200 }
+        { width: 450, height: 200 },
+        { image: 2, emoji: 2 }
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {

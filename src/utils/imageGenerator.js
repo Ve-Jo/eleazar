@@ -4,60 +4,59 @@ import { createSatoriConfig } from "../config/satori-config.js";
 import twemoji from "@twemoji/api";
 import axios from "axios";
 import { Readable } from "stream";
+import fs from "fs/promises";
+import path from "path";
 
-// const emojiCache = new Map();
+const TEMP_DIR = path.join(process.cwd(), "temp", "emoji");
 
 sharp.cache(false);
 sharp.concurrency(1);
 sharp.simd(true);
 
-async function fetchEmojiSvg(emoji, emojiScaling) {
-  const emojiCode = twemoji.convert.toCodePoint(emoji);
-
-  // const cacheKey = `${emojiCode}-${emojiScaling}`;
-  // if (emojiCache.has(cacheKey)) {
-  //   return emojiCache.get(cacheKey);
-  // }
-
-  const svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${emojiCode}.svg`;
-
+// Ensure temp directory exists
+async function ensureTempDir() {
   try {
-    const response = await axios.get(svgUrl, {
-      responseType: "stream",
-    });
-
-    const sharpInstance = sharp();
-    const resizeStream = sharpInstance
-      .resize(256 * emojiScaling, 256 * emojiScaling, {
-        fit: "contain",
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .png();
-
-    const chunks = [];
-    for await (const chunk of response.data.pipe(resizeStream)) {
-      chunks.push(chunk);
-    }
-
-    const pngBuffer = Buffer.concat(chunks);
-    sharpInstance.destroy();
-
-    const base64Png = pngBuffer.toString("base64");
-    const result = `data:image/png;base64,${base64Png}`;
-
-    // emojiCache.set(cacheKey, result);
-
-    // if (emojiCache.size > 100) {
-    //   const firstKey = emojiCache.keys().next().value;
-    //   emojiCache.delete(firstKey);
-    // }
-
-    return result;
-  } catch (error) {
-    console.error(`Failed to load emoji ${emoji}:`, error);
-    return null;
+    await fs.access(TEMP_DIR);
+  } catch {
+    await fs.mkdir(TEMP_DIR, { recursive: true });
   }
 }
+
+async function fetchEmojiSvg(emoji, emojiScaling) {
+  const emojiCode = twemoji.convert.toCodePoint(emoji);
+  const cacheFilePath = path.join(TEMP_DIR, `${emojiCode}-${emojiScaling}.png`);
+
+  try {
+    // Try to read from cache first
+    const cachedData = await fs.readFile(cacheFilePath);
+    return `data:image/png;base64,${cachedData.toString("base64")}`;
+  } catch {
+    // If not in cache, fetch and save
+    const svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${emojiCode}.svg`;
+
+    try {
+      const { data } = await axios.get(svgUrl, { responseType: "arraybuffer" });
+      const pngBuffer = await sharp(data)
+        .resize(64 * emojiScaling, 64 * emojiScaling, {
+          fit: "contain",
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+
+      // Save to temp file
+      await fs.writeFile(cacheFilePath, pngBuffer);
+
+      return `data:image/png;base64,${pngBuffer.toString("base64")}`;
+    } catch (error) {
+      console.error(`Failed to load emoji ${emoji}:`, error);
+      return null;
+    }
+  }
+}
+
+// Initialize temp directory when module loads
+ensureTempDir().catch(console.error);
 
 export async function generateImage(
   Component,
@@ -67,12 +66,8 @@ export async function generateImage(
 ) {
   const satoriConfig = createSatoriConfig({
     ...customConfig,
-    loadAdditionalAsset: async (code, segment) => {
-      if (code === "emoji") {
-        return await fetchEmojiSvg(segment, scaling.emoji);
-      }
-      return null;
-    },
+    loadAdditionalAsset: async (code, segment) =>
+      code === "emoji" ? await fetchEmojiSvg(segment, scaling.emoji) : null,
   });
 
   const svg = await satori(<Component {...props} />, satoriConfig);
@@ -85,38 +80,18 @@ export async function generateImage(
   const newWidth = Math.round(parseInt(width) * scaling.image);
   const newHeight = Math.round(parseInt(height) * scaling.image);
 
-  const sharpInstance = sharp(Buffer.from(svg), {
-    limitInputPixels: false,
-  }).withMetadata({
-    density: 72,
-  });
-
-  const outputStream = sharpInstance
+  return sharp(Buffer.from(svg), { limitInputPixels: false })
+    .withMetadata({ density: 72 })
     .resize(newWidth, newHeight, {
       kernel: sharp.kernel.mitchell,
       fastShrinkOnLoad: true,
     })
-    .png({ compressionLevel: 9, adaptiveFiltering: true });
-
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    outputStream.on("data", (chunk) => chunks.push(chunk));
-    outputStream.on("end", () => {
-      const buffer = Buffer.concat(chunks);
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer()
+    .then((buffer) => {
       const readableStream = new Readable();
       readableStream.push(buffer);
       readableStream.push(null);
-      sharpInstance.destroy();
-      resolve(readableStream);
+      return readableStream;
     });
-    outputStream.on("error", (err) => {
-      sharpInstance.destroy();
-      reject(err);
-    });
-    outputStream.on("close", () => {
-      if (chunks.length === 0) {
-        reject(new Error("ERR_STREAM_PREMATURE_CLOSE"));
-      }
-    });
-  });
 }

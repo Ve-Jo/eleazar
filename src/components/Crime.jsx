@@ -68,7 +68,7 @@ const Crime = ({ interaction, victim, robber, amount, success }) => {
               src={
                 victimUser.displayAvatarURL?.({
                   extension: "png",
-                  size: 2048,
+                  size: 256,
                 }) || // Added size: 2048
                 "https://cdn.discordapp.com/embed/avatars/0.png"
               }
@@ -145,7 +145,7 @@ const Crime = ({ interaction, victim, robber, amount, success }) => {
               src={
                 robberUser.displayAvatarURL?.({
                   extension: "png",
-                  size: 2048,
+                  size: 256,
                 }) || // Added size: 2048
                 "https://cdn.discordapp.com/embed/avatars/0.png"
               }
