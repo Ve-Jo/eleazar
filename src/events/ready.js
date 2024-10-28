@@ -20,6 +20,6 @@ export default {
 
     await EconomyEZ.testDatabaseConnection();
 
-    startResourceMonitor(5000, client);
+    /*startResourceMonitor(5000, client);*/
   },
 };
