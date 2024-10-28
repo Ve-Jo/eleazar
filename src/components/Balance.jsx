@@ -30,7 +30,7 @@ const Balance = ({ interaction, database }) => {
               src={
                 interaction?.guild?.iconURL({
                   extension: "png",
-                  size: 2048,
+                  size: 1024, // Request 1024x1024 resolution
                 }) || "https://cdn.discordapp.com/embed/avatars/0.png"
               }
               alt="Guild Icon"
@@ -92,7 +92,11 @@ const Balance = ({ interaction, database }) => {
           <img
             src={
               user
-                ? user?.displayAvatarURL({ extension: "png", size: 2048 }) // Added size: 2048
+                ? user?.displayAvatarURL({
+                    extension: "png",
+                    size: 1024, // Request 1024x1024 resolution
+                    forceStatic: true,
+                  })
                 : "https://cdn.discordapp.com/embed/avatars/0.png"
             }
             alt="User"

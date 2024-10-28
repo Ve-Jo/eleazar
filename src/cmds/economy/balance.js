@@ -46,7 +46,7 @@ export default {
 
     console.log(userData);
     // Generate the balance image
-    const pngBuffer = await generateImage(
+    let pngBuffer = await generateImage(
       Balance,
       {
         interaction: interaction,
@@ -58,6 +58,9 @@ export default {
     const attachment = new AttachmentBuilder(pngBuffer, {
       name: "balance.png",
     });
+
+    // Clear the buffer
+    pngBuffer = null;
 
     let balance_embed = new EmbedBuilder()
       .setTimestamp()

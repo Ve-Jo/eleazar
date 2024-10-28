@@ -163,9 +163,6 @@ Secure : false*/
     client.lavalink.on("playerDestroy", (player) => {
       // Clean up any stored data
       if (player) {
-        // Clear timestamps if using the WeakMap implementation
-        playerUpdate.timestamps.delete(player);
-
         // Clear any other player-specific cached data
         player.cleanup && player.cleanup();
       }
