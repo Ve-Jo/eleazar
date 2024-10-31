@@ -1,16 +1,47 @@
 import { REST, Routes } from "discord.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export async function SlashCommandsHandler(client, commands) {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
   try {
     console.log("Started refreshing application (/) commands.");
+
+    // Temporarily load all commands for registration
+    const commandsPath = path.join(__dirname, "..", "cmds");
+    const commandFolders = fs.readdirSync(commandsPath);
+    const allCommands = new Map(commands); // Copy existing essential commands
+
+    for (const folder of commandFolders) {
+      const folderPath = path.join(commandsPath, folder);
+      if (fs.statSync(folderPath).isDirectory()) {
+        const commandFile = path.join(folderPath, "index.js");
+        if (fs.existsSync(commandFile)) {
+          try {
+            const command = await import(commandFile);
+            if ("data" in command.default && "execute" in command.default) {
+              if (!allCommands.has(command.default.data.name)) {
+                allCommands.set(command.default.data.name, command.default);
+              }
+            }
+          } catch (error) {
+            console.error("Error loading command file:", commandFile, error);
+          }
+        }
+      }
+    }
+
     const existingCommands = await rest.get(
       Routes.applicationCommands(client.user.id)
     );
 
     const newCommandNames = new Set(
-      Array.from(commands.values()).map((cmd) => cmd.data.name)
+      Array.from(allCommands.values()).map((cmd) => cmd.data.name)
     );
     const commandsToDelete = existingCommands.filter(
       (cmd) => !newCommandNames.has(cmd.name)
@@ -21,7 +52,7 @@ export async function SlashCommandsHandler(client, commands) {
       console.log(`Deleted old command: ${cmd.name}`);
     }
 
-    const commandArray = Array.from(commands.values());
+    const commandArray = Array.from(allCommands.values());
 
     //check if there's no identical command option names and send a warning
     const commandOptionNames = commandArray.map(
@@ -40,7 +71,6 @@ export async function SlashCommandsHandler(client, commands) {
       console.warn(
         "Identical command option names detected. This may cause conflicts."
       );
-      //send what commands have identical option names
       console.warn(
         commandOptionNames
           .map((options, index) => ({
@@ -75,6 +105,13 @@ export async function SlashCommandsHandler(client, commands) {
       `Successfully reloaded application (/) commands. ` +
         `Added/Updated: ${commandArray.length}, Deleted: ${commandsToDelete.length}`
     );
+
+    // Clear temporary commands from memory
+    for (const [name, command] of allCommands) {
+      if (!commands.has(name) && !command.essential) {
+        allCommands.delete(name);
+      }
+    }
   } catch (error) {
     console.error(error);
   }

@@ -2,6 +2,7 @@ import { Events } from "discord.js";
 
 export default {
   name: Events.InteractionCreate,
+  essential: true,
   async execute(interaction) {
     if (!interaction.isAutocomplete()) return;
 

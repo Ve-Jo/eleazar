@@ -3,7 +3,6 @@ import sharp from "sharp";
 import { createSatoriConfig } from "../config/satori-config.js";
 import twemoji from "@twemoji/api";
 import axios from "axios";
-import { Readable } from "stream";
 import fs from "fs/promises";
 import path from "path";
 
@@ -22,32 +21,50 @@ async function ensureTempDir() {
   }
 }
 
-async function fetchEmojiSvg(emoji, emojiScaling) {
+async function fetchEmojiSvg(emoji, emojiScaling, client) {
+  process.emit("memoryLabel", `Emoji Processing Start: ${emoji}`, client);
   const emojiCode = twemoji.convert.toCodePoint(emoji);
   const cacheFilePath = path.join(TEMP_DIR, `${emojiCode}-${emojiScaling}.png`);
 
   try {
-    // Try to read from cache first
-    const cachedData = await fs.readFile(cacheFilePath);
-    return `data:image/png;base64,${cachedData.toString("base64")}`;
+    let cachedData = await fs.readFile(cacheFilePath);
+    const base64 = cachedData.toString("base64");
+    cachedData = null;
+    process.emit("memoryLabel", `Emoji Cache Hit: ${emoji}`, client);
+    return `data:image/png;base64,${base64}`;
   } catch {
-    // If not in cache, fetch and save
+    process.emit("memoryLabel", `Emoji Fetching: ${emoji}`, client);
     const svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${emojiCode}.svg`;
 
     try {
-      const { data } = await axios.get(svgUrl, { responseType: "arraybuffer" });
-      const pngBuffer = await sharp(data)
-        .resize(64 * emojiScaling, 64 * emojiScaling, {
+      let { data } = await axios.get(svgUrl, { responseType: "arraybuffer" });
+      const scaledSize = Math.round(64 * emojiScaling);
+
+      if (isNaN(scaledSize) || scaledSize <= 0) {
+        throw new Error(`Invalid scaled size: ${scaledSize}`);
+      }
+
+      let pngBuffer = await sharp(data)
+        .resize(scaledSize, scaledSize, {
           fit: "contain",
           background: { r: 0, g: 0, b: 0, alpha: 0 },
+          fastShrinkOnLoad: true,
         })
-        .png()
+        .png({ compressionLevel: 6, effort: 1, palette: true })
         .toBuffer();
 
-      // Save to temp file
-      await fs.writeFile(cacheFilePath, pngBuffer);
+      data = null;
 
-      return `data:image/png;base64,${pngBuffer.toString("base64")}`;
+      await fs.writeFile(cacheFilePath, pngBuffer);
+      const base64 = pngBuffer.toString("base64");
+      pngBuffer = null;
+
+      process.emit(
+        "memoryLabel",
+        `Emoji Processing Complete: ${emoji}`,
+        client
+      );
+      return `data:image/png;base64,${base64}`;
     } catch (error) {
       console.error(`Failed to load emoji ${emoji}:`, error);
       return null;
@@ -62,36 +79,94 @@ export async function generateImage(
   Component,
   props = {},
   customConfig = {},
-  scaling = { image: 2, emoji: 1 }
+  scaling = { image: 2, emoji: 1 },
+  client
 ) {
-  const satoriConfig = createSatoriConfig({
-    ...customConfig,
-    loadAdditionalAsset: async (code, segment) =>
-      code === "emoji" ? await fetchEmojiSvg(segment, scaling.emoji) : null,
-  });
+  process.emit("memoryLabel", "Image Generation Start", client);
 
-  const svg = await satori(<Component {...props} />, satoriConfig);
+  let satoriConfig = null;
+  let svg = null;
+  let svgBuffer = null;
 
-  const svgString = Buffer.from(svg).toString("utf-8");
-  const [, width, height] = svgString.match(
-    /<svg[^>]+width="(\d+)"[^>]+height="(\d+)"/
-  );
-
-  const newWidth = Math.round(parseInt(width) * scaling.image);
-  const newHeight = Math.round(parseInt(height) * scaling.image);
-
-  return sharp(Buffer.from(svg), { limitInputPixels: false })
-    .withMetadata({ density: 72 })
-    .resize(newWidth, newHeight, {
-      kernel: sharp.kernel.mitchell,
-      fastShrinkOnLoad: true,
-    })
-    .png({ compressionLevel: 9, adaptiveFiltering: true })
-    .toBuffer()
-    .then((buffer) => {
-      const readableStream = new Readable();
-      readableStream.push(buffer);
-      readableStream.push(null);
-      return readableStream;
+  try {
+    satoriConfig = createSatoriConfig({
+      ...customConfig,
+      loadAdditionalAsset: async (code, segment) =>
+        code === "emoji"
+          ? await fetchEmojiSvg(segment, scaling.emoji, client)
+          : null,
     });
+
+    // Break down the Satori operation
+    process.emit("memoryLabel", "Before Satori", client);
+    svg = await satori(<Component {...props} />, satoriConfig);
+  } finally {
+    // Immediate cleanup
+    Component = null;
+    props = null;
+    customConfig = null;
+    satoriConfig = null;
+    if (global.gc) global.gc();
+  }
+
+  try {
+    process.emit("memoryLabel", "SVG Buffer Creation", client);
+    svgBuffer = Buffer.from(svg);
+    svg = null;
+
+    const dimensions = svgBuffer
+      .toString("utf-8")
+      .match(/<svg[^>]+width="(\d+)"[^>]+height="(\d+)"/);
+    const newWidth = Math.round(parseInt(dimensions[1]) * scaling.image);
+    const newHeight = Math.round(parseInt(dimensions[2]) * scaling.image);
+
+    if (global.gc) global.gc();
+    process.emit("memoryLabel", "Sharp Processing Start", client);
+
+    return await new Promise((resolve, reject) => {
+      let sharpInstance = null;
+      try {
+        sharpInstance = sharp(svgBuffer, {
+          limitInputPixels: true,
+          sequentialRead: true,
+          pages: 1,
+          memory: 256,
+        })
+          .withMetadata({ density: 72 })
+          .resize(newWidth, newHeight, {
+            kernel: sharp.kernel.mitchell,
+            fastShrinkOnLoad: true,
+            limitInputPixels: true,
+          })
+          .png({
+            compressionLevel: 6,
+            adaptiveFiltering: false,
+            effort: 3,
+            palette: true,
+          });
+
+        svgBuffer = null;
+
+        sharpInstance.toBuffer({ resolveWithObject: false }, (err, buffer) => {
+          if (err) {
+            sharpInstance = null;
+            reject(err);
+            return;
+          }
+
+          sharpInstance = null;
+
+          process.emit("memoryLabel", "Processing Complete", client);
+          resolve(buffer);
+          process.emit("memoryLabel", "", client);
+        });
+      } catch (error) {
+        sharpInstance = null;
+        reject(error);
+      }
+    });
+  } finally {
+    svg = null;
+    svgBuffer = null;
+  }
 }

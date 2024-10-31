@@ -4,6 +4,7 @@ import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
   name: Events.MessageCreate,
+  essential: true,
   async execute(message) {
     if (message.author.bot) return;
 
