@@ -5,8 +5,6 @@ import {
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
-import prettyMilliseconds from "pretty-ms";
-import cooldownsManager from "../../utils/cooldownsManager.js";
 import Balance from "../../components/Balance.jsx";
 import { generateImage } from "../../utils/imageGenerator.js";
 
@@ -52,7 +50,9 @@ export default {
         interaction: interaction,
         database: userData,
       },
-      { width: 400, height: 200 }
+      { width: 400, height: 200 },
+      { image: 2, emoji: 1 },
+      interaction.client
     );
 
     const attachment = new AttachmentBuilder(pngBuffer, {

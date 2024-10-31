@@ -82,8 +82,7 @@ export default {
         );
       }
 
-      // Force update the player message if it exists
-      if (player.nowPlayingMessage && player.queue.current) {
+      /*if (player.nowPlayingMessage && player.queue.current) {
         const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
           player.queue.current,
           player
@@ -99,7 +98,7 @@ export default {
         } catch (error) {
           console.error("Error updating player message:", error);
         }
-      }
+      }*/
 
       if (!player.playing) await player.play();
     } catch (error) {
