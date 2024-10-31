@@ -1,6 +1,5 @@
 import { Events, Collection } from "discord.js";
 import i18n from "../utils/i18n";
-import { loadCommand, unloadCommand } from "../utils/loadCommands";
 
 const cooldowns = new Collection();
 
@@ -16,31 +15,11 @@ export default {
       ? `${commandName}_${subcommandName}`
       : commandName;
 
-    process.emit(
-      "memoryLabel",
-      `Command Start: ${fullCommandName}`,
-      interaction.client
-    );
-
-    let command = interaction.client.commands.get(commandName);
-
-    if (!command) {
-      process.emit(
-        "memoryLabel",
-        `Loading Command: ${commandName}`,
-        interaction.client
-      );
-      const loaded = await loadCommand(commandName, interaction.client);
-      if (!loaded) {
-        process.emit("memoryLabel", "", interaction.client);
-        return;
-      }
-      command = interaction.client.commands.get(commandName);
-    }
+    const command = interaction.client.commands.get(commandName);
+    if (!command) return;
 
     if (!command.data.description) {
       console.error(`Command "${command.data.name}" is missing a description.`);
-      process.emit("memoryLabel", "", interaction.client);
       return;
     }
 
@@ -63,11 +42,6 @@ export default {
 
         if (now < expirationTime) {
           const timeLeft = (expirationTime - now) / 1000;
-          process.emit(
-            "memoryLabel",
-            `Cooldown: ${fullCommandName}`,
-            interaction.client
-          );
           return interaction.reply({
             content: `Please wait ${timeLeft.toFixed(
               1
@@ -78,7 +52,6 @@ export default {
       }
 
       timestamps.set(interaction.user.id, now);
-      console.log(timestamps);
       setTimeout(() => timestamps.delete(interaction.user.id), cooldownMs);
     }
 
@@ -89,24 +62,9 @@ export default {
       }
       i18n.setLocale(locale);
 
-      process.emit(
-        "memoryLabel",
-        `Executing: ${fullCommandName}`,
-        interaction.client
-      );
       await command.execute(interaction);
-      process.emit(
-        "memoryLabel",
-        `Completed: ${fullCommandName}`,
-        interaction.client
-      );
     } catch (error) {
       console.error(error);
-      process.emit(
-        "memoryLabel",
-        `Error in: ${fullCommandName}`,
-        interaction.client
-      );
       try {
         await interaction.reply({ content: error.message, ephemeral: true });
       } catch (error) {
@@ -115,11 +73,6 @@ export default {
           ephemeral: true,
         });
       }
-    } finally {
-      if (!["help", "ping"].includes(commandName)) {
-        await unloadCommand(commandName, interaction.client);
-      }
-      process.emit("memoryLabel", "", interaction.client);
     }
   },
 };
