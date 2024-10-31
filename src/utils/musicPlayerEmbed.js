@@ -1,7 +1,6 @@
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import i18n from "./i18n.js";
-import { generateImage } from "./imageGenerator.js";
-import MusicPlayer from "../components/MusicPlayer.jsx";
+import { generateRemoteImage } from "./remoteImageGenerator.js";
 
 let lastGeneratedImage = null;
 let lastGeneratedImageTimestamp = 0;
@@ -35,8 +34,8 @@ export async function createOrUpdateMusicPlayerEmbed(
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
-    const pngBuffer = await generateImage(
-      MusicPlayer,
+    const pngBuffer = await generateRemoteImage(
+      "MusicPlayer",
       {
         currentSong: {
           title: track.info.title,
@@ -48,32 +47,46 @@ export async function createOrUpdateMusicPlayerEmbed(
             size: 256,
           }),
           duration: track.info.duration,
+          user: {
+            id: track.requester.id,
+            username: track.requester.username,
+            displayName: track.requester.displayName,
+            avatarURL: track.requester.displayAvatarURL({
+              extension: "png",
+              size: 256,
+            }),
+          },
         },
         previousSong: previousSong
           ? {
               title: previousSong.info.title,
               duration: previousSong.info.duration,
               thumbnail: previousSong.info.artworkUrl,
-              addedByAvatar: previousSong.requester.displayAvatarURL({
-                extension: "png",
-                size: 256,
-              }),
-              addedBy: previousSong.requester.username,
-            }
-          : undefined,
-        nextSongs:
-          player.queue.tracks && player.queue.tracks.length > 0
-            ? player.queue.tracks.slice(0, 5).map((t) => ({
-                title: t.info.title,
-                duration: t.info.duration,
-                thumbnail: t.info.artworkUrl,
-                addedByAvatar: t.requester.displayAvatarURL({
+              user: {
+                id: previousSong.requester.id,
+                username: previousSong.requester.username,
+                displayName: previousSong.requester.displayName,
+                avatarURL: previousSong.requester.displayAvatarURL({
                   extension: "png",
                   size: 256,
                 }),
-                addedBy: t.requester.username,
-              }))
-            : undefined,
+              },
+            }
+          : undefined,
+        nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
+          title: t.info.title,
+          duration: t.info.duration,
+          thumbnail: t.info.artworkUrl,
+          user: {
+            id: t.requester.id,
+            username: t.requester.username,
+            displayName: t.requester.displayName,
+            avatarURL: t.requester.displayAvatarURL({
+              extension: "png",
+              size: 256,
+            }),
+          },
+        })),
         queueLength: player.queue.tracks.length,
         currentTime: player.position,
         duration: track.info.duration,

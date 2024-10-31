@@ -10,8 +10,7 @@ import {
 import i18n from "../../utils/i18n";
 import { getUpgradesForUser } from "../../utils/shopManager";
 import EconomyEZ from "../../utils/economy";
-import UpgradesDisplay from "../../components/UpgradesDisplay.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -49,37 +48,55 @@ export default {
 
       let formattedBalance = Number(balance);
 
-      return await generateImage(
-        UpgradesDisplay,
+      const pngBuffer = await generateRemoteImage(
+        "UpgradesDisplay",
         {
-          interaction: interaction,
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           upgrades: formattedUpgrades,
           currentUpgrade: Number(currentUpgrade),
           balance: formattedBalance,
-          width: 600,
-          height: 350,
         },
         { width: 600, height: 350 }
       );
+
+      const attachment = new AttachmentBuilder(pngBuffer, {
+        name: "shop.png",
+      });
+
+      const embed = new EmbedBuilder()
+        .setTimestamp()
+        .setColor(process.env.EMBED_COLOR)
+        .setImage("attachment://shop.png")
+        .setAuthor({
+          name: i18n.__({ phrase: "economy.shop.title", locale }),
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      return { embeds: [embed], files: [attachment] };
     };
 
     const updateMessage = async () => {
       try {
-        const pngBuffer = await generateShopImage();
-        const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "shop.png",
-        });
-
-        const embed = new EmbedBuilder()
-          .setTimestamp()
-          .setColor(process.env.EMBED_COLOR)
-          .setImage("attachment://shop.png")
-          .setAuthor({
-            name: i18n.__({ phrase: "economy.shop.title", locale }),
-            iconURL: interaction.user.avatarURL(),
-          });
-
-        return { embeds: [embed], files: [attachment] };
+        const { embeds, files } = await generateShopImage();
+        return { embeds, files };
       } catch (error) {
         console.error("Error generating shop image:", error);
         return {

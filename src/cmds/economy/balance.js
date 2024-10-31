@@ -5,9 +5,7 @@ import {
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
-import Balance from "../../components/Balance.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
-
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 export default {
   data: new SlashCommandSubcommandBuilder()
     .setName("balance")
@@ -27,10 +25,7 @@ export default {
         .setRequired(false)
     ),
   async execute(interaction) {
-    /*await interaction.deferReply();*/
-
     const user = interaction.options.getMember("user") || interaction.user;
-
     const userData = await EconomyEZ.get(
       `economy.${interaction.guild.id}.${user.id}`
     );
@@ -43,16 +38,42 @@ export default {
     }
 
     console.log(userData);
-    // Generate the balance image
-    let pngBuffer = await generateImage(
-      Balance,
+
+    let pngBuffer = await generateRemoteImage(
+      "Balance",
       {
-        interaction: interaction,
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+        },
+        targetUser: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarURL: user.displayAvatarURL({
+            extension: "png",
+            size: 1024,
+          }),
+        },
         database: userData,
       },
       { width: 400, height: 200 },
-      { image: 2, emoji: 1 },
-      interaction.client
+      { image: 2, emoji: 1 }
     );
 
     const attachment = new AttachmentBuilder(pngBuffer, {
@@ -70,34 +91,6 @@ export default {
         name: i18n.__("economy.title"),
         iconURL: user.avatarURL(),
       });
-
-    /*let timestamps_list = ["crime", "daily", "work"];
-    let timestamps_text = "```diff\n";
-    for (const timestamp of timestamps_list) {
-      if (timestamp === "work") {
-        timestamps_text += `+ ${timestamp}: ${i18n.__("economy.available")}\n`;
-        continue;
-      }
-
-      const timeLeft = await cooldownsManager.getCooldownTime(
-        interaction.guild.id,
-        user.id,
-        timestamp
-      );
-
-      if (timeLeft > 0) {
-        timestamps_text += `- ${timestamp}: ${prettyMilliseconds(timeLeft)}\n`;
-      } else {
-        timestamps_text += `+ ${timestamp}: ${i18n.__("economy.available")}\n`;
-      }
-    }
-
-    timestamps_text += "```";
-
-    balance_embed.addFields({
-      name: i18n.__("economy.currentTimestamps"),
-      value: timestamps_text,
-    });*/
 
     await interaction.editReply({
       embeds: [balance_embed],

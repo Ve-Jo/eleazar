@@ -7,9 +7,14 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import SettingsDisplay from "../../components/SettingsDisplay.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -20,85 +25,124 @@ export default {
     const categories = new Set();
     const locale = interaction.locale;
 
-    interaction.client.commands.forEach((command) => {
-      if (command.data.options && command.data.options.length > 0) {
-        command.data.options.forEach((subcommand) => {
-          const args = subcommand.options
-            ? subcommand.options.map(
-                (option) =>
-                  `${option.name}${option.required ? "*" : ""}: ${
-                    option.description_localizations
-                      ? option.description_localizations[locale]
-                      : option.description
-                  }`
-              )
-            : [];
+    // Scan all command folders
+    const commandsPath = path.join(__dirname, "..", "..");
+    const commandFolders = fs.readdirSync(path.join(commandsPath, "cmds"));
 
-          const requiredArgs = subcommand.options
-            ? subcommand.options
-                .filter((option) => option.required)
-                .map((option) => option.name)
-            : [];
+    for (const folder of commandFolders) {
+      const folderPath = path.join(commandsPath, "cmds", folder);
+      if (fs.statSync(folderPath).isDirectory()) {
+        const commandFile = path.join(folderPath, "index.js");
+        if (fs.existsSync(commandFile)) {
+          try {
+            const command = await import(`${commandFile}?t=${Date.now()}`);
+            if ("data" in command.default && "execute" in command.default) {
+              if (
+                command.default.data.options &&
+                command.default.data.options.length > 0
+              ) {
+                command.default.data.options.forEach((subcommand) => {
+                  const args = subcommand.options
+                    ? subcommand.options.map(
+                        (option) =>
+                          `${option.name}${option.required ? "*" : ""}: ${
+                            option.description_localizations
+                              ? option.description_localizations[locale]
+                              : option.description
+                          }`
+                      )
+                    : [];
 
-          const usage = `/${command.data.name} ${subcommand.name} ${requiredArgs
-            .map((arg) => `<${arg}>`)
-            .join(" ")}`;
+                  const requiredArgs = subcommand.options
+                    ? subcommand.options
+                        .filter((option) => option.required)
+                        .map((option) => option.name)
+                    : [];
 
-          let description = subcommand.description;
-          if (
-            subcommand.description_localizations &&
-            subcommand.description_localizations[locale]
-          ) {
-            description = subcommand.description_localizations[locale];
+                  const usage = `/${command.default.data.name} ${
+                    subcommand.name
+                  } ${requiredArgs.map((arg) => `<${arg}>`).join(" ")}`;
+
+                  let description = subcommand.description;
+                  if (
+                    subcommand.description_localizations &&
+                    subcommand.description_localizations[locale]
+                  ) {
+                    description = subcommand.description_localizations[locale];
+                  }
+
+                  commands.push({
+                    title: subcommand.name,
+                    description: description,
+                    category: command.default.data.name,
+                    currentValue: [usage, ...args],
+                  });
+
+                  categories.add(command.default.data.name);
+                });
+              } else {
+                const args = command.default.data.options
+                  ? command.default.data.options.map(
+                      (option) =>
+                        `${option.name}${option.required ? "*" : ""}: ${
+                          option.description
+                        }`
+                    )
+                  : [];
+
+                const requiredArgs = command.default.data.options
+                  ? command.default.data.options
+                      .filter((option) => option.required)
+                      .map((option) => option.name)
+                  : [];
+
+                const usage = `/${command.default.data.name} ${requiredArgs
+                  .map((arg) => `<${arg}>`)
+                  .join(" ")}`;
+
+                commands.push({
+                  title: command.default.data.name,
+                  description: command.default.data.description,
+                  category: "General",
+                  currentValue: [usage, ...args],
+                });
+
+                categories.add("General");
+              }
+            }
+          } catch (error) {
+            console.error("Error loading command file:", commandFile, error);
           }
-
-          commands.push({
-            title: subcommand.name,
-            description: description,
-            category: command.data.name,
-            currentValue: [usage, ...args],
-          });
-
-          categories.add(command.data.name);
-        });
-      } else {
-        const args = command.data.options
-          ? command.data.options.map(
-              (option) =>
-                `${option.name}${option.required ? "*" : ""}: ${
-                  option.description
-                }`
-            )
-          : [];
-
-        const requiredArgs = command.data.options
-          ? command.data.options
-              .filter((option) => option.required)
-              .map((option) => option.name)
-          : [];
-
-        const usage = `/${command.data.name} ${requiredArgs
-          .map((arg) => `<${arg}>`)
-          .join(" ")}`;
-
-        commands.push({
-          title: command.data.name,
-          description: command.data.description,
-          category: "General",
-          currentValue: [usage, ...args],
-        });
-
-        categories.add("General");
+        }
       }
-    });
+    }
 
     let highlightedPosition = 0;
     const visibleCount = 1;
 
     const generateCommandImage = async () => {
-      return await generateImage(
-        SettingsDisplay,
+      return await generateRemoteImage(
+        "SettingsDisplay",
         {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           settings: commands,
           highlightedPosition,
           visibleCount,

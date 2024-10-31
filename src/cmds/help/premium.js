@@ -3,8 +3,7 @@ import {
   AttachmentBuilder,
   EmbedBuilder,
 } from "discord.js";
-import PremiumFeaturesDisplay from "../../components/PremiumFeaturesDisplay.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
 export default {
@@ -46,9 +45,28 @@ export default {
     ];
 
     const generatePremiumImage = async () => {
-      return await generateImage(
-        PremiumFeaturesDisplay,
+      return await generateRemoteImage(
+        "PremiumFeaturesDisplay",
         {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           features: premiumFeatures,
           plans: plans,
           height: 650,

@@ -5,8 +5,7 @@ import {
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
-import Transfer from "../../components/Transfer.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -66,10 +65,28 @@ export default {
     );
 
     // Generate the transfer image
-    const pngBuffer = await generateImage(
-      Transfer,
+    const pngBuffer = await generateRemoteImage(
+      "Transfer",
       {
-        interaction: interaction,
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+        },
         database: updatedUser,
         amount: amountInt,
         isDeposit: false,

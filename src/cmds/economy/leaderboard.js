@@ -9,8 +9,7 @@ import {
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
-import Leaderboard from "../../components/Leaderboard.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -72,14 +71,37 @@ export default {
       const endIndex = startIndex + usersPerPage;
       const usersToDisplay = allUsers.slice(startIndex, endIndex);
 
-      const pngBuffer = await generateImage(
-        Leaderboard,
+      const pngBuffer = await generateRemoteImage(
+        "Leaderboard",
         {
-          interaction,
-          users: usersToDisplay,
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          users: usersToDisplay.map((user) => ({
+            ...user,
+            avatarURL: interaction.guild.members.cache
+              .get(user.id)
+              ?.user.displayAvatarURL({ extension: "png", size: 128 }),
+          })),
           currentPage,
           totalPages,
-          highlightedPosition: highlightedPosition,
+          highlightedPosition,
         },
         { width: 400, height: 755 }
       );

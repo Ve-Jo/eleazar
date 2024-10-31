@@ -3,9 +3,7 @@ import EconomyEZ from "../../utils/economy.js";
 import prettyMs from "pretty-ms";
 import i18n from "../../utils/i18n.js";
 import cooldownsManager from "../../utils/cooldownsManager.js";
-import Cooldown from "../../components/Cooldown.jsx";
-import Daily from "../../components/Daily.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -27,11 +25,28 @@ export default {
     );
 
     if (timeLeft > 0) {
-      const pngBuffer = await generateImage(
-        Cooldown,
+      const pngBuffer = await generateRemoteImage(
+        "Cooldown",
         {
-          interaction,
-          user: interaction.user,
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           nextDaily: timeLeft,
           emoji: "🎁",
         },
@@ -75,12 +90,29 @@ export default {
       );
 
       const pngBuffer = await generateImage(
-        Daily,
+        "Daily",
         {
-          interaction,
-          user: interaction.user,
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           balance: newBalance,
-          amount,
+          amount: amount,
         },
         { width: 450, height: 200 }
       );

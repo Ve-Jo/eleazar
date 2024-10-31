@@ -10,9 +10,7 @@ import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
 import prettyMs from "pretty-ms";
 import cooldownsManager from "../../utils/cooldownsManager.js";
-import Crime from "../../components/Crime.jsx";
-import Cooldown from "../../components/Cooldown.jsx";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: new SlashCommandSubcommandBuilder()
@@ -33,11 +31,28 @@ export default {
     );
 
     if (timeLeft > 0) {
-      const pngBuffer = await generateImage(
-        Cooldown,
+      const pngBuffer = await generateRemoteImage(
+        "Cooldown",
         {
-          interaction,
-          user: interaction.user,
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
           nextDaily: timeLeft,
           emoji: "🦹",
         },
@@ -186,16 +201,41 @@ async function performCrime(interaction, user, target, guildId) {
     `economy.${guildId}.${target.id}.balance`
   );
 
-  const pngBuffer = await generateImage(
-    Crime,
+  const pngBuffer = await generateRemoteImage(
+    "Crime",
     {
-      interaction: interaction,
+      interaction: {
+        user: {
+          id: interaction.user.id,
+          username: interaction.user.username,
+          displayName: interaction.user.displayName,
+          avatarURL: interaction.user.displayAvatarURL({
+            extension: "png",
+            size: 1024,
+          }),
+        },
+        guild: {
+          id: interaction.guild.id,
+          name: interaction.guild.name,
+          iconURL: interaction.guild.iconURL({ extension: "png", size: 1024 }),
+        },
+      },
       victim: {
-        user: target,
+        user: {
+          id: target.id,
+          username: target.user.username,
+          displayName: target.displayName,
+          avatarURL: target.displayAvatarURL({ extension: "png", size: 1024 }),
+        },
         balance: updatedTargetBalance,
       },
       robber: {
-        user: user,
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          avatarURL: user.displayAvatarURL({ extension: "png", size: 1024 }),
+        },
         balance: updatedUserBalance,
       },
       amount: amount,
