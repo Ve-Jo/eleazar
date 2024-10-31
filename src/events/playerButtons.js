@@ -4,6 +4,7 @@ import { createMusicButtons } from "../utils/musicButtons.js";
 
 export default {
   name: Events.InteractionCreate,
+  essential: true,
   async execute(interaction) {
     if (!interaction.isButton()) return;
 
