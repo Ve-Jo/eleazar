@@ -1,11 +1,23 @@
 import fs from "fs";
 import path from "path";
 
-const fontPath = path.join(process.cwd(), "./fonts/Roboto-Medium.ttf");
-const fontBuffer = fs.readFileSync(fontPath);
+let fontBuffers = null;
 
-const fontPath2 = path.join(process.cwd(), "./fonts/Inter_28pt-SemiBold.ttf");
-const fontBuffer2 = fs.readFileSync(fontPath2);
+function loadFonts() {
+  if (!fontBuffers) {
+    const fontPath = path.join(process.cwd(), "./fonts/Roboto-Medium.ttf");
+    const fontPath2 = path.join(
+      process.cwd(),
+      "./fonts/Inter_28pt-SemiBold.ttf"
+    );
+
+    fontBuffers = {
+      Roboto: fs.readFileSync(fontPath),
+      Inter: fs.readFileSync(fontPath2),
+    };
+  }
+  return fontBuffers;
+}
 
 export const defaultSatoriConfig = {
   width: 600,
@@ -13,13 +25,11 @@ export const defaultSatoriConfig = {
   fonts: [
     {
       name: "Inter",
-      data: fontBuffer2,
       weight: 600,
       style: "normal",
     },
     {
       name: "Roboto",
-      data: fontBuffer,
       weight: 400,
       style: "normal",
     },
@@ -27,12 +37,15 @@ export const defaultSatoriConfig = {
 };
 
 export function createSatoriConfig(customConfig = {}) {
+  const fonts = loadFonts();
+  const configFonts = defaultSatoriConfig.fonts.map((font) => ({
+    ...font,
+    data: fonts[font.name],
+  }));
+
   return {
     ...defaultSatoriConfig,
     ...customConfig,
-    fonts: [
-      ...(defaultSatoriConfig.fonts || []),
-      ...(customConfig.fonts || []),
-    ],
+    fonts: [...configFonts, ...(customConfig.fonts || [])],
   };
 }
