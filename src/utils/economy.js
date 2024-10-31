@@ -3,7 +3,7 @@ import { Pool } from "pg";
 let pool;
 
 const DB_MAX_RETRIES = 4;
-const DB_INITIAL_DELAY = 1000; // 1 second
+const DB_INITIAL_DELAY = 1500;
 
 async function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
