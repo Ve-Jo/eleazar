@@ -89,7 +89,7 @@ export default {
         Date.now()
       );
 
-      const pngBuffer = await generateImage(
+      const pngBuffer = await generateRemoteImage(
         "Daily",
         {
           interaction: {
