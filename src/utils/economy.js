@@ -2,31 +2,49 @@ import { Pool } from "pg";
 
 let pool;
 
+const DB_MAX_RETRIES = 4;
+const DB_INITIAL_DELAY = 1000; // 1 second
+
+async function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function createConnection() {
-  /*try {
-    // First, try to connect to the local database
-    pool = new Pool({
-      connectionString: process.env.PG_DATABASE_URL_LOCAL,
-    });
-    await pool.query("SELECT 1");
-    console.log("Connected to local database successfully");
-  } catch (localError) {*/
-  console.log(
-    "Failed to connect to local database, falling back to public URL"
-  );
-  try {
-    // If local connection fails, try the public URL
-    pool = new Pool({
-      connectionString: process.env.PG_DATABASE_URL,
-    });
-    await pool.query("SELECT 1");
-    console.log("Connected to public database successfully");
-  } catch (publicError) {
-    console.error("Failed to connect to both local and public databases");
-    throw publicError;
+  let retries = 0;
+
+  while (true) {
+    try {
+      console.log("Attempting to connect to public database...");
+      pool = new Pool({
+        connectionString: process.env.PG_DATABASE_URL,
+      });
+
+      // Test the connection
+      await pool.query("SELECT 1");
+      console.log("Connected to public database successfully");
+      return pool;
+    } catch (error) {
+      retries++;
+
+      if (retries > DB_MAX_RETRIES) {
+        console.error(
+          "Max retries reached. Failed to connect to database:",
+          error
+        );
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff (1s, 2s, 4s)
+      const backoffDelay = DB_INITIAL_DELAY * Math.pow(2, retries - 1);
+      console.log(
+        `Database connection attempt ${retries} failed, retrying in ${
+          backoffDelay / 1000
+        } seconds...`
+      );
+
+      await delay(backoffDelay);
+    }
   }
-  /*}*/
-  return pool;
 }
 
 let validTables = [];
