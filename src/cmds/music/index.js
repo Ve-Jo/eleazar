@@ -6,7 +6,7 @@ export default {
     const command = i18nBuilder.createCommand();
     return command;
   },
-  server: false,
+  server: true,
   async preExecute(interaction) {
     if (!interaction.member.voice.channel) {
       return interaction.reply({
