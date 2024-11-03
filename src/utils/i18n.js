@@ -1,27 +1,27 @@
 import i18n from "i18n";
 import path from "path";
-import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const localesDir = path.join(__dirname, "../locales");
-console.log("Locales directory:", localesDir);
-
-// Check if the directory exists
-if (!fs.existsSync(localesDir)) {
-  console.error("Locales directory does not exist!");
-} else {
-  console.log("Available locales:", fs.readdirSync(localesDir));
-}
 
 i18n.configure({
-  locales: ["ru", "en", "uk"],
-  defaultLocale: "en", // Changed this to 'en' for consistency
+  locales: ["en", "ru", "uk"],
+  defaultLocale: "en",
   directory: localesDir,
   objectNotation: true,
   updateFiles: false,
   syncFiles: false,
   register: global,
+  api: {
+    __: "t",
+    __n: "tn",
+  },
+  missingKeyFn: function (locale, value) {
+    return undefined;
+  },
 });
-
-console.log("Configured locales:", i18n.getLocales());
 
 export default i18n;
