@@ -36,14 +36,14 @@ export default {
     const current = player.queue.current;
     const nextTrack = player.queue.tracks;
 
-    const queueString = `${i18n.__("music.currentPlaying", {
+    const queueString = `${i18n.__("music.queue.currentPlaying", {
       title: current.info.title,
-    })}\n${i18n.__("music.nextInQueue", {
+    })}\n${i18n.__("music.queue.nextInQueue", {
       tracks: nextTrack.map((t) => t.info.title).join(", "),
     })}`;
 
     await interaction.editReply(
-      `${i18n.__("music.currentQueue")}\n${queueString}`
+      `${i18n.__("music.queue.currentQueue")}\n${queueString}`
     );
   },
   localization_strings: {

@@ -38,6 +38,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const amount = interaction.options.getString("amount");
 
     const initialUser = await EconomyEZ.get(
@@ -54,14 +55,14 @@ export default {
     }
     if (amountInt <= 0) {
       return interaction.editReply({
-        content: i18n.__("economy.amountGreaterThanZero"),
+        content: i18n.__("economy.deposit.amountGreaterThanZero"),
         ephemeral: true,
       });
     }
 
     if (initialUser.balance < amountInt) {
       return interaction.editReply({
-        content: i18n.__("economy.insufficientFunds"),
+        content: i18n.__("economy.deposit.insufficientFunds"),
         ephemeral: true,
       });
     }
@@ -115,11 +116,12 @@ export default {
       .setTimestamp()
       .setImage("attachment://deposit.png")
       .setAuthor({
-        name: i18n.__("economy.title"),
-        iconURL: interaction.user.avatarURL(),
+        name: i18n.__("economy.deposit.title"),
+        iconURL: interaction.user.displayAvatarURL(),
       });
 
     await interaction.editReply({
+      content: i18n.__("economy.deposit.success", { amount: amountInt }),
       embeds: [deposit_embed],
       files: [attachment],
     });
@@ -129,6 +131,11 @@ export default {
       en: "deposit",
       ru: "внести",
       uk: "внести",
+    },
+    title: {
+      en: "Deposit",
+      ru: "Внести",
+      uk: "Внести",
     },
     description: {
       en: "Deposit money",
@@ -148,6 +155,21 @@ export default {
           uk: "Сума для внесення (або 'all', 'half')",
         },
       },
+    },
+    success: {
+      en: "Successfully deposited {{amount}} coins",
+      ru: "Успешно внесено {{amount}} монет",
+      uk: "Успішно внесено {{amount}} монет",
+    },
+    amountGreaterThanZero: {
+      en: "Amount must be greater than 0",
+      ru: "Сумма должна быть больше 0",
+      uk: "Сума повинна бути більшою за 0",
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
     },
   },
 };

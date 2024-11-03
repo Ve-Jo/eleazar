@@ -28,6 +28,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const usersPerPage = 10;
 
     const guildEconomy = await EconomyEZ.get(`economy.${interaction.guild.id}`);
@@ -62,7 +63,7 @@ export default {
 
     if (allUsers.length === 0) {
       return interaction.editReply({
-        content: i18n.__("economy.noUsersFound"),
+        content: i18n.__("economy.leaderboard.noUsersFound"),
         ephemeral: true,
       });
     }
@@ -120,10 +121,10 @@ export default {
 
       const embed = new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__("economy.leaderboardTitle"))
+        .setTitle(i18n.__("economy.leaderboard.title"))
         .setImage("attachment://leaderboard.png")
         .setFooter({
-          text: i18n.__("economy.leaderboardFooter", {
+          text: i18n.__("economy.leaderboard.footer", {
             page: currentPage,
             totalPages,
           }),
@@ -172,7 +173,7 @@ export default {
 
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_user")
-          .setPlaceholder("Select a user")
+          .setPlaceholder(i18n.__("economy.leaderboard.selectUser"))
           .addOptions(selectOptions);
 
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
@@ -200,7 +201,7 @@ export default {
     collector.on("collect", async (i) => {
       if (i.user.id !== interaction.user.id) {
         return i.reply({
-          content: "You can't use this interaction.",
+          content: i18n.__("economy.leaderboard.cantUseInteraction"),
           ephemeral: true,
         });
       }
@@ -244,6 +245,31 @@ export default {
       en: "Display top users by total balance",
       ru: "Показать топ пользователей по общему балансу",
       uk: "Показати топ користувачів за загальним балансом",
+    },
+    noUsersFound: {
+      en: "No users found",
+      ru: "Не найдено пользователей",
+      uk: "Не знайдено користувачів",
+    },
+    cantUseInteraction: {
+      en: "You can't use this interaction.",
+      ru: "Вы не можете использовать это взаимодействие.",
+      uk: "Ви не можете використовувати це взаємодію.",
+    },
+    selectUser: {
+      en: "Select a user",
+      ru: "Выберите пользователя",
+      uk: "Виберіть користувача",
+    },
+    footer: {
+      en: "Page {{page}} of {{totalPages}}",
+      ru: "Страница {{page}} из {{totalPages}}",
+      uk: "Сторінка {{page}} з {{totalPages}}",
+    },
+    title: {
+      en: "Leaderboard",
+      ru: "Лидерборд",
+      uk: "Лідерборд",
     },
   },
 };

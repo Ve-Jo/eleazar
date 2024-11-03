@@ -38,6 +38,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.user;
     const userData = await EconomyEZ.get(
       `economy.${interaction.guild.id}.${user.id}`
@@ -45,7 +46,7 @@ export default {
 
     if (!userData) {
       return interaction.editReply({
-        content: i18n.__("economy.userNotFound"),
+        content: i18n.__("economy.balance.userNotFound"),
         ephemeral: true,
       });
     }
@@ -101,7 +102,7 @@ export default {
       .setColor(process.env.EMBED_COLOR)
       .setImage("attachment://balance.png")
       .setAuthor({
-        name: i18n.__("economy.title"),
+        name: i18n.__("economy.balance.title"),
         iconURL: user.avatarURL(),
       });
 
@@ -116,10 +117,20 @@ export default {
       ru: "баланс",
       uk: "рахунок",
     },
+    title: {
+      en: "Balance",
+      ru: "Баланс",
+      uk: "Баланс",
+    },
     description: {
       en: "Check balance",
       ru: "Посмотреть баланс",
       uk: "Переглянути баланс",
+    },
+    userNotFound: {
+      en: "User not found",
+      ru: "Пользователь не найден",
+      uk: "Користувач не знайдений",
     },
     options: {
       user: {

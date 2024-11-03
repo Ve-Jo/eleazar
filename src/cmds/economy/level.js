@@ -17,6 +17,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     await interaction.reply("Level command executed");
   },
   localization_strings: {

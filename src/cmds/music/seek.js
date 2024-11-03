@@ -36,6 +36,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
       interaction.guild.id
     );

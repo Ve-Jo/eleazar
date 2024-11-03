@@ -44,11 +44,11 @@ export async function getUpgradesForUser(guildId, userId, locale) {
 
     return {
       title: i18n.__(`economy.upgrades.${upgrade.name}.name`, {
-        locale,
+        locale: locale,
       }),
       description: i18n.__(`economy.upgrades.${upgrade.name}.description`, {
         current_multiplier: current_multiplier,
-        locale,
+        locale: locale,
       }),
       currentLevel: current_level,
       nextLevel: current_level + 1,

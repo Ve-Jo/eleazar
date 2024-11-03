@@ -38,6 +38,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const amount = interaction.options.getString("amount");
 
     const initialUser = await EconomyEZ.get(
@@ -116,7 +117,7 @@ export default {
       .setImage("attachment://withdraw.png")
       .setAuthor({
         name: i18n.__("economy.withdraw.title"),
-        iconURL: interaction.user.avatarURL(),
+        iconURL: interaction.user.displayAvatarURL(),
       });
 
     await interaction.editReply({
@@ -129,6 +130,11 @@ export default {
       en: "withdraw",
       ru: "снять",
       uk: "зняти",
+    },
+    title: {
+      en: "Withdraw",
+      ru: "Снять",
+      uk: "Зняти",
     },
     description: {
       en: "Withdraw money from bank",

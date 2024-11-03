@@ -24,7 +24,10 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("music.noMusicPlaying"));
+      return interaction.editReply({
+        content: i18n.__("music.noMusicPlaying"),
+        ephemeral: true,
+      });
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
@@ -40,11 +43,20 @@ export default {
       let autoplay = player.get("autoplay_enabled");
       if (autoplay) {
         await player.seek(player.queue.current.info.duration);
-        return interaction.editReply(i18n.__("music.skippedSong"));
+        return interaction.editReply({
+          content: i18n.__("music.skip.skippedSong"),
+          ephemeral: true,
+        });
       }
-      return interaction.editReply(i18n.__("music.skippingSongError"));
+      return interaction.editReply({
+        content: i18n.__("music.skip.skippingSongError"),
+        ephemeral: true,
+      });
     }
-    await interaction.editReply(i18n.__("music.skippedSong"));
+    await interaction.editReply({
+      content: i18n.__("music.skip.skippedSong"),
+      ephemeral: true,
+    });
   },
   localization_strings: {
     name: {
@@ -56,6 +68,16 @@ export default {
       en: "Skip the current song",
       ru: "Пропустить текущую песню",
       uk: "Пропустити поточну пісню",
+    },
+    skippedSong: {
+      en: "Skipped the current song",
+      ru: "Пропущена текущая песня",
+      uk: "Пропущена поточна пісня",
+    },
+    skippingSongError: {
+      en: "Failed to skip the current song",
+      ru: "Не удалось пропустить текущую песню",
+      uk: "Не вдалося пропустити поточну пісню",
     },
   },
 };

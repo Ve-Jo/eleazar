@@ -29,6 +29,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const user = interaction.user;
     const guildId = interaction.guild.id;
 
@@ -74,7 +75,7 @@ export default {
 
       return interaction.editReply({
         files: [attachment],
-        content: i18n.__("economy.crimeCooldown", {
+        content: i18n.__("economy.crime.cooldown", {
           time: prettyMs(timeLeft, { verbose: true }),
         }),
       });
@@ -99,14 +100,14 @@ export default {
 
     if (sortedUsers.length === 0) {
       return interaction.editReply({
-        content: i18n.__("economy.noValidTargets"),
+        content: i18n.__("economy.crime.noValidTargets"),
         ephemeral: true,
       });
     }
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId("select_crime_target")
-      .setPlaceholder(i18n.__("economy.crimeTargetPlaceholder"))
+      .setPlaceholder(i18n.__("economy.crime.selectCrimeTarget"))
       .addOptions(
         await Promise.all(
           sortedUsers.map(async ([, userData]) => {
@@ -126,7 +127,9 @@ export default {
             return {
               label: member
                 ? member.displayName
-                : `${i18n.__("economy.unknownUser")} (${userData.user_id})`,
+                : `${i18n.__("economy.crime.unknownUser")} (${
+                    userData.user_id
+                  })`,
               description: `${userData.balance.toFixed(2)} 💵`,
               value: userData.user_id,
             };
@@ -137,7 +140,7 @@ export default {
     const row = new ActionRowBuilder().addComponents(selectMenu);
 
     const response = await interaction.editReply({
-      content: i18n.__("economy.selectCrimeTarget"),
+      content: i18n.__("economy.crime.selectCrimeTarget"),
       components: [row],
     });
 
@@ -154,8 +157,9 @@ export default {
       // Proceed with the crime logic
       await performCrime(interaction, user, target, guildId);
     } catch (e) {
+      console.log(e);
       await interaction.editReply({
-        content: i18n.__("economy.noSelectionMade"),
+        content: i18n.__("economy.crime.noSelectionMade"),
         components: [],
       });
     }
@@ -166,10 +170,55 @@ export default {
       ru: "преступление",
       uk: "злочин",
     },
+    title: {
+      en: "Crime",
+      ru: "Преступление",
+      uk: "Злочин",
+    },
     description: {
       en: "Attempt to steal cash from another user",
       ru: "Попытаться украсть деньги у другого пользователя",
       uk: "Спробувати вкрасти гроші у іншого користувача",
+    },
+    selectCrimeTarget: {
+      en: "Select a user to steal from",
+      ru: "Выберите пользователя, у которого хотите украсть деньги",
+      uk: "Виберіть користувача, у якого хочете вкрасти гроші",
+    },
+    noSelectionMade: {
+      en: "No selection made",
+      ru: "Ничего не выбрано",
+      uk: "Нічого не вибрано",
+    },
+    insufficientFundsForCrime: {
+      en: "Insufficient funds for crime",
+      ru: "Недостаточно средств для преступления",
+      uk: "Недостатньо коштів для злочину",
+    },
+    success: {
+      en: "You successfully stole {{amount}} coins",
+      ru: "Вы успешно украли {{amount}} монет",
+      uk: "Ви успішно вкрали {{amount}} монет",
+    },
+    failure: {
+      en: "You failed to steal. You lost {{amount}} coins",
+      ru: "Вы не смогли украсть деньги. Вы потеряли {{amount}} монет",
+      uk: "Ви не змогли вкрасти гроші. Ви втратили {{amount}} монет",
+    },
+    cooldown: {
+      en: "You have to wait {{time}} to commit another crime",
+      ru: "Вам нужно подождать {{time}} чтобы совершить другое преступление",
+      uk: "Вам потрібно почекати {{time}} щоб скористатися ще одним злочином",
+    },
+    noValidTargets: {
+      en: "No valid targets found",
+      ru: "Не найдено допустимых целей",
+      uk: "Не знайдено допустимих цілей",
+    },
+    unknownUser: {
+      en: "Unknown user",
+      ru: "Неизвестный пользователь",
+      uk: "Незнайомий користувач",
     },
   },
 };
@@ -183,7 +232,7 @@ async function performCrime(interaction, user, target, guildId) {
 
   if (userCash < targetCash / 5) {
     return interaction.editReply({
-      content: i18n.__("economy.insufficientFundsForCrime"),
+      content: i18n.__("economy.crime.insufficientFundsForCrime"),
       components: [],
     });
   }
@@ -200,7 +249,7 @@ async function performCrime(interaction, user, target, guildId) {
       "-",
       amount
     );
-    description = i18n.__("economy.crimeSuccess", { amount });
+    description = i18n.__("economy.crime.success", { amount });
   } else {
     amount = Math.floor(Math.random() * (userCash / 2));
     await EconomyEZ.math(`economy.${guildId}.${user.id}.balance`, "-", amount);
@@ -209,7 +258,7 @@ async function performCrime(interaction, user, target, guildId) {
       "+",
       amount
     );
-    description = i18n.__("economy.crimeFailure", { amount });
+    description = i18n.__("economy.crime.failure", { amount });
   }
 
   await EconomyEZ.set(`timestamps.${guildId}.${user.id}.crime`, Date.now());
@@ -271,7 +320,7 @@ async function performCrime(interaction, user, target, guildId) {
     .setTimestamp()
     .setImage("attachment://crime.png")
     .setAuthor({
-      name: i18n.__("economy.title"),
+      name: i18n.__("economy.crime.title"),
       iconURL: user.avatarURL(),
     })
     .setDescription(description);

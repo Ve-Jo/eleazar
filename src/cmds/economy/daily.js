@@ -22,6 +22,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     await EconomyEZ.ensure(
       `timestamps.${interaction.guild.id}.${interaction.user.id}`
     );
@@ -68,7 +69,7 @@ export default {
 
       return interaction.editReply({
         files: [attachment],
-        content: i18n.__("economy.dailyCooldown", {
+        content: i18n.__("economy.daily.cooldown", {
           time: prettyMs(timeLeft, { verbose: true }),
         }),
       });
@@ -131,12 +132,12 @@ export default {
 
       await interaction.editReply({
         files: [attachment],
-        content: i18n.__("economy.dailyBonusClaimed", { amount }),
+        content: i18n.__("economy.daily.bonusClaimed", { amount }),
       });
     } catch (error) {
       console.error("Error updating balance:", error);
       await interaction.editReply({
-        content: i18n.__("economy.errorUpdatingBalance"),
+        content: i18n.__("economy.daily.errorUpdatingBalance"),
         ephemeral: true,
       });
     }
@@ -151,6 +152,21 @@ export default {
       en: "Claim daily reward",
       ru: "Получить ежедневную награду",
       uk: "Отримати щоденну нагороду",
+    },
+    cooldown: {
+      en: "You have to wait {{time}} to claim your daily reward",
+      ru: "Вам нужно подождать {{time}} чтобы получить свою ежедневную награду",
+      uk: "Вам потрібно почекати {{time}} щоб отримати свою щоденну нагороду",
+    },
+    bonusClaimed: {
+      en: "You have claimed your daily reward of {{amount}} coins",
+      ru: "Вы получили свою ежедневную награду в размере {{amount}} монет",
+      uk: "Ви отримали свою щоденну нагороду в розмірі {{amount}} монет",
+    },
+    errorUpdatingBalance: {
+      en: "Error updating balance",
+      ru: "Ошибка обновления баланса",
+      uk: "Помилка оновлення балансу",
     },
   },
 };

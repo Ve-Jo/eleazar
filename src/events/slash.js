@@ -61,7 +61,6 @@ export default {
       // Execute preExecute if it exists
       if (command.preExecute) {
         await command.preExecute(interaction);
-        if (interaction.replied) return;
       }
 
       // Handle subcommand execution

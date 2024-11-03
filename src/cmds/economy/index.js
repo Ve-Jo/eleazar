@@ -9,7 +9,6 @@ export default {
   },
   server: true,
   async preExecute(interaction) {
-    await interaction.deferReply();
     await EconomyEZ.ensure(
       `economy.${interaction.guild.id}.${interaction.user.id}`
     );
@@ -24,6 +23,32 @@ export default {
       en: "Commands for economy",
       ru: "Команды для экономики",
       uk: "Команди для економіки",
+    },
+    upgrades: {
+      0: {
+        name: {
+          en: "Daily bonus",
+          ru: "Ежедневный бонус",
+          uk: "Щоденна премія",
+        },
+        description: {
+          en: "Increase your daily bonus",
+          ru: "Увеличение ежедневного бонуса",
+          uk: "Збільшення щоденної премії",
+        },
+      },
+      1: {
+        name: {
+          en: "Crime cooldown",
+          ru: "Время между преступлениями",
+          uk: "Час між злочинами",
+        },
+        description: {
+          en: "Decrease your crime cooldown",
+          ru: "Уменьшение времени между возможными преступлениями",
+          uk: "Зменшення часу між можливими злочинами",
+        },
+      },
     },
   },
 };

@@ -29,6 +29,7 @@ export default {
     return subcommand;
   },
   async execute(interaction) {
+    await interaction.deferReply();
     const locale = interaction.locale || "en";
     const upgrades = await getUpgradesForUser(
       interaction.guildId,
@@ -119,7 +120,7 @@ export default {
         .setPlaceholder(i18n.__("economy.shop.selectPlaceholder"))
         .addOptions(
           upgrades.map((upgrade, index) => ({
-            label: upgrade.title,
+            label: upgrade.title || "Unknown Upgrade",
             description: `(${upgrade.currentLevel}) ${upgrade.description}`,
             emoji: upgrade.emoji,
             value: index.toString(),
@@ -130,7 +131,7 @@ export default {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("buy")
-        .setLabel(i18n.__({ phrase: "economy.shop.buyButton", locale }))
+        .setLabel(i18n.__("economy.shop.buyButton"))
         .setStyle(ButtonStyle.Success)
     );
 

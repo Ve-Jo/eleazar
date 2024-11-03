@@ -63,7 +63,16 @@
     "description": "Commands for economy",
     "crime": {
       "name": "crime",
-      "description": "Attempt to steal cash from another user"
+      "description": "Attempt to steal cash from another user",
+      "selectCrimeTarget": "Select a user to steal from",
+      "noSelectionMade": "No selection made",
+      "insufficientFundsForCrime": "Insufficient funds for crime",
+      "success": "You successfully stole {{amount}} coins",
+      "failure": "You failed to steal. You lost {{amount}} coins",
+      "cooldown": "You have to wait {{time}} to commit another crime",
+      "noValidTargets": "No valid targets found",
+      "unknownUser": "Unknown user",
+      "title": "Crime"
     },
     "balance": {
       "name": "balance",
@@ -73,11 +82,18 @@
           "name": "user",
           "description": "User to check"
         }
-      }
+      },
+      "title": "Balance",
+      "userNotFound": "User not found"
     },
     "leaderboard": {
       "name": "leaderboard",
-      "description": "Display top users by total balance"
+      "description": "Display top users by total balance",
+      "noUsersFound": "No users found",
+      "cantUseInteraction": "You can't use this interaction.",
+      "selectUser": "Select a user",
+      "footer": "Page {{page}} of {{totalPages}}",
+      "title": "Leaderboard"
     },
     "level": {
       "name": "level",
@@ -91,7 +107,11 @@
           "name": "amount",
           "description": "Amount to deposit (or 'all', 'half')"
         }
-      }
+      },
+      "success": "Successfully deposited {{amount}} coins",
+      "amountGreaterThanZero": "Amount must be greater than 0",
+      "insufficientFunds": "Insufficient funds",
+      "title": "Deposit"
     },
     "withdraw": {
       "name": "withdraw",
@@ -133,7 +153,28 @@
     },
     "daily": {
       "name": "daily",
-      "description": "Claim daily reward"
+      "description": "Claim daily reward",
+      "cooldown": "You have to wait {{time}} to claim your daily reward",
+      "bonusClaimed": "You have claimed your daily reward of {{amount}} coins",
+      "errorUpdatingBalance": "Error updating balance"
+    },
+    "upgrades": {
+      "0": {
+        "name": "Daily bonus",
+        "description": "Increase your daily bonus"
+      },
+      "1": {
+        "name": "Crime cooldown",
+        "description": "Decrease your crime cooldown"
+      },
+      "dailyBonus": {
+        "name": "Daily bonus",
+        "description": "Increase your daily bonus"
+      },
+      "crimeCooldown": {
+        "name": "Crime cooldown",
+        "description": "Decrease your crime cooldown"
+      }
     }
   },
   "music": {
@@ -222,7 +263,9 @@
     },
     "skip": {
       "name": "skip",
-      "description": "Skip the current song"
+      "description": "Skip the current song",
+      "skippedSong": "Skipped the current song",
+      "skippingSongError": "Failed to skip the current song"
     },
     "stop": {
       "name": "stop",
@@ -547,7 +590,8 @@
           "description": "One person cant count twice or more in a row"
         }
       },
-      "no_perms": "You don't have permissions to manage channels"
+      "no_perms": "You don't have permissions to manage channels",
+      "success": "Counting channel setup successfully"
     },
     "remove": {
       "name": "remove",
