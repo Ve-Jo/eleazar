@@ -12,6 +12,7 @@ import {
   ComponentType,
 } from "discord.js";
 import HMFull from "hmfull";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
