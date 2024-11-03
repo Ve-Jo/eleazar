@@ -4,7 +4,7 @@ import {
   OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-
+import i18n from "../../utils/i18n.js";
 const memer_list = [
   "disability",
   "hitler",
@@ -104,14 +104,14 @@ export default {
 
         if (!username) {
           await interaction.editReply({
-            content: i18n.__("memer.noUsername"),
+            content: i18n.__("filters.image_memer.noUsername"),
           });
           return;
         }
 
         if (!all_text_after_username) {
           await interaction.editReply({
-            content: i18n.__("memer.noText"),
+            content: i18n.__("filters.image_memer.noText"),
           });
           return;
         }
@@ -127,7 +127,9 @@ export default {
       await interaction.editReply({ files: [result] });
     } catch (error) {
       console.error("Error applying meme filter:", error);
-      await interaction.editReply(i18n.__("memer.errorApplyingFilter"));
+      await interaction.editReply(
+        i18n.__("filters.image_memer.errorApplyingFilter")
+      );
     }
   },
   localization_strings: {
@@ -178,6 +180,21 @@ export default {
           uk: "[ФІЛЬТР YOUTUBE] Перше слово USERNAME і потім TEXT",
         },
       },
+    },
+    noText: {
+      en: "No text provided",
+      ru: "Не указано текст",
+      uk: "Не вказано текст",
+    },
+    noUsername: {
+      en: "No username provided",
+      ru: "Не указано имя пользователя",
+      uk: "Не вказано ім'я користувача",
+    },
+    errorApplyingFilter: {
+      en: "Error applying meme filter",
+      ru: "Ошибка применения мем-фильтра",
+      uk: "Помилка застосування мем-фільтра",
     },
   },
 };

@@ -75,14 +75,14 @@ export default {
 
     if (targetUser.id === interaction.user.id) {
       return interaction.reply({
-        content: i18n.__("cannotSelectSelf"),
+        content: i18n.__("emotions.negative.cannotSelectSelf"),
         ephemeral: true,
       });
     }
 
     if (targetUser.bot) {
       return interaction.reply({
-        content: i18n.__("cannotSelectBot"),
+        content: i18n.__("emotions.negative.cannotSelectBot"),
         ephemeral: true,
       });
     }
@@ -172,7 +172,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("imageNotFound"),
+            content: i18n.__("emotions.negative.imageNotFound"),
             ephemeral: true,
           });
         }
@@ -352,6 +352,21 @@ export default {
         ru: "<@{{user}}> щекочет <@{{targetUser}}>!",
         uk: "<@{{user}}> лоскоче <@{{targetUser}}>!",
       },
+    },
+    imageNotFound: {
+      en: "Image not found",
+      ru: "Изображение не найдено",
+      uk: "Зображення не знайдено",
+    },
+    cannotSelectSelf: {
+      en: "You cannot select yourself",
+      ru: "Вы не можете выбрать себя",
+      uk: "Ви не можете вибрати себе",
+    },
+    cannotSelectBot: {
+      en: "You cannot select a bot",
+      ru: "Вы не можете выбрать бота",
+      uk: "Ви не можете вибрати бота",
     },
   },
 };

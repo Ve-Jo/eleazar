@@ -13,6 +13,7 @@ import EconomyEZ from "../../utils/economy.js";
 import prettyMs from "pretty-ms";
 import cooldownsManager from "../../utils/cooldownsManager.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {

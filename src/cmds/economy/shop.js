@@ -13,6 +13,7 @@ import {
 import { getUpgradesForUser } from "../../utils/shopManager.js";
 import EconomyEZ from "../../utils/economy.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -93,7 +94,7 @@ export default {
         .setColor(process.env.EMBED_COLOR)
         .setImage("attachment://shop.png")
         .setAuthor({
-          name: i18n.__({ phrase: "economy.shop.title", locale }),
+          name: i18n.__("economy.shop.title"),
           iconURL: interaction.user.avatarURL(),
         });
 
@@ -107,10 +108,7 @@ export default {
       } catch (error) {
         console.error("Error generating shop image:", error);
         return {
-          content: i18n.__({
-            phrase: "economy.shop.errorGeneratingImage",
-            locale,
-          }),
+          content: i18n.__("economy.shop.errorGeneratingImage"),
         };
       }
     };
@@ -118,9 +116,7 @@ export default {
     const createUpgradeMenu = () => {
       return new StringSelectMenuBuilder()
         .setCustomId("select-upgrade")
-        .setPlaceholder(
-          i18n.__({ phrase: "economy.shop.selectPlaceholder", locale })
-        )
+        .setPlaceholder(i18n.__("economy.shop.selectPlaceholder"))
         .addOptions(
           upgrades.map((upgrade, index) => ({
             label: upgrade.title,
@@ -165,7 +161,7 @@ export default {
 
         if (balance < upgrade.price) {
           await i.reply({
-            content: i18n.__({ phrase: "economy.insufficientFunds", locale }),
+            content: i18n.__("economy.shop.insufficientFunds"),
             ephemeral: true,
           });
           return;
@@ -192,13 +188,10 @@ export default {
           );
 
           await i.reply({
-            content: i18n.__(
-              { phrase: "economy.shop.purchaseMessage", locale },
-              {
-                name: upgrade.title,
-                price: upgrade.price,
-              }
-            ),
+            content: i18n.__("economy.shop.purchaseMessage", {
+              name: upgrade.title,
+              price: upgrade.price,
+            }),
             ephemeral: true,
           });
 
@@ -223,7 +216,7 @@ export default {
         } catch (error) {
           console.error("Error during purchase:", error);
           await i.reply({
-            content: i18n.__({ phrase: "economy.shop.purchaseError", locale }),
+            content: i18n.__("economy.shop.purchaseError"),
             ephemeral: true,
           });
         }
@@ -244,6 +237,41 @@ export default {
       en: "Buy upgrades/roles",
       ru: "Купить улучшения/роли",
       uk: "Купити улучшення/ролі",
+    },
+    title: {
+      en: "Shop",
+      ru: "Магазин",
+      uk: "Магазин",
+    },
+    selectPlaceholder: {
+      en: "Select an upgrade",
+      ru: "Выберите улучшение",
+      uk: "Виберіть улучшення",
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
+    },
+    buyButton: {
+      en: "Buy",
+      ru: "Купить",
+      uk: "Купити",
+    },
+    errorGeneratingImage: {
+      en: "Error generating image",
+      ru: "Ошибка при генерации изображения",
+      uk: "Помилка при генерації зображення",
+    },
+    purchaseMessage: {
+      en: "{name} purchased for {price}",
+      ru: "{name} куплен за {price}",
+      uk: "{name} куплено за {price}",
+    },
+    purchaseError: {
+      en: "Error during purchase",
+      ru: "Ошибка при покупке",
+      uk: "Помилка при покупці",
     },
   },
 };

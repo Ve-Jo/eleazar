@@ -6,6 +6,7 @@ import {
 } from "../../utils/builders/index.js";
 import EconomyEZ from "../../utils/economy.js";
 import { PermissionsBitField } from "discord.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -147,7 +148,7 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("no_perms"),
+        content: i18n.__("counting.setup.no_perms"),
         ephemeral: true,
       });
     }
@@ -283,6 +284,11 @@ export default {
           uk: "Один користувач не може рахувати два і більше разів підряд",
         },
       },
+    },
+    no_perms: {
+      en: "You don't have permissions to manage channels",
+      ru: "У вас нет прав на управление каналами",
+      uk: "У вас немає прав на керування каналами",
     },
   },
 };

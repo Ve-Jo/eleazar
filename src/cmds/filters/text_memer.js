@@ -4,6 +4,7 @@ import {
   OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
+import i18n from "../../utils/i18n.js";
 
 const memer_list = ["humanity", "excuseme", "cry", "stonks"];
 
@@ -64,7 +65,9 @@ export default {
       let result = await interaction.client.memer[filter](text);
       await interaction.editReply({ files: [result] });
     } catch (error) {
-      await interaction.editReply(i18n.__("memer.errorApplyingFilter"));
+      await interaction.editReply(
+        i18n.__("filters.text_memer.errorApplyingFilter")
+      );
     }
   },
   localization_strings: {
@@ -103,6 +106,11 @@ export default {
           uk: "Текст для використання",
         },
       },
+    },
+    errorApplyingFilter: {
+      en: "Error applying meme filter",
+      ru: "Ошибка применения мем-фильтра",
+      uk: "Помилка застосування мем-фільтра",
     },
   },
 };

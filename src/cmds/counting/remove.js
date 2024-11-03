@@ -3,6 +3,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import EconomyEZ from "../../utils/economy.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {

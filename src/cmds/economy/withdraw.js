@@ -7,6 +7,7 @@ import {
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -54,13 +55,13 @@ export default {
 
     if (initialUser.bank < amountInt) {
       return interaction.editReply({
-        content: i18n.__("economy.insufficientFunds"),
+        content: i18n.__("economy.withdraw.insufficientFunds"),
         ephemeral: true,
       });
     }
     if (amountInt <= 0) {
       return interaction.editReply({
-        content: i18n.__("economy.amountGreaterThanZero"),
+        content: i18n.__("economy.withdraw.amountGreaterThanZero"),
         ephemeral: true,
       });
     }
@@ -114,7 +115,7 @@ export default {
       .setTimestamp()
       .setImage("attachment://withdraw.png")
       .setAuthor({
-        name: i18n.__("economy.title"),
+        name: i18n.__("economy.withdraw.title"),
         iconURL: interaction.user.avatarURL(),
       });
 
@@ -147,6 +148,21 @@ export default {
           uk: "Сума для зняття (або 'all', 'half')",
         },
       },
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
+    },
+    amountGreaterThanZero: {
+      en: "Amount must be greater than zero",
+      ru: "Сумма должна быть больше нуля",
+      uk: "Сума має бути більшою за нуль",
+    },
+    title: {
+      en: "Withdraw",
+      ru: "Снять",
+      uk: "Зняти",
     },
   },
 };

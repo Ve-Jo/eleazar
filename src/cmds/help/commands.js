@@ -20,18 +20,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default {
-  localization_strings: {
-    name: {
-      en: "commands",
-      ru: "команды",
-      uk: "команди",
-    },
-    description: {
-      en: "Help with commands",
-      ru: "Помощь с командами",
-      uk: "Довідка з командами",
-    },
-  },
   data: () => {
     const i18nBuilder = new I18nCommandBuilder("help", "commands");
 
@@ -165,7 +153,7 @@ export default {
         .setColor(process.env.EMBED_COLOR)
         .setImage("attachment://commands.png")
         .setAuthor({
-          name: i18n.__("help.commandsTitle"),
+          name: i18n.__("help.commands.title"),
           iconURL: interaction.user.avatarURL(),
         });
 
@@ -175,7 +163,7 @@ export default {
     const createCategoryMenu = () => {
       return new StringSelectMenuBuilder()
         .setCustomId("category")
-        .setPlaceholder("Select a category")
+        .setPlaceholder(i18n.__("help.commands.categoryMenu.placeholder"))
         .addOptions(
           Array.from(categories).map((category) => ({
             label: category,
@@ -192,7 +180,7 @@ export default {
 
       return new StringSelectMenuBuilder()
         .setCustomId("subcommand")
-        .setPlaceholder("Select a subcommand")
+        .setPlaceholder(i18n.__("help.commands.subcommandMenu.placeholder"))
         .addOptions(
           subcommands.map((cmd, index) => ({
             label: cmd.title,
@@ -253,5 +241,41 @@ export default {
     collector.on("end", () => {
       interaction.editReply({ components: [] });
     });
+  },
+  localization_strings: {
+    name: {
+      en: "commands",
+      ru: "команды",
+      uk: "команди",
+    },
+    description: {
+      en: "Help with commands",
+      ru: "Помощь с командами",
+      uk: "Довідка з командами",
+    },
+    categoryMenu: {
+      placeholder: {
+        en: "Select a category",
+        ru: "Выберите категорию",
+        uk: "Виберіть категорію",
+      },
+    },
+    subcommandMenu: {
+      placeholder: {
+        en: "Select a subcommand",
+        ru: "Выберите подкоманду",
+        uk: "Виберіть підкоманду",
+      },
+    },
+    title: {
+      en: "Commands",
+      ru: "Команды",
+      uk: "Команди",
+    },
+    noCommands: {
+      en: "No commands found",
+      ru: "Команды не найдены",
+      uk: "Команди не знайдено",
+    },
   },
 };
