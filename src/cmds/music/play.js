@@ -1,28 +1,41 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
+import {
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
 import i18n from "../../utils/i18n.js";
-import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
-import { createMusicButtons } from "../../utils/musicButtons.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("play")
-    .setDescription("Play a song")
-    .setDescriptionLocalizations({
-      ru: "Воспроизвести песню",
-      uk: "Відтворити пісню",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("song")
-        .setDescription("The song to play (URL or search term)")
-        .setDescriptionLocalizations({
-          ru: "Песня для воспроизведения (URL или поисковый запрос)",
-          uk: "Пісня для відтворення (URL або пошуковий запит)",
-        })
-        .setRequired(true)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("music", "play");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add song option
+    const songOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "song",
+      description: i18nBuilder.translateOption("song", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("song", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "song",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(songOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     let query = interaction.options.getString("song");
 
     if (
@@ -59,27 +72,29 @@ export default {
       }
 
       if (res.loadType === "empty") {
-        return interaction.editReply(i18n.__("music.noMatchesFound"));
+        return interaction.editReply(i18n.__("music.play.noMatchesFound"));
       }
 
       if (res.loadType === "playlist") {
         const maxPlaylistSize = player.options.maxPlaylistSize || 1024;
         const tracksToAdd = res.tracks.slice(0, maxPlaylistSize);
         player.queue.add(tracksToAdd);
-        await interaction.editReply(
-          i18n.__("music.addedPlaylist", {
+        await interaction.editReply({
+          content: i18n.__("music.play.addedPlaylist", {
             name: res.playlist.name,
             count: tracksToAdd.length,
             total: res.tracks.length,
             max: maxPlaylistSize,
-          })
-        );
+          }),
+        });
       } else {
         const track = res.tracks[0];
         player.queue.add(track);
-        await interaction.editReply(
-          i18n.__("music.addedToQueue", { title: track.info.title })
-        );
+        await interaction.editReply({
+          content: i18n.__("music.play.addedToQueue", {
+            title: track.info.title,
+          }),
+        });
       }
 
       /*if (player.nowPlayingMessage && player.queue.current) {
@@ -120,5 +135,46 @@ export default {
         );
       }
     }
+  },
+  localization_strings: {
+    name: {
+      en: "play",
+      ru: "играть",
+      uk: "грати",
+    },
+    description: {
+      en: "Play a song",
+      ru: "Воспроизвести песню",
+      uk: "Відтворити пісню",
+    },
+    options: {
+      song: {
+        name: {
+          en: "song",
+          ru: "песня",
+          uk: "пісня",
+        },
+        description: {
+          en: "The song to play (URL or search term)",
+          ru: "Песня для воспроизведения (URL или поисковый запрос)",
+          uk: "Пісня для відтворення (URL або пошуковий запит)",
+        },
+      },
+    },
+    noMatchesFound: {
+      en: "No matches found",
+      ru: "Ничего не найдено",
+      uk: "Нічого не знайдено",
+    },
+    addedToQueue: {
+      en: "Added to queue: {{title}}",
+      ru: "Добавлена в очередь: {{title}}",
+      uk: "Додано в чергу: {{title}}",
+    },
+    addedPlaylist: {
+      en: "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
+      ru: "Добавлена плейлист: {{name}} ({{count}} из {{total}}, max: {{max}})",
+      uk: "Додано плейлист: {{name}} ({{count}} з {{total}}, max: {{max}})",
+    },
   },
 };

@@ -1,30 +1,41 @@
 import {
-  SlashCommandSubcommandBuilder,
-  EmbedBuilder,
-  AttachmentBuilder,
-} from "discord.js";
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("deposit")
-    .setDescription("Deposit money")
-    .setDescriptionLocalizations({
-      ru: "Положить деньги на счет",
-      uk: "Покласти гроші на рахунок",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("amount")
-        .setDescription('Amount to deposit (or "all", "half")')
-        .setDescriptionLocalizations({
-          ru: "Сумма для внесения (или 'all', 'half')",
-          uk: "Сума для внесення (або 'all', 'half')",
-        })
-        .setRequired(true)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "deposit");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add amount option
+    const amountOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "amount",
+      description: i18nBuilder.translateOption("amount", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "amount",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(amountOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const amount = interaction.options.getString("amount");
 
@@ -111,5 +122,31 @@ export default {
       embeds: [deposit_embed],
       files: [attachment],
     });
+  },
+  localization_strings: {
+    name: {
+      en: "deposit",
+      ru: "внести",
+      uk: "внести",
+    },
+    description: {
+      en: "Deposit money",
+      ru: "Положить деньги на счет",
+      uk: "Покласти гроші на рахунок",
+    },
+    options: {
+      amount: {
+        name: {
+          en: "amount",
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          en: "Amount to deposit (or 'all', 'half')",
+          ru: "Сумма для внесения (или 'all', 'half')",
+          uk: "Сума для внесення (або 'all', 'half')",
+        },
+      },
+    },
   },
 };

@@ -1,7 +1,11 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
-import i18n from "../../utils/i18n.js";
+import {
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
 
-let memer_list = [
+const memer_list = [
   "disability",
   "hitler",
   "egg",
@@ -17,49 +21,69 @@ let memer_list = [
 ];
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("memer")
-    .setDescription("Apply a meme filter to the image")
-    .setDescriptionLocalizations({
-      ru: "Применить мем-фильтр к изображению",
-      uk: "Застосувати мем-фільтр до зображення",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("filter")
-        .setDescription("The meme filter to apply")
-        .setDescriptionLocalizations({
-          ru: "Мем-фильтр для применения",
-          uk: "Мем-фільтр для застосування",
-        })
-        .setRequired(true)
-        .addChoices(
-          memer_list.map((filter) => ({
-            name: filter,
-            value: filter,
-          }))
-        )
-    )
-    .addAttachmentOption((option) =>
-      option
-        .setName("image")
-        .setDescription("The image to apply the meme filter to")
-        .setDescriptionLocalizations({
-          ru: "Изображение для применения мем-фильтра",
-          uk: "Зображення для застосування мем-фільтра",
-        })
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("youtube_text")
-        .setDescription("[YOUTUBE FILTER] The first word USERNAME and TEXT")
-        .setDescriptionLocalizations({
-          ru: "[ФИЛЬТР YOUTUBE] Первое слово USERNAME и второе слово TEXT",
-          uk: "[ФІЛЬТР YOUTUBE] Перше слово USERNAME і потім TEXT",
-        })
-        .setMaxLength(75)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("filters", "image_memer");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add filter option
+    const filterOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "filter",
+      description: i18nBuilder.translateOption("filter", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("filter", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "filter",
+        "description"
+      ),
+      choices: memer_list.map((filter) => ({
+        name: filter,
+        value: filter,
+      })),
+    });
+
+    // Add image option
+    const imageOption = new SlashCommandOption({
+      type: OptionType.ATTACHMENT,
+      name: "image",
+      description: i18nBuilder.translateOption("image", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "image",
+        "description"
+      ),
+    });
+
+    // Add youtube_text option
+    const youtubeTextOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "youtube_text",
+      description: i18nBuilder.translateOption("youtube_text", "description"),
+      required: false,
+      name_localizations: i18nBuilder.getOptionLocalizations(
+        "youtube_text",
+        "name"
+      ),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "youtube_text",
+        "description"
+      ),
+      max_length: 75,
+    });
+
+    subcommand.addOption(filterOption);
+    subcommand.addOption(imageOption);
+    subcommand.addOption(youtubeTextOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const image = interaction.options.getAttachment("image");
     const filter = interaction.options.getString("filter");
@@ -105,5 +129,55 @@ export default {
       console.error("Error applying meme filter:", error);
       await interaction.editReply(i18n.__("memer.errorApplyingFilter"));
     }
+  },
+  localization_strings: {
+    name: {
+      en: "memer",
+      ru: "мемер",
+      uk: "мемер",
+    },
+    description: {
+      en: "Apply a meme filter to the image",
+      ru: "Применить мем-фильтр к изображению",
+      uk: "Застосувати мем-фільтр до зображення",
+    },
+    options: {
+      filter: {
+        name: {
+          en: "filter",
+          ru: "фильтр",
+          uk: "фільтр",
+        },
+        description: {
+          en: "The meme filter to apply",
+          ru: "Мем-фильтр для применения",
+          uk: "Мем-фільтр для застосування",
+        },
+      },
+      image: {
+        name: {
+          en: "image",
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          en: "The image to apply the meme filter to",
+          ru: "Изображение для применения мем-фильтра",
+          uk: "Зображення для застосування мем-фільтра",
+        },
+      },
+      youtube_text: {
+        name: {
+          en: "youtube_text",
+          ru: "текст_ютуба",
+          uk: "текст_ютуба",
+        },
+        description: {
+          en: "[YOUTUBE FILTER] The first word USERNAME and TEXT",
+          ru: "[ФИЛЬТР YOUTUBE] Первое слово USERNAME и второе слово TEXT",
+          uk: "[ФІЛЬТР YOUTUBE] Перше слово USERNAME і потім TEXT",
+        },
+      },
+    },
   },
 };

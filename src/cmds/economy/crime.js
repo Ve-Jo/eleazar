@@ -1,5 +1,8 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -7,19 +10,23 @@ import {
   AttachmentBuilder,
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 import prettyMs from "pretty-ms";
 import cooldownsManager from "../../utils/cooldownsManager.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("crime")
-    .setDescription("Attempt to steal cash from another user")
-    .setDescriptionLocalizations({
-      ru: "Попытаться украсть деньги у другого пользователя",
-      uk: "Спробувати вкрасти гроші у іншого користувача",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "crime");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
     const user = interaction.user;
     const guildId = interaction.guild.id;
@@ -151,6 +158,18 @@ export default {
         components: [],
       });
     }
+  },
+  localization_strings: {
+    name: {
+      en: "crime",
+      ru: "преступление",
+      uk: "злочин",
+    },
+    description: {
+      en: "Attempt to steal cash from another user",
+      ru: "Попытаться украсть деньги у другого пользователя",
+      uk: "Спробувати вкрасти гроші у іншого користувача",
+    },
   },
 };
 

@@ -1,169 +1,528 @@
 {
-  "economy": {
-    "title": "Economy",
-    "balance": "Balance",
-    "balanceValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
-    "dailyBonus": "Daily Bonus",
-    "dailyBonusValue": "```\n💵 {{balance}} (+{{amount}})```",
-    "deposit": "Deposit",
-    "depositValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
-    "withdraw": "Withdraw",
-    "withdrawValue": "```\n💵 {{balance}}\n💳 {{bank}}```",
-    "transfer": "Transfer",
-    "transferValue": "```diff\n- 💵 {{senderBalance}} ({{amount}})\n+ 💵 {{targetBalance}} ({{amount}})```",
-    "transferFooter": "Request made by {{user}}",
-    "userNotFound": "An error occurred while retrieving user data.\n\nThe user is likely not in the database.",
-    "insufficientFunds": "You don't have enough funds in your account.",
-    "invalidAmount": "The amount must be greater than 0.",
-    "dailyCooldown": "You've already claimed your daily bonus today!\n\nNext bonus will be available in:\n`{{time}}`",
-    "shop": {
-      "title": "Shop",
-      "price": "Price",
-      "purchase": "Purchase",
-      "level": "level of",
-      "selectPlaceholder": "Select an upgrade",
-      "buyButton": "Buy",
-      "purchaseMessage": "You bought {{name}} for {{price}}"
-    },
-    "upgrades": {
-      "dailyBonus": {
-        "name": "Daily Bonus",
-        "shortDescription": "Increase daily bonus",
-        "description": "Daily bonus reward increased by {{current_multiplier}}%"
+  "ai": {
+    "transcribe_audio": {
+      "name": "transcribe",
+      "description": "Transcribe audio to text",
+      "options": {
+        "audio": {
+          "name": "audio",
+          "description": "The audio file to transcribe"
+        },
+        "language": {
+          "name": "language",
+          "description": "The language of the audio (default: auto)"
+        }
       },
-      "crimeCooldown": {
-        "name": "Crime Cooldown",
-        "shortDescription": "Decrease crime cooldown",
-        "description": "Crime cooldown decreased by {{current_multiplier}} minutes"
+      "invalid_file": "Please provide a valid audio file.",
+      "generated": "Transcription:\n\n{{transcription}}",
+      "failed": "Failed to transcribe the audio. Please try again.",
+      "error": "An error occurred while transcribing the audio. Please try again later.",
+      "too_long": "The transcription is too long to display. Here's a text file with the result:"
+    },
+    "generate_image": {
+      "name": "generate",
+      "description": "Generate beautiful image by prompt",
+      "options": {
+        "prompt": {
+          "name": "prompt",
+          "description": "Enter your prompt"
+        },
+        "ratio": {
+          "name": "ratio",
+          "description": "Choose aspect ratio"
+        }
+      },
+      "generated": "Generated image for prompt: \"{{prompt}}\"",
+      "failed": "Failed to generate the image. Please try again.",
+      "error": "An error occurred while generating the image. Please try again later."
+    },
+    "upscale_image": {
+      "name": "upscale",
+      "description": "Upscale an image to improve its quality",
+      "options": {
+        "image": {
+          "name": "image",
+          "description": "The image to upscale"
+        },
+        "scale": {
+          "name": "scale",
+          "description": "Scale factor (2-4)"
+        }
+      },
+      "invalid_file": "Please provide a valid image file.",
+      "invalid_dimensions": "Image dimensions must not exceed 1024x1024 pixels.\n\nYour current image is {{width}}x{{height}} pixels.",
+      "failed": "Failed to upscale the image. Please try again.",
+      "error": "An error occurred while upscaling the image. Please try again later.",
+      "upscaled": "Image upscaled with scale factor {{scale}}x"
+    },
+    "name": "ai",
+    "description": "AI commands"
+  },
+  "economy": {
+    "name": "economy",
+    "description": "Commands for economy",
+    "crime": {
+      "name": "crime",
+      "description": "Attempt to steal cash from another user"
+    },
+    "balance": {
+      "name": "balance",
+      "description": "Check balance",
+      "options": {
+        "user": {
+          "name": "user",
+          "description": "User to check"
+        }
       }
     },
-
-    "crimeCooldown": "You need to wait `{{time}}` before attempting another crime.",
-    "insufficientFundsForCrime": "You need at least 1/5 of the target's cash to attempt a crime.",
-    "crimeSuccess": "You successfully stole `{{amount}} 💵` from the target!",
-    "crimeFailure": "You failed the crime and lost `{{amount}} 💵` to the target.",
-    "currentTimestamps": "Current Timestamps",
-    "currentTimestampsValue": "-# `🕒` {{daily}}\n-# `🕒` {{crime}}",
-    "selectCrimeTarget": "Which user do you want to attempt a crime against?",
-    "crimeTargetPlaceholder": "Select a user to crime",
-    "noValidTargets": "There are no valid targets for your crime attempt.",
-    "noSelectionMade": "No selection was made. The crime attempt has been cancelled.",
-    "unknownUser": "Unknown User"
+    "leaderboard": {
+      "name": "leaderboard",
+      "description": "Display top users by total balance"
+    },
+    "level": {
+      "name": "level",
+      "description": "Check level"
+    },
+    "deposit": {
+      "name": "deposit",
+      "description": "Deposit money",
+      "options": {
+        "amount": {
+          "name": "amount",
+          "description": "Amount to deposit (or 'all', 'half')"
+        }
+      }
+    },
+    "withdraw": {
+      "name": "withdraw",
+      "description": "Withdraw money from bank",
+      "options": {
+        "amount": {
+          "name": "amount",
+          "description": "Amount to withdraw (or 'all', 'half')"
+        }
+      }
+    },
+    "shop": {
+      "name": "shop",
+      "description": "Buy upgrades/roles"
+    },
+    "transfer": {
+      "name": "transfer",
+      "description": "Transfer money to another user",
+      "options": {
+        "amount": {
+          "name": "amount",
+          "description": "Amount to transfer (or 'all', 'half')"
+        },
+        "user": {
+          "name": "user",
+          "description": "User to transfer to"
+        }
+      }
+    },
+    "daily": {
+      "name": "daily",
+      "description": "Claim daily reward"
+    }
   },
-  "subcommandNotFound": "Subcommand not found.",
+  "music": {
+    "name": "music",
+    "description": "Music control command",
+    "noMusicPlaying": "No music is currently playing",
+    "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+    "connectionTimeout": "There was a connection timeout to the music node",
+    "noAvailableNode": "There's no a available node to connect to, please retry again later",
+    "errorOccurred": "An error occurred while working with the music player: {{error}}",
+    "skippingSongError": "There was an error while skipping the song",
+    "player": {
+      "footerText": "Requested by {{author}}"
+    },
+    "filters": {
+      "name": "filters",
+      "description": "Set the music filters",
+      "options": {
+        "filter": {
+          "name": "filter",
+          "description": "The filter to set"
+        },
+        "property": {
+          "name": "property",
+          "description": "The property of the filter to set"
+        },
+        "value": {
+          "name": "value",
+          "description": "The value to set for the filter property"
+        }
+      },
+      "filterApplied": "Filter {{filter}} has been applied",
+      "invalidFilterProperty": "Invalid filter property"
+    },
+    "loop": {
+      "name": "loop",
+      "description": "Loop the current song/queue",
+      "loopApplied": "Loop type has been set to {{type}}",
+      "options": {
+        "type": {
+          "name": "type",
+          "description": "The type of loop to set"
+        }
+      }
+    },
+    "play": {
+      "name": "play",
+      "description": "Play a song",
+      "options": {
+        "song": {
+          "name": "song",
+          "description": "The song to play (URL or search term)"
+        }
+      },
+      "noMatchesFound": "No matches found",
+      "addedToQueue": "Added to queue: {{title}}",
+      "addedPlaylist": "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})"
+    },
+    "seek": {
+      "name": "seek",
+      "description": "Seek to a specific time in the current track",
+      "options": {
+        "time": {
+          "name": "time",
+          "description": "Time to seek to (format: m:ss or ss)"
+        }
+      }
+    },
+    "autoplay": {
+      "name": "autoplay",
+      "description": "Toggle autoplay mode",
+      "autoplayToggled": "Autoplay mode has been toggled {{enabled}}"
+    },
+    "queue": {
+      "name": "queue",
+      "description": "Show the music queue",
+      "currentPlaying": "Currently playing: {{title}}",
+      "nextInQueue": "Next in queue: {{tracks}}",
+      "currentQueue": "Current queue"
+    },
+    "previous": {
+      "name": "previous",
+      "description": "Play the previous song",
+      "noPreviousSongs": "There are no previous songs in the queue",
+      "addedPreviousToQueue": "Added previous song to queue: {{title}}"
+    },
+    "skip": {
+      "name": "skip",
+      "description": "Skip the current song"
+    },
+    "stop": {
+      "name": "stop",
+      "description": "Stop the music"
+    }
+  },
+  "emotions": {
+    "name": "emotions",
+    "description": "Select an emotion type and emotion",
+    "negative": {
+      "name": "negative",
+      "description": "Choose a negative emotion with a user",
+      "options": {
+        "emotion": {
+          "name": "emotion",
+          "description": "Choose an emotion"
+        },
+        "user": {
+          "name": "user",
+          "description": "Choose a user"
+        }
+      },
+      "bonk": {
+        "title": "Bonk",
+        "description": "<@{{user}}> bonks <@{{targetUser}}>!"
+      },
+      "punch": {
+        "title": "Punch",
+        "description": "<@{{user}}> punches <@{{targetUser}}>!"
+      },
+      "poke": {
+        "title": "Poke",
+        "description": "<@{{user}}> pokes <@{{targetUser}}>!"
+      },
+      "bully": {
+        "title": "Bully",
+        "description": "<@{{user}}> bullies <@{{targetUser}}>!"
+      },
+      "kick": {
+        "title": "Kick",
+        "description": "<@{{user}}> kicks <@{{targetUser}}>!"
+      },
+      "slap": {
+        "title": "Slap",
+        "description": "<@{{user}}> slaps <@{{targetUser}}>!"
+      },
+      "throw": {
+        "title": "Throw",
+        "description": "<@{{user}}> throws something at <@{{targetUser}}>!"
+      },
+      "bite": {
+        "title": "Bite",
+        "description": "<@{{user}}> bites <@{{targetUser}}>!"
+      },
+      "kill": {
+        "title": "Kill",
+        "description": "<@{{user}}> kills <@{{targetUser}}>!"
+      },
+      "threaten": {
+        "title": "Threaten",
+        "description": "<@{{user}}> threatens <@{{targetUser}}>!"
+      },
+      "tickle": {
+        "title": "Tickle",
+        "description": "<@{{user}}> tickles <@{{targetUser}}>!"
+      }
+    },
+    "myself": {
+      "name": "myself",
+      "description": "Choose your own emotion or action",
+      "options": {
+        "emotion": {
+          "name": "emotion",
+          "description": "Choose an emotion or action"
+        }
+      },
+      "blush": {
+        "title": "Blush",
+        "description": "<@{{user}}> is blushing!"
+      },
+      "smug": {
+        "title": "Smug",
+        "description": "<@{{user}}> looks smug!"
+      },
+      "happy": {
+        "title": "Happy",
+        "description": "<@{{user}}> is happy!"
+      },
+      "smile": {
+        "title": "Smile",
+        "description": "<@{{user}}> smiles!"
+      },
+      "dance": {
+        "title": "Dance",
+        "description": "<@{{user}}> is dancing!"
+      },
+      "like": {
+        "title": "Like",
+        "description": "<@{{user}}> likes this!"
+      },
+      "cry": {
+        "title": "Cry",
+        "description": "<@{{user}}> is crying!"
+      },
+      "nosebleed": {
+        "title": "Nosebleed",
+        "description": "<@{{user}}> has a nosebleed!"
+      },
+      "depression": {
+        "title": "Depression",
+        "description": "<@{{user}}> is depressed!"
+      },
+      "tea": {
+        "title": "Tea",
+        "description": "<@{{user}}> drinks tea!"
+      },
+      "nom": {
+        "title": "Nom",
+        "description": "<@{{user}}> is eating!"
+      },
+      "lick": {
+        "title": "Lick",
+        "description": "<@{{user}}> licks their lips!"
+      },
+      "sleep": {
+        "title": "Sleep",
+        "description": "<@{{user}}> is sleeping!"
+      },
+      "coffee": {
+        "title": "Coffee",
+        "description": "<@{{user}}> drinks coffee!"
+      },
+      "gah": {
+        "title": "Gah",
+        "description": "<@{{user}}> is surprised!"
+      }
+    },
+    "positive": {
+      "name": "positive",
+      "description": "Choose a positive emotion with a user",
+      "options": {
+        "emotion": {
+          "name": "emotion",
+          "description": "Choose an emotion"
+        },
+        "user": {
+          "name": "user",
+          "description": "Choose a user"
+        }
+      },
+      "wave": {
+        "title": "Wave",
+        "description": "<@{{user}}> waves at <@{{targetUser}}>!"
+      },
+      "wink": {
+        "title": "Wink",
+        "description": "<@{{user}}> winks at <@{{targetUser}}>!"
+      },
+      "pat": {
+        "title": "Pat",
+        "description": "<@{{user}}> pats <@{{targetUser}}>!"
+      },
+      "kiss": {
+        "title": "Kiss",
+        "description": "<@{{user}}> kisses <@{{targetUser}}>!"
+      },
+      "feed": {
+        "title": "Feed",
+        "description": "<@{{user}}> feeds <@{{targetUser}}>!"
+      },
+      "hug": {
+        "title": "Hug",
+        "description": "<@{{user}}> hugs <@{{targetUser}}>!"
+      },
+      "cuddle": {
+        "title": "Cuddle",
+        "description": "<@{{user}}> cuddles with <@{{targetUser}}>!"
+      },
+      "five": {
+        "title": "High Five",
+        "description": "<@{{user}}> high fives <@{{targetUser}}>!"
+      },
+      "glomp": {
+        "title": "Glomp",
+        "description": "<@{{user}}> glomps <@{{targetUser}}>!"
+      },
+      "hold": {
+        "title": "Hold",
+        "description": "<@{{user}}> holds hands with <@{{targetUser}}>!"
+      },
+      "boop": {
+        "title": "Boop",
+        "description": "<@{{user}}> boops <@{{targetUser}}>!"
+      }
+    }
+  },
+  "filters": {
+    "name": "filters",
+    "description": "Apply a filter to the image",
+    "image_memer": {
+      "name": "memer",
+      "description": "Apply a meme filter to the image",
+      "options": {
+        "filter": {
+          "name": "filter",
+          "description": "The meme filter to apply"
+        },
+        "image": {
+          "name": "image",
+          "description": "The image to apply the meme filter to"
+        },
+        "youtube_text": {
+          "name": "youtube_text",
+          "description": "[YOUTUBE FILTER] The first word USERNAME and TEXT"
+        }
+      }
+    },
+    "text_memer": {
+      "name": "text_memer",
+      "description": "Generate a meme with text",
+      "options": {
+        "filter": {
+          "name": "filter",
+          "description": "The filter to use"
+        },
+        "text": {
+          "name": "text",
+          "description": "The text to use"
+        }
+      }
+    }
+  },
+  "help": {
+    "name": "help",
+    "description": "Get help with the bot",
+    "premium": {
+      "name": "premium",
+      "description": "Information about premium features"
+    },
+    "commands": {
+      "name": "commands",
+      "description": "Help with commands"
+    }
+  },
   "images": {
     "name": "images",
-    "description": "Choose an image type",
+    "description": "Choose an image type and image",
     "sfw": {
       "name": "sfw",
       "description": "Choose a SFW image",
-      "image": "Choose an image"
+      "options": {
+        "image": {
+          "name": "image",
+          "description": "Choose an image"
+        }
+      }
     },
     "nsfw": {
       "name": "nsfw",
       "description": "Choose a NSFW image",
-      "image": "Choose an image"
+      "options": {
+        "image": {
+          "name": "image",
+          "description": "Choose an image"
+        }
+      }
     }
   },
-  "cannotSelectSelf": "You cannot select yourself as the target user.",
-  "cannotSelectBot": "You cannot select a bot as the target user.",
-  "imageNotFound": "Sorry, couldn't find a suitable image.",
-  "nsfwChannelOnly": "Sorry, this command is only available in NSFW channels.",
-  "music": {
-    "filterApplied": "Filter {{filter}} applied.\n\nPlease wait a few seconds for the application.",
-    "loopApplied": "Loop mode set to {{type}}.",
-    "notInVoiceChannel": "You must be in a voice channel to use this command!",
-    "noMusicPlaying": "No music is currently playing.",
-    "addedToQueue": "Added {{title}} to the queue.",
-    "addedPlaylist": "Added playlist '{name}' to the queue ({count} tracks out of {total}, maximum {max} tracks)",
-    "musicStopped": "Music stopped.",
-    "skippedSong": "Current song skipped.",
-    "currentQueue": "Current queue:",
-    "currentPlaying": "Currently playing: {{title}}",
-    "nextInQueue": "Next:\n{{tracks}}",
-    "volumeSet": "Volume set to {{volume}}.",
-    "errorLoadingTrack": "Error loading track: {{message}}",
-    "noMatchesFound": "No matches found for this request.",
-    "skippingSongError": "An error occurred while skipping the song. Maybe there's no next song in the queue?",
-    "nowPlaying": "Now playing in {{channel}}",
-    "duration": "Duration",
-    "requestedBy": "Requested by",
-    "progress": "Progress",
-    "musicPlayerTitle": "Now playing",
-    "playerSettings": "Player settings",
-    "playerSettingsText": "`🔊 {{volume}}%` `🔄 {{loopType}}`",
-    "footerText": "Requested by {{author}}",
-    "info": "Information",
-    "queue": "Queue",
-    "tts": {
-      "voice": "Voice",
-      "voices": "Voices",
-      "voicesDescription": "Available voices: Jacob, Freddie, Russell, and Gerald.",
-      "ttsError": "An error occurred while processing the TTS request.",
-      "ttsSuccess": "TTS request processed successfully. Voice: {{voice}}, Text: {{text}}"
-    },
-    "skipApplied": "Current song skipped.",
-    "paused": "Music paused.",
-    "pauseResumed": "Music resumed.",
-    "autoplayDisabled": "Autoplay disabled.",
-    "autoplayToggled": "Autoplay {{enabled}}.",
-    "invalidTimeFormat": "Invalid time format. Please use m:ss or ss.",
-    "seekBeyondDuration": "Cannot seek beyond the track's duration.",
-    "seekedTo": "Seeked to {{time}}",
-    "addedPreviousToQueue": "Added previous song to the queue: {{title}}",
-    "autoplay": "Autoplay {{enabled}}",
-    "autoplayApplied": "Autoplay {{enabled}}",
-    "andMoreTracks": "and {{count}} more tracks"
-  },
-  "memer": {
-    "filters": {
-      "affect": "Affect",
-      "beautiful": "Beautiful",
-      "bobross": "Bob Ross",
-      "confusedstonk": "Confused Stonk",
-      "delete": "Delete",
-      "doge": "Doge",
-      "drake": "Drake",
-      "facepalm": "Facepalm",
-      "fail": "Fail",
-      "jail": "Jail",
-      "mms": "MMS",
-      "notstonk": "Not Stonk",
-      "poutine": "Poutine",
-      "rainbow": "Rainbow",
-      "rip": "RIP",
-      "shit": "Shit",
-      "stonk": "Stonk",
-      "tattoo": "Tattoo",
-      "trash": "Trash",
-      "wanted": "Wanted",
-      "wasted": "Wasted"
-    },
-    "invalidImage": "Please provide a valid image file.",
-    "errorApplyingFilter": "An error occurred while applying the meme filter. Please try again later."
-  },
   "counting": {
+    "name": "counting",
+    "description": "Set and manage counting channel",
     "setup": {
-      "alreadySet": "Counting channel already set.",
-      "success": "Counting channel set to {{channel}}\n\nStart number: {{number}}\nPin every {{pinoneach}} messages\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}"
+      "name": "setup",
+      "description": "Setup counting channel",
+      "options": {
+        "channel": {
+          "name": "channel",
+          "description": "Select channel"
+        },
+        "start_number": {
+          "name": "start_number",
+          "description": "Start number from what number counting will start"
+        },
+        "pin_on_each": {
+          "name": "pin_on_each",
+          "description": "Pin message every n number"
+        },
+        "pinned_role": {
+          "name": "pinned_role",
+          "description": "Set role to give for a user when her message is pinned"
+        },
+        "no_unique_role": {
+          "name": "no_unique_role",
+          "description": "Previous users with this role will not lose it"
+        },
+        "only_numbers": {
+          "name": "only_numbers",
+          "description": "Only numbers are allowed in this channel (no other text after number)"
+        },
+        "no_same_user": {
+          "name": "no_same_user",
+          "description": "One person cant count twice or more in a row"
+        }
+      }
     },
     "remove": {
-      "success": "Counting channel removed.",
-      "notSet": "Counting channel not set."
-    },
-    "pinoneach": {
-      "success": "Counting channel will pin message on each {{number}} number."
-    },
-    "noSet": "Counting channel not set.",
-    "pinnedroleSet": "Pinned role set to {{role}}.",
-    "noSetPinoneach": "You must set a pinoneach first."
-  },
-  "settings": {
-    "noSettingsFound": "No settings found for this server",
-    "currentValue": "Current: {{currentValue}}{{newValue ? ` -> New: ${newValue}` : ''}}",
-    "invalidSettingName": "Invalid setting name",
-    "settingUpdated": "Setting {{name}} updated to {{value}}",
-    "subcommandNotFound": "Subcommand not found"
-  },
-  "no_perms": "You don't have permissions to use this command."
+      "name": "remove",
+      "description": "Remove counting channel",
+      "success": "Counting channel removed",
+      "notSet": "Counting channel is not set"
+    }
+  }
 }

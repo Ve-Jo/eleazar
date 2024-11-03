@@ -1,16 +1,24 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
+import {
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
 import i18n from "../../utils/i18n.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("skip")
-    .setDescription("Skip the current song")
-    .setDescriptionLocalizations({
-      ru: "Пропустить текущую песню",
-      uk: "Пропустити поточну пісню",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("music", "skip");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
       interaction.guild.id
     );
@@ -37,5 +45,17 @@ export default {
       return interaction.editReply(i18n.__("music.skippingSongError"));
     }
     await interaction.editReply(i18n.__("music.skippedSong"));
+  },
+  localization_strings: {
+    name: {
+      en: "skip",
+      ru: "пропустить",
+      uk: "пропустити",
+    },
+    description: {
+      en: "Skip the current song",
+      ru: "Пропустить текущую песню",
+      uk: "Пропустити поточну пісню",
+    },
   },
 };

@@ -1,5 +1,10 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -7,41 +12,55 @@ import {
   ComponentType,
 } from "discord.js";
 import HMFull from "hmfull";
-import i18n from "../../utils/i18n.js";
 
-const sfwImages = {
-  neko: "Неко",
-  waifu: "Вайфу",
-  foxgirl: "Девушку-лису",
-  kanna: "Канну",
-  holo: "Холо",
-  kemonomimi: "Кемономими",
-  kitsune: "Кцунуэ",
-  wallpaper: "Обои",
-  mobileWallpaper: "Мобильные обои",
-  coffee_arts: "Кофейные рисунки",
-  neko_arts: "Неко",
-  jahy_arts: "Лунное искусство",
-  wolf_arts: "Волк",
-};
+const sfwImages = [
+  "neko",
+  "waifu",
+  "foxgirl",
+  "kanna",
+  "holo",
+  "kemonomimi",
+  "kitsune",
+  "wallpaper",
+  "mobileWallpaper",
+  "coffee_arts",
+  "neko_arts",
+  "jahy_arts",
+  "wolf_arts",
+];
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("sfw")
-    .setDescription("Choose a SFW image")
-    .addStringOption((option) =>
-      option
-        .setName("image")
-        .setDescription("Choose an image")
-        .setRequired(true)
-        .addChoices(
-          ...Object.entries(sfwImages).map(([name, description]) => ({
-            name: description,
-            value: name,
-          }))
-        )
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("images", "sfw");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add image option
+    const imageOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "image",
+      description: i18nBuilder.translateOption("image", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "image",
+        "description"
+      ),
+      choices: sfwImages.map((key) => ({
+        name: key,
+        value: key,
+      })),
+    });
+
+    subcommand.addOption(imageOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const image = interaction.options.getString("image");
 
@@ -137,5 +156,31 @@ export default {
       row.components[0].setDisabled(true);
       interaction.editReply({ components: [row] }).catch(console.error);
     });
+  },
+  localization_strings: {
+    name: {
+      en: "sfw",
+      ru: "sfw",
+      uk: "sfw",
+    },
+    description: {
+      en: "Choose a SFW image",
+      ru: "Выберите безопасное изображение",
+      uk: "Виберіть безпечне зображення",
+    },
+    options: {
+      image: {
+        name: {
+          en: "image",
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          en: "Choose an image",
+          ru: "Выберите изображение",
+          uk: "Виберіть зображення",
+        },
+      },
+    },
   },
 };

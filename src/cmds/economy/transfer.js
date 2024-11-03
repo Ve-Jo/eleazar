@@ -1,35 +1,54 @@
-import { SlashCommandSubcommandBuilder, EmbedBuilder } from "discord.js";
+import {
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { EmbedBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("transfer")
-    .setDescription("Withdraw money from the bank")
-    .setDescriptionLocalizations({
-      ru: "Снять деньги с банковского счета",
-      uk: "Зняти гроші з банківського рахунку",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("amount")
-        .setDescription('Amount to withdraw (or "all", "half")')
-        .setDescriptionLocalizations({
-          ru: 'Сумма для снятия (или "all", "half")',
-          uk: 'Сума для зняття (або "all", "half")',
-        })
-        .setRequired(true)
-    )
-    .addUserOption((option) =>
-      option
-        .setName("user")
-        .setDescription("User to transfer to")
-        .setDescriptionLocalizations({
-          ru: "Пользователь для перевода",
-          uk: "Користувач для переказу",
-        })
-        .setRequired(true)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "transfer");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add amount option
+    const amountOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "amount",
+      description: i18nBuilder.translateOption("amount", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "amount",
+        "description"
+      ),
+    });
+
+    // Add user option
+    const userOption = new SlashCommandOption({
+      type: OptionType.USER,
+      name: "user",
+      description: i18nBuilder.translateOption("user", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "user",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(amountOption);
+    subcommand.addOption(userOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const targetUser = interaction.options.getMember("user");
     const amount = interaction.options.getString("amount");
@@ -120,5 +139,43 @@ export default {
         }),
       });
     await interaction.editReply({ embeds: [withdraw_embed] });
+  },
+  localization_strings: {
+    name: {
+      en: "transfer",
+      ru: "перевести",
+      uk: "переказати",
+    },
+    description: {
+      en: "Transfer money to another user",
+      ru: "Перевести деньги другому пользователю",
+      uk: "Переказати гроші іншому користувачу",
+    },
+    options: {
+      amount: {
+        name: {
+          en: "amount",
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          en: "Amount to transfer (or 'all', 'half')",
+          ru: "Сумма для перевода (или 'all', 'half')",
+          uk: "Сума для переказу (або 'all', 'half')",
+        },
+      },
+      user: {
+        name: {
+          en: "user",
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          en: "User to transfer to",
+          ru: "Пользователь для перевода",
+          uk: "Користувач для переказу",
+        },
+      },
+    },
   },
 };

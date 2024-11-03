@@ -1,5 +1,8 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   EmbedBuilder,
   AttachmentBuilder,
   ActionRowBuilder,
@@ -8,17 +11,21 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("leaderboard")
-    .setDescription("Display top users by total balance")
-    .setDescriptionLocalizations({
-      ru: "Показать топ пользователей по общему балансу",
-      uk: "Показати топ користувачів за загальним балансом",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "leaderboard");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
     const usersPerPage = 10;
 
@@ -225,5 +232,17 @@ export default {
     collector.on("end", () => {
       interaction.editReply({ components: [] });
     });
+  },
+  localization_strings: {
+    name: {
+      en: "leaderboard",
+      ru: "лидерборд",
+      uk: "лідерборд",
+    },
+    description: {
+      en: "Display top users by total balance",
+      ru: "Показать топ пользователей по общему балансу",
+      uk: "Показати топ користувачів за загальним балансом",
+    },
   },
 };

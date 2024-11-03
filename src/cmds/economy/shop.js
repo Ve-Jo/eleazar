@@ -1,5 +1,8 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   AttachmentBuilder,
   EmbedBuilder,
   ActionRowBuilder,
@@ -7,19 +10,23 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import i18n from "../../utils/i18n";
-import { getUpgradesForUser } from "../../utils/shopManager";
-import EconomyEZ from "../../utils/economy";
+import { getUpgradesForUser } from "../../utils/shopManager.js";
+import EconomyEZ from "../../utils/economy.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("shop")
-    .setDescription("Buy upgrades/roles")
-    .setDescriptionLocalizations({
-      ru: "Купить улучшения/роли",
-      uk: "Купити улучшення/ролі",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "shop");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
     const locale = interaction.locale || "en";
     const upgrades = await getUpgradesForUser(
@@ -226,5 +233,17 @@ export default {
     collector.on("end", () => {
       response.edit({ components: [] });
     });
+  },
+  localization_strings: {
+    name: {
+      en: "shop",
+      ru: "магазин",
+      uk: "магазин",
+    },
+    description: {
+      en: "Buy upgrades/roles",
+      ru: "Купить улучшения/роли",
+      uk: "Купити улучшення/ролі",
+    },
   },
 };

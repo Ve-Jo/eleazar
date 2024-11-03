@@ -1,29 +1,42 @@
 import {
-  SlashCommandSubcommandBuilder,
-  EmbedBuilder,
-  AttachmentBuilder,
-} from "discord.js";
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import i18n from "../../utils/i18n.js";
+
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("balance")
-    .setDescription("Check balance")
-    .setDescriptionLocalizations({
-      ru: "Посмотреть баланс",
-      uk: "Переглянути баланс",
-    })
-    .addUserOption((option) =>
-      option
-        .setName("user")
-        .setDescription("User to check")
-        .setDescriptionLocalizations({
-          ru: "Пользователь для проверки",
-          uk: "Користувач для перевірки",
-        })
-        .setRequired(false)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "balance");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add user option
+    const userOption = new SlashCommandOption({
+      type: OptionType.USER,
+      name: "user",
+      description: i18nBuilder.translateOption("user", "description"),
+      required: false,
+      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "user",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(userOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const user = interaction.options.getMember("user") || interaction.user;
     const userData = await EconomyEZ.get(
@@ -96,5 +109,31 @@ export default {
       embeds: [balance_embed],
       files: [attachment],
     });
+  },
+  localization_strings: {
+    name: {
+      en: "balance",
+      ru: "баланс",
+      uk: "рахунок",
+    },
+    description: {
+      en: "Check balance",
+      ru: "Посмотреть баланс",
+      uk: "Переглянути баланс",
+    },
+    options: {
+      user: {
+        name: {
+          en: "user",
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          en: "User to check",
+          ru: "Пользователь для проверки",
+          uk: "Користувач для перевірки",
+        },
+      },
+    },
   },
 };

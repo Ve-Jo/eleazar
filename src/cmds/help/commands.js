@@ -1,5 +1,8 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   AttachmentBuilder,
   EmbedBuilder,
   ActionRowBuilder,
@@ -17,15 +20,37 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("commands")
-    .setDescription("Help with commands"),
+  localization_strings: {
+    name: {
+      en: "commands",
+      ru: "команды",
+      uk: "команди",
+    },
+    description: {
+      en: "Help with commands",
+      ru: "Помощь с командами",
+      uk: "Довідка з командами",
+    },
+  },
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("help", "commands");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     const commands = [];
     const categories = new Set();
     const locale = interaction.locale;
 
-    interaction.client.commands.forEach(command => {
+    interaction.client.commands.forEach((command) => {
       if (command.data.options && command.data.options.length > 0) {
         command.data.options.forEach((subcommand) => {
           const args = subcommand.options
@@ -45,13 +70,15 @@ export default {
                 .map((option) => option.name)
             : [];
 
-          const usage = `/${command.data.name} ${
-            subcommand.name
-          } ${requiredArgs.map((arg) => `<${arg}>`).join(" ")}`;
+          const usage = `/${command.data.name} ${subcommand.name} ${requiredArgs
+            .map((arg) => `<${arg}>`)
+            .join(" ")}`;
 
           commands.push({
             title: subcommand.name,
-            description: subcommand.description_localizations?.[locale] || subcommand.description,
+            description:
+              subcommand.description_localizations?.[locale] ||
+              subcommand.description,
             category: command.data.name,
             currentValue: [usage, ...args],
           });
@@ -62,7 +89,9 @@ export default {
         const args = command.data.options
           ? command.data.options.map(
               (option) =>
-                `${option.name}${option.required ? "*" : ""}: ${option.description}`
+                `${option.name}${option.required ? "*" : ""}: ${
+                  option.description
+                }`
             )
           : [];
 

@@ -1,16 +1,25 @@
 import {
-  SlashCommandSubcommandBuilder,
-  AttachmentBuilder,
-  EmbedBuilder,
-} from "discord.js";
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import i18n from "../../utils/i18n.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("premium")
-    .setDescription("Information about premium features"),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("help", "premium");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     const premiumFeatures = [
       {
         title: "24/7 Music Player",
@@ -91,5 +100,17 @@ export default {
       });
 
     await interaction.editReply({ embeds: [embed], files: [attachment] });
+  },
+  localization_strings: {
+    name: {
+      en: "premium",
+      ru: "премиум",
+      uk: "преміум",
+    },
+    description: {
+      en: "Information about premium features",
+      ru: "Информация о премиум-функциях",
+      uk: "Інформація про преміум-функції",
+    },
   },
 };

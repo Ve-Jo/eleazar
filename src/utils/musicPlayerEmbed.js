@@ -112,7 +112,7 @@ export async function createOrUpdateMusicPlayerEmbed(
     .setColor(process.env.EMBED_COLOR)
     .setImage("attachment://musicplayer.png")
     .setFooter({
-      text: i18n.__("music.footerText", {
+      text: i18n.__("music.player.footerText", {
         author: track.requester.username,
       }),
       iconURL: track.requester.displayAvatarURL({ size: 128 }),

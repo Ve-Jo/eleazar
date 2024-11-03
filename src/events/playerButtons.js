@@ -64,7 +64,7 @@ export default {
           case "previous": {
             if (player.queue.previous.length === 0) {
               return interaction.reply({
-                content: i18n.__("music.noPreviousSongs"),
+                content: i18n.__("music.previous.noPreviousSongs"),
                 ephemeral: true,
               });
             }
@@ -74,7 +74,7 @@ export default {
 
             await interaction.reply(
               `<@${interaction.user.id}> ` +
-                i18n.__("music.addedPreviousToQueue", {
+                i18n.__("music.previous.addedPreviousToQueue", {
                   title: previousTrack.info.title,
                 })
             );
@@ -93,7 +93,7 @@ export default {
               .reply({
                 content:
                   `<@${interaction.user.id}> ` +
-                  i18n.__("music.autoplayApplied", {
+                  i18n.__("music.autoplay.autoplayApplied", {
                     enabled: player.get("autoplay_enabled") ? "ON" : "OFF",
                   }),
               })

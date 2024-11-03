@@ -3,7 +3,7 @@ import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
 import EconomyEZ from "../utils/economy.js";
 import { startResourceMonitor } from "../runners/resourceMonitor.js";
-
+import AiChannelBot from "../handlers/ai_channelbot.js";
 export default {
   name: Events.ClientReady,
   once: true,
@@ -22,5 +22,6 @@ export default {
     await EconomyEZ.testDatabaseConnection();
 
     startResourceMonitor(200, client);
+    // AiChannelBot(client);
   },
 };

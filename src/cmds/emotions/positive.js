@@ -1,5 +1,10 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -9,55 +14,68 @@ import {
 import HMFull from "hmfull";
 import i18n from "../../utils/i18n.js";
 
-const positiveEmotions = {
-  wave: "Помахать",
-  wink: "Подмигнуть",
-  pat: "Погладить",
-  kiss: "Поцеловать",
-  feed: "Покормить",
-  hug: "Обнять",
-  cuddle: "Прижаться",
-  five: "Дать пять",
-  glomp: "Броситься обнимать",
-  hold: "Держать",
-  boop: "Легонько ткнуть",
-};
+const positiveEmotions = Object.fromEntries(
+  [
+    "wave",
+    "wink",
+    "pat",
+    "kiss",
+    "feed",
+    "hug",
+    "cuddle",
+    "five",
+    "glomp",
+    "hold",
+    "boop",
+  ].map((key) => [key, key])
+);
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("positive")
-    .setDescription("Choose a positive emotion with a user")
-    .setDescriptionLocalizations({
-      ru: "Выберите позитивную эмоцию с пользователем",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("emotion")
-        .setDescription("Choose an emotion")
-        .setDescriptionLocalizations({
-          ru: "Выберите эмоцию",
-        })
-        .setRequired(true)
-        .addChoices(
-          ...Object.entries(positiveEmotions).map(([name, description]) => ({
-            name: description,
-            value: name,
-          }))
-        )
-    )
-    .addUserOption((option) =>
-      option
-        .setName("user")
-        .setNameLocalizations({
-          ru: "пользователь",
-        })
-        .setDescription("Choose a user")
-        .setDescriptionLocalizations({
-          ru: "Выберите пользователя",
-        })
-        .setRequired(true)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("emotions", "positive");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add emotion option
+    const emotionOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "emotion",
+      description: i18nBuilder.translateOption("emotion", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("emotion", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "emotion",
+        "description"
+      ),
+      choices: Object.entries(positiveEmotions).map(([name]) => ({
+        name,
+        value: name,
+      })),
+    });
+
+    // Add user option
+    const userOption = new SlashCommandOption({
+      type: OptionType.USER,
+      name: "user",
+      description: i18nBuilder.translateOption("user", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "user",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(emotionOption);
+    subcommand.addOption(userOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const emotion = interaction.options.getString("emotion");
     const targetUser = interaction.options.getUser("user");
@@ -113,12 +131,11 @@ export default {
 
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`emotions:positive.${emotion}`))
+        .setTitle(i18n.__(`emotions.positive.${emotion}.title`))
         .setDescription(
-          i18n.__(`emotions:positive.description`, {
+          i18n.__(`emotions.positive.${emotion}.description`, {
             user: interaction.user,
             targetUser: targetUser,
-            emotion: i18n.__(`emotions:positive.${emotion}`).toLowerCase(),
           })
         )
         .setImage(imageUrl)
@@ -173,5 +190,175 @@ export default {
       row.components[0].setDisabled(true);
       interaction.editReply({ components: [row] }).catch(console.error);
     });
+  },
+  localization_strings: {
+    name: {
+      en: "positive",
+      ru: "позитивные",
+      uk: "позитивні",
+    },
+    description: {
+      en: "Choose a positive emotion with a user",
+      ru: "Выберите позитивную эмоцию с пользователем",
+      uk: "Виберіть позитивну емоцію з користувачем",
+    },
+    options: {
+      emotion: {
+        name: {
+          en: "emotion",
+          ru: "эмоция",
+          uk: "емоція",
+        },
+        description: {
+          en: "Choose an emotion",
+          ru: "Выберите эмоцию",
+          uk: "Виберіть емоцію",
+        },
+      },
+      user: {
+        name: {
+          en: "user",
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          en: "Choose a user",
+          ru: "Выберите пользователя",
+          uk: "Виберіть користувача",
+        },
+      },
+    },
+    wave: {
+      title: {
+        en: "Wave",
+        ru: "Приветствие",
+        uk: "Привітання",
+      },
+      description: {
+        en: "<@{{user}}> waves at <@{{targetUser}}>!",
+        ru: "<@{{user}}> машет <@{{targetUser}}>!",
+        uk: "<@{{user}}> махає <@{{targetUser}}>!",
+      },
+    },
+    wink: {
+      title: {
+        en: "Wink",
+        ru: "Подмигивание",
+        uk: "Підморгування",
+      },
+      description: {
+        en: "<@{{user}}> winks at <@{{targetUser}}>!",
+        ru: "<@{{user}}> подмигивает <@{{targetUser}}>!",
+        uk: "<@{{user}}> підморгує <@{{targetUser}}>!",
+      },
+    },
+    pat: {
+      title: {
+        en: "Pat",
+        ru: "Поглаживание",
+        uk: "Погладжування",
+      },
+      description: {
+        en: "<@{{user}}> pats <@{{targetUser}}>!",
+        ru: "<@{{user}}> гладит <@{{targetUser}}>!",
+        uk: "<@{{user}}> гладить <@{{targetUser}}>!",
+      },
+    },
+    kiss: {
+      title: {
+        en: "Kiss",
+        ru: "Поцелуй",
+        uk: "Поцілунок",
+      },
+      description: {
+        en: "<@{{user}}> kisses <@{{targetUser}}>!",
+        ru: "<@{{user}}> целует <@{{targetUser}}>!",
+        uk: "<@{{user}}> цілує <@{{targetUser}}>!",
+      },
+    },
+    feed: {
+      title: {
+        en: "Feed",
+        ru: "Кормление",
+        uk: "Годування",
+      },
+      description: {
+        en: "<@{{user}}> feeds <@{{targetUser}}>!",
+        ru: "<@{{user}}> кормит <@{{targetUser}}>!",
+        uk: "<@{{user}}> годує <@{{targetUser}}>!",
+      },
+    },
+    hug: {
+      title: {
+        en: "Hug",
+        ru: "Объятие",
+        uk: "Обійми",
+      },
+      description: {
+        en: "<@{{user}}> hugs <@{{targetUser}}>!",
+        ru: "<@{{user}}> обнимает <@{{targetUser}}>!",
+        uk: "<@{{user}}> обіймає <@{{targetUser}}>!",
+      },
+    },
+    cuddle: {
+      title: {
+        en: "Cuddle",
+        ru: "Прижимание",
+        uk: "Притискання",
+      },
+      description: {
+        en: "<@{{user}}> cuddles with <@{{targetUser}}>!",
+        ru: "<@{{user}}> прижимается к <@{{targetUser}}>!",
+        uk: "<@{{user}}> притискається до <@{{targetUser}}>!",
+      },
+    },
+    five: {
+      title: {
+        en: "High Five",
+        ru: "Дать пять",
+        uk: "Дати п'ять",
+      },
+      description: {
+        en: "<@{{user}}> high fives <@{{targetUser}}>!",
+        ru: "<@{{user}}> дает пять <@{{targetUser}}>!",
+        uk: "<@{{user}}> дає п'ять <@{{targetUser}}>!",
+      },
+    },
+    glomp: {
+      title: {
+        en: "Glomp",
+        ru: "Тискание",
+        uk: "Стискання",
+      },
+      description: {
+        en: "<@{{user}}> glomps <@{{targetUser}}>!",
+        ru: "<@{{user}}> тискает <@{{targetUser}}>!",
+        uk: "<@{{user}}> стискає <@{{targetUser}}>!",
+      },
+    },
+    hold: {
+      title: {
+        en: "Hold",
+        ru: "Держание за руку",
+        uk: "Тримання за руку",
+      },
+      description: {
+        en: "<@{{user}}> holds hands with <@{{targetUser}}>!",
+        ru: "<@{{user}}> держит за руку <@{{targetUser}}>!",
+        uk: "<@{{user}}> тримає за руку <@{{targetUser}}>!",
+      },
+    },
+    boop: {
+      title: {
+        en: "Boop",
+        ru: "Тык в нос",
+        uk: "Тик у ніс",
+      },
+      description: {
+        en: "<@{{user}}> boops <@{{targetUser}}>!",
+        ru: "<@{{user}}> тыкает в нос <@{{targetUser}}>!",
+        uk: "<@{{user}}> тикає в ніс <@{{targetUser}}>!",
+      },
+    },
   },
 };

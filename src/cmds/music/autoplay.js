@@ -1,15 +1,24 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
-import i18n from "../../utils/i18n";
+import {
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("autoplay")
-    .setDescription("Toggle autoplay mode")
-    .setDescriptionLocalizations({
-      ru: "Переключить режим автопроигрывания",
-      uk: "Перемикати режим автопрогравання",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("music", "autoplay");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
       interaction.guild.id
     );
@@ -29,7 +38,7 @@ export default {
       player.set("autoplay_enabled", true);
 
       return interaction.editReply({
-        content: i18n.__("music.autoplayToggled", {
+        content: i18n.__("music.autoplay.autoplayToggled", {
           enabled: !autoplay,
         }),
         ephemeral: true,
@@ -38,11 +47,28 @@ export default {
       player.set("autoplay_enabled", false);
 
       return interaction.editReply({
-        content: i18n.__("music.autoplayToggled", {
+        content: i18n.__("music.autoplay.autoplayToggled", {
           enabled: !autoplay,
         }),
         ephemeral: true,
       });
     }
+  },
+  localization_strings: {
+    name: {
+      en: "autoplay",
+      ru: "автопроигрывание",
+      uk: "автопрогравання",
+    },
+    description: {
+      en: "Toggle autoplay mode",
+      ru: "Переключить режим автопроигрывания",
+      uk: "Перемикати режим автопрогравання",
+    },
+    autoplayToggled: {
+      en: "Autoplay mode has been toggled {{enabled}}",
+      ru: "Режим автопроигрывания был переключен на {{enabled}}",
+      uk: "Режим автопрогравання був переключений на {{enabled}}",
+    },
   },
 };

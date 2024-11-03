@@ -1,24 +1,22 @@
-import { SlashCommandBuilder } from "discord.js";
-import memer from "./image_memer.js";
-import text_memer from "./text_memer.js";
+import { I18nCommandBuilder } from "../../utils/builders/index.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("filters")
-    .setDescription("Apply a filter to the image")
-    .setDescriptionLocalizations({
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("filters");
+    const command = i18nBuilder.createCommand();
+    return command;
+  },
+  server: true,
+  localization_strings: {
+    name: {
+      en: "filters",
+      ru: "фильтры",
+      uk: "фільтри",
+    },
+    description: {
+      en: "Apply a filter to the image",
       ru: "Примените фильтр к изображению",
       uk: "Застосуйте фільтр до зображення",
-    })
-    .addSubcommand(memer.data)
-    .addSubcommand(text_memer.data),
-  server: true,
-  async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    if (subcommand === "memer") {
-      await memer.execute(interaction);
-    } else if (subcommand === "text_memer") {
-      await text_memer.execute(interaction);
-    }
+    },
   },
 };

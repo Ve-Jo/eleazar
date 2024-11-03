@@ -1,5 +1,10 @@
 import {
-  SlashCommandSubcommandBuilder,
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -7,56 +12,61 @@ import {
   ComponentType,
 } from "discord.js";
 import HMFull from "hmfull";
-import i18n from "../../utils/i18n.js";
-
-const nsfwImages = {
-  anal: "Анал",
-  ass: "Попа",
-  bdsm: "БДСМ",
-  cum: "Сперма",
-  creampie: "Сперма в киске",
-  manga: "Манга",
-  femdom: "Фемдом",
-  hentai: "Хентай",
-  masturbation: "Мастурбация",
-  public: "В общественном месте",
-  orgy: "Оргия",
-  yuri: "Юри",
-  pantsu: "Панталны",
-  glasses: "Очки",
-  blowjob: "Девушка сосет",
-  boobjob: "Сосок",
-  footjob: "Стопа",
-  handjob: "Рука",
-  boobs: "Грудь",
-  thighs: "Бедра",
-  pussy: "Киска",
-  ahegao: "Ахегао",
-  uniform: "Униформа",
-  gif: "Гифка",
-};
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("nsfw")
-    .setDescription("Choose a NSFW image")
-    .setDescriptionLocalizations({
-      ru: "Выберите NSFW изображение",
-      uk: "Виберіть NSFW зображення",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("image")
-        .setDescription("Choose an image")
-        .setRequired(true)
-        .addChoices(
-          ...Object.entries(nsfwImages).map(([name, description]) => ({
-            name: description,
-            value: name,
-          }))
-        )
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("images", "nsfw");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add image option
+    const imageOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "image",
+      description: i18nBuilder.translateOption("image", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "image",
+        "description"
+      ),
+      choices: [
+        { name: "Anal", value: "anal" },
+        { name: "Ass", value: "ass" },
+        { name: "BDSM", value: "bdsm" },
+        { name: "Cum", value: "cum" },
+        { name: "Creampie", value: "creampie" },
+        { name: "Manga", value: "manga" },
+        { name: "Femdom", value: "femdom" },
+        { name: "Hentai", value: "hentai" },
+        { name: "Masturbation", value: "masturbation" },
+        { name: "Public", value: "public" },
+        { name: "Orgy", value: "orgy" },
+        { name: "Yuri", value: "yuri" },
+        { name: "Pantsu", value: "pantsu" },
+        { name: "Glasses", value: "glasses" },
+        { name: "Blowjob", value: "blowjob" },
+        { name: "Boobjob", value: "boobjob" },
+        { name: "Footjob", value: "footjob" },
+        { name: "Handjob", value: "handjob" },
+        { name: "Boobs", value: "boobs" },
+        { name: "Thighs", value: "thighs" },
+        { name: "Pussy", value: "pussy" },
+        { name: "Ahegao", value: "ahegao" },
+        { name: "Uniform", value: "uniform" },
+        { name: "GIF", value: "gif" },
+      ],
+    });
+
+    subcommand.addOption(imageOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     if (!interaction.channel.nsfw) {
       return interaction.reply({
@@ -159,5 +169,31 @@ export default {
       row.components[0].setDisabled(true);
       interaction.editReply({ components: [row] }).catch(console.error);
     });
+  },
+  localization_strings: {
+    name: {
+      en: "nsfw",
+      ru: "nsfw",
+      uk: "nsfw",
+    },
+    description: {
+      en: "Choose a NSFW image",
+      ru: "Выберите NSFW изображение",
+      uk: "Виберіть NSFW зображення",
+    },
+    options: {
+      image: {
+        name: {
+          en: "image",
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          en: "Choose an image",
+          ru: "Выберите изображение",
+          uk: "Виберіть зображення",
+        },
+      },
+    },
   },
 };

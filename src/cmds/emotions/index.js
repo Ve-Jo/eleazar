@@ -1,31 +1,22 @@
-import { SlashCommandBuilder } from "discord.js";
-import i18n from "../../utils/i18n.js";
-import positive from "./positive.js";
-import negative from "./negative.js";
-import myself from "./myself.js";
+import { I18nCommandBuilder } from "../../utils/builders/index.js";
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("emotions")
-    .setDescription("Select an emotion type and emotion")
-    .setDescriptionLocalizations({
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("emotions");
+    const command = i18nBuilder.createCommand();
+    return command;
+  },
+  server: true,
+  localization_strings: {
+    name: {
+      en: "emotions",
+      ru: "эмоции",
+      uk: "емоції",
+    },
+    description: {
+      en: "Select an emotion type and emotion",
       ru: "Выберите тип эмоции и саму эмоцию",
-    })
-    .addSubcommand(positive.data)
-    .addSubcommand(negative.data)
-    .addSubcommand(myself.data),
-
-  async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    const subcommands = { positive, negative, myself };
-
-    if (subcommands[subcommand]) {
-      await subcommands[subcommand].execute(interaction);
-    } else {
-      await interaction.reply({
-        content: i18n.__("invalidSubcommand"),
-        ephemeral: true,
-      });
-    }
+      uk: "Виберіть тип емоції та саму емоцію",
+    },
   },
 };

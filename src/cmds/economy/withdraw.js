@@ -1,30 +1,41 @@
 import {
-  SlashCommandSubcommandBuilder,
-  EmbedBuilder,
-  AttachmentBuilder,
-} from "discord.js";
+  SlashCommandSubcommand,
+  SlashCommandOption,
+  OptionType,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
-import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("withdraw")
-    .setDescription("Withdraw money")
-    .setDescriptionLocalizations({
-      ru: "Снять деньги со счета",
-      uk: "Зняти гроші з рахунку",
-    })
-    .addStringOption((option) =>
-      option
-        .setName("amount")
-        .setDescription("Amount to withdraw (or 'all', 'half')")
-        .setDescriptionLocalizations({
-          ru: "Сумма для снятия (или 'all', 'half')",
-          uk: "Сума для зняття (або 'all', 'half')",
-        })
-        .setRequired(true)
-    ),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "withdraw");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    // Add amount option
+    const amountOption = new SlashCommandOption({
+      type: OptionType.STRING,
+      name: "amount",
+      description: i18nBuilder.translateOption("amount", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "amount",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(amountOption);
+
+    return subcommand;
+  },
   async execute(interaction) {
     const amount = interaction.options.getString("amount");
 
@@ -111,5 +122,31 @@ export default {
       embeds: [withdraw_embed],
       files: [attachment],
     });
+  },
+  localization_strings: {
+    name: {
+      en: "withdraw",
+      ru: "снять",
+      uk: "зняти",
+    },
+    description: {
+      en: "Withdraw money from bank",
+      ru: "Снять деньги со счета",
+      uk: "Зняти гроші з рахунку",
+    },
+    options: {
+      amount: {
+        name: {
+          en: "amount",
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          en: "Amount to withdraw (or 'all', 'half')",
+          ru: "Сумма для снятия (или 'all', 'half')",
+          uk: "Сума для зняття (або 'all', 'half')",
+        },
+      },
+    },
   },
 };

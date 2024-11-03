@@ -1,18 +1,26 @@
-import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
+import {
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
+import { AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import prettyMs from "pretty-ms";
-import i18n from "../../utils/i18n.js";
 import cooldownsManager from "../../utils/cooldownsManager.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("daily")
-    .setDescription("Claim daily reward")
-    .setDescriptionLocalizations({
-      ru: "Получить ежедневную награду",
-      uk: "Отримати щоденну нагороду",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("economy", "daily");
+
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
     await EconomyEZ.ensure(
       `timestamps.${interaction.guild.id}.${interaction.user.id}`
@@ -132,5 +140,17 @@ export default {
         ephemeral: true,
       });
     }
+  },
+  localization_strings: {
+    name: {
+      en: "daily",
+      ru: "ежедневное",
+      uk: "щоденне",
+    },
+    description: {
+      en: "Claim daily reward",
+      ru: "Получить ежедневную награду",
+      uk: "Отримати щоденну нагороду",
+    },
   },
 };

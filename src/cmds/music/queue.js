@@ -1,16 +1,23 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
+import {
+  SlashCommandSubcommand,
+  I18nCommandBuilder,
+} from "../../utils/builders/index.js";
 import i18n from "../../utils/i18n.js";
-
 export default {
-  data: new SlashCommandSubcommandBuilder()
-    .setName("queue")
-    .setDescription("Show the music queue")
-    .setDescriptionLocalizations({
-      ru: "Показать очередь музыки",
-      uk: "Показати чергу музики",
-    }),
+  data: () => {
+    const i18nBuilder = new I18nCommandBuilder("music", "queue");
 
+    const subcommand = new SlashCommandSubcommand({
+      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
+      description: i18nBuilder.translate("description"),
+      name_localizations: i18nBuilder.getLocalizations("name"),
+      description_localizations: i18nBuilder.getLocalizations("description"),
+    });
+
+    return subcommand;
+  },
   async execute(interaction) {
+    await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
       interaction.guild.id
     );
@@ -38,5 +45,32 @@ export default {
     await interaction.editReply(
       `${i18n.__("music.currentQueue")}\n${queueString}`
     );
+  },
+  localization_strings: {
+    name: {
+      en: "queue",
+      ru: "очередь",
+      uk: "черга",
+    },
+    description: {
+      en: "Show the music queue",
+      ru: "Показать очередь музыки",
+      uk: "Показати чергу музики",
+    },
+    currentPlaying: {
+      en: "Currently playing: {{title}}",
+      ru: "Текущая песня: {{title}}",
+      uk: "Поточна пісня: {{title}}",
+    },
+    nextInQueue: {
+      en: "Next in queue: {{tracks}}",
+      ru: "Следующая в очереди: {{tracks}}",
+      uk: "Наступна в черзі: {{tracks}}",
+    },
+    currentQueue: {
+      en: "Current queue",
+      ru: "Текущая очередь",
+      uk: "Поточна черга",
+    },
   },
 };

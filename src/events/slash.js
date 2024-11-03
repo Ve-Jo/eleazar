@@ -1,5 +1,5 @@
 import { Events, Collection } from "discord.js";
-import i18n from "../utils/i18n";
+import i18n from "../utils/i18n.js";
 
 const cooldowns = new Collection();
 
@@ -17,11 +17,6 @@ export default {
 
     const command = interaction.client.commands.get(commandName);
     if (!command) return;
-
-    if (!command.data.description) {
-      console.error(`Command "${command.data.name}" is missing a description.`);
-      return;
-    }
 
     let cooldownAmount;
     if (subcommandName && command[subcommandName]) {
@@ -56,23 +51,34 @@ export default {
     }
 
     try {
+      // Set locale based on interaction
       let locale = interaction.locale || "en";
       if (locale.includes("-")) {
         locale = locale.split("-")[0];
       }
-      i18n.setLocale(locale);
+      await i18n.setLocale(locale);
 
-      await command.execute(interaction);
+      // Execute preExecute if it exists
+      if (command.preExecute) {
+        await command.preExecute(interaction);
+        if (interaction.replied) return;
+      }
+
+      // Handle subcommand execution
+      if (subcommandName) {
+        const subcommand = command.subcommands?.[subcommandName];
+        if (!subcommand) {
+          return interaction.reply({
+            content: i18n.__("subcommandNotFound"),
+            ephemeral: true,
+          });
+        }
+        await subcommand.execute(interaction, i18n);
+      } else if (command.execute) {
+        await command.execute(interaction, i18n);
+      }
     } catch (error) {
       console.error(error);
-      try {
-        await interaction.reply({ content: error.message, ephemeral: true });
-      } catch (error) {
-        await interaction.editReply({
-          content: error.message,
-          ephemeral: true,
-        });
-      }
     }
   },
 };

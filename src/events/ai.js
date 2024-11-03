@@ -142,7 +142,6 @@ async function executeToolCall(
   }
 
   const command = message.client.commands.get(commandName);
-
   if (!command) return { success: false, response: null };
 
   try {
@@ -165,7 +164,26 @@ async function executeToolCall(
       };
     }
 
-    const response = await command.execute(fakeInteraction);
+    // Execute preExecute if it exists
+    if (command.preExecute) {
+      await command.preExecute(fakeInteraction);
+    }
+
+    let response;
+    // Handle subcommand execution
+    if (subcommandName) {
+      const subcommand = command.subcommands?.[subcommandName];
+      if (!subcommand) {
+        return {
+          success: false,
+          response: "Subcommand not found",
+        };
+      }
+      response = await subcommand.execute(fakeInteraction);
+    } else if (command.execute) {
+      response = await command.execute(fakeInteraction);
+    }
+
     return {
       success: true,
       response: response || "Command executed successfully.",
