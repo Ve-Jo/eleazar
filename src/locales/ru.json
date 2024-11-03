@@ -101,11 +101,21 @@
           "name": "сумма",
           "description": "Сумма для снятия (или 'all', 'half')"
         }
-      }
+      },
+      "insufficientFunds": "Недостаточно средств",
+      "amountGreaterThanZero": "Сумма должна быть больше нуля",
+      "title": "Снять"
     },
     "shop": {
       "name": "магазин",
-      "description": "Купить улучшения/роли"
+      "description": "Купить улучшения/роли",
+      "title": "Магазин",
+      "selectPlaceholder": "Выберите улучшение",
+      "insufficientFunds": "Недостаточно средств",
+      "buyButton": "Купить",
+      "errorGeneratingImage": "Ошибка при генерации изображения",
+      "purchaseMessage": "{name} куплен за {price}",
+      "purchaseError": "Ошибка при покупке"
     },
     "transfer": {
       "name": "перевести",
@@ -278,7 +288,10 @@
       "tickle": {
         "title": "Щекотание",
         "description": "<@{{user}}> щекочет <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Изображение не найдено",
+      "cannotSelectSelf": "Вы не можете выбрать себя",
+      "cannotSelectBot": "Вы не можете выбрать бота"
     },
     "myself": {
       "name": "я",
@@ -406,7 +419,10 @@
       "boop": {
         "title": "Тык в нос",
         "description": "<@{{user}}> тыкает в нос <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Изображение не найдено",
+      "cannotSelectSelf": "Вы не можете выбрать себя",
+      "cannotSelectBot": "Вы не можете выбрать бота"
     }
   },
   "filters": {
@@ -428,7 +444,10 @@
           "name": "текст_ютуба",
           "description": "[ФИЛЬТР YOUTUBE] Первое слово USERNAME и второе слово TEXT"
         }
-      }
+      },
+      "noText": "Не указано текст",
+      "noUsername": "Не указано имя пользователя",
+      "errorApplyingFilter": "Ошибка применения мем-фильтра"
     },
     "text_memer": {
       "name": "текстовый_мемер",
@@ -442,7 +461,8 @@
           "name": "текст",
           "description": "Текст для использования"
         }
-      }
+      },
+      "errorApplyingFilter": "Ошибка применения мем-фильтра"
     }
   },
   "help": {
@@ -454,7 +474,15 @@
     },
     "commands": {
       "name": "команды",
-      "description": "Помощь с командами"
+      "description": "Помощь с командами",
+      "categoryMenu": {
+        "placeholder": "Выберите категорию"
+      },
+      "subcommandMenu": {
+        "placeholder": "Выберите подкоманду"
+      },
+      "title": "Команды",
+      "noCommands": "Команды не найдены"
     }
   },
   "images": {
@@ -518,7 +546,8 @@
           "name": "без_повторений",
           "description": "Один пользователь не может считать два и больше раз подряд"
         }
-      }
+      },
+      "no_perms": "У вас нет прав на управление каналами"
     },
     "remove": {
       "name": "удалить",

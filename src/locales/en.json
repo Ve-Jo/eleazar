@@ -101,11 +101,21 @@
           "name": "amount",
           "description": "Amount to withdraw (or 'all', 'half')"
         }
-      }
+      },
+      "insufficientFunds": "Insufficient funds",
+      "amountGreaterThanZero": "Amount must be greater than zero",
+      "title": "Withdraw"
     },
     "shop": {
       "name": "shop",
-      "description": "Buy upgrades/roles"
+      "description": "Buy upgrades/roles",
+      "title": "Shop",
+      "selectPlaceholder": "Select an upgrade",
+      "insufficientFunds": "Insufficient funds",
+      "buyButton": "Buy",
+      "errorGeneratingImage": "Error generating image",
+      "purchaseMessage": "{name} purchased for {price}",
+      "purchaseError": "Error during purchase"
     },
     "transfer": {
       "name": "transfer",
@@ -278,7 +288,10 @@
       "tickle": {
         "title": "Tickle",
         "description": "<@{{user}}> tickles <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Image not found",
+      "cannotSelectSelf": "You cannot select yourself",
+      "cannotSelectBot": "You cannot select a bot"
     },
     "myself": {
       "name": "myself",
@@ -406,7 +419,10 @@
       "boop": {
         "title": "Boop",
         "description": "<@{{user}}> boops <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Image not found",
+      "cannotSelectSelf": "You cannot select yourself",
+      "cannotSelectBot": "You cannot select a bot"
     }
   },
   "filters": {
@@ -428,7 +444,10 @@
           "name": "youtube_text",
           "description": "[YOUTUBE FILTER] The first word USERNAME and TEXT"
         }
-      }
+      },
+      "noText": "No text provided",
+      "noUsername": "No username provided",
+      "errorApplyingFilter": "Error applying meme filter"
     },
     "text_memer": {
       "name": "text_memer",
@@ -442,7 +461,8 @@
           "name": "text",
           "description": "The text to use"
         }
-      }
+      },
+      "errorApplyingFilter": "Error applying meme filter"
     }
   },
   "help": {
@@ -454,7 +474,15 @@
     },
     "commands": {
       "name": "commands",
-      "description": "Help with commands"
+      "description": "Help with commands",
+      "categoryMenu": {
+        "placeholder": "Select a category"
+      },
+      "subcommandMenu": {
+        "placeholder": "Select a subcommand"
+      },
+      "title": "Commands",
+      "noCommands": "No commands found"
     }
   },
   "images": {
@@ -518,7 +546,8 @@
           "name": "no_same_user",
           "description": "One person cant count twice or more in a row"
         }
-      }
+      },
+      "no_perms": "You don't have permissions to manage channels"
     },
     "remove": {
       "name": "remove",

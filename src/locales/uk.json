@@ -101,11 +101,21 @@
           "name": "сума",
           "description": "Сума для зняття (або 'all', 'half')"
         }
-      }
+      },
+      "insufficientFunds": "Недостатньо коштів",
+      "amountGreaterThanZero": "Сума має бути більшою за нуль",
+      "title": "Зняти"
     },
     "shop": {
       "name": "магазин",
-      "description": "Купити улучшення/ролі"
+      "description": "Купити улучшення/ролі",
+      "title": "Магазин",
+      "selectPlaceholder": "Виберіть улучшення",
+      "insufficientFunds": "Недостатньо коштів",
+      "buyButton": "Купити",
+      "errorGeneratingImage": "Помилка при генерації зображення",
+      "purchaseMessage": "{name} куплено за {price}",
+      "purchaseError": "Помилка при покупці"
     },
     "transfer": {
       "name": "переказати",
@@ -278,7 +288,10 @@
       "tickle": {
         "title": "Лоскоче",
         "description": "<@{{user}}> лоскоче <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Зображення не знайдено",
+      "cannotSelectSelf": "Ви не можете вибрати себе",
+      "cannotSelectBot": "Ви не можете вибрати бота"
     },
     "myself": {
       "name": "я",
@@ -406,7 +419,10 @@
       "boop": {
         "title": "Тик у ніс",
         "description": "<@{{user}}> тикає в ніс <@{{targetUser}}>!"
-      }
+      },
+      "imageNotFound": "Зображення не знайдено",
+      "cannotSelectSelf": "Ви не можете вибрати себе",
+      "cannotSelectBot": "Ви не можете вибрати бота"
     }
   },
   "filters": {
@@ -428,7 +444,10 @@
           "name": "текст_ютуба",
           "description": "[ФІЛЬТР YOUTUBE] Перше слово USERNAME і потім TEXT"
         }
-      }
+      },
+      "noText": "Не вказано текст",
+      "noUsername": "Не вказано ім'я користувача",
+      "errorApplyingFilter": "Помилка застосування мем-фільтра"
     },
     "text_memer": {
       "name": "текстовий_мемер",
@@ -442,7 +461,8 @@
           "name": "текст",
           "description": "Текст для використання"
         }
-      }
+      },
+      "errorApplyingFilter": "Помилка застосування мем-фільтра"
     }
   },
   "help": {
@@ -454,7 +474,15 @@
     },
     "commands": {
       "name": "команди",
-      "description": "Довідка з командами"
+      "description": "Довідка з командами",
+      "categoryMenu": {
+        "placeholder": "Виберіть категорію"
+      },
+      "subcommandMenu": {
+        "placeholder": "Виберіть підкоманду"
+      },
+      "title": "Команди",
+      "noCommands": "Команди не знайдено"
     }
   },
   "images": {
@@ -518,7 +546,8 @@
           "name": "без_повторень",
           "description": "Один користувач не може рахувати два і більше разів підряд"
         }
-      }
+      },
+      "no_perms": "У вас немає прав на керування каналами"
     },
     "remove": {
       "name": "видалити",
