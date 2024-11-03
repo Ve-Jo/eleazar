@@ -112,7 +112,7 @@ export default {
         return null;
       }
 
-      const title = i18n.__(`images:nsfw.${image}`);
+      const title = i18n.__(`images.nsfw.name`);
 
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
@@ -128,7 +128,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("imageNotFound"),
+        content: i18n.__("images.nsfw.notFound"),
         ephemeral: true,
       });
     }
@@ -158,7 +158,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("imageNotFound"),
+            content: i18n.__("images.nsfw.notFound"),
             ephemeral: true,
           });
         }
@@ -194,6 +194,11 @@ export default {
           uk: "Виберіть зображення",
         },
       },
+    },
+    notFound: {
+      en: "Image not found",
+      ru: "Изображение не найдено",
+      uk: "Зображення не знайдено",
     },
   },
 };
