@@ -468,7 +468,8 @@
           "name": "image",
           "description": "Choose an image"
         }
-      }
+      },
+      "notFound": "Image not found"
     },
     "nsfw": {
       "name": "nsfw",
@@ -478,7 +479,8 @@
           "name": "image",
           "description": "Choose an image"
         }
-      }
+      },
+      "notFound": "Image not found"
     }
   },
   "counting": {
