@@ -27,60 +27,94 @@ function generateToolsFromCommands(client) {
   return Array.from(client.commands.values())
     .filter((command) => command.data && command.data.ai !== false)
     .flatMap((command) => {
+      const commandData = command.data;
+
+      // If command has subcommands
       if (
-        command.data.options &&
-        command.data.options.some(
-          (opt) => opt.toJSON && opt.toJSON().type === 1
-        )
+        commandData.options &&
+        commandData.options.some((opt) => opt.type === 1)
       ) {
-        return command.data.options
-          .filter((subcommand) => subcommand.ai !== false)
-          .map((subcommand) => createToolObject(command.data.name, subcommand));
+        return commandData.options
+          .filter((subcommand) => subcommand.type === 1)
+          .map((subcommand) => ({
+            type: "function",
+            function: {
+              name: `${commandData.name}_${subcommand.name}`,
+              description: subcommand.description,
+              parameters: {
+                type: "object",
+                properties: generateParametersFromOptions(
+                  subcommand.options || []
+                ),
+                required: (subcommand.options || [])
+                  .filter((opt) => opt.required)
+                  .map((opt) => opt.name),
+              },
+            },
+          }));
       }
-      return [createToolObject(command.data.name, command.data)];
+
+      // If command doesn't have subcommands
+      return [
+        {
+          type: "function",
+          function: {
+            name: commandData.name,
+            description: commandData.description,
+            parameters: {
+              type: "object",
+              properties: generateParametersFromOptions(
+                commandData.options || []
+              ),
+              required: (commandData.options || [])
+                .filter((opt) => opt.required)
+                .map((opt) => opt.name),
+            },
+          },
+        },
+      ];
     });
 }
 
-function createToolObject(commandName, commandData) {
+function generateParametersFromOptions(options) {
   const parameters = {};
-  if (commandData.options) {
-    commandData.options.forEach((option) => {
-      if (option.required) {
-        parameters[option.name] = {
-          type: option.type === "INTEGER" ? "number" : "string",
-          description: option.description,
-        };
 
-        if (option.choices) {
-          parameters[option.name].enum = option.choices.map(
-            (choice) => choice.value
-          );
-        }
-      }
-    });
+  options.forEach((option) => {
+    parameters[option.name] = {
+      type: getParameterType(option.type),
+      description: option.description,
+    };
+
+    if (option.choices) {
+      parameters[option.name].enum = option.choices.map(
+        (choice) => choice.value
+      );
+    }
+  });
+
+  return parameters;
+}
+
+function getParameterType(optionType) {
+  // Discord.js ApplicationCommandOptionType mapping
+  switch (optionType) {
+    case 3: // STRING
+      return "string";
+    case 4: // INTEGER
+      return "integer";
+    case 5: // BOOLEAN
+      return "boolean";
+    case 6: // USER
+      return "string"; // For user mentions/IDs
+    case 7: // CHANNEL
+      return "string"; // For channel mentions/IDs
+    case 8: // ROLE
+      return "string"; // For role mentions/IDs
+    case 10: // NUMBER
+      return "number";
+    default:
+      return "string";
   }
-
-  // Get the correct description
-  let description = commandData.description;
-  if (commandData.toJSON) {
-    const jsonData = commandData.toJSON();
-    description = jsonData.description || description;
-  }
-
-  return {
-    type: "function",
-    function: {
-      name: commandData.name
-        ? `${commandName}_${commandData.name}`
-        : commandName,
-      description: description,
-      parameters: {
-        type: "object",
-        properties: parameters,
-        required: Object.keys(parameters),
-      },
-    },
-  };
 }
 
 async function translateText(text, targetLang) {
@@ -130,19 +164,16 @@ async function executeToolCall(
   detectedLanguage
 ) {
   const { name, arguments: args } = toolCall.function;
-  const parts = name.split("_");
-  let commandName, subcommandName;
-
-  if (parts.length > 1) {
-    commandName = parts[0];
-    subcommandName = parts.slice(1).join("_");
-  } else {
-    commandName = name;
-    subcommandName = null;
-  }
+  const [commandName, ...subcommandParts] = name.split("_");
+  const subcommandName = subcommandParts.join("_");
 
   const command = message.client.commands.get(commandName);
-  if (!command) return { success: false, response: null };
+  if (!command) {
+    return {
+      success: false,
+      response: `Command "${commandName}" not found.`,
+    };
+  }
 
   try {
     const fakeInteraction = await createFakeInteraction(
@@ -150,19 +181,9 @@ async function executeToolCall(
       processingMessage,
       commandName,
       subcommandName,
-      args || "{}",
+      args,
       detectedLanguage
     );
-
-    if (!fakeInteraction.guild || !fakeInteraction.member) {
-      await processingMessage.edit(
-        "This command can only be used in a server."
-      );
-      return {
-        success: false,
-        response: "This command can only be used in a server.",
-      };
-    }
 
     // Execute preExecute if it exists
     if (command.preExecute) {
@@ -170,18 +191,17 @@ async function executeToolCall(
     }
 
     let response;
-    // Handle subcommand execution
-    if (subcommandName) {
-      const subcommand = command.subcommands?.[subcommandName];
-      if (!subcommand) {
-        return {
-          success: false,
-          response: "Subcommand not found",
-        };
-      }
-      response = await subcommand.execute(fakeInteraction);
+    if (subcommandName && command.subcommands?.[subcommandName]) {
+      response = await command.subcommands[subcommandName].execute(
+        fakeInteraction
+      );
     } else if (command.execute) {
       response = await command.execute(fakeInteraction);
+    } else {
+      return {
+        success: false,
+        response: "Command execution method not found.",
+      };
     }
 
     return {
@@ -190,7 +210,6 @@ async function executeToolCall(
     };
   } catch (error) {
     console.error(`Error executing command ${name}:`, error);
-    await processingMessage.edit(`Error executing command: ${error.message}`);
     return {
       success: false,
       response: `Error executing command: ${error.message}`,
@@ -212,117 +231,85 @@ async function createFakeInteraction(
   try {
     freshMember = await message.guild.members.fetch(message.author.id);
   } catch (error) {
-    console.error(
-      `Failed to fetch member data for ${message.author.tag}:`,
-      error
-    );
-    freshMember = message.member; // Fallback to existing member data
-  }
-
-  if (!freshMember) {
-    console.error(
-      `Member data is unavailable for interaction by ${message.author.tag}`
-    );
-  }
-
-  const guild = message.guild;
-  if (guild) {
-    await guild.roles.fetch();
+    console.error(`Failed to fetch member data:`, error);
+    freshMember = message.member;
   }
 
   let userLocale = ["en", "ru", "uk"].includes(detectedLanguage)
     ? detectedLanguage
     : "en";
 
-  message.author.locale = userLocale;
-
-  const channel = message.channel || guild.channels.cache.first();
-
-  if (!channel) {
-    throw new Error("No valid channel found for the interaction");
-  }
-
   return {
+    commandName: commandName,
     user: message.author,
-    guild: guild,
-    channel: channel,
-    channelId: channel.id,
-    channels: guild.channels,
+    guild: message.guild,
     member: freshMember,
+    channel: message.channel,
     client: message.client,
     reply: async (content) => processingMessage.edit(content),
     editReply: async (content) => processingMessage.edit(content),
     deferReply: async () => processingMessage.edit("Processing..."),
-    followUp: async (content) => channel.send(content),
-    options: fakeOptions,
+    followUp: async (content) => message.channel.send(content),
+    options: {
+      ...fakeOptions,
+      getSubcommand: () => subcommandName,
+      getString: (name) => {
+        const value = JSON.parse(args)[name];
+        return value ? String(value) : null;
+      },
+      getUser: (name) => {
+        const value = JSON.parse(args)[name];
+        if (!value) return null;
+        // Handle both mention format and plain username
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          const userId = value.replace(/[<@!>]/g, "");
+          return message.client.users.cache.get(userId);
+        }
+        // Try to find user by username
+        return message.client.users.cache.find(
+          (u) =>
+            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
+        );
+      },
+    },
+    locale: userLocale,
+    isChatInputCommand: () => true,
     isCommand: () => true,
-    commandName: commandName,
     deferred: false,
     replied: false,
     ephemeral: false,
-    webhook: {
-      send: async (content) => channel.send(content),
-      editMessage: async (messageId, content) => {
-        const msg = await channel.messages.fetch(messageId);
-        return msg.edit(content);
-      },
-    },
-    roles: freshMember ? freshMember.roles : null,
   };
 }
 
 function createFakeOptions(subcommandName, args, message) {
   const parsedArgs = args ? JSON.parse(args) : {};
+
   return {
-    data: [{ name: subcommandName, value: args }],
     getSubcommand: () => subcommandName,
     getString: (name) => parsedArgs[name] || null,
     getInteger: (name) =>
       parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
-    getBoolean: (name) => parsedArgs[name] === "true",
+    getBoolean: (name) =>
+      parsedArgs[name] === true || parsedArgs[name] === "true",
     getUser: (name) => {
-      if (parsedArgs[name]) {
-        if (
-          parsedArgs[name].startsWith("<@") &&
-          parsedArgs[name].endsWith(">")
-        ) {
-          const userId = parsedArgs[name].replace(/[<@!>]/g, "");
-          return message.client.users.cache.get(userId) || message.author;
-        }
-        // If it's a username, try to find the user in the guild
-        const user = message.guild.members.cache.find(
-          (member) =>
-            member.user.username.toLowerCase() ===
-            parsedArgs[name].replace("@", "").toLowerCase()
-        );
-        return user ? user.user : message.author;
+      if (!parsedArgs[name]) return null;
+      const value = parsedArgs[name];
+      if (value.startsWith("<@") && value.endsWith(">")) {
+        const userId = value.replace(/[<@!>]/g, "");
+        return message.client.users.cache.get(userId);
       }
-      return message.author;
+      return message.client.users.cache.find(
+        (u) => u.username.toLowerCase() === value.toLowerCase().replace("@", "")
+      );
     },
     getMember: (name) => {
-      if (parsedArgs[name]) {
-        if (
-          parsedArgs[name].startsWith("<@") &&
-          parsedArgs[name].endsWith(">")
-        ) {
-          const userId = parsedArgs[name].replace(/[<@!>]/g, "");
-          return message.guild.members.cache.get(userId) || message.member;
-        }
-        // If it's a username, try to find the member in the guild
-        return (
-          message.guild.members.cache.find(
-            (member) =>
-              member.user.username.toLowerCase() ===
-              parsedArgs[name].replace("@", "").toLowerCase()
-          ) || message.member
-        );
-      }
-      return message.member;
+      const user = parsedArgs[name]
+        ? message.guild.members.cache.get(
+            parsedArgs[name].replace(/[<@!>]/g, "")
+          )
+        : null;
+      return user || message.member;
     },
-    getChannel: (name) =>
-      parsedArgs.channel
-        ? message.guild.channels.cache.get(parsedArgs.channel)
-        : message.channel,
   };
 }
 
