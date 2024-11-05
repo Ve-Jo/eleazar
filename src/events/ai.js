@@ -119,6 +119,11 @@ function getParameterType(optionType) {
 
 async function translateText(text, targetLang) {
   try {
+    // Sanitize mentions before translation
+    text = text.replace(/<@[!&]?\d+>/g, " ");
+    text = text.replace(/@everyone/gi, " ");
+    text = text.replace(/@here/gi, " ");
+
     // Preserve code blocks
     const codeBlocks = [];
     text = text.replace(/```[\s\S]*?```/g, (match) => {
@@ -463,6 +468,11 @@ function splitMessage(message, maxLength = 2000) {
 
 // Replace the existing processingMessage.edit calls with this new function
 async function sendResponse(message, processingMessage, content) {
+  // Sanitize mentions in the response
+  content = content.replace(/<@[!&]?\d+>/g, "no_mention");
+  content = content.replace(/@everyone/gi, "no_mention");
+  content = content.replace(/@here/gi, "no_mention");
+
   const chunks = splitMessage(content);
 
   await processingMessage.edit(chunks[0]);
