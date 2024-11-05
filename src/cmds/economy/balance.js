@@ -83,7 +83,9 @@ export default {
             size: 1024,
           }),
         },
-        database: userData,
+        database: {
+          ...userData,
+        },
       },
       { width: 400, height: 225 },
       { image: 2, emoji: 1 }

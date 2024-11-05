@@ -75,6 +75,7 @@ class EconomyEZ {
           balance INT NOT NULL DEFAULT 0,
           bank INT NOT NULL DEFAULT 0,
           total_xp INT NOT NULL DEFAULT 0,
+          banner_url TEXT,
           UNIQUE (guild_id, user_id)
         )`,
         columns: [
@@ -82,6 +83,7 @@ class EconomyEZ {
           "balance INT NOT NULL DEFAULT 0",
           "bank INT NOT NULL DEFAULT 0",
           "total_xp INT NOT NULL DEFAULT 0",
+          "banner_url TEXT",
         ],
       },
       {

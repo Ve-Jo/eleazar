@@ -183,6 +183,22 @@
         "name": "Crime cooldown",
         "description": "Decrease your crime cooldown"
       }
+    },
+    "setbanner": {
+      "name": "setbanner",
+      "description": "Set your profile banner image",
+      "title": "Banner Preview",
+      "options": {
+        "image": {
+          "name": "image",
+          "description": "Upload your banner image (PNG, JPG, or WEBP)"
+        }
+      },
+      "invalidUrl": "Please provide a valid image URL (must end with .png, .jpg, .jpeg, or .webp)",
+      "invalidImage": "The provided URL does not contain a valid image",
+      "success": "Banner has been set successfully!",
+      "error": "An error occurred while setting the banner",
+      "imageTooLarge": "Image file is too large (maximum 8MB)"
     }
   },
   "music": {
@@ -560,6 +576,28 @@
         }
       },
       "notFound": "Image not found"
+    },
+    "setbanner": {
+      "name": "setbanner",
+      "description": "Set your profile banner image",
+      "title": "Banner Preview",
+      "options": {
+        "image": {
+          "name": "image",
+          "description": "Upload your banner image (PNG, JPG, or WEBP)"
+        }
+      },
+      "invalidImage": "The provided URL does not contain a valid image",
+      "success": "Banner has been set successfully!",
+      "error": "An error occurred while setting the banner",
+      "imageTooLarge": "Image file is too large (maximum 8MB)"
+    },
+    "removebanner": {
+      "name": "removebanner",
+      "description": "Remove your profile banner image",
+      "title": "Banner Removed",
+      "success": "Your banner has been removed successfully!",
+      "error": "An error occurred while removing the banner"
     }
   },
   "counting": {
