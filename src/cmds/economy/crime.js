@@ -62,6 +62,7 @@ export default {
               }),
             },
           },
+          locale: interaction.locale,
           nextDaily: timeLeft,
           emoji: "🦹",
         },
