@@ -97,7 +97,15 @@
     },
     "level": {
       "name": "рівень",
-      "description": "Перевірити рівень"
+      "description": "Переглянути рівень",
+      "title": "Рівень",
+      "userNotFound": "Користувач не знайдений",
+      "options": {
+        "user": {
+          "name": "користувач",
+          "description": "Користувач для перевірки"
+        }
+      }
     },
     "deposit": {
       "name": "внести",

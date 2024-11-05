@@ -74,18 +74,14 @@ class EconomyEZ {
           latest_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           balance INT NOT NULL DEFAULT 0,
           bank INT NOT NULL DEFAULT 0,
-          xp INT NOT NULL DEFAULT 0,
           total_xp INT NOT NULL DEFAULT 0,
-          level INT NOT NULL DEFAULT 1,
           UNIQUE (guild_id, user_id)
         )`,
         columns: [
           "latest_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
           "balance INT NOT NULL DEFAULT 0",
           "bank INT NOT NULL DEFAULT 0",
-          "xp INT NOT NULL DEFAULT 0",
           "total_xp INT NOT NULL DEFAULT 0",
-          "level INT NOT NULL DEFAULT 1",
         ],
       },
       {
@@ -197,8 +193,8 @@ class EconomyEZ {
       },
     ];
 
-    const client = await pool.connect();
-    /*try {
+    /*const client = await pool.connect();
+    try {
       await client.query("BEGIN");
 
       for (const table of tables) {

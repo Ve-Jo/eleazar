@@ -97,7 +97,15 @@
     },
     "level": {
       "name": "level",
-      "description": "Check level"
+      "description": "Check level",
+      "title": "Level",
+      "userNotFound": "User not found",
+      "options": {
+        "user": {
+          "name": "user",
+          "description": "User to check"
+        }
+      }
     },
     "deposit": {
       "name": "deposit",
