@@ -51,14 +51,12 @@ export default {
     }
 
     try {
-      // Set locale based on interaction
       let locale = interaction.locale || "en";
       if (locale.includes("-")) {
         locale = locale.split("-")[0];
       }
       await i18n.setLocale(locale);
 
-      // Execute preExecute if it exists
       if (command.preExecute) {
         await command.preExecute(interaction);
       }

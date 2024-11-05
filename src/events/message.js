@@ -1,6 +1,7 @@
 import { Events } from "discord.js";
 import EconomyEZ from "../utils/economy.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
+import LevelsManager from "../utils/levelsManager.js";
 
 export default {
   name: Events.MessageCreate,
@@ -134,26 +135,22 @@ export default {
 
     if (
       !timestampsUser.message ||
-      now - timestampsUser.message >= config.xp_per_message_cooldown * 1000
+      now - timestampsUser.message >= LevelsManager.getMessageCooldown(config)
     ) {
       console.log("XP cooldown passed or first message, adding XP");
 
-      const xpToAdd = config.xp_per_message;
-      const newXP = (userData.xp || 0) + xpToAdd;
+      const xpToAdd = LevelsManager.getXPForMessage(config);
       const newTotalXP = (userData.total_xp || 0) + xpToAdd;
-      const currentLevel = userData.level || 1;
-      const nextLevelXP = currentLevel * config.level_xp_multiplier;
+
+      // Calculate level data
+      const levelData = LevelsManager.calculateLevel(
+        newTotalXP,
+        LevelsManager.getLevelMultiplier(config)
+      );
 
       let updates = {
-        xp: newXP,
         total_xp: newTotalXP,
       };
-
-      if (newXP >= nextLevelXP) {
-        console.log("Level up!");
-        updates.level = currentLevel + 1;
-        updates.xp = 0;
-      }
 
       // Perform all updates in a single operation
       await Promise.all([
@@ -172,20 +169,16 @@ export default {
       ]);
 
       console.log("Added XP:", xpToAdd);
-      console.log("New XP:", updates.xp);
       console.log("New total XP:", newTotalXP);
-      if (updates.level) {
-        console.log("New level:", updates.level);
-        // You can add level up message here if needed
-      }
+      console.log("Current level:", levelData.level);
     } else {
       console.log("XP cooldown not passed, skipping XP addition");
+      console.log("XP cooldown:", LevelsManager.getMessageCooldown(config));
       console.log("now:", now);
       console.log("lastMessageTime:", timestampsUser.message);
-      console.log("XP cooldown:", config.xp_per_message_cooldown * 1000);
       console.log(
         "XP cooldown passed:",
-        now - timestampsUser.message >= config.xp_per_message_cooldown * 1000
+        now - timestampsUser.message >= LevelsManager.getMessageCooldown(config)
       );
     }
   },
