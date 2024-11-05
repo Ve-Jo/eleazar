@@ -8,7 +8,7 @@ import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("images", "removebanner");
+    const i18nBuilder = new I18nCommandBuilder("economy", "removebanner");
 
     const subcommand = new SlashCommandSubcommand({
       name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
