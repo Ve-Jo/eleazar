@@ -289,6 +289,7 @@ async function performCrime(interaction, user, target, guildId) {
           iconURL: interaction.guild.iconURL({ extension: "png", size: 1024 }),
         },
       },
+      locale: interaction.locale,
       victim: {
         user: {
           id: target.id,

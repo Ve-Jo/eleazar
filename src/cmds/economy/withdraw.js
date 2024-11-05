@@ -90,6 +90,7 @@ export default {
               extension: "png",
               size: 1024,
             }),
+            locale: interaction.user.locale,
           },
           guild: {
             id: interaction.guild.id,
@@ -100,6 +101,7 @@ export default {
             }),
           },
         },
+        locale: interaction.locale,
         database: updatedUser,
         amount: amountInt,
         isDeposit: false,

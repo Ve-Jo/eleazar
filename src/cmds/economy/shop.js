@@ -79,6 +79,7 @@ export default {
               }),
             },
           },
+          locale: interaction.locale,
           upgrades: formattedUpgrades,
           currentUpgrade: Number(currentUpgrade),
           balance: formattedBalance,

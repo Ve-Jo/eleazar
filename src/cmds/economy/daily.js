@@ -120,6 +120,7 @@ export default {
               }),
             },
           },
+          locale: interaction.locale,
           balance: newBalance,
           amount: amount,
         },

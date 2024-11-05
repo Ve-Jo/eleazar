@@ -17,10 +17,12 @@ export async function generateRemoteImage(
 
   while (true) {
     try {
-      // Convert any BigInt values to strings before sending
+      const locale = props.locale || "en";
+
       const sanitizedProps = JSON.parse(
-        JSON.stringify(props, (_, value) =>
-          typeof value === "bigint" ? value.toString() : value
+        JSON.stringify(
+          { ...props, locale }, // Include locale in props
+          (_, value) => (typeof value === "bigint" ? value.toString() : value)
         )
       );
 
@@ -49,7 +51,6 @@ export async function generateRemoteImage(
         throw error;
       }
 
-      // Calculate delay with exponential backoff (1s, 2s, 4s)
       const backoffDelay = INITIAL_DELAY * Math.pow(2, retries - 1);
       console.log(
         `Attempt ${retries} failed, retrying in ${

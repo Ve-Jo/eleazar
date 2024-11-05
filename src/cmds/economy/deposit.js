@@ -91,6 +91,7 @@ export default {
               size: 1024,
             }),
           },
+
           guild: {
             id: interaction.guild.id,
             name: interaction.guild.name,
@@ -100,6 +101,7 @@ export default {
             }),
           },
         },
+        locale: interaction.locale,
         database: updatedUser,
         amount: amountInt,
         isDeposit: true,

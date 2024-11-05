@@ -130,6 +130,7 @@ export default {
               }),
             },
           },
+          locale: interaction.locale,
           settings: commands,
           highlightedPosition,
           visibleCount,

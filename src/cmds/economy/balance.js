@@ -51,8 +51,6 @@ export default {
       });
     }
 
-    console.log(userData);
-
     let pngBuffer = await generateRemoteImage(
       "Balance",
       {
@@ -75,6 +73,7 @@ export default {
             }),
           },
         },
+        locale: interaction.locale,
         targetUser: {
           id: user.id,
           username: user.username,
@@ -86,7 +85,7 @@ export default {
         },
         database: userData,
       },
-      { width: 400, height: 200 },
+      { width: 400, height: 225 },
       { image: 2, emoji: 1 }
     );
 

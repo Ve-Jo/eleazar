@@ -102,6 +102,7 @@ export default {
               }),
             },
           },
+          locale: interaction.locale,
           users: usersToDisplay.map((user) => ({
             ...user,
             avatarURL: interaction.guild.members.cache

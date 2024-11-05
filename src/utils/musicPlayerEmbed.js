@@ -57,6 +57,7 @@ export async function createOrUpdateMusicPlayerEmbed(
             }),
           },
         },
+        locale: track.requester.locale,
         previousSong: previousSong
           ? {
               title: previousSong.info.title,
