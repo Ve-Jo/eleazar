@@ -40,7 +40,7 @@ export default {
     );
 
     if (timeLeft > 0) {
-      const pngBuffer = await generateRemoteImage(
+      let pngBuffer = await generateRemoteImage(
         "Cooldown",
         {
           interaction: {
@@ -62,6 +62,7 @@ export default {
               }),
             },
           },
+          database: await EconomyEZ.get(`economy.${guildId}.${user.id}`),
           locale: interaction.locale,
           nextDaily: timeLeft,
           emoji: "🦹",
@@ -70,8 +71,10 @@ export default {
         { image: 2, emoji: 2 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "crime_cooldown.png",
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `crime_cooldown.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
       });
 
       return interaction.editReply({
@@ -315,12 +318,18 @@ async function performCrime(interaction, user, target, guildId) {
     { width: 450, height: 200 }
   );
 
-  const attachment = new AttachmentBuilder(pngBuffer, { name: "crime.png" });
+  const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+    name: `crime.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+  });
 
   const embed = new EmbedBuilder()
     .setColor(process.env.EMBED_COLOR)
     .setTimestamp()
-    .setImage("attachment://crime.png")
+    .setImage(
+      `attachment://crime.${
+        pngBuffer.contentType === "image/gif" ? "gif" : "png"
+      }`
+    )
     .setAuthor({
       name: i18n.__("economy.crime.title"),
       iconURL: user.avatarURL(),

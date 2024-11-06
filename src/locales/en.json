@@ -142,7 +142,7 @@
       "insufficientFunds": "Insufficient funds",
       "buyButton": "Buy",
       "errorGeneratingImage": "Error generating image",
-      "purchaseMessage": "{name} purchased for {price}",
+      "purchaseMessage": "{{name}} purchased for {{price}}",
       "purchaseError": "Error during purchase"
     },
     "transfer": {
@@ -554,7 +554,7 @@
   },
   "images": {
     "name": "images",
-    "description": "Choose an image type and image",
+    "description": "Manage profile images and banners",
     "sfw": {
       "name": "sfw",
       "description": "Choose a SFW image",
@@ -584,13 +584,14 @@
       "options": {
         "image": {
           "name": "image",
-          "description": "Upload your banner image (PNG, JPG, or WEBP)"
+          "description": "Upload your banner image (PNG, JPG, GIF, or WEBP)"
         }
       },
       "invalidImage": "The provided URL does not contain a valid image",
-      "success": "Banner has been set successfully!",
+      "success": "Banner has been set successfully!\n\nNote: The first time you use a command with image support, it may take a moment to load.",
       "error": "An error occurred while setting the banner",
-      "imageTooLarge": "Image file is too large (maximum 8MB)"
+      "imageTooLarge": "Image file is too large (maximum 8MB)",
+      "processingGif": "Processing GIF banner... This may take a moment."
     },
     "removebanner": {
       "name": "removebanner",

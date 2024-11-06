@@ -34,7 +34,7 @@ export default {
     );
 
     if (timeLeft > 0) {
-      const pngBuffer = await generateRemoteImage(
+      let pngBuffer = await generateRemoteImage(
         "Cooldown",
         {
           interaction: {
@@ -56,6 +56,9 @@ export default {
               }),
             },
           },
+          database: await EconomyEZ.get(
+            `economy.${interaction.guild.id}.${interaction.user.id}`
+          ),
           locale: interaction.locale,
           nextDaily: timeLeft,
           emoji: "🎁",
@@ -64,9 +67,13 @@ export default {
         { image: 2, emoji: 2 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "daily_cooldown.png",
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `daily_cooldown.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
       });
+
+      pngBuffer = null;
 
       return interaction.editReply({
         files: [attachment],
@@ -99,7 +106,7 @@ export default {
         Date.now()
       );
 
-      const pngBuffer = await generateRemoteImage(
+      let pngBuffer = await generateRemoteImage(
         "Daily",
         {
           interaction: {
@@ -121,6 +128,9 @@ export default {
               }),
             },
           },
+          database: await EconomyEZ.get(
+            `economy.${interaction.guild.id}.${interaction.user.id}`
+          ),
           locale: interaction.locale,
           balance: newBalance,
           amount: amount,
@@ -128,9 +138,13 @@ export default {
         { width: 450, height: 200 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "daily_claimed.png",
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `daily_claimed.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
       });
+
+      pngBuffer = null;
 
       await interaction.editReply({
         files: [attachment],

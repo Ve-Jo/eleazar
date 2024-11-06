@@ -8,7 +8,7 @@ import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "removebanner");
+    const i18nBuilder = new I18nCommandBuilder("images", "removebanner");
 
     const subcommand = new SlashCommandSubcommand({
       name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
@@ -23,7 +23,7 @@ export default {
     await interaction.deferReply();
 
     try {
-      await EconomyEZ.delete(
+      await EconomyEZ.remove(
         `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`
       );
 
@@ -31,18 +31,18 @@ export default {
         .setColor(process.env.EMBED_COLOR)
         .setTimestamp()
         .setAuthor({
-          name: i18n.__("economy.removebanner.title"),
+          name: i18n.__("images.removebanner.title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
       await interaction.editReply({
-        content: i18n.__("economy.removebanner.success"),
+        content: i18n.__("images.removebanner.success"),
         embeds: [embed],
       });
     } catch (error) {
       console.error("Error removing banner:", error);
       await interaction.editReply({
-        content: i18n.__("economy.removebanner.error"),
+        content: i18n.__("images.removebanner.error"),
         ephemeral: true,
       });
     }

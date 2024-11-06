@@ -87,14 +87,18 @@ export default {
         { width: 600, height: 350 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "shop.png",
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
       });
 
       const embed = new EmbedBuilder()
         .setTimestamp()
         .setColor(process.env.EMBED_COLOR)
-        .setImage("attachment://shop.png")
+        .setImage(
+          `attachment://shop.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`
+        )
         .setAuthor({
           name: i18n.__("economy.shop.title"),
           iconURL: interaction.user.avatarURL(),
@@ -266,9 +270,9 @@ export default {
       uk: "Помилка при генерації зображення",
     },
     purchaseMessage: {
-      en: "{name} purchased for {price}",
-      ru: "{name} куплен за {price}",
-      uk: "{name} куплено за {price}",
+      en: "{{name}} purchased for {{price}}",
+      ru: "{{name}} куплен за {{price}}",
+      uk: "{{name}} куплено за {{price}}",
     },
     purchaseError: {
       en: "Error during purchase",

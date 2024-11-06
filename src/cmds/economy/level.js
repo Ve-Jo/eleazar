@@ -76,22 +76,26 @@ export default {
         currentXP: levelData.currentXP,
         requiredXP: levelData.requiredXP,
         level: levelData.level,
+        database: await EconomyEZ.get(
+          `economy.${interaction.guild.id}.${interaction.user.id}`
+        ),
       },
       { width: 400, height: 200 },
       { image: 2, emoji: 1 }
     );
 
-    const attachment = new AttachmentBuilder(pngBuffer, {
-      name: "level.png",
+    const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+      name: `level.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
     });
-
-    // Clear the buffer
-    pngBuffer = null;
 
     let level_embed = new EmbedBuilder()
       .setTimestamp()
       .setColor(process.env.EMBED_COLOR)
-      .setImage("attachment://level.png")
+      .setImage(
+        `attachment://level.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`
+      )
       .setAuthor({
         name: user.displayName,
         iconURL: user.displayAvatarURL({
@@ -99,6 +103,8 @@ export default {
           size: 1024,
         }),
       });
+
+    pngBuffer = null;
 
     await interaction.editReply({
       embeds: [level_embed],

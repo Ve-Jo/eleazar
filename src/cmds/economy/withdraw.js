@@ -102,21 +102,27 @@ export default {
           },
         },
         locale: interaction.locale,
-        database: updatedUser,
+        database: await EconomyEZ.get(
+          `economy.${interaction.guild.id}.${interaction.user.id}`
+        ),
         amount: amountInt,
         isDeposit: false,
       },
       { width: 400, height: 200 }
     );
 
-    const attachment = new AttachmentBuilder(pngBuffer, {
-      name: "withdraw.png",
+    const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+      name: `withdraw.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
     });
 
     let withdraw_embed = new EmbedBuilder()
       .setColor(process.env.EMBED_COLOR)
       .setTimestamp()
-      .setImage("attachment://withdraw.png")
+      .setImage(
+        `attachment://withdraw.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`
+      )
       .setAuthor({
         name: i18n.__("economy.withdraw.title"),
         iconURL: interaction.user.displayAvatarURL(),

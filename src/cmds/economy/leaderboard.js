@@ -116,14 +116,20 @@ export default {
         { width: 400, height: 755 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "leaderboard.png",
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `leaderboard.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
       });
 
       const embed = new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
         .setTitle(i18n.__("economy.leaderboard.title"))
-        .setImage("attachment://leaderboard.png")
+        .setImage(
+          `attachment://leaderboard.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`
+        )
         .setFooter({
           text: i18n.__("economy.leaderboard.footer", {
             page: currentPage,

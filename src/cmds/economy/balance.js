@@ -51,15 +51,15 @@ export default {
       });
     }
 
-    let pngBuffer = await generateRemoteImage(
+    let imageResponse = await generateRemoteImage(
       "Balance",
       {
         interaction: {
           user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            avatarURL: user.displayAvatarURL({
               extension: "png",
               size: 1024,
             }),
@@ -91,21 +91,26 @@ export default {
       { image: 2, emoji: 1 }
     );
 
-    const attachment = new AttachmentBuilder(pngBuffer, {
-      name: "balance.png",
+    const attachment = new AttachmentBuilder(imageResponse.buffer, {
+      name: `balance.${
+        imageResponse.contentType === "image/gif" ? "gif" : "png"
+      }`,
     });
-
-    // Clear the buffer
-    pngBuffer = null;
 
     let balance_embed = new EmbedBuilder()
       .setTimestamp()
       .setColor(process.env.EMBED_COLOR)
-      .setImage("attachment://balance.png")
+      .setImage(
+        `attachment://balance.${
+          imageResponse.contentType === "image/gif" ? "gif" : "png"
+        }`
+      )
       .setAuthor({
         name: i18n.__("economy.balance.title"),
         iconURL: user.avatarURL(),
       });
+
+    imageResponse = null;
 
     await interaction.editReply({
       embeds: [balance_embed],
