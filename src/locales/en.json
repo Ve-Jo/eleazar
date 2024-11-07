@@ -30,9 +30,25 @@
         "ratio": {
           "name": "ratio",
           "description": "Choose aspect ratio"
+        },
+        "width": {
+          "name": "width",
+          "description": "Choose width"
+        },
+        "height": {
+          "name": "height",
+          "description": "Choose height"
+        },
+        "interference_steps": {
+          "name": "interference_steps",
+          "description": "Choose number of steps for generation"
+        },
+        "seed": {
+          "name": "seed",
+          "description": "Choose seed"
         }
       },
-      "generated": "Generated image for prompt: \"{{prompt}}\"",
+      "generated": "Generated image for prompt: \"{{prompt}}\"\nSeed: {{seed}} | Steps: {{steps}}",
       "failed": "Failed to generate the image. Please try again.",
       "error": "An error occurred while generating the image. Please try again later."
     },

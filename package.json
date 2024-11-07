@@ -16,6 +16,7 @@
     "bing-translate-api": "^4.0.2",
     "chokidar": "^4.0.1",
     "crypto": "^1.0.1",
+    "deepinfra": "^2.0.2",
     "discord.js": "^14.16.1",
     "dotenv": "^16.4.5",
     "filesize": "^10.1.6",

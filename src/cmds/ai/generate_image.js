@@ -32,57 +32,111 @@ export default {
       ),
     });
 
-    // Add ratio option
-    const ratioOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "ratio",
-      description: i18nBuilder.translateOption("ratio", "description"),
+    // Add width option
+    const widthOption = new SlashCommandOption({
+      type: OptionType.INTEGER,
+      name: "width",
+      description: i18nBuilder.translateOption("width", "description"),
       required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("ratio", "name"),
+      name_localizations: i18nBuilder.getOptionLocalizations("width", "name"),
       description_localizations: i18nBuilder.getOptionLocalizations(
-        "ratio",
+        "width",
         "description"
       ),
+      min_value: 256,
+      max_value: 1526,
       choices: [
-        { name: "1:1", value: "1:1" },
-        { name: "21:9", value: "21:9" },
-        { name: "16:9", value: "16:9" },
-        { name: "4:5", value: "4:5" },
-        { name: "5:4", value: "5:4" },
-        { name: "4:3", value: "4:3" },
-        { name: "9:16", value: "9:16" },
-        { name: "9:21", value: "9:21" },
+        { name: "256", value: 256 },
+        { name: "512", value: 512 },
+        { name: "768", value: 768 },
+        { name: "1024", value: 1024 },
       ],
     });
 
-    subcommand.addOption(promptOption);
-    subcommand.addOption(ratioOption);
+    // Add height option
+    const heightOption = new SlashCommandOption({
+      type: OptionType.INTEGER,
+      name: "height",
+      description: i18nBuilder.translateOption("height", "description"),
+      required: true,
+      name_localizations: i18nBuilder.getOptionLocalizations("height", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "height",
+        "description"
+      ),
+      min_value: 256,
+      max_value: 1526,
+      choices: [
+        { name: "256", value: 256 },
+        { name: "512", value: 512 },
+        { name: "768", value: 768 },
+        { name: "1024", value: 1024 },
+      ],
+    });
 
+    const interferenceSteps = new SlashCommandOption({
+      type: OptionType.INTEGER,
+      name: "interference_steps",
+      description: i18nBuilder.translateOption(
+        "interference_steps",
+        "description"
+      ),
+      required: false,
+      name_localizations: i18nBuilder.getOptionLocalizations(
+        "interference_steps",
+        "name"
+      ),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "interference_steps",
+        "description"
+      ),
+      min_value: 2,
+      max_value: 5,
+    });
+
+    const seedOption = new SlashCommandOption({
+      type: OptionType.INTEGER,
+      name: "seed",
+      description: i18nBuilder.translateOption("seed", "description"),
+      required: false,
+      name_localizations: i18nBuilder.getOptionLocalizations("seed", "name"),
+      description_localizations: i18nBuilder.getOptionLocalizations(
+        "seed",
+        "description"
+      ),
+    });
+
+    subcommand.addOption(promptOption);
+    subcommand.addOption(widthOption);
+    subcommand.addOption(heightOption);
+    subcommand.addOption(interferenceSteps);
+    subcommand.addOption(seedOption);
     return subcommand;
   },
   async execute(interaction) {
     await interaction.deferReply();
 
     let prompt = interaction.options.getString("prompt");
-    let aspectRatio = interaction.options.getString("ratio");
-
-    console.log(JSON.stringify({ prompt, aspectRatio }, null, 2));
+    let width = interaction.options.getInteger("width");
+    let height = interaction.options.getInteger("height");
+    let interferenceSteps =
+      interaction.options.getInteger("interference_steps") || 3;
+    let seed = interaction.options.getInteger("seed");
+    console.log(JSON.stringify({ prompt, width, height }, null, 2));
 
     try {
-      let output = await interaction.client.replicate.run(
-        "black-forest-labs/flux-schnell",
-        {
-          input: {
-            prompt,
-            aspect_ratio: aspectRatio,
-          },
-        }
-      );
+      const output = await interaction.client.deepinfra.flux_schnell.generate({
+        prompt,
+        width,
+        height,
+        num_inference_steps: interferenceSteps,
+        seed,
+      });
 
-      console.log("Replicate API output:", output);
+      console.log("DeepInfra output:", output);
 
-      if (output && output.length > 0 && output[0]) {
-        const imageUrl = output[0];
+      if (output && output.images && output.images.length > 0) {
+        const imageUrl = output.images[0];
 
         const response = await fetch(imageUrl);
         if (!response.ok)
@@ -132,23 +186,59 @@ export default {
           uk: "Введіть ваш запит",
         },
       },
-      ratio: {
+      width: {
         name: {
-          en: "ratio",
-          ru: "формат",
-          uk: "формат",
+          en: "width",
+          ru: "ширина",
+          uk: "ширина",
         },
         description: {
-          en: "Choose aspect ratio",
-          ru: "Выберите соотношение сторон",
-          uk: "Виберіть співвідношення сторін",
+          en: "Choose width",
+          ru: "Выберите ширину",
+          uk: "Виберіть ширину",
+        },
+      },
+      height: {
+        name: {
+          en: "height",
+          ru: "высота",
+          uk: "висота",
+        },
+        description: {
+          en: "Choose height",
+          ru: "Выберите высоту",
+          uk: "Виберіть висоту",
+        },
+      },
+      interference_steps: {
+        name: {
+          en: "interference_steps",
+          ru: "шаги_генерации",
+          uk: "кроки_генерації",
+        },
+        description: {
+          en: "Choose number of steps for generation",
+          ru: "Выберите количество шагов для генерации",
+          uk: "Виберіть кількість кроків для генерації",
+        },
+      },
+      seed: {
+        name: {
+          en: "seed",
+          ru: "сид",
+          uk: "сид",
+        },
+        description: {
+          en: "Choose seed",
+          ru: "Выберите сид",
+          uk: "Виберіть сид",
         },
       },
     },
     generated: {
-      en: 'Generated image for prompt: "{{prompt}}"',
-      ru: 'Сгенерировано изображение для запроса: "{{prompt}}"',
-      uk: 'Згенеровано зображення для запиту: "{{prompt}}"',
+      en: 'Generated image for prompt: "{{prompt}}"\nSeed: {{seed}} | Steps: {{steps}}',
+      ru: 'Сгенерировано изображение для запроса: "{{prompt}}"\nСид: {{seed}} | Шаги: {{steps}}',
+      uk: 'Згенеровано зображення для запиту: "{{prompt}}"\nСид: {{seed}} | Кроків: {{steps}}',
     },
     failed: {
       en: "Failed to generate the image. Please try again.",

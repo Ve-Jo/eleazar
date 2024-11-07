@@ -15,6 +15,9 @@ export async function generateRemoteImage(
 ) {
   let retries = 0;
 
+  const serverUrl = process.env.IMAGE_SERVER_URL || "http://localhost:3002";
+  console.log("🔄 Using render server at:", serverUrl);
+
   while (true) {
     try {
       const locale = props.locale || "en";
@@ -41,7 +44,7 @@ export async function generateRemoteImage(
       );
 
       const response = await axios.post(
-        `${process.env.IMAGE_SERVER_URL}/generate`,
+        `${serverUrl}/generate`,
         {
           componentName,
           props: sanitizedProps,
@@ -87,7 +90,8 @@ export async function generateRemoteImage(
         throw error;
       }
 
-      const backoffDelay = INITIAL_DELAY * Math.pow(2, retries - 1);
+      const backoffDelay =
+        retries === 1 ? 2000 : INITIAL_DELAY * Math.pow(2, retries - 1);
       console.log(
         `Attempt ${retries} failed, retrying in ${
           backoffDelay / 1000

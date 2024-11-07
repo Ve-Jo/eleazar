@@ -55,36 +55,22 @@ export async function transcribeAudio(client, audioUrl, language = "auto") {
       };
     } catch (groqError) {
       console.error("Error using Groq API:", groqError);
-      console.log("Falling back to Replicate API");
+      console.log("Falling back to DeepInfra API");
 
-      const output = await client.replicate.run(
-        "openai/whisper:cdd97b257f93cb89dede1c7584e3f3dfc969571b357dbcee08e793740bedd854",
-        {
-          input: {
-            audio: audioUrl,
-            language: language,
-          },
-        }
-      );
+      const transcription = await client.deepinfra.whisper.generate({
+        audio: fs.createReadStream(convertedFilePath),
+        language: language,
+      });
 
       await Promise.all([
         unlinkAsync(originalFilePath),
         unlinkAsync(convertedFilePath),
       ]);
 
-      let transcription = "";
-      if (Array.isArray(output.segments)) {
-        transcription = output.segments
-          .map((segment) => segment.text)
-          .join(" ");
-      } else {
-        transcription = output.transcription || "Transcription failed.";
-      }
-
       return {
-        text: transcription,
-        language: output.language,
-        provider: "replicate",
+        text: transcription.text,
+        language: transcription.language,
+        provider: "deepinfra",
       };
     }
   } catch (error) {

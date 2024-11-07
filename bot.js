@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, Options, Partials } from "discord.js";
 import { loadCommands } from "./src/utils/loadCommands.js";
 import { loadEvents } from "./src/utils/loadEvents.js";
 import { Memer } from "memer.ts";
-
+import { AutomaticSpeechRecognition, TextToImage } from "deepinfra";
 import Groq from "groq-sdk";
 import Replicate from "replicate";
 
@@ -68,6 +68,17 @@ client.groq = new Groq({
 client.replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
+
+client.deepinfra = {
+  whisper: new AutomaticSpeechRecognition(
+    "openai/whisper-large-v3-turbo",
+    process.env.DEEPINFRA_API_KEY
+  ),
+  flux_schnell: new TextToImage(
+    "black-forest-labs/FLUX-1-schnell",
+    process.env.DEEPINFRA_API_KEY
+  ),
+};
 
 await client.login(process.env.DISCORD_TOKEN);
 
