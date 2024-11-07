@@ -12,10 +12,6 @@ export class SlashCommand {
 
   addSubcommand(subcommand) {
     const json = subcommand.toJSON();
-    console.log(
-      `Adding subcommand to ${this.name}:`,
-      JSON.stringify(json, null, 2)
-    );
     this.options.push(json);
     return this;
   }
@@ -31,10 +27,6 @@ export class SlashCommand {
       default_member_permissions: this.default_member_permissions,
       dm_permission: this.dm_permission,
     };
-    console.log(
-      `Final SlashCommand structure for ${this.name}:`,
-      JSON.stringify(json, null, 2)
-    );
     return json;
   }
 }

@@ -62,10 +62,8 @@ export async function generateRemoteImage(
         response.headers["content-type"] || response.headers["x-image-type"];
       console.log("Detected content type:", contentType);
 
-      const shouldBeGif = props.database?.banner_url;
-      console.log("Should be GIF:", shouldBeGif);
-
-      const finalContentType = shouldBeGif ? "image/gif" : "image/png";
+      const finalContentType =
+        contentType === "image/gif" ? "image/gif" : "image/png";
       console.log("Final content type:", finalContentType);
 
       return {

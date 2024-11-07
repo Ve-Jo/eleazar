@@ -10,10 +10,6 @@ export class SlashCommandSubcommand {
 
   addOption(option) {
     const json = option.toJSON();
-    console.log(
-      `Adding option to subcommand ${this.name}:`,
-      JSON.stringify(json, null, 2)
-    );
     this.options.push(json);
     return this;
   }
@@ -27,10 +23,6 @@ export class SlashCommandSubcommand {
       name_localizations: this.name_localizations,
       options: this.options,
     };
-    console.log(
-      `Final Subcommand structure for ${this.name}:`,
-      JSON.stringify(json, null, 2)
-    );
     return json;
   }
 }

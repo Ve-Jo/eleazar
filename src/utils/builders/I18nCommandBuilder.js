@@ -16,10 +16,6 @@ export class I18nCommandBuilder {
       name_localizations: this.getLocalizations("name", true),
     });
 
-    console.log(
-      `Created base command for ${this.category}:`,
-      JSON.stringify(command, null, 2)
-    );
     return command;
   }
 
@@ -32,8 +28,6 @@ export class I18nCommandBuilder {
       const translation = locale
         ? i18n.__({ phrase: fullPath, locale })
         : i18n.__(fullPath);
-
-      console.log(`Translation for ${fullPath}: ${translation}`);
 
       if (!translation || translation === fullPath) {
         console.warn(`Warning: Missing translation for key: ${fullPath}`);
@@ -68,7 +62,6 @@ export class I18nCommandBuilder {
     }
 
     const simplified = name; /*.toLowerCase().slice(0, 32);*/
-    console.log(`Simplified name for "${name}":`, simplified);
     return simplified;
   }
 
@@ -85,8 +78,6 @@ export class I18nCommandBuilder {
           ? i18n.__({ phrase: shortPath, locale })
           : i18n.__(shortPath);
       }
-
-      console.log(`Option translation for ${fullPath}: ${translation}`);
 
       if (!translation || translation.includes("options.")) {
         console.warn(
@@ -107,10 +98,6 @@ export class I18nCommandBuilder {
       ru: this.translateOption(optionKey, type, "ru"),
       uk: this.translateOption(optionKey, type, "uk"),
     };
-    console.log(
-      `Option localizations for ${optionKey}.${type}:`,
-      localizations
-    );
     return localizations;
   }
 }

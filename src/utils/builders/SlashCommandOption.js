@@ -23,10 +23,6 @@ export class SlashCommandOption {
       ...(this.min_value !== undefined && { min_value: this.min_value }),
       ...(this.max_value !== undefined && { max_value: this.max_value }),
     };
-    console.log(
-      `Option structure for ${this.name}:`,
-      JSON.stringify(json, null, 2)
-    );
     return json;
   }
 }
