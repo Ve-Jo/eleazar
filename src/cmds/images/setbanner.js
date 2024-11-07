@@ -8,6 +8,7 @@ import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import axios from "axios";
 
 export default {
   data: () => {
@@ -58,9 +59,34 @@ export default {
         });
       }
 
+      // Validate the URL and ensure it's accessible
+      try {
+        const response = await axios.head(attachment.url);
+        if (!response.headers["content-type"]?.startsWith("image/")) {
+          return interaction.editReply({
+            content: i18n.__("images.setbanner.invalidImage"),
+            ephemeral: true,
+          });
+        }
+      } catch (error) {
+        console.error("Error validating image URL:", error);
+        return interaction.editReply({
+          content: i18n.__("images.setbanner.invalidImage"),
+          ephemeral: true,
+        });
+      }
+
+      // Store the permanent URL instead of ephemeral one
+      let permanentUrl = attachment.proxyURL || attachment.url;
+
+      const format = attachment.contentType.split("/")[1];
+      if (!permanentUrl.endsWith(`.${format}`)) {
+        permanentUrl += `.${format}`;
+      }
+
       await EconomyEZ.set(
         `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`,
-        attachment.url
+        permanentUrl
       );
 
       const userData = await EconomyEZ.get(
@@ -70,6 +96,9 @@ export default {
       await interaction.editReply({
         content: i18n.__("images.setbanner.processing"),
       });
+
+      // Clear any cached data for this user
+      if (typeof Bun !== "undefined") Bun.gc();
 
       let imageResponse = await generateRemoteImage(
         "Balance",
@@ -105,6 +134,7 @@ export default {
           },
           database: {
             ...userData,
+            banner_url: permanentUrl, // Use the permanent URL here
           },
         },
         { width: 400, height: 225 },
@@ -125,10 +155,6 @@ export default {
         ),
         files: [final_attachment],
       });
-
-      if (typeof Bun !== "undefined") {
-        Bun.gc();
-      }
     } catch (error) {
       console.error("Error setting banner:", error);
       await interaction.editReply({

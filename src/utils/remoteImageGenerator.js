@@ -18,21 +18,36 @@ export async function generateRemoteImage(
   const serverUrl = process.env.IMAGE_SERVER_URL || "http://localhost:3002";
   console.log("🔄 Using render server at:", serverUrl);
 
+  // Validate banner URL if present
+  if (props.database?.banner_url) {
+    try {
+      const response = await axios.head(props.database.banner_url);
+      if (!response.headers["content-type"]?.startsWith("image/")) {
+        console.error(
+          "Invalid banner content type:",
+          response.headers["content-type"]
+        );
+        props.database.banner_url = null; // Clear invalid banner URL
+      }
+    } catch (error) {
+      console.error("Error validating banner URL:", error);
+      props.database.banner_url = null; // Clear inaccessible banner URL
+    }
+  }
+
   while (true) {
     try {
       const locale = props.locale || "en";
 
-      if (props.database?.banner_url) {
-        console.log(
-          "Sending request with banner URL:",
-          props.database.banner_url
-        );
-      }
-
+      // Clean up props before sending
       const sanitizedProps = JSON.parse(
         JSON.stringify({ ...props, locale }, (key, value) => {
           if (typeof value === "bigint") {
             return value.toString();
+          }
+          // Remove null or undefined banner_url
+          if (key === "banner_url" && !value) {
+            return undefined;
           }
           return value;
         })
