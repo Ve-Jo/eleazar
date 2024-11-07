@@ -577,6 +577,13 @@
       },
       "notFound": "Image not found"
     },
+    "removebanner": {
+      "name": "removebanner",
+      "description": "Remove your profile banner image",
+      "title": "Banner Removed",
+      "success": "Your banner has been removed successfully!",
+      "error": "An error occurred while removing the banner"
+    },
     "setbanner": {
       "name": "setbanner",
       "description": "Set your profile banner image",
@@ -588,17 +595,14 @@
         }
       },
       "invalidImage": "The provided URL does not contain a valid image",
-      "success": "Banner has been set successfully!\n\nNote: The first time you use a command with image support, it may take a moment to load.",
+      "success": {
+        "static": "Banner has been set successfully!",
+        "gif": "Your GIF has been set successfully as a banner!\n\nNote: To maintain fast rendering of each of your commands, the number of frames on the entire animation will be limited to 30 frames. Try to choose short animations to get smooth display."
+      },
       "error": "An error occurred while setting the banner",
       "imageTooLarge": "Image file is too large (maximum 8MB)",
-      "processingGif": "Processing GIF banner... This may take a moment."
-    },
-    "removebanner": {
-      "name": "removebanner",
-      "description": "Remove your profile banner image",
-      "title": "Banner Removed",
-      "success": "Your banner has been removed successfully!",
-      "error": "An error occurred while removing the banner"
+      "processingGif": "Processing GIF banner... This may take a moment.",
+      "processing": "Processing banner... This may take a moment (especially if it's a GIF)."
     }
   },
   "counting": {

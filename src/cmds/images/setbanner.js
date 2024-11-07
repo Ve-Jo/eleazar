@@ -4,10 +4,10 @@ import {
   OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import { EmbedBuilder } from "discord.js";
+import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import i18n from "../../utils/i18n.js";
-import axios from "axios";
+import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 
 export default {
   data: () => {
@@ -50,7 +50,6 @@ export default {
         });
       }
 
-      // Check file size
       const MAX_SIZE = 8 * 1024 * 1024;
       if (attachment.size > MAX_SIZE) {
         return interaction.editReply({
@@ -59,43 +58,72 @@ export default {
         });
       }
 
-      // If it's a GIF, request pre-caching
-      if (attachment.contentType === "image/gif") {
-        try {
-          await interaction.editReply({
-            content: i18n.__("images.setbanner.processingGif"),
-          });
-
-          // Request GIF caching from render server
-          await axios.post(`${process.env.IMAGE_SERVER_URL}/api/cache-gif`, {
-            url: attachment.url,
-          });
-
-          console.log("GIF caching requested successfully");
-        } catch (error) {
-          console.error("Error requesting GIF caching:", error);
-          // Continue even if caching request fails
-        }
-      }
-
-      // Store the banner URL in the database
       await EconomyEZ.set(
         `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`,
         attachment.url
       );
 
-      const embed = new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTimestamp()
-        .setImage(attachment.url)
-        .setAuthor({
-          name: i18n.__("images.setbanner.title"),
-          iconURL: interaction.user.displayAvatarURL(),
-        });
+      const userData = await EconomyEZ.get(
+        `economy.${interaction.guild.id}.${interaction.user.id}`
+      );
 
       await interaction.editReply({
-        content: i18n.__("images.setbanner.success"),
-        embeds: [embed],
+        content: i18n.__("images.setbanner.processing"),
+      });
+
+      let imageResponse = await generateRemoteImage(
+        "Balance",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          locale: interaction.locale,
+          targetUser: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+          database: {
+            ...userData,
+          },
+        },
+        { width: 400, height: 225 },
+        { image: 2, emoji: 1 }
+      );
+
+      const final_attachment = new AttachmentBuilder(imageResponse.buffer, {
+        name: `balance.${
+          imageResponse.contentType === "image/gif" ? "gif" : "png"
+        }`,
+      });
+
+      await interaction.editReply({
+        content: i18n.__(
+          `images.setbanner.success.${
+            imageResponse.contentType === "image/gif" ? "gif" : "static"
+          }`
+        ),
+        files: [final_attachment],
       });
     } catch (error) {
       console.error("Error setting banner:", error);
@@ -140,10 +168,22 @@ export default {
       ru: "Предоставленный URL не содержит действительного изображения",
       uk: "Наданий URL не містить дійсного зображення",
     },
+    processing: {
+      en: "Processing banner... This may take a moment (especially if it's a GIF).",
+      ru: "Обработка баннера... Это может занять некоторое время (особенно если это гифка).",
+      uk: "Обробка банера... Це може зайняти деякий час (особливо якщо це анімація).",
+    },
     success: {
-      en: "Banner has been set successfully!\n\nNote: The first time you use a command with image support, it may take a moment to load.",
-      ru: "Баннер успешно установлен!\n\nОбратите внимание, первая загрузка команд с поддержкой изображения может занять некоторое время.",
-      uk: "Банер успішно встановлено!\n\nЗверніть увагу, перша завантаження команд з підтримкою зображення може зайняти деякий час.",
+      static: {
+        en: "Banner has been set successfully!",
+        ru: "Ваше изображение баннера успешно установлено!",
+        uk: "Ваше зображення банера успішно встановлено!",
+      },
+      gif: {
+        en: "Your GIF has been set successfully as a banner!\n\nNote: To maintain fast rendering of each of your commands, the number of frames on the entire animation will be limited to 30 frames. Try to choose short animations to get smooth display.",
+        ru: "Ваша гифка была успешно установлена в качестве баннера!\n\nОбратите внимание, чтобы поддерживать быстрый рендер каждой вашей команды, количество кадров на всю анимацию будет ограничено 30 кадрами. Старайтесь подбирать короткие анимации дабы получить плавное отображение.",
+        uk: "Ваша анімація банера успішно встановлена як баннер!\n\nЗверніть увагу, щоб підтримувати швидкий рендер кожної вашої команди, кількість кадрів на всю анімацію буде обмежено 30 кадрами. Намагайтесь вибирати короткі анімації дабы отримати плавне відображення.",
+      },
     },
     error: {
       en: "An error occurred while setting the banner",
