@@ -451,11 +451,18 @@ class EconomyEZ {
         ]);
       }
     } else {
-      // Remove user-specific data
-      await this.executeQuery(
-        `DELETE FROM ${table} WHERE guild_id = $1 AND user_id = $2`,
-        [guildId, userId]
-      );
+      // Update: Instead of deleting the record, set the specific field to NULL
+      if (field) {
+        await this.executeQuery(
+          `UPDATE ${table} SET ${field} = NULL WHERE guild_id = $1 AND user_id = $2`,
+          [guildId, userId]
+        );
+      } else {
+        await this.executeQuery(
+          `DELETE FROM ${table} WHERE guild_id = $1 AND user_id = $2`,
+          [guildId, userId]
+        );
+      }
     }
   }
 
