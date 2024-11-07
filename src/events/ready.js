@@ -2,7 +2,7 @@ import { Events } from "discord.js";
 import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
 import EconomyEZ from "../utils/economy.js";
-import { startResourceMonitor } from "../../../eleazar-server/src/utils/resourceMonitor.js";
+import { startResourceMonitor } from "../runners/resourseMonitor.js";
 import AiChannelBot from "../handlers/ai_channelbot.js";
 export default {
   name: Events.ClientReady,
