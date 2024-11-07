@@ -125,6 +125,10 @@ export default {
         ),
         files: [final_attachment],
       });
+
+      if (typeof Bun !== "undefined") {
+        Bun.gc();
+      }
     } catch (error) {
       console.error("Error setting banner:", error);
       await interaction.editReply({
