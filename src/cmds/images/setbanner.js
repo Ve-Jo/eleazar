@@ -10,6 +10,122 @@ import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import axios from "axios";
 
+const BANNER_LOGS = {
+  guildId: "1282078106202669148",
+  channelId: "1306739210715140116",
+};
+
+async function makePermanentAttachment(interaction, attachment) {
+  try {
+    // Download the attachment
+    const response = await axios.get(attachment.url, {
+      responseType: "arraybuffer",
+    });
+
+    const tempAttachment = new AttachmentBuilder(response.data, {
+      name: `banner.${attachment.contentType.split("/")[1]}`,
+      description: "User banner image",
+    });
+
+    // Get the mod channel
+    const modGuild = interaction.client.guilds.cache.get(BANNER_LOGS.guildId);
+    if (!modGuild) throw new Error("Mod guild not found");
+
+    const modChannel = modGuild.channels.cache.get(BANNER_LOGS.channelId);
+    if (!modChannel) throw new Error("Mod channel not found");
+
+    // Create the embed
+    const modEmbed = new EmbedBuilder()
+      .setTitle("New Banner Set")
+      .setColor(0x0099ff)
+      .addFields(
+        {
+          name: "User",
+          value: `${interaction.user.tag} (${interaction.user.id})`,
+        },
+        {
+          name: "Guild",
+          value: `${interaction.guild.name} (${interaction.guild.id})`,
+        },
+        {
+          name: "Original Filename",
+          value: attachment.name,
+        }
+      )
+      .setTimestamp();
+
+    // Send both the attachment and embed in one message
+    const storageMsg = await modChannel.send({
+      embeds: [modEmbed],
+      files: [tempAttachment],
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              style: 4,
+              label: "Remove Banner",
+              custom_id: `remove_banner:${interaction.user.id}:${interaction.guild.id}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Get the permanent URL from the sent message
+    const permanentUrl = storageMsg.attachments.first().url;
+
+    // Update the embed to include the image now that we have the permanent URL
+    modEmbed.setImage(permanentUrl);
+    await storageMsg.edit({ embeds: [modEmbed] });
+
+    return permanentUrl;
+  } catch (error) {
+    console.error("Error making permanent attachment:", error);
+    throw error;
+  }
+}
+
+// Add this function to handle the remove banner button
+export async function handleRemoveBanner(interaction) {
+  if (!interaction.customId.startsWith("remove_banner:")) return;
+
+  const [, userId, guildId] = interaction.customId.split(":");
+
+  try {
+    // Remove the banner
+    await EconomyEZ.set(`economy.${guildId}.${userId}.banner_url`, null);
+
+    // Try to notify the user
+    const guild = interaction.client.guilds.cache.get(guildId);
+    const user = await interaction.client.users.fetch(userId);
+    if (user) {
+      try {
+        await user.send({
+          content:
+            "Your banner has been removed by a moderator for violating our guidelines.",
+        });
+      } catch (error) {
+        console.error("Could not DM user about banner removal:", error);
+      }
+    }
+
+    await interaction.reply({
+      content: `Banner removed for user ${user?.tag || userId}`,
+      ephemeral: true,
+    });
+
+    await interaction.message.delete();
+  } catch (error) {
+    console.error("Error removing banner:", error);
+    await interaction.reply({
+      content: "Failed to remove banner. Please try again.",
+      ephemeral: true,
+    });
+  }
+}
+
 export default {
   data: () => {
     const i18nBuilder = new I18nCommandBuilder("images", "setbanner");
@@ -76,14 +192,15 @@ export default {
         });
       }
 
-      // Store the permanent URL instead of ephemeral one
-      let permanentUrl = attachment.proxyURL || attachment.url;
+      console.log(attachment);
 
-      const format = attachment.contentType.split("/")[1];
-      if (!permanentUrl.endsWith(`.${format}`)) {
-        permanentUrl += `.${format}`;
-      }
+      // Convert ephemeral attachment to permanent before saving
+      const permanentUrl = await makePermanentAttachment(
+        interaction,
+        attachment
+      );
 
+      // Save the permanent URL
       await EconomyEZ.set(
         `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`,
         permanentUrl
