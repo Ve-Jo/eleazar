@@ -7,6 +7,7 @@ import {
 import { AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import i18n from "../../utils/i18n.js";
+import { Client } from "@gradio/client";
 
 export default {
   data: () => {
@@ -44,7 +45,7 @@ export default {
         "description"
       ),
       min_value: 256,
-      max_value: 1526,
+      max_value: 2048,
       choices: [
         { name: "256", value: 256 },
         { name: "512", value: 512 },
@@ -65,7 +66,7 @@ export default {
         "description"
       ),
       min_value: 256,
-      max_value: 1526,
+      max_value: 2048,
       choices: [
         { name: "256", value: 256 },
         { name: "512", value: 512 },
@@ -117,43 +118,88 @@ export default {
     await interaction.deferReply();
 
     let prompt = interaction.options.getString("prompt");
-    let width = interaction.options.getInteger("width");
-    let height = interaction.options.getInteger("height");
+    let width = interaction.options.getInteger("width") || 1024;
+    let height = interaction.options.getInteger("height") || 1024;
     let interferenceSteps =
-      interaction.options.getInteger("interference_steps") || 3;
-    let seed = interaction.options.getInteger("seed");
+      interaction.options.getInteger("interference_steps") || 4;
+    let seed = interaction.options.getInteger("seed") || 0;
     console.log(JSON.stringify({ prompt, width, height }, null, 2));
 
     try {
-      const output = await interaction.client.deepinfra.flux_schnell.generate({
-        prompt,
-        width,
-        height,
-        num_inference_steps: interferenceSteps,
-        seed,
-      });
+      // First try using Gradio client
+      try {
+        const client = await Client.connect("black-forest-labs/FLUX.1-schnell");
+        const output = await client.predict("/infer", [
+          prompt,
+          seed,
+          !seed,
+          width,
+          height,
+          interferenceSteps,
+        ]);
 
-      console.log("DeepInfra output:", output);
+        console.log("Gradio output:", output);
 
-      if (output && output.images && output.images.length > 0) {
-        const imageUrl = output.images[0];
+        if (output.data && output.data.length > 0) {
+          const imageUrl = output.data[0].url; // Access url property from the file data object
+          const response = await fetch(imageUrl);
+          if (!response.ok)
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+          const imageBuffer = await response.arrayBuffer();
 
-        const response = await fetch(imageUrl);
-        if (!response.ok)
-          throw new Error(`Failed to fetch image: ${response.statusText}`);
-        const imageBuffer = await response.arrayBuffer();
+          const attachment = new AttachmentBuilder(
+            Buffer.from(imageBuffer)
+          ).setName("generated_image.png");
 
-        // Create an attachment
-        const attachment = new AttachmentBuilder(
-          Buffer.from(imageBuffer)
-        ).setName("generated_image.png");
+          await interaction.editReply({
+            content: i18n.__("ai.generate_image.generated", {
+              prompt,
+              seed: output.data[1] || "random", // Use the seed from output data
+              steps: interferenceSteps,
+            }),
+            files: [attachment],
+          });
+          return;
+        }
+        throw new Error("No image in response");
+      } catch (gradioError) {
+        console.error("Gradio client error:", gradioError);
+        // Fallback to DeepInfra
+        const output = await interaction.client.deepinfra.flux_schnell.generate(
+          {
+            prompt,
+            width,
+            height,
+            num_inference_steps: interferenceSteps,
+            seed,
+          }
+        );
 
-        await interaction.editReply({
-          content: i18n.__("ai.generate_image.generated", { prompt }),
-          files: [attachment],
-        });
-      } else {
-        await interaction.editReply(i18n.__("ai.generate_image.failed"));
+        console.log("DeepInfra output:");
+
+        if (output && output.images && output.images.length > 0) {
+          const imageUrl = output.images[0];
+
+          const response = await fetch(imageUrl);
+          if (!response.ok)
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+          const imageBuffer = await response.arrayBuffer();
+
+          const attachment = new AttachmentBuilder(
+            Buffer.from(imageBuffer)
+          ).setName("generated_image.png");
+
+          await interaction.editReply({
+            content: i18n.__("ai.generate_image.generated", {
+              prompt,
+              seed: seed || "random",
+              steps: interferenceSteps,
+            }),
+            files: [attachment],
+          });
+        } else {
+          await interaction.editReply(i18n.__("ai.generate_image.failed"));
+        }
       }
     } catch (error) {
       console.error("Error generating image:", error);

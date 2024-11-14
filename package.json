@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@gradio/client": "^1.7.1",
     "@resvg/resvg-js": "^2.6.2",
     "@twemoji/api": "^15.1.0",
     "axios": "^1.7.7",
