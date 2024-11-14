@@ -16,8 +16,8 @@ async function init(client) {
       nodes: [
         {
           id: "lavalink01",
-          host: "lavalink01.techbyte.host",
-          port: 2036,
+          host: "lavahatry4.techbyte.host",
+          port: 3000,
           authorization: "NAIGLAVA-dash.techbyte.host",
           secure: false,
         },
