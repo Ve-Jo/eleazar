@@ -8,43 +8,87 @@ import autoPlayFunction from "../handlers/MusicAutoplay";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const LAVALINK_SERVERS = [
+  {
+    id: "lavahatry4",
+    host: "lavahatry4.techbyte.host",
+    port: 3000,
+    authorization: "NAIGLAVA-dash.techbyte.host",
+    secure: false,
+  },
+  {
+    id: "lavalink4",
+    host: "lavalink4.lightsout.in",
+    port: 40069,
+    authorization: "LightsoutOwnsElves",
+    secure: false,
+  },
+  {
+    id: "jirayu",
+    host: "lavalink.jirayu.net",
+    port: 13592,
+    authorization: "youshallnotpass",
+    secure: false,
+  },
+  {
+    id: "localhost",
+    host: "127.0.0.1",
+    port: 2333,
+    authorization: "youshallnotpass",
+    secure: false,
+  },
+  // Add more servers here
+];
+
+async function testServerConnection(node) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+    const response = await fetch(
+      `http${node.secure ? "s" : ""}://${node.host}:${node.port}/version`,
+      {
+        headers: {
+          Authorization: node.authorization,
+        },
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeout);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function init(client) {
   try {
     console.log("Initializing Lavalink Manager...");
 
+    // Test all servers and find the first working one
+    console.log("Testing Lavalink servers...");
+    let workingServer = null;
+
+    for (const server of LAVALINK_SERVERS) {
+      console.log(`Testing server ${server.id}...`);
+      const isWorking = await testServerConnection(server);
+
+      if (isWorking) {
+        console.log(`Server ${server.id} is available`);
+        workingServer = server;
+        break;
+      } else {
+        console.log(`Server ${server.id} is not responding`);
+      }
+    }
+
+    if (!workingServer) {
+      throw new Error("No working Lavalink servers found!");
+    }
+
     client.lavalink = new LavalinkManager({
-      nodes: [
-        {
-          id: "lavalink01",
-          host: "lavahatry4.techbyte.host",
-          port: 3000,
-          authorization: "NAIGLAVA-dash.techbyte.host",
-          secure: false,
-        },
-        /*{
-          id: "lavalink4",
-          host: "lavalink4.lightsout.in",
-          port: 40069,
-          authorization: "LightsoutOwnsElves",
-          secure: false,
-        },*/
-        /*{
-          id: "jirayu",
-          host: "lavalink.jirayu.net",
-          port: 13592,
-          authorization: "youshallnotpass",
-          secure: false,
-        },*/
-        /*{
-          id: "localhost",
-          host: "127.0.0.1",
-          port: 2333,
-          authorization: "youshallnotpass", // Fixed typo in authorization token
-          secure: false,
-          reconnectTimeout: 5000, // Add reconnect timeout to handle connection issues
-          reconnectTries: 3, // Limit reconnection attempts
-        },*/
-      ],
+      nodes: [workingServer],
       sendToShard: (guildId, payload) =>
         client.guilds.cache.get(guildId)?.shard?.send(payload),
       client: {
@@ -108,8 +152,25 @@ async function init(client) {
       console.log(`Node ${node.id} connected successfully!`);
     });
 
-    client.lavalink.nodeManager.on("disconnect", (node, reason) => {
+    client.lavalink.nodeManager.on("disconnect", async (node, reason) => {
       console.error(`Node ${node.id} disconnected. Reason:`, reason);
+
+      // Try to find another working server
+      console.log("Attempting to connect to alternative server...");
+
+      for (const server of LAVALINK_SERVERS) {
+        // Skip the current disconnected server
+        if (server.id === node.id) continue;
+
+        const isWorking = await testServerConnection(server);
+        if (isWorking) {
+          console.log(`Connecting to alternative server ${server.id}`);
+          await client.lavalink.nodeManager.createNode(server);
+          return;
+        }
+      }
+
+      console.error("No alternative servers available!");
     });
 
     client.lavalink.nodeManager.on("error", (node, error) => {
