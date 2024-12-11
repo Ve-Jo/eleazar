@@ -15,7 +15,7 @@ export async function generateRemoteImage(
 ) {
   let retries = 0;
 
-  const serverUrl = process.env.IMAGE_SERVER_URL || "http://localhost:3002";
+  const serverUrl = process.env.IMAGE_SERVER_URL || "http://localhost:3000";
   console.log("🔄 Using render server at:", serverUrl);
 
   // Validate banner URL if present
