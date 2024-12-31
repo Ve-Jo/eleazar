@@ -40,9 +40,7 @@ export default {
   async execute(interaction) {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.user;
-    const userData = await EconomyEZ.get(
-      `economy.${interaction.guild.id}.${user.id}`
-    );
+    const userData = await EconomyEZ.get(`${interaction.guild.id}.${user.id}`);
 
     if (!userData) {
       return interaction.editReply({

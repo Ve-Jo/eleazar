@@ -31,23 +31,27 @@ export default {
     await interaction.deferReply();
     const usersPerPage = 10;
 
-    const guildEconomy = await EconomyEZ.get(`economy.${interaction.guild.id}`);
+    const guildData = await EconomyEZ.get(interaction.guild.id);
 
-    console.log("Guild Economy Data:", JSON.stringify(guildEconomy, null, 2));
+    // Filter out guild-level data and get user data
+    const users = Object.entries(guildData).filter(
+      ([key, value]) =>
+        key !== "counting" && key !== "levels" && typeof value === "object"
+    );
 
-    let allUsersPromises = guildEconomy.map(async (userData) => {
+    let allUsersPromises = users.map(async ([userId, userData]) => {
       let username;
       let member;
       try {
-        member = await interaction.guild.members.fetch(userData.user_id);
+        member = await interaction.guild.members.fetch(userId);
         username = member.user.username;
       } catch (error) {
-        console.error(`Failed to fetch user ${userData.user_id}:`, error);
+        console.error(`Failed to fetch user ${userId}:`, error);
         username = "Unknown User";
       }
 
       return {
-        id: userData.user_id,
+        id: userId,
         name: username,
         totalBalance: (userData.balance || 0) + (userData.bank || 0),
         balance: userData.balance || 0,
@@ -58,8 +62,6 @@ export default {
 
     let allUsers = await Promise.all(allUsersPromises);
     allUsers.sort((a, b) => b.totalBalance - a.totalBalance);
-
-    console.log("Processed Users:", JSON.stringify(allUsers, null, 2));
 
     if (allUsers.length === 0) {
       return interaction.editReply({

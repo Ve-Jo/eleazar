@@ -1,7 +1,6 @@
 import { Events } from "discord.js";
 import EconomyEZ from "../utils/economy.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
-import LevelsManager from "../utils/levelsManager.js";
 
 export default {
   name: Events.MessageCreate,
@@ -44,31 +43,35 @@ export default {
     }
 
     // Handle counting
-    const countingData = (await EconomyEZ.get(`counting.${guild.id}`))[0];
-
-    console.log(JSON.stringify(countingData, null, 2));
+    const guildData = await EconomyEZ.get(guild.id);
+    const countingData = guildData.counting;
 
     if (countingData && channel.id === countingData.channel_id) {
       const lastNumber = parseInt(countingData.message);
-
       const currentNumber = parseInt(message.content);
 
       if (currentNumber === lastNumber) {
-        if (countingData.no_same_user) {
-          if (message.author.id === countingData.lastwritter) {
-            await message.delete();
-            return;
-          }
+        if (
+          countingData.no_same_user &&
+          message.author.id === countingData.lastwritter
+        ) {
+          await message.delete();
+          return;
         }
 
-        if (countingData.only_numbers) {
-          if (isNaN(message.content)) {
-            await message.delete();
-            return;
-          }
+        if (countingData.only_numbers && isNaN(message.content)) {
+          await message.delete();
+          return;
         }
 
-        await EconomyEZ.set(`counting.${guild.id}.message`, currentNumber + 1);
+        // Update counting data
+        const updates = {
+          counting: {
+            ...countingData,
+            message: currentNumber + 1,
+            lastwritter: message.author.id,
+          },
+        };
 
         if (
           countingData.pinoneach > 0 &&
@@ -79,8 +82,6 @@ export default {
               countingData.lastpinnedmember !== "0" &&
               !countingData.no_unique_role
             ) {
-              console.log(`STILL WORKS`);
-
               const role = guild.roles.cache.get(countingData.pinnedrole);
               let member = guild.members.cache.get(
                 countingData.lastpinnedmember
@@ -95,91 +96,33 @@ export default {
 
             const role = guild.roles.cache.get(countingData.pinnedrole);
             await message.member.roles.add(role);
-            await EconomyEZ.set(
-              `counting.${guild.id}.lastpinnedmember`,
-              message.author.id
-            );
+            updates.counting.lastpinnedmember = message.author.id;
           }
 
           await message.pin();
         }
 
-        await EconomyEZ.set(
-          `counting.${guild.id}.lastwritter`,
-          message.author.id
-        );
+        await EconomyEZ.set(guild.id, updates);
       } else {
         await message.delete();
       }
     }
 
-    let config = (await EconomyEZ.get(`economy_config.${guild.id}`))[0];
-    if (!config) {
-      console.log("No economy config found for this guild");
-      await EconomyEZ.ensure(`economy_config.${guild.id}`);
-      config = (await EconomyEZ.get(`economy_config.${guild.id}`))[0];
-    }
-    console.log("Economy config:", config);
-
+    // Handle XP gain
+    const userData = await EconomyEZ.get(`${guild.id}.${author.id}`);
     const now = Date.now();
-    console.log("Current time:", now);
-
-    // Fetch user data and timestamps in a single operation
-    const [userData, timestampsUser] = await Promise.all([
-      EconomyEZ.get(`economy.${guild.id}.${author.id}`),
-      EconomyEZ.get(`timestamps.${guild.id}.${author.id}`),
-    ]);
-
-    console.log("User data:", userData);
-    console.log("Last message time:", timestampsUser);
 
     if (
-      !timestampsUser.message ||
-      now - timestampsUser.message >= LevelsManager.getMessageCooldown(config)
+      !userData.message ||
+      now - userData.message >= guildData.levels.message_cooldown * 1000
     ) {
-      console.log("XP cooldown passed or first message, adding XP");
-
-      const xpToAdd = LevelsManager.getXPForMessage(config);
-      const newTotalXP = (userData.total_xp || 0) + xpToAdd;
-
-      // Calculate level data
-      const levelData = LevelsManager.calculateLevel(
-        newTotalXP,
-        LevelsManager.getLevelMultiplier(config)
+      // Add XP and update message timestamp
+      await EconomyEZ.addXP(
+        guild.id,
+        author.id,
+        guildData.levels.xp_per_message
       );
-
-      let updates = {
-        total_xp: newTotalXP,
-      };
-
-      // Perform all updates in a single operation
-      await Promise.all([
-        EconomyEZ.batchOperation([
-          {
-            type: "set",
-            path: `economy.${guild.id}.${author.id}`,
-            value: updates,
-          },
-          {
-            type: "set",
-            path: `timestamps.${guild.id}.${author.id}.message`,
-            value: now,
-          },
-        ]),
-      ]);
-
-      console.log("Added XP:", xpToAdd);
-      console.log("New total XP:", newTotalXP);
-      console.log("Current level:", levelData.level);
-    } else {
-      console.log("XP cooldown not passed, skipping XP addition");
-      console.log("XP cooldown:", LevelsManager.getMessageCooldown(config));
-      console.log("now:", now);
-      console.log("lastMessageTime:", timestampsUser.message);
-      console.log(
-        "XP cooldown passed:",
-        now - timestampsUser.message >= LevelsManager.getMessageCooldown(config)
-      );
+      await EconomyEZ.set(`${guild.id}.${author.id}.message`, now);
     }
   },
 };

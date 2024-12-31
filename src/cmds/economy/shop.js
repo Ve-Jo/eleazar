@@ -3,14 +3,14 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import {
-  AttachmentBuilder,
   EmbedBuilder,
   ActionRowBuilder,
+  StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder,
+  ComponentType,
+  AttachmentBuilder,
 } from "discord.js";
-import { getUpgradesForUser } from "../../utils/shopManager.js";
 import EconomyEZ from "../../utils/economy.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
@@ -30,142 +30,154 @@ export default {
   },
   async execute(interaction) {
     await interaction.deferReply();
-    const locale = interaction.locale || "en";
-    const upgrades = await getUpgradesForUser(
-      interaction.guildId,
-      interaction.user.id,
-      locale
-    );
+    const { guild, user } = interaction;
 
     let currentUpgrade = 0;
-    let balance = await EconomyEZ.get(
-      `economy.${interaction.guildId}.${interaction.user.id}.balance`
-    );
 
-    const generateShopImage = async () => {
-      // Ensure all data is properly formatted for Satori
-      const formattedUpgrades = upgrades.map((upgrade) => ({
-        ...upgrade,
-        title: String(upgrade.title),
-        description: String(upgrade.description),
-        currentLevel: Number(upgrade.currentLevel),
-        nextLevel: Number(upgrade.nextLevel),
-        price: Number(upgrade.price),
-        progress: Number(upgrade.progress),
-        emoji: String(upgrade.emoji),
-      }));
+    const generateShopMessage = async () => {
+      // Get user data and available upgrades
+      const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
+      const upgrades = await EconomyEZ.getUpgrades(guild.id, user.id);
 
-      let formattedBalance = Number(balance);
-
+      // Generate shop image
       const pngBuffer = await generateRemoteImage(
         "UpgradesDisplay",
         {
           interaction: {
             user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
+              id: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              avatarURL: user.displayAvatarURL({
                 extension: "png",
                 size: 1024,
               }),
             },
             guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
+              id: guild.id,
+              name: guild.name,
+              iconURL: guild.iconURL({
                 extension: "png",
                 size: 1024,
               }),
             },
           },
+          database: userData,
           locale: interaction.locale,
-          upgrades: formattedUpgrades,
-          currentUpgrade: Number(currentUpgrade),
-          balance: formattedBalance,
+          upgrades: [
+            {
+              emoji: upgrades.daily.emoji,
+              title: i18n.__("economy.shop.upgrades.daily.name"),
+              description: i18n.__("economy.shop.upgrades.daily.description", {
+                effect: upgrades.daily.effect,
+                price: upgrades.daily.price,
+              }),
+              currentLevel: upgrades.daily.level,
+              nextLevel: upgrades.daily.level + 1,
+              price: upgrades.daily.price,
+              progress: 50,
+              id: 0,
+            },
+            {
+              emoji: upgrades.crime.emoji,
+              title: i18n.__("economy.shop.upgrades.crime.name"),
+              description: i18n.__("economy.shop.upgrades.crime.description", {
+                effect: upgrades.crime.effect,
+                price: upgrades.crime.price,
+              }),
+              currentLevel: upgrades.crime.level,
+              nextLevel: upgrades.crime.level + 1,
+              price: upgrades.crime.price,
+              progress: 50,
+              id: 1,
+            },
+          ],
+          currentUpgrade,
+          balance: userData.balance,
         },
-        { width: 600, height: 350 }
+        { width: 600, height: 350 },
+        { image: 2, emoji: 2 }
       );
 
       const attachment = new AttachmentBuilder(pngBuffer.buffer, {
         name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
       });
 
+      // Create selection menu for switching upgrades
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId("switch_upgrade")
+        .setPlaceholder(i18n.__("economy.shop.selectUpgrade"))
+        .addOptions([
+          {
+            label: i18n.__("economy.shop.upgrades.daily.name"),
+            description: i18n.__("economy.shop.upgrades.daily.description", {
+              effect: upgrades.daily.effect,
+              price: upgrades.daily.price,
+            }),
+            value: "0",
+            emoji: upgrades.daily.emoji,
+            default: currentUpgrade === 0,
+          },
+          {
+            label: i18n.__("economy.shop.upgrades.crime.name"),
+            description: i18n.__("economy.shop.upgrades.crime.description", {
+              effect: upgrades.crime.effect,
+              price: upgrades.crime.price,
+            }),
+            value: "1",
+            emoji: upgrades.crime.emoji,
+            default: currentUpgrade === 1,
+          },
+        ]);
+
+      const purchaseButton = new ButtonBuilder()
+        .setCustomId("purchase")
+        .setLabel(i18n.__("economy.shop.purchaseButton"))
+        .setStyle(ButtonStyle.Success);
+
+      const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+      const buttonRow = new ActionRowBuilder().addComponents(purchaseButton);
+
       const embed = new EmbedBuilder()
-        .setTimestamp()
         .setColor(process.env.EMBED_COLOR)
+        .setAuthor({
+          name: i18n.__("economy.shop.title"),
+          iconURL: user.displayAvatarURL(),
+        })
+        .setDescription(
+          i18n.__("economy.shop.description", { balance: userData.balance })
+        )
         .setImage(
           `attachment://shop.${
             pngBuffer.contentType === "image/gif" ? "gif" : "png"
           }`
         )
-        .setAuthor({
-          name: i18n.__("economy.shop.title"),
-          iconURL: interaction.user.avatarURL(),
-        });
+        .setTimestamp();
 
-      return { embeds: [embed], files: [attachment] };
+      return {
+        embeds: [embed],
+        files: [attachment],
+        components: [selectRow, buttonRow],
+      };
     };
 
-    const updateMessage = async () => {
-      try {
-        const { embeds, files } = await generateShopImage();
-        return { embeds, files };
-      } catch (error) {
-        console.error("Error generating shop image:", error);
-        return {
-          content: i18n.__("economy.shop.errorGeneratingImage"),
-        };
-      }
-    };
+    const message = await interaction.editReply(await generateShopMessage());
 
-    const createUpgradeMenu = () => {
-      return new StringSelectMenuBuilder()
-        .setCustomId("select-upgrade")
-        .setPlaceholder(i18n.__("economy.shop.selectPlaceholder"))
-        .addOptions(
-          upgrades.map((upgrade, index) => ({
-            label: upgrade.title || "Unknown Upgrade",
-            description: `(${upgrade.currentLevel}) ${upgrade.description}`,
-            emoji: upgrade.emoji,
-            value: index.toString(),
-          }))
-        );
-    };
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("buy")
-        .setLabel(i18n.__("economy.shop.buyButton"))
-        .setStyle(ButtonStyle.Success)
-    );
-
-    const selectMenu = new ActionRowBuilder().addComponents(
-      createUpgradeMenu()
-    );
-
-    const response = await interaction.editReply({
-      ...(await updateMessage()),
-      components: [row, selectMenu],
-    });
-
-    const collector = response.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
+    // Create collector for both select menu and button
+    const collector = message.createMessageComponentCollector({
+      filter: (i) => i.user.id === user.id,
       time: 60000,
     });
 
     collector.on("collect", async (i) => {
-      if (i.customId === "select-upgrade") {
-        currentUpgrade = parseInt(i.values[0], 10);
-        await i.deferUpdate();
-        await response.edit({
-          ...(await updateMessage()),
-          components: [row, selectMenu],
-        });
-      } else if (i.customId === "buy") {
-        const upgrade = upgrades[currentUpgrade];
+      if (i.customId === "switch_upgrade") {
+        currentUpgrade = parseInt(i.values[0]);
+        await i.update(await generateShopMessage());
+      } else if (i.customId === "purchase") {
+        const type = currentUpgrade === 0 ? "daily" : "crime";
+        const result = await EconomyEZ.purchaseUpgrade(guild.id, user.id, type);
 
-        if (balance < upgrade.price) {
+        if (!result.success) {
           await i.reply({
             content: i18n.__("economy.shop.insufficientFunds"),
             ephemeral: true,
@@ -173,64 +185,89 @@ export default {
           return;
         }
 
-        try {
-          // Deduct the price from the user's balance
-          await EconomyEZ.math(
-            `economy.${interaction.guildId}.${interaction.user.id}.balance`,
-            "-",
-            upgrade.price
-          );
+        // Get updated data
+        const updatedUserData = await EconomyEZ.get(`${guild.id}.${user.id}`);
+        const newUpgradeInfo = (await EconomyEZ.getUpgrades(guild.id, user.id))[
+          type
+        ];
 
-          // Increment the upgrade level
-          const currentLevel =
-            (await EconomyEZ.get(
-              `shop.${interaction.guildId}.${interaction.user.id}.upgrade_level.${upgrade.id}`
-            )) || 0;
+        // Generate purchase success image
+        const successBuffer = await generateRemoteImage(
+          "UpgradesDisplay",
+          {
+            interaction: {
+              user: {
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatarURL: user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: guild.id,
+                name: guild.name,
+                iconURL: guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+            },
+            database: updatedUserData,
+            locale: interaction.locale,
+            upgrade: {
+              type,
+              name: i18n.__(`economy.shop.upgrades.${type}.name`),
+              emoji: newUpgradeInfo.emoji,
+              oldLevel: result.newLevel - 1,
+              newLevel: result.newLevel,
+              cost: result.cost,
+            },
+          },
+          { width: 450, height: 200 },
+          { image: 2, emoji: 2 }
+        );
 
-          // Here's the corrected line:
-          await EconomyEZ.set(
-            `shop.${interaction.guildId}.${interaction.user.id}.upgrade_level.${upgrade.id}`,
-            currentLevel + 1
-          );
+        const successAttachment = new AttachmentBuilder(successBuffer.buffer, {
+          name: `purchase.${
+            successBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`,
+        });
 
-          await i.reply({
-            content: i18n.__("economy.shop.purchaseMessage", {
-              name: upgrade.title,
-              price: upgrade.price,
-            }),
-            ephemeral: true,
-          });
+        const successEmbed = new EmbedBuilder()
+          .setColor(process.env.EMBED_COLOR)
+          .setAuthor({
+            name: i18n.__("economy.shop.purchaseTitle"),
+            iconURL: user.displayAvatarURL(),
+          })
+          .setDescription(
+            i18n.__("economy.shop.purchaseSuccess", {
+              type: i18n.__(`economy.shop.upgrades.${type}.name`),
+              level: result.newLevel,
+              cost: result.cost,
+            })
+          )
+          .setImage(
+            `attachment://purchase.${
+              successBuffer.contentType === "image/gif" ? "gif" : "png"
+            }`
+          )
+          .setTimestamp();
 
-          // Update the message with new data
-          const updatedUpgrades = await getUpgradesForUser(
-            interaction.guildId,
-            interaction.user.id,
-            locale
-          );
-          upgrades.splice(0, upgrades.length, ...updatedUpgrades);
-          balance = await EconomyEZ.get(
-            `economy.${interaction.guildId}.${interaction.user.id}.balance`
-          );
-
-          await response.edit({
-            ...(await updateMessage()),
-            components: [
-              row,
-              new ActionRowBuilder().addComponents(createUpgradeMenu()),
-            ],
-          });
-        } catch (error) {
-          console.error("Error during purchase:", error);
-          await i.reply({
-            content: i18n.__("economy.shop.purchaseError"),
-            ephemeral: true,
-          });
-        }
+        await i.update({
+          embeds: [successEmbed],
+          files: [successAttachment],
+          components: [],
+        });
+        collector.stop();
       }
     });
 
     collector.on("end", () => {
-      response.edit({ components: [] });
+      if (message.editable) {
+        message.edit({ components: [] }).catch(() => {});
+      }
     });
   },
   localization_strings: {
@@ -240,44 +277,70 @@ export default {
       uk: "магазин",
     },
     description: {
-      en: "Buy upgrades/roles",
-      ru: "Купить улучшения/роли",
-      uk: "Купити улучшення/ролі",
+      en: "View and purchase upgrades",
+      ru: "Просмотреть и купить улучшения",
+      uk: "Переглянути та купити покращення",
     },
     title: {
       en: "Shop",
       ru: "Магазин",
       uk: "Магазин",
     },
-    selectPlaceholder: {
-      en: "Select an upgrade",
-      ru: "Выберите улучшение",
-      uk: "Виберіть улучшення",
+    selectUpgrade: {
+      en: "Select an upgrade to view",
+      ru: "Выберите улучшение для просмотра",
+      uk: "Виберіть покращення для перегляду",
     },
-    insufficientFunds: {
-      en: "Insufficient funds",
-      ru: "Недостаточно средств",
-      uk: "Недостатньо коштів",
-    },
-    buyButton: {
-      en: "Buy",
+    purchaseButton: {
+      en: "Purchase",
       ru: "Купить",
       uk: "Купити",
     },
-    errorGeneratingImage: {
-      en: "Error generating image",
-      ru: "Ошибка при генерации изображения",
-      uk: "Помилка при генерації зображення",
+    insufficientFunds: {
+      en: "You don't have enough coins for this upgrade",
+      ru: "У вас недостаточно монет для этого улучшения",
+      uk: "У вас недостатньо монет для цього покращення",
     },
-    purchaseMessage: {
-      en: "{{name}} purchased for {{price}}",
-      ru: "{{name}} куплен за {{price}}",
-      uk: "{{name}} куплено за {{price}}",
+    noSelection: {
+      en: "No upgrade selected",
+      ru: "Улучшение не выбрано",
+      uk: "Покращення не вибрано",
     },
-    purchaseError: {
-      en: "Error during purchase",
-      ru: "Ошибка при покупке",
-      uk: "Помилка при покупці",
+    purchaseTitle: {
+      en: "Purchase Successful",
+      ru: "Покупка Успешна",
+      uk: "Покупка Успішна",
+    },
+    purchaseSuccess: {
+      en: "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
+      ru: "Успешно улучшено {{type}} до уровня {{level}} за {{cost}} монет",
+      uk: "Успішно покращено {{type}} до рівня {{level}} за {{cost}} монет",
+    },
+    upgrades: {
+      daily: {
+        name: {
+          en: "Daily Reward Boost",
+          ru: "Усиление Ежедневной Награды",
+          uk: "Посилення Щоденної Нагороди",
+        },
+        description: {
+          en: "+{{effect}} reward ({{price}} coins)",
+          ru: "+{{effect}} к награде ({{price}} монет)",
+          uk: "+{{effect}} до нагороди ({{price}} монет)",
+        },
+      },
+      crime: {
+        name: {
+          en: "Crime Cooldown Reduction",
+          ru: "Уменьшение Перезарядки Преступления",
+          uk: "Зменшення Перезарядки Злочину",
+        },
+        description: {
+          en: "-{{effect}} cooldown ({{price}} coins)",
+          ru: "-{{effect}} к перезарядке ({{price}} монет)",
+          uk: "-{{effect}} до перезарядки ({{price}} монет)",
+        },
+      },
     },
   },
 };

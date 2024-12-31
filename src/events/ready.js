@@ -19,7 +19,13 @@ export default {
 
     await SlashCommandsHandler(client, client.commands);
 
-    await EconomyEZ.testDatabaseConnection();
+    // Initialize the new economy system
+    try {
+      await EconomyEZ.testDatabaseConnection();
+      console.log("Economy system initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize economy system:", error);
+    }
 
     startResourceMonitor(200, client);
     // AiChannelBot(client);

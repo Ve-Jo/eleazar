@@ -1,14 +1,15 @@
 import {
   SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+import {
+  EmbedBuilder,
+  AttachmentBuilder,
+  ApplicationCommandOptionType,
+} from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
-import LevelsManager from "../../utils/levelsManager.js";
 
 export default {
   data: () => {
@@ -19,66 +20,73 @@ export default {
       description: i18nBuilder.translate("description"),
       name_localizations: i18nBuilder.getLocalizations("name"),
       description_localizations: i18nBuilder.getLocalizations("description"),
+      options: [
+        {
+          type: ApplicationCommandOptionType.User,
+          name: i18nBuilder.getSimpleName(
+            i18nBuilder.translate("options.user.name")
+          ),
+          description: i18nBuilder.translate("options.user.description"),
+          name_localizations: i18nBuilder.getLocalizations("options.user.name"),
+          description_localizations: i18nBuilder.getLocalizations(
+            "options.user.description"
+          ),
+          required: false,
+        },
+      ],
     });
-
-    // Add user option
-    const userOption = new SlashCommandOption({
-      type: OptionType.USER,
-      name: "user",
-      description: i18nBuilder.translateOption("user", "description"),
-      required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "user",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(userOption);
 
     return subcommand;
   },
   async execute(interaction) {
     await interaction.deferReply();
-    const user = interaction.options.getMember("user") || interaction.user;
-    const userData = await EconomyEZ.get(
-      `economy.${interaction.guild.id}.${user.id}`
+    const { guild } = interaction;
+    const targetUser = interaction.options.getUser("user") || interaction.user;
+
+    // Get user and guild data
+    const [userData, guildData] = await Promise.all([
+      EconomyEZ.get(`${guild.id}.${targetUser.id}`),
+      EconomyEZ.get(guild.id),
+    ]);
+
+    // Calculate level info
+    const levelInfo = EconomyEZ.calculateLevel(
+      userData.total_xp,
+      guildData.levels.multiplier
     );
+    const nextLevelXP = levelInfo.requiredXP;
+    const currentXP = levelInfo.currentXP;
+    const level = levelInfo.level;
 
-    if (!userData) {
-      return interaction.editReply({
-        content: i18n.__("economy.level.userNotFound"),
-        ephemeral: true,
-      });
-    }
-
-    const levelData = LevelsManager.calculateLevel(
-      userData.total_xp || 0,
-      LevelsManager.getLevelMultiplier()
-    );
-
-    let pngBuffer = await generateRemoteImage(
+    // Generate level card image
+    const pngBuffer = await generateRemoteImage(
       "Level",
       {
         interaction: {
           user: {
-            id: user.id,
-            username: user.username,
-            displayName: user.displayName,
-            avatarURL: user.displayAvatarURL({
+            id: targetUser.id,
+            username: targetUser.username,
+            displayName: targetUser.displayName,
+            avatarURL: targetUser.displayAvatarURL({
               extension: "png",
               size: 1024,
             }),
-            locale: user.locale,
+          },
+          guild: {
+            id: guild.id,
+            name: guild.name,
+            iconURL: guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
           },
         },
+        database: userData,
         locale: interaction.locale,
-        currentXP: levelData.currentXP,
-        requiredXP: levelData.requiredXP,
-        level: levelData.level,
-        database: await EconomyEZ.get(
-          `economy.${interaction.guild.id}.${interaction.user.id}`
-        ),
+        currentXP: currentXP,
+        requiredXP: nextLevelXP,
+        level: level,
+        totalXP: levelInfo.totalXP,
       },
       { width: 400, height: 200 },
       { image: 2, emoji: 1 }
@@ -88,26 +96,21 @@ export default {
       name: `level.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
     });
 
-    let level_embed = new EmbedBuilder()
-      .setTimestamp()
+    const embed = new EmbedBuilder()
       .setColor(process.env.EMBED_COLOR)
+      .setAuthor({
+        name: i18n.__("economy.level.title"),
+        iconURL: targetUser.displayAvatarURL(),
+      })
       .setImage(
         `attachment://level.${
           pngBuffer.contentType === "image/gif" ? "gif" : "png"
         }`
       )
-      .setAuthor({
-        name: user.displayName,
-        iconURL: user.displayAvatarURL({
-          extension: "png",
-          size: 1024,
-        }),
-      });
+      .setTimestamp();
 
-    pngBuffer = null;
-
-    await interaction.editReply({
-      embeds: [level_embed],
+    return interaction.editReply({
+      embeds: [embed],
       files: [attachment],
     });
   },
@@ -117,20 +120,10 @@ export default {
       ru: "уровень",
       uk: "рівень",
     },
-    title: {
-      en: "Level",
-      ru: "Уровень",
-      uk: "Рівень",
-    },
     description: {
-      en: "Check level",
-      ru: "Посмотреть уровень",
-      uk: "Переглянути рівень",
-    },
-    userNotFound: {
-      en: "User not found",
-      ru: "Пользователь не найден",
-      uk: "Користувач не знайдений",
+      en: "Check your or another user's level",
+      ru: "Проверить свой уровень или уровень другого пользователя",
+      uk: "Перевірити свій рівень або рівень іншого користувача",
     },
     options: {
       user: {
@@ -140,11 +133,16 @@ export default {
           uk: "користувач",
         },
         description: {
-          en: "User to check",
-          ru: "Пользователь для проверки",
-          uk: "Користувач для перевірки",
+          en: "User to check level for",
+          ru: "Пользователь, чей уровень нужно проверить",
+          uk: "Користувач, чий рівень потрібно перевірити",
         },
       },
+    },
+    title: {
+      en: "Level Information",
+      ru: "Информация об уровне",
+      uk: "Інформація про рівень",
     },
   },
 };

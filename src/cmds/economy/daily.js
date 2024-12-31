@@ -5,9 +5,9 @@ import {
 import { AttachmentBuilder } from "discord.js";
 import EconomyEZ from "../../utils/economy.js";
 import prettyMs from "pretty-ms";
-import cooldownsManager from "../../utils/cooldownsManager.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
+
 export default {
   data: () => {
     const i18nBuilder = new I18nCommandBuilder("economy", "daily");
@@ -23,11 +23,8 @@ export default {
   },
   async execute(interaction) {
     await interaction.deferReply();
-    await EconomyEZ.ensure(
-      `timestamps.${interaction.guild.id}.${interaction.user.id}`
-    );
 
-    let timeLeft = await cooldownsManager.getCooldownTime(
+    let timeLeft = await EconomyEZ.getCooldownTime(
       interaction.guild.id,
       interaction.user.id,
       "daily"
@@ -57,7 +54,7 @@ export default {
             },
           },
           database: await EconomyEZ.get(
-            `economy.${interaction.guild.id}.${interaction.user.id}`
+            `${interaction.guild.id}.${interaction.user.id}`
           ),
           locale: interaction.locale,
           nextDaily: timeLeft,
@@ -83,26 +80,26 @@ export default {
       });
     }
 
-    // Fetch the user's upgrade level and multiplier
-    const upgradeId = 1; // Assuming 1 is the ID for the daily bonus upgrade
-    const upgradeLevel =
-      (await EconomyEZ.get(
-        `shop.${interaction.guild.id}.${interaction.user.id}.upgrade_level.${upgradeId}`
-      )) || 1;
-    const multiplier = 1 + (upgradeLevel - 1) * 0.15; // Assuming each level increases the multiplier by 15%
+    // Get user's daily bonus upgrade info
+    const userData = await EconomyEZ.get(
+      `${interaction.guild.id}.${interaction.user.id}`
+    );
+    const dailyLevel = userData.upgrades.daily.level;
+    const multiplier = 1 + (dailyLevel - 1) * 0.15; // 15% increase per level
 
     const baseAmount = Math.floor(Math.random() * 90) + 10;
     const amount = Math.floor(baseAmount * multiplier);
 
     try {
       let newBalance = await EconomyEZ.math(
-        `economy.${interaction.guild.id}.${interaction.user.id}.balance`,
+        `${interaction.guild.id}.${interaction.user.id}.balance`,
         "+",
         amount
       );
 
+      // Update daily timestamp
       await EconomyEZ.set(
-        `timestamps.${interaction.guild.id}.${interaction.user.id}.daily`,
+        `${interaction.guild.id}.${interaction.user.id}.daily`,
         Date.now()
       );
 
@@ -129,7 +126,7 @@ export default {
             },
           },
           database: await EconomyEZ.get(
-            `economy.${interaction.guild.id}.${interaction.user.id}`
+            `${interaction.guild.id}.${interaction.user.id}`
           ),
           locale: interaction.locale,
           balance: newBalance,

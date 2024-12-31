@@ -8,11 +8,6 @@ export default {
     return command;
   },
   server: true,
-  async preExecute(interaction) {
-    await EconomyEZ.ensure(
-      `economy.${interaction.guild.id}.${interaction.user.id}`
-    );
-  },
   localization_strings: {
     name: {
       en: "economy",

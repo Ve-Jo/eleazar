@@ -42,7 +42,7 @@ export default {
     const amount = interaction.options.getString("amount");
 
     const initialUser = await EconomyEZ.get(
-      `economy.${interaction.guild.id}.${interaction.user.id}`
+      `${interaction.guild.id}.${interaction.user.id}`
     );
 
     let amountInt = 0;
@@ -73,7 +73,7 @@ export default {
     };
 
     await EconomyEZ.set(
-      `economy.${interaction.guild.id}.${interaction.user.id}`,
+      `${interaction.guild.id}.${interaction.user.id}`,
       updatedUser
     );
 
@@ -103,7 +103,7 @@ export default {
         },
         locale: interaction.locale,
         database: await EconomyEZ.get(
-          `economy.${interaction.guild.id}.${interaction.user.id}`
+          `${interaction.guild.id}.${interaction.user.id}`
         ),
         amount: amountInt,
         isDeposit: true,
