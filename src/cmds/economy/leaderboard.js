@@ -32,22 +32,40 @@ export default {
     const usersPerPage = 10;
 
     const guildData = await EconomyEZ.get(interaction.guild.id);
+    console.log("Guild data:", guildData); // Debug log
 
-    // Filter out guild-level data and get user data
+    // Get all entries that are not special keys and represent user data
     const users = Object.entries(guildData).filter(
       ([key, value]) =>
-        key !== "counting" && key !== "levels" && typeof value === "object"
+        key !== "counting" &&
+        key !== "settings" &&
+        typeof value === "object" &&
+        !isNaN(key) // Ensure key is a numeric string (user ID)
     );
 
+    console.log("Found users:", users); // Debug log
+
+    if (users.length === 0) {
+      console.log("No users found in data structure"); // Debug log
+    }
+
     let allUsersPromises = users.map(async ([userId, userData]) => {
+      console.log(`Processing user ${userId}:`, userData); // Debug log
       let username;
       let member;
+      let avatarURL;
       try {
         member = await interaction.guild.members.fetch(userId);
         username = member.user.username;
+        avatarURL = member.user.displayAvatarURL({
+          extension: "png",
+          size: 1024,
+          forceStatic: true,
+        });
       } catch (error) {
         console.error(`Failed to fetch user ${userId}:`, error);
         username = "Unknown User";
+        avatarURL = null;
       }
 
       return {
@@ -55,7 +73,7 @@ export default {
         name: username,
         totalBalance: (userData.balance || 0) + (userData.bank || 0),
         balance: userData.balance || 0,
-        avatar: member?.user?.avatarURL({ extension: "png", size: 128 }),
+        avatarURL,
         bank: userData.bank || 0,
       };
     });
@@ -93,6 +111,7 @@ export default {
               avatarURL: interaction.user.displayAvatarURL({
                 extension: "png",
                 size: 1024,
+                forceStatic: true,
               }),
             },
             guild: {
@@ -101,16 +120,12 @@ export default {
               iconURL: interaction.guild.iconURL({
                 extension: "png",
                 size: 1024,
+                forceStatic: true,
               }),
             },
           },
           locale: interaction.locale,
-          users: usersToDisplay.map((user) => ({
-            ...user,
-            avatarURL: interaction.guild.members.cache
-              .get(user.id)
-              ?.user.displayAvatarURL({ extension: "png", size: 128 }),
-          })),
+          users: usersToDisplay,
           currentPage,
           totalPages,
           highlightedPosition,
