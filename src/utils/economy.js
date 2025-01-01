@@ -7,40 +7,44 @@ const DB_INITIAL_DELAY = 1500;
 
 // Define default values for all possible fields
 const DEFAULT_VALUES = {
-  // Guild level defaults
-  counting: {
-    channel_id: "0",
-    message: 1,
-    pinoneach: 0,
-    pinnedrole: "0",
-    only_numbers: false,
-    lastpinnedmember: "0",
-    no_same_user: false,
-    no_unique_role: false,
-    lastwritter: "0",
+  global: {
+    // Empty for now, will be used for future global settings
   },
-  levels: {
-    xp_per_message: 1,
-    message_cooldown: 60,
-    multiplier: 100,
-  },
-
-  // User level defaults
-  balance: 0,
-  bank: 0,
-  total_xp: 0,
-  banner_url: null,
-  latest_activity: () => new Date(),
-  daily: 0,
-  work: 0,
-  crime: 0,
-  message: 0,
-  total_messages: 0,
-  commands_used: 0,
-  total_earned: 0,
-  upgrades: {
-    daily: { level: 1 },
-    crime: { level: 1 },
+  guild: {
+    counting: {
+      channel_id: "0",
+      message: 1,
+      pinoneach: 0,
+      pinnedrole: "0",
+      only_numbers: false,
+      lastpinnedmember: "0",
+      no_same_user: false,
+      no_unique_role: false,
+      lastwritter: "0",
+    },
+    settings: {
+      xp_per_message: 1,
+      message_cooldown: 60,
+      multiplier: 100,
+    },
+    user: {
+      balance: 0,
+      bank: 0,
+      total_xp: 0,
+      banner_url: null,
+      latest_activity: () => new Date(),
+      daily: 0,
+      work: 0,
+      crime: 0,
+      message: 0,
+      total_messages: 0,
+      commands_used: 0,
+      total_earned: 0,
+      upgrades: {
+        daily: { level: 1 },
+        crime: { level: 1 },
+      },
+    },
   },
 };
 
@@ -171,9 +175,24 @@ class EconomyEZ {
     }
   }
 
-  static getDefaultValue(field) {
-    const value = DEFAULT_VALUES[field];
-    return typeof value === "function" ? value() : value;
+  static getDefaultValue(path) {
+    const parts = path.split(".");
+
+    // Handle guild/user paths
+    if (parts.length === 1) {
+      // Guild-level request
+      return {
+        ...DEFAULT_VALUES.guild.counting,
+        ...DEFAULT_VALUES.guild.settings,
+      };
+    } else if (parts.length === 2) {
+      // User-level request
+      return DEFAULT_VALUES.guild.user;
+    } else {
+      // Specific field request
+      const field = parts[parts.length - 1];
+      return DEFAULT_VALUES.guild.user[field];
+    }
   }
 
   static isDefaultValue(field, value) {
@@ -209,13 +228,13 @@ class EconomyEZ {
     if (cleaned.counting && this.isDefaultValue("counting", cleaned.counting)) {
       delete cleaned.counting;
     }
-    if (cleaned.levels && this.isDefaultValue("levels", cleaned.levels)) {
-      delete cleaned.levels;
+    if (cleaned.settings && this.isDefaultValue("settings", cleaned.settings)) {
+      delete cleaned.settings;
     }
 
     // Handle user data
     for (const [key, value] of Object.entries(cleaned)) {
-      if (key !== "counting" && key !== "levels") {
+      if (key !== "counting" && key !== "settings") {
         if (typeof value === "object" && value !== null) {
           const cleanedNested = this.cleanupDefaultValues(value);
           if (Object.keys(cleanedNested).length === 0) {
@@ -251,13 +270,13 @@ class EconomyEZ {
         };
       }
 
-      if (!result.levels) {
-        result.levels = this.getDefaultValue("levels");
+      if (!result.settings) {
+        result.settings = this.getDefaultValue("settings");
       } else {
         // Ensure all level properties have defaults
-        result.levels = {
-          ...this.getDefaultValue("levels"),
-          ...result.levels,
+        result.settings = {
+          ...this.getDefaultValue("settings"),
+          ...result.settings,
         };
       }
       return result;
@@ -266,7 +285,7 @@ class EconomyEZ {
     // If this is a user path (guildId.userId)
     if (parts.length === 2) {
       for (const [key, defaultValue] of Object.entries(DEFAULT_VALUES)) {
-        if (key !== "counting" && key !== "levels") {
+        if (key !== "counting" && key !== "settings") {
           if (result[key] === undefined) {
             result[key] = this.getDefaultValue(key);
           } else if (
@@ -290,17 +309,16 @@ class EconomyEZ {
     if (!path) throw new Error("Path is required");
 
     const parts = path.split(".");
-    const guildId = parts[0];
+    const key = parts[0];
 
     try {
       const result = await this.executeQuery(
         `SELECT value FROM key_value_store WHERE key = $1`,
-        [guildId]
+        [key]
       );
 
       // If no data exists in database
       if (!result[0]) {
-        // Return appropriate default structure based on path
         return this.applyDefaultValues({}, path);
       }
 
@@ -308,13 +326,26 @@ class EconomyEZ {
 
       // If requesting guild data
       if (parts.length === 1) {
-        return this.applyDefaultValues(data, path);
+        return {
+          ...data,
+          counting: {
+            ...DEFAULT_VALUES.guild.counting,
+            ...data.counting,
+          },
+          settings: {
+            ...DEFAULT_VALUES.guild.settings,
+            ...data.settings,
+          },
+        };
       }
 
       // If requesting user data
       if (parts.length === 2) {
-        data = data[parts[1]] || {};
-        return this.applyDefaultValues(data, path);
+        const userData = data[parts[1]] || {};
+        return {
+          ...DEFAULT_VALUES.guild.user,
+          ...userData,
+        };
       }
 
       // If requesting a specific field
@@ -341,28 +372,36 @@ class EconomyEZ {
     const guildId = parts[0];
 
     try {
-      let existingData = (await this.get(guildId)) || {};
+      let existingData = await this.executeQuery(
+        `SELECT value FROM key_value_store WHERE key = $1`,
+        [guildId]
+      );
+
+      // Get existing data or initialize new
+      let data = existingData[0]?.value || {};
 
       // If setting guild-level data directly
       if (parts.length === 1) {
-        existingData = { ...existingData, ...value };
+        data = { ...data, ...value };
       } else {
-        // Navigate to the correct nested location
-        let current = existingData;
+        // Navigate to the correct nested location and update
+        let current = data;
         for (let i = 1; i < parts.length - 1; i++) {
-          current[parts[i]] = current[parts[i]] || {};
-          current = current[parts[i]];
+          const part = parts[i];
+          // Initialize or preserve nested objects
+          current[part] = current[part] || {};
+          current = current[part];
         }
 
-        // Set the value
+        // Set the value at the final location
         if (parts.length > 1) {
           const lastKey = parts[parts.length - 1];
-          current[parts[parts.length - 1]] = value;
+          current[lastKey] = value;
         }
       }
 
       // Clean up and save
-      const cleanedData = this.cleanupDefaultValues(existingData);
+      const cleanedData = this.cleanupDefaultValues(data);
 
       // If all values are default, remove the record entirely
       if (Object.keys(cleanedData).length === 0) {
@@ -443,43 +482,40 @@ class EconomyEZ {
     try {
       const parts = path.split(".");
       const field = parts[parts.length - 1];
+      const parentPath = parts.slice(0, -1).join(".");
 
-      // Get the default value for this field
-      const defaultValue = this.getDefaultValue(field);
-      if (typeof defaultValue !== "number") {
+      // Get the current data
+      const currentData = await this.get(parentPath);
+
+      // Get the current value, using 0 as default for numeric operations
+      const currentValue = currentData[field] || 0;
+
+      if (typeof currentValue !== "number") {
         throw new Error(`Field ${field} does not support math operations`);
       }
-
-      // Get the current value, using default if not set
-      const currentValue = await this.get(path);
-      const numericValue =
-        typeof currentValue === "number" ? currentValue : defaultValue;
 
       let newValue;
       switch (operator) {
         case "+":
-          newValue = numericValue + number;
+          newValue = currentValue + number;
           break;
         case "-":
-          newValue = numericValue - number;
+          newValue = currentValue - number;
           break;
         case "*":
-          newValue = numericValue * number;
+          newValue = currentValue * number;
           break;
         case "/":
           if (number === 0) throw new Error("Division by zero");
-          newValue = numericValue / number;
+          newValue = currentValue / number;
           break;
         default:
           throw new Error(`Unsupported operator: ${operator}`);
       }
 
-      // Only save if the new value is different from the default
-      if (newValue !== defaultValue) {
+      // Only save if the new value is different from the current
+      if (newValue !== currentValue) {
         await this.set(path, newValue);
-      } else {
-        // If the new value equals the default, remove it from storage
-        await this.remove(path);
       }
 
       return newValue;
@@ -577,11 +613,18 @@ class EconomyEZ {
   }
 
   static async getUpgrades(guildId, userId) {
+    // Get upgrades from user data
     const userData = await this.get(`${guildId}.${userId}`);
     const upgrades = {};
 
+    // Ensure upgrades object exists with defaults
+    const userUpgrades =
+      userData.upgrades || DEFAULT_VALUES.guild.user.upgrades;
+
     for (const [type, config] of Object.entries(UPGRADES)) {
-      const level = userData.upgrades[type].level;
+      const level =
+        userUpgrades[type]?.level ||
+        DEFAULT_VALUES.guild.user.upgrades[type].level;
       upgrades[type] = this.getUpgradeInfo(type, level);
     }
 
@@ -589,15 +632,20 @@ class EconomyEZ {
   }
 
   static async purchaseUpgrade(guildId, userId, type) {
+    // Get user data
     const userData = await this.get(`${guildId}.${userId}`);
-    const currentLevel = userData.upgrades[type].level;
+    const userUpgrades =
+      userData.upgrades || DEFAULT_VALUES.guild.user.upgrades;
+    const currentLevel =
+      userUpgrades[type]?.level ||
+      DEFAULT_VALUES.guild.user.upgrades[type].level;
     const upgradeInfo = this.getUpgradeInfo(type, currentLevel);
 
     if (userData.balance < upgradeInfo.price) {
       return { success: false, reason: "insufficient_funds" };
     }
 
-    // Update balance and upgrade level
+    // Update balance and upgrade level in user data
     await this.math(`${guildId}.${userId}.balance`, "-", upgradeInfo.price);
     await this.set(
       `${guildId}.${userId}.upgrades.${type}.level`,
@@ -614,7 +662,7 @@ class EconomyEZ {
   // Level Methods
   static calculateLevel(
     totalXp,
-    multiplier = DEFAULT_VALUES.levels.multiplier
+    multiplier = DEFAULT_VALUES.guild.settings.multiplier
   ) {
     let level = 1;
     let xpForNextLevel = multiplier;
@@ -649,9 +697,12 @@ class EconomyEZ {
       amount
     );
 
-    const multiplier = guildData.levels.multiplier;
+    const multiplier = guildData.settings.multiplier;
     const oldLevel = this.calculateLevel(oldTotal, multiplier).level;
     const newLevel = this.calculateLevel(newTotal, multiplier).level;
+
+    // Update total_messages count
+    await this.math(`${guildId}.${userId}.total_messages`, "+", 1);
 
     return {
       oldLevel,
@@ -663,20 +714,20 @@ class EconomyEZ {
 
   static async getGuildLevels(guildId) {
     const guildData = await this.get(guildId);
-    return guildData.levels;
+    return guildData.settings;
   }
 
   static async setGuildLevels(guildId, settings) {
     const guildData = await this.get(guildId);
     const updates = {
       ...guildData,
-      levels: {
-        ...guildData.levels,
+      settings: {
+        ...guildData.settings,
         ...settings,
       },
     };
     await this.set(guildId, updates);
-    return updates.levels;
+    return updates.settings;
   }
 }
 
