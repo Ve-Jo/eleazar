@@ -39,7 +39,6 @@ export default {
       const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
       const upgrades = await EconomyEZ.getUpgrades(guild.id, user.id);
 
-      // Generate shop image
       const pngBuffer = await generateRemoteImage(
         "UpgradesDisplay",
         {
@@ -64,34 +63,19 @@ export default {
           },
           database: userData,
           locale: interaction.locale,
-          upgrades: [
-            {
-              emoji: upgrades.daily.emoji,
-              title: i18n.__("economy.shop.upgrades.daily.name"),
-              description: i18n.__("economy.shop.upgrades.daily.description", {
-                effect: upgrades.daily.effect,
-                price: upgrades.daily.price,
-              }),
-              currentLevel: upgrades.daily.level,
-              nextLevel: upgrades.daily.level + 1,
-              price: upgrades.daily.price,
-              progress: 50,
-              id: 0,
-            },
-            {
-              emoji: upgrades.crime.emoji,
-              title: i18n.__("economy.shop.upgrades.crime.name"),
-              description: i18n.__("economy.shop.upgrades.crime.description", {
-                effect: upgrades.crime.effect,
-                price: upgrades.crime.price,
-              }),
-              currentLevel: upgrades.crime.level,
-              nextLevel: upgrades.crime.level + 1,
-              price: upgrades.crime.price,
-              progress: 50,
-              id: 1,
-            },
-          ],
+          upgrades: Object.entries(upgrades).map(([key, upgrade], index) => ({
+            emoji: upgrade.emoji,
+            title: i18n.__(`economy.shop.upgrades.${key}.name`),
+            description: i18n.__(`economy.shop.upgrades.${key}.description`, {
+              effect: upgrade.effect,
+              price: upgrade.price,
+            }),
+            currentLevel: upgrade.level,
+            nextLevel: upgrade.level + 1,
+            price: upgrade.price,
+            progress: 50,
+            id: index,
+          })),
           currentUpgrade,
           balance: userData.balance,
         },
@@ -185,81 +169,8 @@ export default {
           return;
         }
 
-        // Get updated data
-        const updatedUserData = await EconomyEZ.get(`${guild.id}.${user.id}`);
-        const newUpgradeInfo = (await EconomyEZ.getUpgrades(guild.id, user.id))[
-          type
-        ];
-
-        // Generate purchase success image
-        const successBuffer = await generateRemoteImage(
-          "UpgradesDisplay",
-          {
-            interaction: {
-              user: {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                avatarURL: user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              guild: {
-                id: guild.id,
-                name: guild.name,
-                iconURL: guild.iconURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-            },
-            database: updatedUserData,
-            locale: interaction.locale,
-            upgrade: {
-              type,
-              name: i18n.__(`economy.shop.upgrades.${type}.name`),
-              emoji: newUpgradeInfo.emoji,
-              oldLevel: result.newLevel - 1,
-              newLevel: result.newLevel,
-              cost: result.cost,
-            },
-          },
-          { width: 450, height: 200 },
-          { image: 2, emoji: 2 }
-        );
-
-        const successAttachment = new AttachmentBuilder(successBuffer.buffer, {
-          name: `purchase.${
-            successBuffer.contentType === "image/gif" ? "gif" : "png"
-          }`,
-        });
-
-        const successEmbed = new EmbedBuilder()
-          .setColor(process.env.EMBED_COLOR)
-          .setAuthor({
-            name: i18n.__("economy.shop.purchaseTitle"),
-            iconURL: user.displayAvatarURL(),
-          })
-          .setDescription(
-            i18n.__("economy.shop.purchaseSuccess", {
-              type: i18n.__(`economy.shop.upgrades.${type}.name`),
-              level: result.newLevel,
-              cost: result.cost,
-            })
-          )
-          .setImage(
-            `attachment://purchase.${
-              successBuffer.contentType === "image/gif" ? "gif" : "png"
-            }`
-          )
-          .setTimestamp();
-
-        await i.update({
-          embeds: [successEmbed],
-          files: [successAttachment],
-          components: [],
-        });
+        // Show updated shop with new upgrade level
+        await i.update(await generateShopMessage());
         collector.stop();
       }
     });
