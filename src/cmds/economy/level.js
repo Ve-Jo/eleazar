@@ -52,7 +52,7 @@ export default {
     // Calculate level info
     const levelInfo = EconomyEZ.calculateLevel(
       userData.total_xp,
-      guildData.levels.multiplier
+      guildData.settings.multiplier
     );
     const nextLevelXP = levelInfo.requiredXP;
     const currentXP = levelInfo.currentXP;

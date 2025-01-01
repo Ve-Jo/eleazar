@@ -1,5 +1,5 @@
 //run only economy.js file
 
-import { testDatabaseConnection } from "./src/utils/economy";
+import { testDatabaseConnection } from "../utils/economy.js";
 
 await testDatabaseConnection();
