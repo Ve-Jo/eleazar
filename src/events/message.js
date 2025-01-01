@@ -112,16 +112,19 @@ export default {
     const userData = await EconomyEZ.get(`${guild.id}.${author.id}`);
     const now = Date.now();
 
+    // Check if enough time has passed since last XP gain
     if (
       !userData.message ||
-      now - userData.message >= guildData.levels.message_cooldown * 1000
+      now - userData.message >= guildData.settings.message_cooldown * 1000
     ) {
       // Add XP and update message timestamp
       await EconomyEZ.addXP(
         guild.id,
         author.id,
-        guildData.levels.xp_per_message
+        guildData.settings.xp_per_message
       );
+
+      // Update last message timestamp
       await EconomyEZ.set(`${guild.id}.${author.id}.message`, now);
     }
   },
