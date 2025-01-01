@@ -155,7 +155,10 @@ export default {
       const maxStealPercent = 0.2 + (crimeLevel - 1) * 0.02; // 2% increase per level
       const amount = success
         ? Math.floor(Math.random() * (targetData.balance * maxStealPercent))
-        : Math.floor(Math.random() * (userData.balance * 0.1)); // Lose up to 10% of own balance
+        : Math.max(
+            10, // Minimum loss of 10 coins
+            Math.floor(Math.random() * (userData.balance * 0.1)) // Lose up to 10% of own balance
+          );
 
       // Update balances
       if (success) {
