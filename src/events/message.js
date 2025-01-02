@@ -102,7 +102,7 @@ export default {
           await message.pin();
         }
 
-        await EconomyEZ.set(guild.id, updates);
+        await EconomyEZ.set(`${guild.id}.counting`, updates.counting);
       } else {
         await message.delete();
       }
