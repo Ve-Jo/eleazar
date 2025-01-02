@@ -79,16 +79,20 @@
     "description": "Commands for economy",
     "crime": {
       "name": "crime",
-      "description": "Attempt to steal cash from another user",
+      "description": "Attempt to steal money from another user",
       "selectCrimeTarget": "Select a user to steal from",
       "noSelectionMade": "No selection made",
       "insufficientFundsForCrime": "Insufficient funds for crime",
       "success": "You successfully stole {{amount}} coins",
       "failure": "You failed to steal. You lost {{amount}} coins",
-      "cooldown": "You have to wait {{time}} to commit another crime",
-      "noValidTargets": "No valid targets found",
+      "cooldown": "You need to wait {{time}} seconds before committing another crime",
+      "noValidTargets": "No valid targets found (users must have coins to steal)",
       "unknownUser": "Unknown user",
-      "title": "Crime"
+      "title": "Crime",
+      "selectTarget": "Select a user to steal from",
+      "noSelection": "No target selected",
+      "successTarget": "You successfully stole {{amount}} coins from {{target}}!",
+      "failTarget": "You were caught and had to pay a fine of {{amount}} coins!"
     },
     "balance": {
       "name": "balance",
@@ -113,15 +117,16 @@
     },
     "level": {
       "name": "level",
-      "description": "Check level",
-      "title": "Level",
+      "description": "Check your or another user's level",
+      "title": "Level Information",
       "userNotFound": "User not found",
       "options": {
         "user": {
           "name": "user",
-          "description": "User to check"
+          "description": "User to check level for"
         }
-      }
+      },
+      "info": "{{user}}'s Level Information:\n• Level: **{{level}}**\n• XP: **{{currentXP}}**/**{{nextLevelXP}}** ({{progress}}%)\n• Total XP: **{{totalXP}}**"
     },
     "deposit": {
       "name": "deposit",
@@ -152,14 +157,29 @@
     },
     "shop": {
       "name": "shop",
-      "description": "Buy upgrades/roles",
+      "description": "View and purchase upgrades",
       "title": "Shop",
       "selectPlaceholder": "Select an upgrade",
-      "insufficientFunds": "Insufficient funds",
+      "insufficientFunds": "You don't have enough coins for this upgrade",
       "buyButton": "Buy",
       "errorGeneratingImage": "Error generating image",
       "purchaseMessage": "{{name}} purchased for {{price}}",
-      "purchaseError": "Error during purchase"
+      "purchaseError": "Error during purchase",
+      "selectUpgrade": "Select an upgrade to view",
+      "noSelection": "No upgrade selected",
+      "purchaseTitle": "Purchase Successful",
+      "purchaseSuccess": "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
+      "upgrades": {
+        "daily": {
+          "name": "Daily Reward Boost",
+          "description": "+{{effect}} reward ({{price}} coins)"
+        },
+        "crime": {
+          "name": "Crime Cooldown Reduction",
+          "description": "-{{effect}} cooldown ({{price}} coins)"
+        }
+      },
+      "purchaseButton": "Purchase"
     },
     "transfer": {
       "name": "transfer",
