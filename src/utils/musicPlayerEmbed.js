@@ -34,7 +34,7 @@ export async function createOrUpdateMusicPlayerEmbed(
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
-    const pngBuffer = await generateRemoteImage(
+    const imageData = await generateRemoteImage(
       "MusicPlayer",
       {
         currentSong: {
@@ -99,11 +99,11 @@ export async function createOrUpdateMusicPlayerEmbed(
       { width: 525, height: 200 }
     );
 
-    lastGeneratedImage = pngBuffer;
+    lastGeneratedImage = imageData;
     lastGeneratedImageTimestamp = currentTime;
   }
 
-  const attachment = new AttachmentBuilder(lastGeneratedImage, {
+  const attachment = new AttachmentBuilder(lastGeneratedImage.buffer, {
     name: "musicplayer.png",
   });
 

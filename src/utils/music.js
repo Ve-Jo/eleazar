@@ -9,6 +9,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const LAVALINK_SERVERS = [
+  /*{
+    id: "localhost",
+    host: "127.0.0.1",
+    port: 2333,
+    authorization: "youshallnotpass",
+    secure: false,
+  },*/
   {
     id: "lavahatry4",
     host: "lavahatry4.techbyte.host",
@@ -27,13 +34,6 @@ const LAVALINK_SERVERS = [
     id: "jirayu",
     host: "lavalink.jirayu.net",
     port: 13592,
-    authorization: "youshallnotpass",
-    secure: false,
-  },
-  {
-    id: "localhost",
-    host: "127.0.0.1",
-    port: 2333,
     authorization: "youshallnotpass",
     secure: false,
   },

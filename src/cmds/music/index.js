@@ -8,6 +8,10 @@ export default {
   },
   server: true,
   async preExecute(interaction) {
+    return interaction.reply({
+      content: "Музыкальный плеер пока-что неисправен",
+      ephemeral: true,
+    });
     if (!interaction.member.voice.channel) {
       return interaction.reply({
         content: i18n.__("music.notInVoiceChannel"),
