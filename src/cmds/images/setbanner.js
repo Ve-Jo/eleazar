@@ -95,7 +95,7 @@ export async function handleRemoveBanner(interaction) {
 
   try {
     // Remove the banner
-    await EconomyEZ.set(`economy.${guildId}.${userId}.banner_url`, null);
+    await EconomyEZ.set(`${guildId}.${userId}.banner_url`, null);
 
     // Try to notify the user
     const guild = interaction.client.guilds.cache.get(guildId);
@@ -202,12 +202,12 @@ export default {
 
       // Save the permanent URL
       await EconomyEZ.set(
-        `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`,
+        `${interaction.guild.id}.${interaction.user.id}.banner_url`,
         permanentUrl
       );
 
       const userData = await EconomyEZ.get(
-        `economy.${interaction.guild.id}.${interaction.user.id}`
+        `${interaction.guild.id}.${interaction.user.id}`
       );
 
       await interaction.editReply({

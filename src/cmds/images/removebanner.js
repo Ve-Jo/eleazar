@@ -23,12 +23,8 @@ export default {
     await interaction.deferReply();
 
     try {
-      await EconomyEZ.ensure(
-        `economy.${interaction.guild.id}.${interaction.user.id}`
-      );
-
       await EconomyEZ.remove(
-        `economy.${interaction.guild.id}.${interaction.user.id}.banner_url`
+        `${interaction.guild.id}.${interaction.user.id}.banner_url`
       );
 
       const embed = new EmbedBuilder()
