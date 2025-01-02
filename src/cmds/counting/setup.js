@@ -162,9 +162,7 @@ export default {
     const noUniqueRole =
       interaction.options.getBoolean("no_unique_role") || false;
 
-    await EconomyEZ.ensure(`counting.${guild.id}`);
-
-    await EconomyEZ.set(`counting.${guild.id}`, {
+    await EconomyEZ.set(`${guild.id}.counting`, {
       channel_id: channel.id,
       message: startNumber,
       pinoneach: pinOneEach,

@@ -21,10 +21,10 @@ export default {
   async execute(interaction) {
     const { guild } = interaction;
 
-    const countingChannel = await EconomyEZ.get(`counting.${guild.id}`);
+    const countingChannel = await EconomyEZ.get(`${guild.id}.counting`);
 
     if (countingChannel) {
-      await EconomyEZ.remove(`counting.${guild.id}`);
+      await EconomyEZ.remove(`${guild.id}.counting`);
 
       await interaction.reply({
         content: i18n.__("counting.remove.success"),
