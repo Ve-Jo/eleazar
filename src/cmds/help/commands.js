@@ -145,7 +145,7 @@ export default {
 
     const updateMessage = async () => {
       const pngBuffer = await generateCommandImage();
-      const attachment = new AttachmentBuilder(pngBuffer, {
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
         name: "commands.png",
       });
 
