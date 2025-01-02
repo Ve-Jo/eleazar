@@ -11,10 +11,8 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     clients:
-      - MUSIC
-      - ANDROID_VR
       - WEB
-      - WEBEMBEDDED
+      - IOS
   lavasrc:
     sources:
       spotify: true
@@ -27,12 +25,6 @@ plugins:
       albumLoadLimit: 50
       resolveArtistsInSearch: true
       localFiles: false
-    # applemusic:
-    #  countryCode: "US"
-    #  playlistLoadLimit: 6
-    #  albumLoadLimit: 50
-    # deezer:
-    #  masterDecryptionKey: null
     twitch:
       clientId: null
       clientSecret: null
@@ -46,7 +38,7 @@ lavalink:
   server:
     password: "youshallnotpass"
     sources:
-      youtube: false
+      youtube: false # DONT CHANGE THIS, WERE USING PLUGINS
       bandcamp: true
       soundcloud: true
       twitch: true
@@ -55,10 +47,12 @@ lavalink:
       http: true
       local: false
     plugins:
-      - className: "dev.arbjerg.lavalink.plugins.youtube.YoutubePlugin"
-        path: "./plugins/youtube-plugin-1.8.3.jar"
-      - className: "com.github.topi314.lavasrc.plugin.LavaSrcPlugin"
-        path: "./plugins/lavasrc-plugin-4.3.0.jar"
+      - dependency: "dev.lavalink.youtube:youtube-plugin:1.11.3"
+        repository: "https://maven.lavalink.dev/releases"
+      - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.3.0"
+        repository: "https://maven.lavalink.dev/releases"
+      - dependency: "com.github.topi314.lavasearch:lavasearch-plugin:1.0.0"
+        repository: "https://maven.lavalink.dev/releases"
     bufferDurationMs: 400
     frameBufferDurationMs: 5000
     opusEncodingQuality: 5
@@ -73,16 +67,6 @@ lavalink:
     httpConfig:
       forwardHeaders: true
     pluginsDir: "./plugins"
-    youtubeConfig:
-      enabled: true
-      allowSearch: true
-      allowDirectVideoIds: true
-      allowDirectPlaylistIds: true
-      clients:
-        - MUSIC
-        - ANDROID_VR
-        - WEB
-        - WEBEMBEDDED
 
 metrics:
   prometheus:
