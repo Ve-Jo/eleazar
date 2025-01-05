@@ -1,4 +1,5 @@
 import { Events, Collection } from "discord.js";
+import EconomyEZ from "../utils/economy.js";
 import i18n from "../utils/i18n.js";
 
 const cooldowns = new Collection();
@@ -74,6 +75,11 @@ export default {
       } else if (command.execute) {
         await command.execute(interaction, i18n);
       }
+
+      await EconomyEZ.set(
+        `${interaction.guild.id}.${interaction.user.id}.latest_activity`,
+        Date.now()
+      );
     } catch (error) {
       console.error(error);
     }
