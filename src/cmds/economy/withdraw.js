@@ -41,20 +41,29 @@ export default {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
 
-    const initialUser = await EconomyEZ.get(
+    let initialUser = await EconomyEZ.get(
       `${interaction.guild.id}.${interaction.user.id}`
+    );
+
+    initialUser.bank = await EconomyEZ.calculateBankBalance(
+      initialUser.bank,
+      initialUser.latest_activity,
+      interaction.guild.id,
+      interaction.user.id
     );
 
     let amountInt = 0;
     if (amount === "all") {
-      amountInt = initialUser.bank;
+      amountInt = initialUser.bank.amount;
     } else if (amount === "half") {
-      amountInt = Math.floor(initialUser.bank / 2);
+      amountInt = Math.floor(initialUser.bank.amount / 2);
     } else {
       amountInt = parseInt(amount);
     }
 
-    if (initialUser.bank < amountInt) {
+    console.log(initialUser.bank.amount, amountInt);
+
+    if (initialUser.bank.amount < amountInt) {
       return interaction.editReply({
         content: i18n.__("economy.withdraw.insufficientFunds"),
         ephemeral: true,
@@ -67,8 +76,17 @@ export default {
       });
     }
 
-    const updatedUser = {
-      bank: initialUser.bank - amountInt,
+    const bankAmountAfterWithdraw = initialUser.bank.amount - amountInt;
+    let updatedUser = {
+      ...initialUser,
+      bank: {
+        amount: bankAmountAfterWithdraw,
+        ...(bankAmountAfterWithdraw > 0 && {
+          started_to_hold: initialUser.bank.started_to_hold,
+          holding_percentage: EconomyEZ.calculateLevel(initialUser.totalXp)
+            .level,
+        }),
+      },
       balance: initialUser.balance + amountInt,
     };
 

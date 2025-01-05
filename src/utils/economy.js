@@ -29,7 +29,11 @@ const DEFAULT_VALUES = {
     },
     user: {
       balance: 0,
-      bank: 0,
+      bank: {
+        amount: 0,
+        started_to_hold: 0,
+        holding_percentage: 0,
+      },
       total_xp: 0,
       banner_url: null,
       latest_activity: () => new Date(),
@@ -58,6 +62,9 @@ const COOLDOWNS = {
   daily: 24 * 60 * 60 * 1000, // 24 hours
   message: 60 * 1000, // 1 minute
 };
+
+// Store active timeouts
+const activeTimeouts = new Map();
 
 // Shop configurations
 const UPGRADES = {
@@ -728,6 +735,80 @@ class EconomyEZ {
     };
     await this.set(guildId, updates);
     return updates.settings;
+  }
+
+  static async calculateBankBalance(bankData, latestActivity, guildId, userId) {
+    if (
+      !bankData ||
+      !bankData.amount ||
+      !bankData.started_to_hold ||
+      !bankData.holding_percentage
+    ) {
+      return {
+        amount: bankData?.amount || 0,
+        started_to_hold: 0,
+        holding_percentage: 0,
+      };
+    }
+
+    const currentTime = Date.now();
+    const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+
+    // Check if user has been inactive for more than 2 days
+    if (currentTime - latestActivity > twoDaysInMs) {
+      // Calculate interest only up to 2 days after last activity
+      const endTime = latestActivity + twoDaysInMs;
+      const holdingTime = Math.max(0, endTime - bankData.started_to_hold);
+      const timeInYears = holdingTime / (365 * 24 * 60 * 60 * 1000);
+      const annualRate = bankData.holding_percentage / 100;
+
+      // Calculate final amount
+      const finalAmount =
+        Math.round(
+          bankData.amount * Math.pow(1 + annualRate, timeInYears) * 100
+        ) / 100;
+
+      const updatedBank = {
+        amount: finalAmount,
+      };
+
+      // Update the database if guild and user IDs are provided
+      if (guildId && userId) {
+        const userData = await this.get(`${guildId}.${userId}`);
+        if (userData?.bank) {
+          userData.bank = updatedBank;
+          await this.set(`${guildId}.${userId}`, userData);
+        }
+      }
+
+      return updatedBank;
+    }
+
+    // If user is active, calculate interest up to current time
+    const holdingTime = Math.max(0, currentTime - bankData.started_to_hold);
+    const timeInYears = holdingTime / (365 * 24 * 60 * 60 * 1000);
+    const annualRate = bankData.holding_percentage / 100;
+
+    return {
+      amount:
+        Math.round(
+          bankData.amount * Math.pow(1 + annualRate, timeInYears) * 100
+        ) / 100,
+      started_to_hold: bankData.started_to_hold,
+      holding_percentage: bankData.holding_percentage,
+    };
+  }
+
+  static async updateBankOnInactivity(guildId, userId) {
+    const userData = await this.get(`${guildId}.${userId}`);
+    if (!userData?.bank?.amount) return;
+
+    // Calculate and update the bank balance
+    userData.bank.amount = this.calculateBankBalance(
+      userData.bank,
+      userData.latest_activity
+    );
+    await this.set(`${guildId}.${userId}`, userData);
   }
 }
 

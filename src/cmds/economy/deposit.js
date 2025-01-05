@@ -68,8 +68,14 @@ export default {
     }
 
     const updatedUser = {
+      ...initialUser,
       balance: initialUser.balance - amountInt,
-      bank: initialUser.bank + amountInt,
+      bank: {
+        amount: initialUser.bank.amount + amountInt,
+        started_to_hold: Date.now(),
+        holding_percentage:
+          100 + EconomyEZ.calculateLevel(initialUser.totalXp).level * 10,
+      },
     };
 
     await EconomyEZ.set(
