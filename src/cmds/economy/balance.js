@@ -94,7 +94,7 @@ export default {
           ...userData,
         },
       },
-      { width: 400, height: 225 },
+      { width: 400, height: 235 },
       { image: 2, emoji: 1 }
     );
 
