@@ -2,7 +2,7 @@
 nixPkgs = ["bun"]
 
 [phases.install]
-cmds = ["bun install"]
+cmds = ["bun upgrade", "bun install"]
 
 [start]
 cmd = "bun ."
