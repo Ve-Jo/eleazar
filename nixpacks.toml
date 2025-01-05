@@ -10,7 +10,7 @@ nixPkgs = [
     "librsvg",
     "python3",
     "gcc",
-    "g++",
+    "gpp",
     "make",
     "vips",
     "ffmpeg",
