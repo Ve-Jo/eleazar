@@ -1,5 +1,9 @@
 [phases.setup]
-nixPkgs = ["bun", "unzip"]
+nixPkgs = ["bun", "unzip", "pkg-config", "cairo", "pango", "libpng", "libjpeg", "giflib", "librsvg", "python3", "gcc", "g++", "make", "vips"]
+aptPkgs = ["libvips-dev"]
+
+[env]
+SHARP_IGNORE_GLOBAL_LIBVIPS = "1"
 
 [phases.install]
 cmds = ["bun upgrade", "bun install"]
