@@ -792,8 +792,8 @@ class EconomyEZ {
     return {
       amount:
         Math.round(
-          bankData.amount * Math.pow(1 + annualRate, timeInYears) * 100
-        ) / 100,
+          bankData.amount * Math.pow(1 + annualRate, timeInYears) * 100000
+        ) / 100000,
       started_to_hold: bankData.started_to_hold,
       holding_percentage: bankData.holding_percentage,
     };
