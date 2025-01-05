@@ -11,7 +11,7 @@ nixPkgs = [
     "python3",
     "gcc",
     "gpp",
-    "make",
+    "gnumake",
     "vips",
     "ffmpeg",
     "chromium",
