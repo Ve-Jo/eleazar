@@ -1,53 +1,11 @@
 [phases.setup]
-nixPkgs = [
-    "bun",
-    "pkg-config",
-    "cairo",
-    "pango",
-    "libpng",
-    "libjpeg",
-    "giflib",
-    "librsvg",
-    "python3",
-    "gcc",
-    "gpp",
-    "gnumake",
-    "vips",
-    "ffmpeg",
-    "chromium",
-    "fontconfig",
-    "unzip"
-]
-aptPkgs = [
-    "libvips-dev",
-    "fonts-noto-color-emoji",
-    "fonts-noto-cjk",
-    "fonts-noto",
-    "libnss3",
-    "libnspr4",
-    "libatk1.0-0",
-    "libatk-bridge2.0-0",
-    "libcups2",
-    "libdrm2",
-    "libxkbcommon0",
-    "libxcomposite1",
-    "libxdamage1",
-    "libxfixes3",
-    "libxrandr2",
-    "libgbm1",
-    "libasound2"
-]
+nixPkgs = ["bun", "unzip"]
 
 [phases.install]
-cmds = ["bun upgrade", "bun install"]
+cmds = ["bun upgrade", "bun install --no-postinstall=false"]
 
 [start]
 cmd = "bun ."
 
 [phases.cache]
 directories = ["node_modules", "bun.lockb"]
-
-[env]
-SHARP_IGNORE_GLOBAL_LIBVIPS = "1"
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-CHROME_BIN = "/usr/bin/chromium"
