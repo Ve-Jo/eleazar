@@ -74,7 +74,7 @@ export default {
         amount: initialUser.bank.amount + amountInt,
         started_to_hold: Date.now(),
         holding_percentage:
-          100 + EconomyEZ.calculateLevel(initialUser.totalXp).level * 10,
+          300 + EconomyEZ.calculateLevel(initialUser.totalXp).level * 10,
       },
     };
 
