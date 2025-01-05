@@ -1,7 +1,6 @@
 [phases.setup]
 nixPkgs = [
     "bun",
-    "unzip",
     "pkg-config",
     "cairo",
     "pango",
@@ -16,7 +15,8 @@ nixPkgs = [
     "vips",
     "ffmpeg",
     "chromium",
-    "fontconfig"
+    "fontconfig",
+    "unzip"
 ]
 aptPkgs = [
     "libvips-dev",
