@@ -18,9 +18,7 @@ nixPkgs = [
     "chromium",
     "fontconfig"
 ]
-
-[phases.setup.aptPkgs]
-packages = [
+aptPkgs = [
     "libvips-dev",
     "fonts-noto-color-emoji",
     "fonts-noto-cjk",
