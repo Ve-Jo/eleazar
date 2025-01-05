@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["bun", "unzip"]
+nixPkgs = ["bun"]
 
 [phases.install]
-cmds = ["bun upgrade", "bun install --no-postinstall=false"]
+cmds = ["bun install --no-postinstall=false"]
 
 [start]
 cmd = "bun ."
