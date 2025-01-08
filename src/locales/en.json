@@ -182,11 +182,11 @@
       "upgrades": {
         "daily": {
           "name": "Daily Reward Boost",
-          "description": "+{{effect}} reward ({{price}} coins)"
+          "description": "%{{effect}} reward ({{price}} coins)"
         },
         "crime": {
           "name": "Crime Cooldown Reduction",
-          "description": "-{{effect}} cooldown ({{price}} coins)"
+          "description": "-{{effect}} minutes cooldown ({{price}} coins)"
         }
       },
       "purchaseButton": "Purchase",

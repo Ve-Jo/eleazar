@@ -108,7 +108,7 @@
       "userNotFound": "Користувач не знайдений"
     },
     "leaderboard": {
-      "name": "таблиця",
+      "name": "лідерборд",
       "description": "Переглянути таблицю лідерів сервера",
       "noUsersFound": "Не знайдено користувачів",
       "cantUseInteraction": "Ви не можете використовувати це взаємодію.",
@@ -182,11 +182,11 @@
       "upgrades": {
         "daily": {
           "name": "Посилення Щоденної Нагороди",
-          "description": "+{{effect}} до нагороди ({{price}} монет)"
+          "description": "%{{effect}} до нагороди ({{price}} монет)"
         },
         "crime": {
           "name": "Зменшення Перезарядки Злочину",
-          "description": "-{{effect}} до перезарядки ({{price}} монет)"
+          "description": "-{{effect}} хвилин кулдауна ({{price}} монет)"
         }
       },
       "purchaseButton": "Купити",
