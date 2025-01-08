@@ -4,30 +4,29 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json bun.lockb ./
-COPY prisma ./prisma/
 
-# Install dependencies
+# Install dependencies including Prisma
 RUN bun install --no-postinstall=false
 
-# Generate Prisma Client
-RUN bunx prisma generate
+# Copy prisma schema
+COPY prisma ./prisma/
 
 # Copy source code
 COPY . .
+
+# Generate Prisma Client
+RUN bunx prisma generate
 
 # Production stage
 FROM oven/bun:1
 
 WORKDIR /app
 
-# Copy package files and built assets
-COPY --from=builder /app/package*.json /app/bun.lockb ./
-COPY --from=builder /app/prisma ./prisma/
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/src ./src
+# Copy all files from builder
+COPY --from=builder /app .
 
 # Set production environment
 ENV NODE_ENV=production
 
 # Run migrations and start the bot
-CMD bunx prisma migrate deploy && bun . 
+CMD bunx prisma generate && bunx prisma migrate deploy && bun . 
