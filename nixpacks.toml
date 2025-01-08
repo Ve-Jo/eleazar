@@ -2,7 +2,10 @@
 nixPkgs = ["bun"]
 
 [phases.install]
-cmds = ["bun install --no-postinstall=false"]
+cmds = [
+    "bun install --no-postinstall=false",
+    "bunx prisma generate"
+]
 
 [start]
 cmd = "bun ."
