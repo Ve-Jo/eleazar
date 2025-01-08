@@ -11,6 +11,7 @@
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
     "@gradio/client": "^1.7.1",
+    "@prisma/client": "6.2.0",
     "@resvg/resvg-js": "^2.6.2",
     "@twemoji/api": "^15.1.0",
     "axios": "^1.7.7",
@@ -34,13 +35,15 @@
     "path": "^0.12.7",
     "pg": "^8.13.0",
     "pretty-ms": "^9.1.0",
+    "prisma": "6.2.0",
     "puppeteer": "^23.6.0",
     "react": "^18.3.1",
     "replicate": "^1.0.1",
     "riffy": "^1.0.7-rc.1",
     "satori": "^0.11.1",
     "sharp": "^0.33.5",
-    "url": "^0.11.4"
+    "url": "^0.11.4",
+    "ioredis": "^5.3.2"
   },
   "version": "1.0.0",
   "main": "bot.js",
