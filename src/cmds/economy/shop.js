@@ -252,9 +252,9 @@ export default {
           uk: "Посилення Щоденної Нагороди",
         },
         description: {
-          en: "+{{effect}} reward ({{price}} coins)",
-          ru: "+{{effect}} к награде ({{price}} монет)",
-          uk: "+{{effect}} до нагороди ({{price}} монет)",
+          en: "%{{effect}} reward ({{price}} coins)",
+          ru: "%{{effect}} к награде ({{price}} монет)",
+          uk: "%{{effect}} до нагороди ({{price}} монет)",
         },
       },
       crime: {
@@ -264,9 +264,9 @@ export default {
           uk: "Зменшення Перезарядки Злочину",
         },
         description: {
-          en: "-{{effect}} cooldown ({{price}} coins)",
-          ru: "-{{effect}} к перезарядке ({{price}} монет)",
-          uk: "-{{effect}} до перезарядки ({{price}} монет)",
+          en: "-{{effect}} minutes cooldown ({{price}} coins)",
+          ru: "-{{effect}} минут кулдауна ({{price}} монет)",
+          uk: "-{{effect}} хвилин кулдауна ({{price}} монет)",
         },
       },
     },
