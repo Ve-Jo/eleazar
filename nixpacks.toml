@@ -11,12 +11,11 @@ cmds = [
 [phases.build]
 cmds = [
     "bunx prisma generate",
-    "bunx prisma migrate deploy",
-    "bun build ./src/bot.js --target=bun --outdir=build"
+    "bunx prisma migrate deploy"
 ]
 
 [start]
-cmd = "bun ./build/bot.js"
+cmd = "bun ."
 
 [phases.cache]
-directories = ["node_modules", "bun.lockb", "node_modules/.prisma", "build"]
+directories = ["node_modules", "bun.lockb", "node_modules/.prisma"]
