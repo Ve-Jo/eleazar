@@ -1,14 +1,22 @@
 [phases.setup]
-nixPkgs = ["bun"]
+nixPkgs = ["bun", "openssl"]
+aptPkgs = ["openssl"]
 
 [phases.install]
-cmds = ["bun install --no-postinstall=false"]
+cmds = [
+    "bun install --no-postinstall=false",
+    "bun add -d prisma@6.2.0"
+]
 
 [phases.build]
-cmds = ["bunx prisma generate", "bunx prisma migrate deploy"]
+cmds = [
+    "bunx prisma generate",
+    "bunx prisma migrate deploy",
+    "bun build ./src/bot.js --target=bun --outdir=build"
+]
 
 [start]
-cmd = "bun ."
+cmd = "bun ./build/bot.js"
 
 [phases.cache]
-directories = ["node_modules", "bun.lockb", "node_modules/.prisma"]
+directories = ["node_modules", "bun.lockb", "node_modules/.prisma", "build"]
