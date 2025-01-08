@@ -1,6 +1,6 @@
 import { Events } from "discord.js";
 import EconomyEZ from "../utils/economy.js";
-import { transcribeAudio } from "../cmds/ai/transcribe.js";
+import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
   name: Events.MessageCreate,
