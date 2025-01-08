@@ -1,0 +1,87 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Guild {
+  id        String   @id @map("guild_id")
+  settings  Json
+  counting  Json
+  updatedAt BigInt   @map("updated_at")
+  users     User[]
+
+  @@map("guilds")
+}
+
+model User {
+  guildId         String         @map("guild_id")
+  userId          String         @map("user_id")
+  balance         Decimal        @db.Decimal(20, 5) @default(0)
+  totalXp         BigInt         @map("total_xp") @default(0)
+  bannerUrl       String?        @map("banner_url")
+  latestActivity  BigInt         @map("latest_activity")
+  totalMessages   Int            @map("total_messages") @default(0)
+  commandsUsed    Int            @map("commands_used") @default(0)
+  totalEarned     Decimal        @db.Decimal(20, 5) @default(0)
+  guild           Guild          @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  bank            UserBank?
+  cooldowns       UserCooldowns?
+  upgrades        UserUpgrade[]
+
+  @@id([guildId, userId])
+  @@index([balance])
+  @@index([totalXp])
+  @@index([latestActivity])
+  @@index([guildId, balance])
+  @@index([guildId, totalXp])
+  @@index([guildId, latestActivity])
+  @@map("users")
+}
+
+model UserCooldowns {
+  guildId String
+  userId  String
+  daily   BigInt @default(0)
+  work    BigInt @default(0)
+  crime   BigInt @default(0)
+  message BigInt @default(0)
+
+  user  User  @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+
+  @@id([guildId, userId])
+  @@index([guildId])
+  @@index([daily])
+  @@index([work])
+  @@index([crime])
+  @@index([message])
+  @@map("user_cooldowns")
+}
+
+model UserBank {
+  guildId          String   @map("guild_id")
+  userId           String   @map("user_id")
+  amount           Decimal  @db.Decimal(20, 5) @default(0)
+  startedToHold    BigInt   @map("started_to_hold")
+  holdingPercentage Int     @map("holding_percentage") @default(0)
+  user             User     @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+
+  @@id([guildId, userId])
+  @@index([amount])
+  @@index([startedToHold])
+  @@map("user_bank")
+}
+
+model UserUpgrade {
+  guildId     String   @map("guild_id")
+  userId      String   @map("user_id")
+  upgradeType String   @map("upgrade_type")
+  level       Int      @default(1)
+  user        User     @relation(fields: [guildId, userId], references: [guildId, userId], onDelete: Cascade)
+
+  @@id([guildId, userId, upgradeType])
+  @@map("user_upgrades")
+} 
