@@ -1,9 +1,10 @@
 import { Events } from "discord.js";
 import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
-import EconomyEZ from "../utils/economy.js";
+import prisma from "../database/client.js";
 import { startResourceMonitor } from "../runners/resourseMonitor.js";
 import AiChannelBot from "../handlers/ai_channelbot.js";
+
 export default {
   name: Events.ClientReady,
   once: true,
@@ -19,12 +20,12 @@ export default {
 
     await SlashCommandsHandler(client, client.commands);
 
-    // Initialize the new economy system
+    // Initialize the database connection
     try {
-      await EconomyEZ.testDatabaseConnection();
-      console.log("Economy system initialized successfully");
+      await prisma.$connect();
+      console.log("Database connection initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize economy system:", error);
+      console.error("Failed to initialize database connection:", error);
     }
 
     startResourceMonitor(200, client);

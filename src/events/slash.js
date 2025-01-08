@@ -77,7 +77,7 @@ export default {
       }
 
       await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.latest_activity`,
+        `${interaction.guild.id}.${interaction.user.id}.latestActivity`,
         Date.now()
       );
     } catch (error) {
