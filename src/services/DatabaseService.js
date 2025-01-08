@@ -2,6 +2,8 @@ import prisma from "../database/prisma.js";
 import { DEFAULT_VALUES } from "../utils/economy.js";
 
 class DatabaseService {
+  static prisma = prisma;
+
   // Utility methods for type conversion and validation
   static safeNumber(value) {
     if (value === null || value === undefined) return 0;
