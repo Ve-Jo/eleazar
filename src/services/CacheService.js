@@ -12,6 +12,26 @@ class CacheService {
       },
     });
 
+    this.redis.on("connect", () => {
+      console.log("Redis connection established successfully");
+    });
+
+    this.redis.on("error", (err) => {
+      console.error("Redis connection error:", err);
+    });
+
+    this.redis.on("ready", () => {
+      console.log("Redis client ready");
+    });
+
+    this.redis.on("reconnecting", () => {
+      console.log("Redis client reconnecting");
+    });
+
+    this.redis.on("end", () => {
+      console.log("Redis client connection ended");
+    });
+
     // Default TTLs in seconds
     this.TTL = {
       USER: 300, // 5 minutes
@@ -64,7 +84,27 @@ class CacheService {
 
   async set(key, value, ttl = null) {
     try {
-      const serialized = JSON.stringify(value);
+      // Convert BigInt to Number before serialization
+      const convertBigIntToNumber = (obj) => {
+        if (typeof obj === "bigint") {
+          return Number(obj);
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(convertBigIntToNumber);
+        }
+        if (typeof obj === "object" && obj !== null) {
+          const converted = {};
+          for (const key in obj) {
+            converted[key] = convertBigIntToNumber(obj[key]);
+          }
+          return converted;
+        }
+        return obj;
+      };
+
+      const convertedValue = convertBigIntToNumber(value);
+      const serialized = JSON.stringify(convertedValue);
+
       if (ttl) {
         await this.redis.setex(key, ttl, serialized);
       } else {
