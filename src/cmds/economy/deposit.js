@@ -41,104 +41,140 @@ export default {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
 
-    const initialUser = await EconomyEZ.get(
-      `${interaction.guild.id}.${interaction.user.id}`
-    );
+    try {
+      // Get initial user data and update bank balance
+      await EconomyEZ.updateBankOnInactivity(
+        interaction.guild.id,
+        interaction.user.id
+      );
+      const initialUser = await EconomyEZ.get(
+        `${interaction.guild.id}.${interaction.user.id}`
+      );
 
-    let amountInt = 0;
-    if (amount === "all") {
-      amountInt = initialUser.balance;
-    } else if (amount === "half") {
-      amountInt = Math.floor(initialUser.balance / 2);
-    } else {
-      amountInt = parseInt(amount);
-    }
-    if (amountInt <= 0) {
-      return interaction.editReply({
-        content: i18n.__("economy.deposit.amountGreaterThanZero"),
-        ephemeral: true,
-      });
-    }
+      if (!initialUser?.bank) {
+        return interaction.editReply({
+          content: i18n.__("economy.deposit.noBankAccount"),
+          ephemeral: true,
+        });
+      }
 
-    if (initialUser.balance < amountInt) {
-      return interaction.editReply({
-        content: i18n.__("economy.deposit.insufficientFunds"),
-        ephemeral: true,
-      });
-    }
+      // Calculate deposit amount
+      let amountInt = 0;
+      if (amount === "all") {
+        amountInt = Number(initialUser.balance);
+      } else if (amount === "half") {
+        amountInt = Math.floor(Number(initialUser.balance) / 2);
+      } else {
+        amountInt = parseInt(amount);
+        if (isNaN(amountInt)) {
+          return interaction.editReply({
+            content: i18n.__("economy.deposit.invalidAmount"),
+            ephemeral: true,
+          });
+        }
+      }
 
-    const updatedUser = {
-      ...initialUser,
-      balance: initialUser.balance - amountInt,
-      bank: {
-        amount: initialUser.bank.amount + amountInt,
-        started_to_hold: Date.now(),
-        holding_percentage:
-          300 + EconomyEZ.calculateLevel(initialUser.totalXp).level * 10,
-      },
-    };
+      // Validate amount
+      if (initialUser.balance < amountInt) {
+        return interaction.editReply({
+          content: i18n.__("economy.deposit.insufficientFunds"),
+          ephemeral: true,
+        });
+      }
+      if (amountInt <= 0) {
+        return interaction.editReply({
+          content: i18n.__("economy.deposit.amountGreaterThanZero"),
+          ephemeral: true,
+        });
+      }
 
-    await EconomyEZ.set(
-      `${interaction.guild.id}.${interaction.user.id}`,
-      updatedUser
-    );
+      // Perform the deposit transaction
+      const levelInfo = EconomyEZ.calculateLevel(initialUser.totalXp);
+      const holdingPercentage = 300 + levelInfo.level; // Base 300% + level bonus
 
-    // Generate the transfer image
-    const pngBuffer = await generateRemoteImage(
-      "Transfer",
-      {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+      // First update the bank balance
+      await EconomyEZ.math(
+        `${interaction.guild.id}.${interaction.user.id}.bank.amount`,
+        "+",
+        amountInt
+      );
 
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+      // Then update the bank settings and user balance
+      await EconomyEZ.set(`${interaction.guild.id}.${interaction.user.id}`, {
+        balance: initialUser.balance - amountInt,
+        bank: {
+          startedToHold: Date.now(),
+          holdingPercentage: holdingPercentage,
         },
-        locale: interaction.locale,
-        database: await EconomyEZ.get(
-          `${interaction.guild.id}.${interaction.user.id}`
-        ),
-        amount: amountInt,
-        isDeposit: true,
-      },
-      { width: 400, height: 200 }
-    );
-
-    const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-      name: `deposit.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
-    });
-
-    let deposit_embed = new EmbedBuilder()
-      .setColor(process.env.EMBED_COLOR)
-      .setTimestamp()
-      .setImage(
-        `attachment://deposit.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
-        }`
-      )
-      .setAuthor({
-        name: i18n.__("economy.deposit.title"),
-        iconURL: interaction.user.displayAvatarURL(),
       });
 
-    await interaction.editReply({
-      content: i18n.__("economy.deposit.success", { amount: amountInt }),
-      embeds: [deposit_embed],
-      files: [attachment],
-    });
+      // Get updated user data
+      const updatedUser = await EconomyEZ.get(
+        `${interaction.guild.id}.${interaction.user.id}`
+      );
+
+      // Generate the transfer image
+      const pngBuffer = await generateRemoteImage(
+        "Transfer",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+              locale: interaction.user.locale,
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          locale: interaction.locale,
+          database: updatedUser,
+          amount: amountInt,
+          isDeposit: true,
+        },
+        { width: 400, height: 200 }
+      );
+
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `deposit.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
+      });
+
+      let deposit_embed = new EmbedBuilder()
+        .setColor(process.env.EMBED_COLOR)
+        .setTimestamp()
+        .setImage(
+          `attachment://deposit.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`
+        )
+        .setAuthor({
+          name: i18n.__("economy.deposit.title"),
+          iconURL: interaction.user.displayAvatarURL(),
+        });
+
+      await interaction.editReply({
+        embeds: [deposit_embed],
+        files: [attachment],
+      });
+    } catch (error) {
+      console.error("Error in deposit command:", error);
+      await interaction.editReply({
+        content: i18n.__("economy.deposit.error"),
+        ephemeral: true,
+      });
+    }
   },
   localization_strings: {
     name: {
@@ -184,6 +220,21 @@ export default {
       en: "Insufficient funds",
       ru: "Недостаточно средств",
       uk: "Недостатньо коштів",
+    },
+    invalidAmount: {
+      en: "Invalid amount",
+      ru: "Неверная сумма",
+      uk: "Невірна сума",
+    },
+    noBankAccount: {
+      en: "You don't have a bank account",
+      ru: "У вас нет банковского счета",
+      uk: "У вас немає банківського рахунку",
+    },
+    error: {
+      en: "An error occurred while processing your deposit",
+      ru: "Произошла ошибка при обработке депозита",
+      uk: "Сталася помилка під час обробки депозиту",
     },
   },
 };

@@ -42,20 +42,21 @@ export default {
     const user = interaction.options.getMember("user") || interaction.user;
     const userData = await EconomyEZ.get(`${interaction.guild.id}.${user.id}`);
 
-    if (userData.bank.started_to_hold) {
-      userData.bank = await EconomyEZ.calculateBankBalance(
-        userData.bank,
-        userData.latest_activity,
-        interaction.guild.id,
-        user.id
-      );
-    }
-
     if (!userData) {
       return interaction.editReply({
         content: i18n.__("economy.balance.userNotFound"),
         ephemeral: true,
       });
+    }
+
+    // Update bank balance if user has bank account
+    if (userData.bank?.startedToHold) {
+      await EconomyEZ.updateBankOnInactivity(interaction.guild.id, user.id);
+      // Get updated data after bank calculation
+      const updatedData = await EconomyEZ.get(
+        `${interaction.guild.id}.${user.id}`
+      );
+      userData.bank = updatedData.bank;
     }
 
     let imageResponse = await generateRemoteImage(

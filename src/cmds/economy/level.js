@@ -40,30 +40,47 @@ export default {
   },
   async execute(interaction) {
     await interaction.deferReply();
-    const { guild } = interaction;
-    const targetUser = interaction.options.getUser("user") || interaction.user;
 
-    // Get user and guild data
-    const [userData, guildData] = await Promise.all([
-      EconomyEZ.get(`${guild.id}.${targetUser.id}`),
-      EconomyEZ.get(guild.id),
-    ]);
+    try {
+      const targetUser =
+        interaction.options.getUser("user") || interaction.user;
+      const userData = await EconomyEZ.get(
+        `${interaction.guild.id}.${targetUser.id}`
+      );
 
-    // Calculate level info
-    const levelInfo = EconomyEZ.calculateLevel(
-      userData.total_xp,
-      guildData.settings.multiplier
-    );
-    const nextLevelXP = levelInfo.requiredXP;
-    const currentXP = levelInfo.currentXP;
-    const level = levelInfo.level;
+      if (!userData) {
+        return interaction.editReply({
+          content: i18n.__("economy.level.userNotFound"),
+          ephemeral: true,
+        });
+      }
 
-    // Generate level card image
-    const pngBuffer = await generateRemoteImage(
-      "Level",
-      {
-        interaction: {
-          user: {
+      const levelInfo = EconomyEZ.calculateLevel(userData.totalXp);
+
+      const pngBuffer = await generateRemoteImage(
+        "Level",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          locale: interaction.locale,
+          targetUser: {
             id: targetUser.id,
             username: targetUser.username,
             displayName: targetUser.displayName,
@@ -72,47 +89,42 @@ export default {
               size: 1024,
             }),
           },
-          guild: {
-            id: guild.id,
-            name: guild.name,
-            iconURL: guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+          level: levelInfo.level,
+          currentXP: levelInfo.currentXP,
+          requiredXP: levelInfo.requiredXP,
+          totalXP: userData.totalXp,
         },
-        database: userData,
-        locale: interaction.locale,
-        currentXP: currentXP,
-        requiredXP: nextLevelXP,
-        level: level,
-        totalXP: levelInfo.totalXP,
-      },
-      { width: 400, height: 200 },
-      { image: 2, emoji: 1 }
-    );
+        { width: 450, height: 200 }
+      );
 
-    const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-      name: `level.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
-    });
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `level.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+      });
 
-    const embed = new EmbedBuilder()
-      .setColor(process.env.EMBED_COLOR)
-      .setAuthor({
-        name: i18n.__("economy.level.title"),
-        iconURL: targetUser.displayAvatarURL(),
-      })
-      .setImage(
-        `attachment://level.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
-        }`
-      )
-      .setTimestamp();
+      const embed = new EmbedBuilder()
+        .setColor(process.env.EMBED_COLOR)
+        .setAuthor({
+          name: i18n.__("economy.level.title"),
+          iconURL: targetUser.displayAvatarURL(),
+        })
+        .setImage(
+          `attachment://level.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`
+        )
+        .setTimestamp();
 
-    return interaction.editReply({
-      embeds: [embed],
-      files: [attachment],
-    });
+      await interaction.editReply({
+        embeds: [embed],
+        files: [attachment],
+      });
+    } catch (error) {
+      console.error("Error in level command:", error);
+      await interaction.editReply({
+        content: i18n.__("economy.level.error"),
+        ephemeral: true,
+      });
+    }
   },
   localization_strings: {
     name: {
@@ -143,6 +155,16 @@ export default {
       en: "Level Information",
       ru: "Информация об уровне",
       uk: "Інформація про рівень",
+    },
+    userNotFound: {
+      en: "User not found",
+      ru: "Пользователь не найден",
+      uk: "Користувач не знайдений",
+    },
+    error: {
+      en: "An error occurred while processing your level request",
+      ru: "Произошла ошибка при обработке запроса уровня",
+      uk: "Сталася помилка під час обробки запиту рівня",
     },
   },
 };

@@ -29,271 +29,226 @@ export default {
   },
   async execute(interaction) {
     await interaction.deferReply();
-    const usersPerPage = 10;
+    const { guild } = interaction;
 
-    const guildData = await EconomyEZ.get(interaction.guild.id);
-    console.log("Guild data:", guildData); // Debug log
+    try {
+      let page = 0;
+      const pageSize = 10;
 
-    // Get all entries that are not special keys and represent user data
-    const users = Object.entries(guildData).filter(
-      ([key, value]) =>
-        key !== "counting" &&
-        key !== "settings" &&
-        typeof value === "object" &&
-        !isNaN(key) // Ensure key is a numeric string (user ID)
-    );
+      const generateLeaderboardMessage = async () => {
+        // Get all users in the guild with their data
+        const guildUsers = await EconomyEZ.getGuildUsers(guild.id);
 
-    console.log("Found users:", users); // Debug log
+        // Sort users by total balance (balance + bank amount)
+        const sortedUsers = guildUsers
+          .map((userData) => ({
+            ...userData,
+            totalBalance: userData.balance + (userData.bank?.amount || 0),
+          }))
+          .sort((a, b) => b.totalBalance - a.totalBalance);
 
-    if (users.length === 0) {
-      console.log("No users found in data structure"); // Debug log
-    }
+        const totalPages = Math.ceil(sortedUsers.length / pageSize);
+        const startIndex = page * pageSize;
+        const endIndex = startIndex + pageSize;
+        const usersToDisplay = sortedUsers.slice(startIndex, endIndex);
 
-    let allUsersPromises = users.map(async ([userId, userData]) => {
-      console.log(`Processing user ${userId}:`, userData); // Debug log
-      let username;
-      let member;
-      let avatarURL;
-      try {
-        member = await interaction.guild.members.fetch(userId);
-        username = member.user.username;
-        avatarURL = member.user.displayAvatarURL({
-          extension: "png",
-          size: 1024,
-          forceStatic: true,
+        // Fetch member data for each user
+        const usersWithNames = await Promise.all(
+          usersToDisplay.map(async (userData) => {
+            try {
+              const member = await guild.members.fetch(userData.userId);
+              return {
+                ...userData,
+                name: member.displayName,
+                avatarURL: member.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              };
+            } catch (error) {
+              console.error(
+                `Failed to fetch member ${userData.userId}:`,
+                error
+              );
+              return null;
+            }
+          })
+        );
+
+        const validUsers = usersWithNames.filter((user) => user !== null);
+
+        // Generate leaderboard image
+        const pngBuffer = await generateRemoteImage(
+          "Leaderboard",
+          {
+            interaction: {
+              user: {
+                id: interaction.user.id,
+                username: interaction.user.username,
+                displayName: interaction.user.displayName,
+                avatarURL: interaction.user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: guild.id,
+                name: guild.name,
+                iconURL: guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+            },
+            locale: interaction.locale,
+            users: validUsers.map((user, index) => ({
+              id: user.userId,
+              position: startIndex + index + 1,
+              name: user.name,
+              avatarURL: user.avatarURL,
+              balance: user.balance,
+              bank: user.bank,
+              totalBalance: user.totalBalance,
+            })),
+            currentPage: page + 1,
+            totalPages,
+          },
+          { width: 400, height: 775 }
+        );
+
+        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+          name: `leaderboard.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`,
         });
-      } catch (error) {
-        console.error(`Failed to fetch user ${userId}:`, error);
-        username = "Unknown User";
-        avatarURL = null;
-      }
 
-      return {
-        id: userId,
-        name: username,
-        totalBalance: (userData.balance || 0) + (userData.bank || 0),
-        balance: userData.balance || 0,
-        avatarURL,
-        bank: userData.bank || 0,
+        const embed = new EmbedBuilder()
+          .setColor(process.env.EMBED_COLOR)
+          .setAuthor({
+            name: i18n.__("economy.leaderboard.title"),
+            iconURL: interaction.user.displayAvatarURL(),
+          })
+          .setImage(
+            `attachment://leaderboard.${
+              pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            }`
+          )
+          .setTimestamp();
+
+        // Create navigation buttons
+        const prevButton = new ButtonBuilder()
+          .setCustomId("prev_page")
+          .setLabel("◀")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(page === 0);
+
+        const nextButton = new ButtonBuilder()
+          .setCustomId("next_page")
+          .setLabel("▶")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(page >= totalPages - 1);
+
+        const buttonRow = new ActionRowBuilder().addComponents(
+          prevButton,
+          nextButton
+        );
+
+        let components = [buttonRow];
+
+        if (validUsers.length > 0) {
+          const selectOptions = validUsers.map((user, index) => ({
+            label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
+            value: (startIndex + index + 1).toString(),
+            description: `Total: ${user.totalBalance.toFixed(0)}`.slice(0, 50),
+          }));
+
+          const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId("select_user")
+            .setPlaceholder(i18n.__("economy.leaderboard.selectUser"))
+            .addOptions(selectOptions);
+
+          const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+          components.push(selectRow);
+        }
+
+        return {
+          embeds: [embed],
+          files: [attachment],
+          components,
+        };
       };
-    });
 
-    let allUsers = await Promise.all(allUsersPromises);
-    allUsers.sort((a, b) => b.totalBalance - a.totalBalance);
+      const message = await interaction.editReply(
+        await generateLeaderboardMessage()
+      );
 
-    if (allUsers.length === 0) {
-      return interaction.editReply({
-        content: i18n.__("economy.leaderboard.noUsersFound"),
+      // Create collector for buttons and select menu
+      const collector = message.createMessageComponentCollector({
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 60000,
+      });
+
+      collector.on("collect", async (i) => {
+        if (i.customId === "prev_page") {
+          page = Math.max(0, page - 1);
+          await i.update(await generateLeaderboardMessage());
+        } else if (i.customId === "next_page") {
+          page++;
+          await i.update(await generateLeaderboardMessage());
+        } else if (i.customId === "select_user") {
+          const position = parseInt(i.values[0]);
+          await i.reply({
+            content: i18n.__("economy.leaderboard.selectedUser", {
+              position,
+            }),
+            ephemeral: true,
+          });
+        }
+      });
+
+      collector.on("end", () => {
+        if (message.editable) {
+          message.edit({ components: [] }).catch(() => {});
+        }
+      });
+    } catch (error) {
+      console.error("Error in leaderboard command:", error);
+      await interaction.editReply({
+        content: i18n.__("economy.leaderboard.error"),
         ephemeral: true,
       });
     }
-
-    const totalPages = Math.ceil(allUsers.length / usersPerPage);
-
-    const userPosition =
-      allUsers.findIndex((user) => user.id === interaction.user.id) + 1;
-    let currentPage = Math.ceil(userPosition / usersPerPage) || 1;
-    let highlightedPosition = userPosition || 1;
-
-    const generateLeaderboardMessage = async () => {
-      const startIndex = (currentPage - 1) * usersPerPage;
-      const endIndex = startIndex + usersPerPage;
-      const usersToDisplay = allUsers.slice(startIndex, endIndex);
-
-      const pngBuffer = await generateRemoteImage(
-        "Leaderboard",
-        {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-                forceStatic: true,
-              }),
-            },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-                forceStatic: true,
-              }),
-            },
-          },
-          locale: interaction.locale,
-          users: usersToDisplay,
-          currentPage,
-          totalPages,
-          highlightedPosition,
-        },
-        { width: 400, height: 755 }
-      );
-
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-        name: `leaderboard.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
-        }`,
-      });
-
-      const embed = new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__("economy.leaderboard.title"))
-        .setImage(
-          `attachment://leaderboard.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
-          }`
-        )
-        .setFooter({
-          text: i18n.__("economy.leaderboard.footer", {
-            page: currentPage,
-            totalPages,
-          }),
-        })
-        .setTimestamp();
-
-      const upButton = new ButtonBuilder()
-        .setCustomId("up")
-        .setLabel("▲")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(highlightedPosition <= 1);
-
-      const downButton = new ButtonBuilder()
-        .setCustomId("down")
-        .setLabel("▼")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(highlightedPosition >= allUsers.length);
-
-      const prevButton = new ButtonBuilder()
-        .setCustomId("prev")
-        .setLabel("◀")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(currentPage <= 1);
-
-      const nextButton = new ButtonBuilder()
-        .setCustomId("next")
-        .setLabel("▶")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(currentPage >= totalPages);
-
-      const buttonRow = new ActionRowBuilder().addComponents(
-        upButton,
-        downButton,
-        prevButton,
-        nextButton
-      );
-
-      let components = [buttonRow];
-
-      if (usersToDisplay.length > 0) {
-        const selectOptions = usersToDisplay.map((user, index) => ({
-          label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
-          value: (startIndex + index + 1).toString(),
-          description: `Total: ${user.totalBalance.toFixed(0)}`.slice(0, 50),
-        }));
-
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId("select_user")
-          .setPlaceholder(i18n.__("economy.leaderboard.selectUser"))
-          .addOptions(selectOptions);
-
-        const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-        components.push(selectRow);
-      }
-
-      console.log(JSON.stringify(components, null, 2));
-
-      return {
-        embeds: [embed],
-        files: [attachment],
-        components,
-      };
-    };
-
-    const message = await interaction.editReply(
-      await generateLeaderboardMessage()
-    );
-
-    const collector = message.createMessageComponentCollector({
-      idle: 60000,
-      filter: (i) => i.user.id === interaction.user.id,
-    });
-
-    collector.on("collect", async (i) => {
-      if (i.user.id !== interaction.user.id) {
-        return i.reply({
-          content: i18n.__("economy.leaderboard.cantUseInteraction"),
-          ephemeral: true,
-        });
-      }
-
-      switch (i.customId) {
-        case "up":
-          highlightedPosition = Math.max(1, highlightedPosition - 1);
-          break;
-        case "down":
-          highlightedPosition = Math.min(
-            allUsers.length,
-            highlightedPosition + 1
-          );
-          break;
-        case "prev":
-          currentPage = Math.max(1, currentPage - 1);
-          break;
-        case "next":
-          currentPage = Math.min(totalPages, currentPage + 1);
-          break;
-        case "select_user":
-          highlightedPosition = parseInt(i.values[0]);
-          currentPage = Math.ceil(highlightedPosition / usersPerPage);
-          break;
-      }
-
-      await i.update(await generateLeaderboardMessage());
-    });
-
-    collector.on("end", () => {
-      interaction.editReply({ components: [] });
-    });
   },
   localization_strings: {
     name: {
       en: "leaderboard",
-      ru: "лидерборд",
-      uk: "лідерборд",
+      ru: "таблица",
+      uk: "таблиця",
     },
     description: {
-      en: "Display top users by total balance",
-      ru: "Показать топ пользователей по общему балансу",
-      uk: "Показати топ користувачів за загальним балансом",
-    },
-    noUsersFound: {
-      en: "No users found",
-      ru: "Не найдено пользователей",
-      uk: "Не знайдено користувачів",
-    },
-    cantUseInteraction: {
-      en: "You can't use this interaction.",
-      ru: "Вы не можете использовать это взаимодействие.",
-      uk: "Ви не можете використовувати це взаємодію.",
-    },
-    selectUser: {
-      en: "Select a user",
-      ru: "Выберите пользователя",
-      uk: "Виберіть користувача",
-    },
-    footer: {
-      en: "Page {{page}} of {{totalPages}}",
-      ru: "Страница {{page}} из {{totalPages}}",
-      uk: "Сторінка {{page}} з {{totalPages}}",
+      en: "View server leaderboard",
+      ru: "Посмотреть таблицу лидеров сервера",
+      uk: "Переглянути таблицю лідерів сервера",
     },
     title: {
-      en: "Leaderboard",
-      ru: "Лидерборд",
-      uk: "Лідерборд",
+      en: "Server Leaderboard",
+      ru: "Таблица лидеров сервера",
+      uk: "Таблиця лідерів сервера",
+    },
+    selectUser: {
+      en: "Select a user to view details",
+      ru: "Выберите пользователя для просмотра деталей",
+      uk: "Виберіть користувача для перегляду деталей",
+    },
+    selectedUser: {
+      en: "Selected user at position {{position}}",
+      ru: "Выбран пользователь на позиции {{position}}",
+      uk: "Обрано користувача на позиції {{position}}",
+    },
+    error: {
+      en: "An error occurred while processing your leaderboard request",
+      ru: "Произошла ошибка при обработке запроса таблицы лидеров",
+      uk: "Сталася помилка під час обробки запиту таблиці лідерів",
     },
   },
 };

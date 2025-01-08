@@ -41,126 +41,145 @@ export default {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
 
-    let initialUser = await EconomyEZ.get(
-      `${interaction.guild.id}.${interaction.user.id}`
-    );
+    try {
+      // Get initial user data and update bank balance
+      await EconomyEZ.updateBankOnInactivity(
+        interaction.guild.id,
+        interaction.user.id
+      );
+      const initialUser = await EconomyEZ.get(
+        `${interaction.guild.id}.${interaction.user.id}`
+      );
 
-    initialUser.bank = await EconomyEZ.calculateBankBalance(
-      initialUser.bank,
-      initialUser.latest_activity,
-      interaction.guild.id,
-      interaction.user.id
-    );
+      if (!initialUser?.bank) {
+        return interaction.editReply({
+          content: i18n.__("economy.withdraw.noBankAccount"),
+          ephemeral: true,
+        });
+      }
 
-    let amountInt = 0;
-    if (amount === "all") {
-      amountInt = initialUser.bank.amount;
-    } else if (amount === "half") {
-      amountInt = Math.floor(initialUser.bank.amount / 2);
-    } else {
-      amountInt = parseInt(amount);
-    }
+      // Calculate withdrawal amount
+      let amountInt = 0;
+      if (amount === "all") {
+        amountInt = Number(initialUser.bank.amount);
+      } else if (amount === "half") {
+        amountInt = Math.floor(Number(initialUser.bank.amount) / 2);
+      } else {
+        amountInt = parseInt(amount);
+        if (isNaN(amountInt)) {
+          return interaction.editReply({
+            content: i18n.__("economy.withdraw.invalidAmount"),
+            ephemeral: true,
+          });
+        }
+      }
 
-    console.log(initialUser.bank.amount, amountInt);
+      // Validate amount
+      if (initialUser.bank.amount < amountInt) {
+        return interaction.editReply({
+          content: i18n.__("economy.withdraw.insufficientFunds"),
+          ephemeral: true,
+        });
+      }
+      if (amountInt <= 0) {
+        return interaction.editReply({
+          content: i18n.__("economy.withdraw.amountGreaterThanZero"),
+          ephemeral: true,
+        });
+      }
 
-    if (initialUser.bank.amount < amountInt) {
-      return interaction.editReply({
-        content: i18n.__("economy.withdraw.insufficientFunds"),
-        ephemeral: true,
-      });
-    }
-    if (amountInt <= 0) {
-      return interaction.editReply({
-        content: i18n.__("economy.withdraw.amountGreaterThanZero"),
-        ephemeral: true,
-      });
-    }
-
-    const bankAmountAfterWithdraw = initialUser.bank.amount - amountInt;
-    let updatedUser = {
-      ...initialUser,
-      bank: {
-        amount: bankAmountAfterWithdraw,
-        ...(bankAmountAfterWithdraw > 0 && {
-          started_to_hold: initialUser.bank.started_to_hold,
-          holding_percentage: EconomyEZ.calculateLevel(initialUser.totalXp)
-            .level,
-        }),
-      },
-      balance: initialUser.balance + amountInt,
-    };
-
-    await EconomyEZ.set(
-      `${interaction.guild.id}.${interaction.user.id}`,
-      updatedUser
-    );
-
-    // Generate the transfer image
-    const pngBuffer = await generateRemoteImage(
-      "Transfer",
-      {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
-            locale: interaction.user.locale,
-          },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+      // Perform the withdrawal transaction
+      // Update bank data with proper nested update
+      const newBankAmount = initialUser.bank.amount - amountInt;
+      await EconomyEZ.set(`${interaction.guild.id}.${interaction.user.id}`, {
+        bank: {
+          amount: newBankAmount,
+          ...(newBankAmount === 0
+            ? {
+                startedToHold: BigInt(0),
+                holdingPercentage: 0,
+              }
+            : {
+                startedToHold: initialUser.bank.startedToHold,
+                holdingPercentage: initialUser.bank.holdingPercentage,
+              }),
         },
-        locale: interaction.locale,
-        database: await EconomyEZ.get(
-          `${interaction.guild.id}.${interaction.user.id}`
-        ),
-        amount: amountInt,
-        isDeposit: false,
-      },
-      { width: 400, height: 200 }
-    );
-
-    const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-      name: `withdraw.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
-    });
-
-    let withdraw_embed = new EmbedBuilder()
-      .setColor(process.env.EMBED_COLOR)
-      .setTimestamp()
-      .setImage(
-        `attachment://withdraw.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
-        }`
-      )
-      .setAuthor({
-        name: i18n.__("economy.withdraw.title"),
-        iconURL: interaction.user.displayAvatarURL(),
+        balance: initialUser.balance + amountInt,
       });
 
-    await interaction.editReply({
-      embeds: [withdraw_embed],
-      files: [attachment],
-    });
+      // Get updated user data
+      const updatedUser = await EconomyEZ.get(
+        `${interaction.guild.id}.${interaction.user.id}`
+      );
+
+      // Generate the transfer image
+      const pngBuffer = await generateRemoteImage(
+        "Transfer",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+              locale: interaction.user.locale,
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          locale: interaction.locale,
+          database: updatedUser,
+          amount: amountInt,
+          isDeposit: false,
+        },
+        { width: 400, height: 200 }
+      );
+
+      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        name: `withdraw.${
+          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+        }`,
+      });
+
+      let withdraw_embed = new EmbedBuilder()
+        .setColor(process.env.EMBED_COLOR)
+        .setTimestamp()
+        .setImage(
+          `attachment://withdraw.${
+            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          }`
+        )
+        .setAuthor({
+          name: i18n.__("economy.withdraw.title"),
+          iconURL: interaction.user.displayAvatarURL(),
+        });
+
+      await interaction.editReply({
+        embeds: [withdraw_embed],
+        files: [attachment],
+      });
+    } catch (error) {
+      console.error("Error in withdraw command:", error);
+      await interaction.editReply({
+        content: i18n.__("economy.withdraw.error"),
+        ephemeral: true,
+      });
+    }
   },
   localization_strings: {
     name: {
       en: "withdraw",
       ru: "снять",
       uk: "зняти",
-    },
-    title: {
-      en: "Withdraw",
-      ru: "Снять",
-      uk: "Зняти",
     },
     description: {
       en: "Withdraw money from bank",
@@ -190,6 +209,21 @@ export default {
       en: "Amount must be greater than zero",
       ru: "Сумма должна быть больше нуля",
       uk: "Сума має бути більшою за нуль",
+    },
+    invalidAmount: {
+      en: "Invalid amount",
+      ru: "Неверная сумма",
+      uk: "Невірна сума",
+    },
+    noBankAccount: {
+      en: "You don't have a bank account",
+      ru: "У вас нет банковского счета",
+      uk: "У вас немає банківського рахунку",
+    },
+    error: {
+      en: "An error occurred while processing your withdrawal",
+      ru: "Произошла ошибка при обработке снятия",
+      uk: "Сталася помилка під час обробки зняття",
     },
     title: {
       en: "Withdraw",

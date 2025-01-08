@@ -32,154 +32,166 @@ export default {
     await interaction.deferReply();
     const { guild, user } = interaction;
 
-    let currentUpgrade = 0;
+    try {
+      let currentUpgrade = 0;
 
-    const generateShopMessage = async () => {
-      // Get user data and available upgrades
-      const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
-      const upgrades = await EconomyEZ.getUpgrades(guild.id, user.id);
+      const generateShopMessage = async () => {
+        // Get user data and available upgrades
+        const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
+        const upgrades = await EconomyEZ.getUpgrades(guild.id, user.id);
 
-      const pngBuffer = await generateRemoteImage(
-        "UpgradesDisplay",
-        {
-          interaction: {
-            user: {
-              id: user.id,
-              username: user.username,
-              displayName: user.displayName,
-              avatarURL: user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
+        const pngBuffer = await generateRemoteImage(
+          "UpgradesDisplay",
+          {
+            interaction: {
+              user: {
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatarURL: user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: guild.id,
+                name: guild.name,
+                iconURL: guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
             },
-            guild: {
-              id: guild.id,
-              name: guild.name,
-              iconURL: guild.iconURL({
-                extension: "png",
-                size: 1024,
+            database: userData,
+            locale: interaction.locale,
+            upgrades: Object.entries(upgrades).map(([key, upgrade], index) => ({
+              emoji: upgrade.emoji,
+              title: i18n.__(`economy.shop.upgrades.${key}.name`),
+              description: i18n.__(`economy.shop.upgrades.${key}.description`, {
+                effect: upgrade.effect,
+                price: upgrade.price,
               }),
-            },
-          },
-          database: userData,
-          locale: interaction.locale,
-          upgrades: Object.entries(upgrades).map(([key, upgrade], index) => ({
-            emoji: upgrade.emoji,
-            title: i18n.__(`economy.shop.upgrades.${key}.name`),
-            description: i18n.__(`economy.shop.upgrades.${key}.description`, {
-              effect: upgrade.effect,
+              currentLevel: upgrade.level,
+              nextLevel: upgrade.level + 1,
               price: upgrade.price,
-            }),
-            currentLevel: upgrade.level,
-            nextLevel: upgrade.level + 1,
-            price: upgrade.price,
-            progress: 50,
-            id: index,
-          })),
-          currentUpgrade,
-          balance: userData.balance,
-        },
-        { width: 600, height: 350 },
-        { image: 2, emoji: 2 }
-      );
+              progress: 50,
+              id: index,
+            })),
+            currentUpgrade,
+            balance: userData.balance,
+          },
+          { width: 600, height: 350 },
+          { image: 2, emoji: 2 }
+        );
 
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-        name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+          name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+        });
+
+        // Create selection menu for switching upgrades
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId("switch_upgrade")
+          .setPlaceholder(i18n.__("economy.shop.selectUpgrade"))
+          .addOptions([
+            {
+              label: i18n.__("economy.shop.upgrades.daily.name"),
+              description: i18n.__("economy.shop.upgrades.daily.description", {
+                effect: upgrades.daily.effect,
+                price: upgrades.daily.price,
+              }),
+              value: "0",
+              emoji: upgrades.daily.emoji,
+              default: currentUpgrade === 0,
+            },
+            {
+              label: i18n.__("economy.shop.upgrades.crime.name"),
+              description: i18n.__("economy.shop.upgrades.crime.description", {
+                effect: upgrades.crime.effect,
+                price: upgrades.crime.price,
+              }),
+              value: "1",
+              emoji: upgrades.crime.emoji,
+              default: currentUpgrade === 1,
+            },
+          ]);
+
+        const purchaseButton = new ButtonBuilder()
+          .setCustomId("purchase")
+          .setLabel(i18n.__("economy.shop.purchaseButton"))
+          .setStyle(ButtonStyle.Success);
+
+        const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+        const buttonRow = new ActionRowBuilder().addComponents(purchaseButton);
+
+        const embed = new EmbedBuilder()
+          .setColor(process.env.EMBED_COLOR)
+          .setAuthor({
+            name: i18n.__("economy.shop.title"),
+            iconURL: user.displayAvatarURL(),
+          })
+          .setDescription(
+            i18n.__("economy.shop.description", { balance: userData.balance })
+          )
+          .setImage(
+            `attachment://shop.${
+              pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            }`
+          )
+          .setTimestamp();
+
+        return {
+          embeds: [embed],
+          files: [attachment],
+          components: [selectRow, buttonRow],
+        };
+      };
+
+      const message = await interaction.editReply(await generateShopMessage());
+
+      // Create collector for both select menu and button
+      const collector = message.createMessageComponentCollector({
+        filter: (i) => i.user.id === user.id,
+        time: 60000,
       });
 
-      // Create selection menu for switching upgrades
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId("switch_upgrade")
-        .setPlaceholder(i18n.__("economy.shop.selectUpgrade"))
-        .addOptions([
-          {
-            label: i18n.__("economy.shop.upgrades.daily.name"),
-            description: i18n.__("economy.shop.upgrades.daily.description", {
-              effect: upgrades.daily.effect,
-              price: upgrades.daily.price,
-            }),
-            value: "0",
-            emoji: upgrades.daily.emoji,
-            default: currentUpgrade === 0,
-          },
-          {
-            label: i18n.__("economy.shop.upgrades.crime.name"),
-            description: i18n.__("economy.shop.upgrades.crime.description", {
-              effect: upgrades.crime.effect,
-              price: upgrades.crime.price,
-            }),
-            value: "1",
-            emoji: upgrades.crime.emoji,
-            default: currentUpgrade === 1,
-          },
-        ]);
+      collector.on("collect", async (i) => {
+        if (i.customId === "switch_upgrade") {
+          currentUpgrade = parseInt(i.values[0]);
+          await i.update(await generateShopMessage());
+        } else if (i.customId === "purchase") {
+          const type = currentUpgrade === 0 ? "daily" : "crime";
+          const result = await EconomyEZ.purchaseUpgrade(
+            guild.id,
+            user.id,
+            type
+          );
 
-      const purchaseButton = new ButtonBuilder()
-        .setCustomId("purchase")
-        .setLabel(i18n.__("economy.shop.purchaseButton"))
-        .setStyle(ButtonStyle.Success);
+          if (!result.success) {
+            await i.reply({
+              content: i18n.__("economy.shop.insufficientFunds"),
+              ephemeral: true,
+            });
+            return;
+          }
 
-      const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-      const buttonRow = new ActionRowBuilder().addComponents(purchaseButton);
-
-      const embed = new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setAuthor({
-          name: i18n.__("economy.shop.title"),
-          iconURL: user.displayAvatarURL(),
-        })
-        .setDescription(
-          i18n.__("economy.shop.description", { balance: userData.balance })
-        )
-        .setImage(
-          `attachment://shop.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
-          }`
-        )
-        .setTimestamp();
-
-      return {
-        embeds: [embed],
-        files: [attachment],
-        components: [selectRow, buttonRow],
-      };
-    };
-
-    const message = await interaction.editReply(await generateShopMessage());
-
-    // Create collector for both select menu and button
-    const collector = message.createMessageComponentCollector({
-      filter: (i) => i.user.id === user.id,
-      time: 60000,
-    });
-
-    collector.on("collect", async (i) => {
-      if (i.customId === "switch_upgrade") {
-        currentUpgrade = parseInt(i.values[0]);
-        await i.update(await generateShopMessage());
-      } else if (i.customId === "purchase") {
-        const type = currentUpgrade === 0 ? "daily" : "crime";
-        const result = await EconomyEZ.purchaseUpgrade(guild.id, user.id, type);
-
-        if (!result.success) {
-          await i.reply({
-            content: i18n.__("economy.shop.insufficientFunds"),
-            ephemeral: true,
-          });
-          return;
+          // Show updated shop with new upgrade level
+          await i.update(await generateShopMessage());
+          collector.stop();
         }
+      });
 
-        // Show updated shop with new upgrade level
-        await i.update(await generateShopMessage());
-        collector.stop();
-      }
-    });
-
-    collector.on("end", () => {
-      if (message.editable) {
-        message.edit({ components: [] }).catch(() => {});
-      }
-    });
+      collector.on("end", () => {
+        if (message.editable) {
+          message.edit({ components: [] }).catch(() => {});
+        }
+      });
+    } catch (error) {
+      console.error("Error in shop command:", error);
+      await interaction.editReply({
+        content: i18n.__("economy.shop.error"),
+        ephemeral: true,
+      });
+    }
   },
   localization_strings: {
     name: {
@@ -226,6 +238,11 @@ export default {
       en: "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
       ru: "Успешно улучшено {{type}} до уровня {{level}} за {{cost}} монет",
       uk: "Успішно покращено {{type}} до рівня {{level}} за {{cost}} монет",
+    },
+    error: {
+      en: "An error occurred while processing your shop request",
+      ru: "Произошла ошибка при обработке запроса магазина",
+      uk: "Сталася помилка під час обробки запиту магазину",
     },
     upgrades: {
       daily: {
