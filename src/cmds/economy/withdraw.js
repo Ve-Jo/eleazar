@@ -96,7 +96,7 @@ export default {
           amount: newBankAmount,
           ...(newBankAmount === 0
             ? {
-                startedToHold: BigInt(0),
+                startedToHold: 0,
                 holdingPercentage: 0,
               }
             : {
