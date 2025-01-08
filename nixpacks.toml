@@ -4,11 +4,13 @@ nixPkgs = ["bun"]
 [phases.install]
 cmds = [
     "bun install --no-postinstall=false",
-    "bunx prisma generate"
+    "bun x prisma generate",
+    "mkdir -p node_modules/.prisma/client",
+    "cp -r node_modules/@prisma/client node_modules/.prisma/"
 ]
 
 [start]
 cmd = "bun ."
 
 [phases.cache]
-directories = ["node_modules", "bun.lockb"]
+directories = ["node_modules", "bun.lockb", ".prisma"]
