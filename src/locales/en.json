@@ -92,7 +92,8 @@
       "selectTarget": "Select a user to steal from",
       "noSelection": "No target selected",
       "successTarget": "You successfully stole {{amount}} coins from {{target}}!",
-      "failTarget": "You were caught and had to pay a fine of {{amount}} coins!"
+      "failTarget": "You were caught and had to pay a fine of {{amount}} coins!",
+      "error": "An error occurred while processing your crime attempt"
     },
     "balance": {
       "name": "balance",
@@ -108,12 +109,14 @@
     },
     "leaderboard": {
       "name": "leaderboard",
-      "description": "Display top users by total balance",
+      "description": "View server leaderboard",
       "noUsersFound": "No users found",
       "cantUseInteraction": "You can't use this interaction.",
-      "selectUser": "Select a user",
+      "selectUser": "Select a user to view details",
       "footer": "Page {{page}} of {{totalPages}}",
-      "title": "Leaderboard"
+      "title": "Server Leaderboard",
+      "selectedUser": "Selected user at position {{position}}",
+      "error": "An error occurred while processing your leaderboard request"
     },
     "level": {
       "name": "level",
@@ -126,7 +129,8 @@
           "description": "User to check level for"
         }
       },
-      "info": "{{user}}'s Level Information:\n• Level: **{{level}}**\n• XP: **{{currentXP}}**/**{{nextLevelXP}}** ({{progress}}%)\n• Total XP: **{{totalXP}}**"
+      "info": "{{user}}'s Level Information:\n• Level: **{{level}}**\n• XP: **{{currentXP}}**/**{{nextLevelXP}}** ({{progress}}%)\n• Total XP: **{{totalXP}}**",
+      "error": "An error occurred while processing your level request"
     },
     "deposit": {
       "name": "deposit",
@@ -140,7 +144,10 @@
       "success": "Successfully deposited {{amount}} coins",
       "amountGreaterThanZero": "Amount must be greater than 0",
       "insufficientFunds": "Insufficient funds",
-      "title": "Deposit"
+      "title": "Deposit",
+      "invalidAmount": "Invalid amount",
+      "noBankAccount": "You don't have a bank account",
+      "error": "An error occurred while processing your deposit"
     },
     "withdraw": {
       "name": "withdraw",
@@ -153,7 +160,10 @@
       },
       "insufficientFunds": "Insufficient funds",
       "amountGreaterThanZero": "Amount must be greater than zero",
-      "title": "Withdraw"
+      "title": "Withdraw",
+      "invalidAmount": "Invalid amount",
+      "noBankAccount": "You don't have a bank account",
+      "error": "An error occurred while processing your withdrawal"
     },
     "shop": {
       "name": "shop",
@@ -179,7 +189,8 @@
           "description": "-{{effect}} cooldown ({{price}} coins)"
         }
       },
-      "purchaseButton": "Purchase"
+      "purchaseButton": "Purchase",
+      "error": "An error occurred while processing your shop request"
     },
     "transfer": {
       "name": "transfer",
