@@ -29,4 +29,4 @@ COPY --from=builder /app .
 ENV NODE_ENV=production
 
 # Run migrations and start the bot
-CMD bunx prisma generate && bunx prisma migrate deploy && bun . 
+CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma migrate deploy && bun . 

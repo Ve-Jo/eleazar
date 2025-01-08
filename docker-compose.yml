@@ -4,4 +4,6 @@ services:
   bot:
     build: .
     env_file: .env
+    environment:
+      - DATABASE_URL=${PG_DATABASE_URL}
     restart: unless-stopped 
