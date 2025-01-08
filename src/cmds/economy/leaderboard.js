@@ -34,6 +34,7 @@ export default {
     try {
       let page = 0;
       const pageSize = 10;
+      let highlightedPosition = null;
 
       const generateLeaderboardMessage = async () => {
         // Get all users in the guild with their data
@@ -46,6 +47,18 @@ export default {
             totalBalance: userData.balance + (userData.bank?.amount || 0),
           }))
           .sort((a, b) => b.totalBalance - a.totalBalance);
+
+        // Find user's position in the leaderboard
+        if (highlightedPosition === null) {
+          const userIndex = sortedUsers.findIndex(
+            (user) => user.userId === interaction.user.id
+          );
+          if (userIndex !== -1) {
+            highlightedPosition = userIndex + 1;
+            // Adjust page to show the user's position
+            page = Math.floor(userIndex / pageSize);
+          }
+        }
 
         const totalPages = Math.ceil(sortedUsers.length / pageSize);
         const startIndex = page * pageSize;
@@ -112,6 +125,7 @@ export default {
             })),
             currentPage: page + 1,
             totalPages,
+            highlightedPosition,
           },
           { width: 400, height: 775 }
         );
@@ -191,18 +205,15 @@ export default {
       collector.on("collect", async (i) => {
         if (i.customId === "prev_page") {
           page = Math.max(0, page - 1);
+          highlightedPosition = null;
           await i.update(await generateLeaderboardMessage());
         } else if (i.customId === "next_page") {
           page++;
+          highlightedPosition = null;
           await i.update(await generateLeaderboardMessage());
         } else if (i.customId === "select_user") {
-          const position = parseInt(i.values[0]);
-          await i.reply({
-            content: i18n.__("economy.leaderboard.selectedUser", {
-              position,
-            }),
-            ephemeral: true,
-          });
+          highlightedPosition = parseInt(i.values[0]);
+          await i.update(await generateLeaderboardMessage());
         }
       });
 
@@ -222,8 +233,8 @@ export default {
   localization_strings: {
     name: {
       en: "leaderboard",
-      ru: "таблица",
-      uk: "таблиця",
+      ru: "лидерборд",
+      uk: "лідерборд",
     },
     description: {
       en: "View server leaderboard",
