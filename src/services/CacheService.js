@@ -34,11 +34,11 @@ class CacheService {
 
     // Default TTLs in seconds
     this.TTL = {
-      USER: 300, // 5 minutes
-      GUILD: 600, // 10 minutes
-      COOLDOWN: 60, // 1 minute
-      UPGRADE: 1800, // 30 minutes
-      LEADERBOARD: 300, // 5 minutes
+      USER: 300 * 60, // 5 minutes -> 300 seconds
+      GUILD: 600 * 60, // 10 minutes -> 600 seconds
+      COOLDOWN: 60 * 60, // 1 minute -> 60 seconds
+      UPGRADE: 1800 * 60, // 30 minutes -> 1800 seconds
+      LEADERBOARD: 300 * 60, // 5 minutes -> 300 seconds
     };
 
     this.PREFIXES = {
