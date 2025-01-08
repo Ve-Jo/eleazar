@@ -8,14 +8,8 @@ cmds = [
     "bun add -d prisma@6.2.0"
 ]
 
-[phases.build]
-cmds = [
-    "bunx prisma generate",
-    "bunx prisma migrate deploy"
-]
-
 [start]
-cmd = "bun ."
+cmd = "bunx prisma generate && bunx prisma migrate deploy && bun ."
 
 [phases.cache]
 directories = ["node_modules", "bun.lockb", "node_modules/.prisma"]
