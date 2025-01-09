@@ -44,9 +44,10 @@ export default {
     try {
       const targetUser =
         interaction.options.getUser("user") || interaction.user;
-      const userData = await EconomyEZ.get(
-        `${interaction.guild.id}.${targetUser.id}`
-      );
+      const guildId = interaction.guild.id;
+      const userId = targetUser.id;
+
+      const userData = await EconomyEZ.get(`${guildId}.${userId}`);
 
       if (!userData) {
         return interaction.editReply({
