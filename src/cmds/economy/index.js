@@ -7,23 +7,6 @@ export default {
     const command = i18nBuilder.createCommand();
     return command;
   },
-  async preExecute(interaction) {
-    const userData = await EconomyEZ.get(
-      `${interaction.guild.id}.${interaction.user.id}`
-    );
-    if (typeof userData.bank === "number") {
-      userData.bank = {
-        amount: userData.bank,
-        started_to_hold: Date.now(),
-        holding_percentage:
-          300 + EconomyEZ.calculateLevel(userData.totalXp).level * 10,
-      };
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.bank`,
-        userData.bank
-      );
-    }
-  },
   server: true,
   localization_strings: {
     name: {
