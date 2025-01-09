@@ -32,22 +32,49 @@ class EconomyService {
       throw new Error("Invalid path: must be a non-empty string");
     }
 
-    const [guildId, userId, ...rest] = path.split(".");
+    const [guildId, ...rest] = path.split(".");
+
+    // Special case for guild settings
+    if (rest.length === 1 && rest[0] === "settings") {
+      try {
+        const guild = await DatabaseService.getGuild(guildId);
+        return guild?.settings || DEFAULT_VALUES.guild.settings;
+      } catch (error) {
+        console.error("Error getting guild settings:", error);
+        return DEFAULT_VALUES.guild.settings;
+      }
+    }
+
+    // Regular user data path
+    const userId = rest[0];
     if (!guildId || !userId) {
       throw new Error("Invalid path: must include guildId and userId");
     }
 
     try {
+      console.log("EconomyService.get - Attempting to get user:", {
+        guildId,
+        userId,
+      });
+
       // Try to get from cache first
       let user = await CacheService.getUser(guildId, userId);
+      console.log("Cache result:", { exists: !!user });
 
       if (!user) {
-        // If not in cache, get from database
+        // Get from database (this will create the user if they don't exist)
         user = await DatabaseService.getUser(guildId, userId);
-        if (!user) return null;
+        console.log("Database result:", { exists: !!user });
 
-        // Cache the user data
-        await CacheService.setUser(guildId, userId, user);
+        if (user) {
+          // Cache the user data
+          await CacheService.setUser(guildId, userId, user);
+        }
+      }
+
+      if (!user) {
+        console.log("No user data found after all attempts");
+        return null;
       }
 
       // Format upgrades into the expected structure
@@ -63,7 +90,7 @@ class EconomyService {
 
       // Navigate through the path to get the specific value
       let value = user;
-      for (const key of rest) {
+      for (const key of rest.slice(1)) {
         value = value[key];
         if (value === undefined) return null;
       }
@@ -81,40 +108,42 @@ class EconomyService {
     try {
       const result = await DatabaseService.transaction(
         async (tx) => {
-          // Handle bank updates in a special way
-          if (value.bank) {
-            const bankUpdate = { ...value.bank };
-            delete value.bank;
+          // Special handling for cooldown updates
+          if (rest[0] === "message") {
+            // Update the message cooldown in the cooldowns table
+            await tx.userCooldowns.upsert({
+              where: {
+                guildId_userId: { guildId, userId },
+              },
+              create: {
+                guildId,
+                userId,
+                message: DatabaseService.safeBigInt(value),
+              },
+              update: {
+                message: DatabaseService.safeBigInt(value),
+              },
+            });
 
-            if (Object.keys(bankUpdate).length > 0) {
-              const updateData = {};
-
-              if (bankUpdate.amount !== undefined) {
-                updateData.amount = DatabaseService.safeDecimal(
-                  bankUpdate.amount
-                );
-              }
-
-              if (bankUpdate.holdingPercentage !== undefined) {
-                updateData.holdingPercentage = DatabaseService.safeNumber(
-                  bankUpdate.holdingPercentage
-                );
-                updateData.startedToHold = DatabaseService.safeBigInt(
-                  Date.now()
-                );
-              }
-
-              await tx.userBank.update({
-                where: { guildId_userId: { guildId, userId } },
-                data: updateData,
-              });
-            }
+            // Return the updated user data
+            return await tx.user.findUnique({
+              where: { guildId_userId: { guildId, userId } },
+              include: {
+                bank: true,
+                cooldowns: true,
+                upgrades: true,
+              },
+            });
           }
+
+          // Handle other updates as before
+          const updateData = {};
+          updateData[rest.join(".")] = value;
 
           const result = await tx.user.update({
             where: { guildId_userId: { guildId, userId } },
             data: {
-              ...value,
+              ...updateData,
               latestActivity: DatabaseService.safeBigInt(Date.now()),
             },
             include: {
@@ -124,22 +153,32 @@ class EconomyService {
             },
           });
 
-          const processedResult = DatabaseService.processUserData(result);
-
-          // Invalidate cache after update
-          await CacheService.invalidateUser(guildId, userId);
-
-          return processedResult;
+          return DatabaseService.processUserData(result);
         },
         {
           maxAttempts: 3,
-          timeout: 10000,
+          timeout: 15000,
+          isolationLevel: "ReadCommitted",
         }
       );
+
+      // Invalidate cache after update
+      await CacheService.invalidateUser(guildId, userId);
 
       return result;
     } catch (error) {
       console.error("Error in set:", error);
+      if (error.code === "P2028") {
+        // If transaction failed, retry without transaction
+        if (rest[0] === "message") {
+          await DatabaseService.updateCooldown(guildId, userId, "message");
+        } else {
+          const updateData = {};
+          updateData[rest.join(".")] = value;
+          await DatabaseService.updateUser(guildId, userId, updateData);
+        }
+        await CacheService.invalidateUser(guildId, userId);
+      }
       throw error;
     }
   }
@@ -415,24 +454,27 @@ class EconomyService {
 
   static async addXP(guildId, userId, amount) {
     try {
-      return await DatabaseService.transaction(
-        async (tx) => {
-          const user = await DatabaseService.mathOperation(
-            guildId,
-            userId,
-            "totalXp",
-            "+",
-            amount
-          );
-          return this.calculateLevel(user.totalXp);
-        },
-        {
-          maxAttempts: 3,
-          timeout: 5000,
-        }
+      const user = await DatabaseService.mathOperation(
+        guildId,
+        userId,
+        "totalXp",
+        "+",
+        amount
       );
+
+      // Invalidate cache after XP update
+      await CacheService.invalidateUser(guildId, userId);
+
+      return this.calculateLevel(user.totalXp);
     } catch (error) {
       console.error("Error in addXP:", error);
+      if (error.code === "P2028") {
+        // If transaction failed, retry once without transaction
+        const user = await DatabaseService.getUser(guildId, userId);
+        const newXp = user.totalXp + amount;
+        await DatabaseService.updateUser(guildId, userId, { totalXp: newXp });
+        return this.calculateLevel(newXp);
+      }
       throw error;
     }
   }

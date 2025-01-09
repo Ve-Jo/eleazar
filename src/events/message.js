@@ -111,21 +111,31 @@ export default {
 
     // Handle XP gain
     const userData = await EconomyEZ.get(`${guild.id}.${author.id}`);
-    const guildSettings = await EconomyEZ.get(
-      `${guild.id}.${guild.id}.settings`
-    );
+    const guildSettings = await EconomyEZ.get(`${guild.id}.settings`);
+
     const now = Date.now();
 
-    // Check if enough time has passed since last XP gain
-    if (
-      !userData?.message ||
-      now - userData.message >= guildSettings.message_cooldown * 1000
-    ) {
-      // Add XP and update message timestamp
-      await EconomyEZ.addXP(guild.id, author.id, guildSettings.xp_per_message);
+    try {
+      // Check if enough time has passed since last XP gain
+      if (
+        !userData?.message ||
+        now - userData.message >= guildSettings?.message_cooldown * 1000
+      ) {
+        // Add XP and update message timestamp
+        await EconomyEZ.addXP(
+          guild.id,
+          author.id,
+          guildSettings?.xp_per_message ||
+            DEFAULT_VALUES.guild.settings.xp_per_message
+        );
 
-      // Update last message timestamp
-      await EconomyEZ.set(`${guild.id}.${author.id}.message`, now);
+        // Update last message timestamp
+        await EconomyEZ.set(`${guild.id}.${author.id}.message`, now);
+      }
+    } catch (error) {
+      console.error("Error handling XP gain:", error);
+      // Don't throw the error to prevent the bot from crashing
+      // Just log it and continue
     }
   },
 };
