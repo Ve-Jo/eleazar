@@ -90,23 +90,26 @@ export default {
 
       // Perform the deposit transaction
       const levelInfo = EconomyEZ.calculateLevel(initialUser.totalXp);
-      const holdingPercentage = 300 + levelInfo.level; // Base 300% + level bonus
+      const holdingPercentage = 300 + levelInfo.level * 10; // Base 300% + level bonus
 
-      // First update the bank balance
-      await EconomyEZ.math(
-        `${interaction.guild.id}.${interaction.user.id}.bank.amount`,
-        "+",
-        amountInt
+      // First update the bank
+      await EconomyEZ.set(
+        `${interaction.guild.id}.${interaction.user.id}.bank`,
+        {
+          amount: initialUser.bank.amount + amountInt,
+          startedToHold: initialUser.bank.startedToHold || Date.now(),
+          holdingPercentage: Math.max(
+            holdingPercentage,
+            initialUser.bank.holdingPercentage || 0
+          ),
+        }
       );
 
-      // Then update the bank settings and user balance
-      await EconomyEZ.set(`${interaction.guild.id}.${interaction.user.id}`, {
-        balance: initialUser.balance - amountInt,
-        bank: {
-          startedToHold: Date.now(),
-          holdingPercentage: holdingPercentage,
-        },
-      });
+      // Then update the balance
+      await EconomyEZ.set(
+        `${interaction.guild.id}.${interaction.user.id}.balance`,
+        initialUser.balance - amountInt
+      );
 
       // Get updated user data
       const updatedUser = await EconomyEZ.get(

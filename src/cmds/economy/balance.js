@@ -40,6 +40,8 @@ export default {
   async execute(interaction) {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.user;
+
+    // Get user data with improved caching
     const userData = await EconomyEZ.get(`${interaction.guild.id}.${user.id}`);
 
     if (!userData) {

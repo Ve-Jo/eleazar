@@ -92,27 +92,25 @@ export default {
       const userData = await EconomyEZ.get(
         `${interaction.guild.id}.${interaction.user.id}`
       );
+      console.log(userData);
       const dailyLevel = userData.upgrades.daily.level;
       const multiplier = 1 + (dailyLevel - 1) * 0.15; // 15% increase per level
 
       const baseAmount = Math.floor(Math.random() * 90) + 10;
       const amount = Math.floor(baseAmount * multiplier);
 
-      // Update balance and cooldown in a single transaction
-      await EconomyEZ.math(
-        `${interaction.guild.id}.${interaction.user.id}.balance`,
-        "+",
-        amount
-      );
+      // Update cooldown first
       await EconomyEZ.updateCooldown(
         interaction.guild.id,
         interaction.user.id,
         "daily"
       );
 
-      // Get the final updated user data
-      const finalUserData = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
+      // Then update balance and get the result
+      const updatedData = await EconomyEZ.math(
+        `${interaction.guild.id}.${interaction.user.id}.balance`,
+        "+",
+        amount
       );
 
       let pngBuffer = await generateRemoteImage(
@@ -137,7 +135,7 @@ export default {
               }),
             },
           },
-          database: finalUserData,
+          database: updatedData,
           locale: interaction.locale,
           amount: amount,
         },

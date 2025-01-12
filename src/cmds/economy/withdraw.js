@@ -89,23 +89,21 @@ export default {
       }
 
       // Perform the withdrawal transaction
-      // Update bank data with proper nested update
       const newBankAmount = initialUser.bank.amount - amountInt;
-      await EconomyEZ.set(`${interaction.guild.id}.${interaction.user.id}`, {
-        bank: {
+      await EconomyEZ.set(
+        `${interaction.guild.id}.${interaction.user.id}.bank`,
+        {
           amount: newBankAmount,
-          ...(newBankAmount === 0
-            ? {
-                startedToHold: 0,
-                holdingPercentage: 0,
-              }
-            : {
-                startedToHold: initialUser.bank.startedToHold,
-                holdingPercentage: initialUser.bank.holdingPercentage,
-              }),
-        },
-        balance: initialUser.balance + amountInt,
-      });
+          startedToHold:
+            newBankAmount === 0 ? 0 : initialUser.bank.startedToHold,
+          holdingPercentage:
+            newBankAmount === 0 ? 0 : initialUser.bank.holdingPercentage,
+        }
+      );
+      await EconomyEZ.set(
+        `${interaction.guild.id}.${interaction.user.id}.balance`,
+        initialUser.balance + amountInt
+      );
 
       // Get updated user data
       const updatedUser = await EconomyEZ.get(
