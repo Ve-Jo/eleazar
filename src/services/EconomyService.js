@@ -39,6 +39,23 @@ class EconomyService {
 
       if (!user) return null;
 
+      // Only calculate bank balance if we're specifically requesting bank or bank-related data
+      const field = rest.join(".");
+      if (field === "bank" || field.startsWith("bank.") || !field) {
+        // Update bank balance if needed
+        const newBalance = await this.calculateBankBalance(
+          user.bank,
+          user.latestActivity,
+          guildId,
+          userId
+        );
+
+        // Only update user object if balance changed
+        if (Math.abs(newBalance - user.bank.amount) > 0.00001) {
+          user.bank.amount = newBalance;
+        }
+      }
+
       // Navigate through the path to get the specific value
       let value = user;
       for (const key of rest) {
@@ -430,19 +447,46 @@ class EconomyService {
         userId,
       });
 
+      let newAmount;
       if (hoursSinceLastActivity > MAX_INACTIVE_HOURS) {
-        return await this.handleInactiveBankBalance(
+        newAmount = await this.handleInactiveBankBalance(
           bankData,
           MAX_INACTIVE_HOURS,
           guildId,
           userId
         );
+      } else {
+        newAmount = await this.calculateActiveBankBalance(
+          bankData,
+          hoursSinceLastActivity
+        );
       }
 
-      return await this.calculateActiveBankBalance(
-        bankData,
-        hoursSinceLastActivity
-      );
+      // Only update if the amount has changed significantly (more than 0.00001)
+      if (Math.abs(newAmount - bankData.amount) > 0.00001) {
+        console.log("Bank balance changed significantly:", {
+          oldAmount: bankData.amount,
+          newAmount,
+          difference: newAmount - bankData.amount,
+        });
+
+        await DatabaseService.updateBank(guildId, userId, {
+          amount: newAmount,
+          startedToHold: bankData.startedToHold,
+          holdingPercentage: bankData.holdingPercentage,
+        });
+
+        // Invalidate cache after bank update
+        await CacheService.invalidateUser(guildId, userId);
+      } else {
+        console.log("Bank balance change too small, skipping update:", {
+          oldAmount: bankData.amount,
+          newAmount,
+          difference: newAmount - bankData.amount,
+        });
+      }
+
+      return newAmount;
     } catch (error) {
       console.error("Error in EconomyService.calculateBankBalance:", {
         bankData,
