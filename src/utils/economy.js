@@ -83,116 +83,398 @@ class EconomyEZ {
     const testUserId = "test_user";
 
     try {
-      // First test basic connection
-      await EconomyService.testConnection();
-
-      // Then test full functionality with a test user
       await EconomyService.get(`${testGuildId}.${testUserId}`);
-
-      console.log(
-        "Successfully connected to the database and initialized tables"
-      );
-
-      // Clean up test data
-      await EconomyService.cleanupTestData(testGuildId, testUserId);
-      console.log("Successfully cleaned up test data");
-
+      console.log("Successfully connected to the database");
       return true;
     } catch (error) {
-      // Try to clean up even if test failed
-      try {
-        await EconomyService.cleanupTestData(testGuildId, testUserId);
-      } catch (cleanupError) {
-        console.error("Failed to cleanup test data:", cleanupError);
-      }
-
-      console.error("Failed to connect to the database:", error);
+      console.error("Database connection test failed:", {
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
       throw error;
     }
   }
 
   static async get(path) {
-    return await EconomyService.get(path);
+    try {
+      if (!path) {
+        throw new Error("Path is required for get operation");
+      }
+      const [guildId, userId] = path.split(".");
+      if (!guildId || !userId) {
+        throw new Error(
+          `Invalid path format: ${path}. Expected format: guildId.userId.field`
+        );
+      }
+
+      return await EconomyService.get(path);
+    } catch (error) {
+      console.error("Error in EconomyEZ.get:", {
+        path,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static async set(path, value) {
-    return await EconomyService.set(path, value);
-  }
+    try {
+      if (!path) {
+        throw new Error("Path is required for set operation");
+      }
+      const [guildId, userId] = path.split(".");
+      if (!guildId || !userId) {
+        throw new Error(
+          `Invalid path format: ${path}. Expected format: guildId.userId.field`
+        );
+      }
 
-  static async remove(path) {
-    return await EconomyService.remove(path);
+      return await EconomyService.set(path, value);
+    } catch (error) {
+      console.error("Error in EconomyEZ.set:", {
+        path,
+        value,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static async math(path, operator, number) {
-    return await EconomyService.math(path, operator, number);
-  }
+    try {
+      if (!path) {
+        throw new Error("Path is required for math operation");
+      }
+      if (!["+", "-", "*", "/"].includes(operator)) {
+        throw new Error(`Invalid operator: ${operator}`);
+      }
+      if (isNaN(number)) {
+        throw new Error(`Invalid number: ${number}`);
+      }
 
-  static async listGuilds() {
-    return await EconomyService.listGuilds();
-  }
-
-  static async search(prefix) {
-    return await EconomyService.search(prefix);
+      return await EconomyService.math(path, operator, number);
+    } catch (error) {
+      console.error("Error in EconomyEZ.math:", {
+        path,
+        operator,
+        number,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static async getCooldownTime(guildId, userId, type) {
-    return await EconomyService.getCooldownTime(guildId, userId, type);
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+      if (!type || !COOLDOWNS[type]) {
+        throw new Error(`Invalid cooldown type: ${type}`);
+      }
+
+      return await EconomyService.getCooldownTime(guildId, userId, type);
+    } catch (error) {
+      console.error("Error in EconomyEZ.getCooldownTime:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static async isCooldownActive(guildId, userId, type) {
-    return await EconomyService.isCooldownActive(guildId, userId, type);
+    try {
+      const remainingTime = await this.getCooldownTime(guildId, userId, type);
+      return remainingTime > 0;
+    } catch (error) {
+      console.error("Error in EconomyEZ.isCooldownActive:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static getUpgradeInfo(type, level) {
-    return EconomyService.getUpgradeInfo(type, level);
+    try {
+      if (!type || !UPGRADES[type]) {
+        throw new Error(`Invalid upgrade type: ${type}`);
+      }
+      if (isNaN(level) || level < 1) {
+        throw new Error(`Invalid level: ${level}`);
+      }
+
+      return EconomyService.getUpgradeInfo(type, level);
+    } catch (error) {
+      console.error("Error in EconomyEZ.getUpgradeInfo:", {
+        type,
+        level,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw error;
+    }
   }
 
   static async getUpgrades(guildId, userId) {
-    return await EconomyService.getUpgrades(guildId, userId);
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+
+      return await EconomyService.getUpgrades(guildId, userId);
+    } catch (error) {
+      console.error("Error in EconomyEZ.getUpgrades:", {
+        guildId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
-  static async purchaseUpgrade(guildId, userId, type) {
-    return await EconomyService.purchaseUpgrade(guildId, userId, type);
+  static async updateBankOnInactivity(guildId, userId) {
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+
+      const user = await this.get(`${guildId}.${userId}`);
+      if (!user) {
+        throw new Error(`User not found: ${guildId}.${userId}`);
+      }
+      if (!user.bank) {
+        throw new Error(
+          `Bank account not found for user: ${guildId}.${userId}`
+        );
+      }
+
+      console.log("Calculating bank balance for:", {
+        guildId,
+        userId,
+        currentBank: user.bank,
+        latestActivity: user.latestActivity,
+      });
+
+      const newBalance = await EconomyService.calculateBankBalance(
+        user.bank,
+        user.latestActivity,
+        guildId,
+        userId
+      );
+
+      if (newBalance !== user.bank.amount) {
+        console.log("Updating bank balance:", {
+          guildId,
+          userId,
+          oldBalance: user.bank.amount,
+          newBalance,
+        });
+
+        await this.set(`${guildId}.${userId}.bank`, {
+          amount: newBalance,
+          startedToHold: user.bank.startedToHold,
+          holdingPercentage: user.bank.holdingPercentage,
+        });
+      }
+
+      return newBalance;
+    } catch (error) {
+      console.error("Error in EconomyEZ.updateBankOnInactivity:", {
+        guildId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static calculateLevel(
     totalXp,
     multiplier = DEFAULT_VALUES.guild.settings.multiplier
   ) {
-    return EconomyService.calculateLevel(totalXp, multiplier);
+    try {
+      if (isNaN(totalXp)) {
+        throw new Error(`Invalid totalXp: ${totalXp}`);
+      }
+      if (isNaN(multiplier)) {
+        throw new Error(`Invalid multiplier: ${multiplier}`);
+      }
+
+      const level = Math.max(1, Math.floor(Math.sqrt(totalXp / multiplier)));
+      const xpForCurrentLevel = (level - 1) * (level - 1) * multiplier;
+      const xpForNextLevel = level * level * multiplier;
+      const remainingXp = totalXp - xpForCurrentLevel;
+
+      return {
+        level,
+        currentXP: remainingXp,
+        requiredXP: xpForNextLevel - xpForCurrentLevel,
+        totalXP: totalXp,
+      };
+    } catch (error) {
+      console.error("Error in EconomyEZ.calculateLevel:", {
+        totalXp,
+        multiplier,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw error;
+    }
   }
 
   static async addXP(guildId, userId, amount) {
-    return await EconomyService.addXP(guildId, userId, amount);
-  }
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+      if (isNaN(amount)) {
+        throw new Error(`Invalid amount: ${amount}`);
+      }
 
-  static async getGuildLevels(guildId) {
-    return await EconomyService.getGuildLevels(guildId);
-  }
+      await this.math(`${guildId}.${userId}.totalXp`, "+", amount);
+      const user = await this.get(`${guildId}.${userId}`);
+      if (!user) {
+        throw new Error(`User not found after XP update: ${guildId}.${userId}`);
+      }
 
-  static async setGuildLevels(guildId, settings) {
-    return await EconomyService.setGuildLevels(guildId, settings);
-  }
-
-  static async calculateBankBalance(bankData, latestActivity, guildId, userId) {
-    return await EconomyService.calculateBankBalance(
-      bankData,
-      latestActivity,
-      guildId,
-      userId
-    );
-  }
-
-  static async updateBankOnInactivity(guildId, userId) {
-    return await EconomyService.updateBankOnInactivity(guildId, userId);
-  }
-
-  static async updateCooldown(guildId, userId, type) {
-    return await EconomyService.updateCooldown(guildId, userId, type);
+      return this.calculateLevel(user.totalXp);
+    } catch (error) {
+      console.error("Error in EconomyEZ.addXP:", {
+        guildId,
+        userId,
+        amount,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 
   static async getGuildUsers(guildId) {
-    return await EconomyService.getGuildUsers(guildId);
+    try {
+      if (!guildId) {
+        throw new Error("GuildId is required");
+      }
+
+      return await EconomyService.getGuildUsers(guildId);
+    } catch (error) {
+      console.error("Error in EconomyEZ.getGuildUsers:", {
+        guildId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async purchaseUpgrade(guildId, userId, type) {
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+      if (!type || !UPGRADES[type]) {
+        throw new Error(`Invalid upgrade type: ${type}`);
+      }
+
+      const user = await this.get(`${guildId}.${userId}`);
+      if (!user) {
+        throw new Error(`User not found: ${guildId}.${userId}`);
+      }
+
+      const upgrades = await this.getUpgrades(guildId, userId);
+      const currentLevel = upgrades[type]?.level || 1;
+      const { price } = this.getUpgradeInfo(type, currentLevel);
+
+      if (user.balance < price) {
+        return { success: false, reason: "insufficient_funds" };
+      }
+
+      // Deduct the cost
+      await this.math(`${guildId}.${userId}.balance`, "-", price);
+
+      // Update the upgrade level
+      return await EconomyService.upgradeLevel(guildId, userId, type);
+    } catch (error) {
+      console.error("Error in EconomyEZ.purchaseUpgrade:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async updateCooldown(guildId, userId, type) {
+    try {
+      if (!guildId || !userId) {
+        throw new Error("Both guildId and userId are required");
+      }
+      if (!type || !COOLDOWNS[type]) {
+        throw new Error(`Invalid cooldown type: ${type}`);
+      }
+
+      return await EconomyService.updateCooldown(guildId, userId, type);
+    } catch (error) {
+      console.error("Error in EconomyEZ.updateCooldown:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async remove(path) {
+    try {
+      if (!path) {
+        throw new Error("Path is required for remove operation");
+      }
+      const [guildId, userId] = path.split(".");
+      if (!guildId || !userId) {
+        throw new Error(
+          `Invalid path format: ${path}. Expected format: guildId.userId.field`
+        );
+      }
+
+      return await EconomyService.remove(path);
+    } catch (error) {
+      console.error("Error in EconomyEZ.remove:", {
+        path,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
   }
 }
 

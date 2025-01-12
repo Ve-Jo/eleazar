@@ -3,607 +3,639 @@ import CacheService from "./CacheService.js";
 import { COOLDOWNS, UPGRADES, DEFAULT_VALUES } from "../utils/economy.js";
 
 class EconomyService {
-  // Test database connection
-  static async testConnection() {
-    try {
-      await DatabaseService.testConnection();
-      return true;
-    } catch (error) {
-      console.error("Failed to connect to the database:", error);
-      throw error;
-    }
-  }
-
-  // Cleanup test data
-  static async cleanupTestData(guildId, userId) {
-    try {
-      await DatabaseService.cleanupTestData(guildId, userId);
-      await CacheService.invalidateUser(guildId, userId);
-      await CacheService.invalidateGuild(guildId);
-      return true;
-    } catch (error) {
-      console.error("Failed to cleanup test data:", error);
-      throw error;
-    }
-  }
-
+  // Core Operations
   static async get(path) {
     if (!path || typeof path !== "string") {
       throw new Error("Invalid path: must be a non-empty string");
     }
 
-    const [guildId, ...rest] = path.split(".");
-
-    // Special case for guild settings
-    if (rest.length === 1 && rest[0] === "settings") {
-      try {
-        const guild = await DatabaseService.getGuild(guildId);
-        return guild?.settings || DEFAULT_VALUES.guild.settings;
-      } catch (error) {
-        console.error("Error getting guild settings:", error);
-        return DEFAULT_VALUES.guild.settings;
-      }
-    }
-
-    // Regular user data path
-    const userId = rest[0];
+    const [guildId, userId, ...rest] = path.split(".");
     if (!guildId || !userId) {
       throw new Error("Invalid path: must include guildId and userId");
     }
 
     try {
-      console.log("EconomyService.get - Attempting to get user:", {
-        guildId,
-        userId,
-      });
+      console.log("Getting user data:", { guildId, userId, path });
 
       // Try to get from cache first
       let user = await CacheService.getUser(guildId, userId);
-      console.log("Cache result:", { exists: !!user });
+      console.log("Cache result:", { guildId, userId, hasData: !!user });
 
       if (!user) {
-        // Get from database (this will create the user if they don't exist)
+        // Get from database
         user = await DatabaseService.getUser(guildId, userId);
-        console.log("Database result:", { exists: !!user });
+        console.log("Database result:", { guildId, userId, hasData: !!user });
 
         if (user) {
           // Cache the user data
-          await CacheService.setUser(guildId, userId, user);
+          const cached = await CacheService.setUser(guildId, userId, user);
+          console.log("Cache set result:", {
+            guildId,
+            userId,
+            success: cached,
+          });
         }
       }
 
-      if (!user) {
-        console.log("No user data found after all attempts");
-        return null;
-      }
-
-      // Format upgrades into the expected structure
-      if (user.upgrades) {
-        const formattedUpgrades = {};
-        for (const upgrade of user.upgrades) {
-          formattedUpgrades[upgrade.upgradeType] = {
-            level: upgrade.level,
-          };
-        }
-        user.upgrades = formattedUpgrades;
-      }
+      if (!user) return null;
 
       // Navigate through the path to get the specific value
       let value = user;
-      for (const key of rest.slice(1)) {
+      for (const key of rest) {
         value = value[key];
         if (value === undefined) return null;
       }
 
       return value;
     } catch (error) {
-      console.error("Error in get:", error);
+      console.error("Error in EconomyService.get:", {
+        path,
+        guildId,
+        userId,
+        rest,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
       throw error;
     }
   }
 
   static async set(path, value) {
+    if (!path || typeof path !== "string") {
+      throw new Error("Invalid path: must be a non-empty string");
+    }
+
     const [guildId, userId, ...rest] = path.split(".");
+    if (!guildId || !userId) {
+      throw new Error("Invalid path: must include guildId and userId");
+    }
+
+    const field = rest.join(".");
+    if (!field) {
+      throw new Error("Invalid path: must include a field to update");
+    }
 
     try {
-      const result = await DatabaseService.transaction(
-        async (tx) => {
-          // Special handling for cooldown updates
-          if (rest[0] === "message") {
-            // Update the message cooldown in the cooldowns table
-            await tx.userCooldowns.upsert({
-              where: {
-                guildId_userId: { guildId, userId },
-              },
-              create: {
-                guildId,
-                userId,
-                message: DatabaseService.safeBigInt(value),
-              },
-              update: {
-                message: DatabaseService.safeBigInt(value),
-              },
-            });
+      console.log("Setting user data:", { guildId, userId, field, value });
 
-            // Return the updated user data
-            return await tx.user.findUnique({
-              where: { guildId_userId: { guildId, userId } },
-              include: {
-                bank: true,
-                cooldowns: true,
-                upgrades: true,
-              },
-            });
-          }
+      // Special handling for non-numeric fields and objects
+      if (
+        field === "banner_url" ||
+        field === "bannerUrl" ||
+        field === "bank" ||
+        typeof value === "object"
+      ) {
+        const user = await DatabaseService.findUser(guildId, userId);
+        if (!user) {
+          // Create user if doesn't exist
+          await DatabaseService.createUser(guildId, userId);
+        }
 
-          // Handle other updates as before
-          const updateData = {};
-          updateData[rest.join(".")] = value;
-
-          const result = await tx.user.update({
-            where: { guildId_userId: { guildId, userId } },
-            data: {
-              ...updateData,
-              latestActivity: DatabaseService.safeBigInt(Date.now()),
-            },
-            include: {
-              bank: true,
-              cooldowns: true,
-              upgrades: true,
-            },
+        let updateData = {};
+        if (field === "banner_url" || field === "bannerUrl") {
+          updateData = { bannerUrl: value };
+        } else if (field === "bank") {
+          // Update bank directly
+          const result = await DatabaseService.updateBank(
+            guildId,
+            userId,
+            value
+          );
+          return DatabaseService.processUserData({
+            guildId,
+            userId,
+            bank: result,
           });
-
-          return DatabaseService.processUserData(result);
-        },
-        {
-          maxAttempts: 3,
-          timeout: 15000,
-          isolationLevel: "ReadCommitted",
-        }
-      );
-
-      // Invalidate cache after update
-      await CacheService.invalidateUser(guildId, userId);
-
-      return result;
-    } catch (error) {
-      console.error("Error in set:", error);
-      if (error.code === "P2028") {
-        // If transaction failed, retry without transaction
-        if (rest[0] === "message") {
-          await DatabaseService.updateCooldown(guildId, userId, "message");
         } else {
-          const updateData = {};
-          updateData[rest.join(".")] = value;
-          await DatabaseService.updateUser(guildId, userId, updateData);
+          updateData = { [field]: value };
         }
-        await CacheService.invalidateUser(guildId, userId);
+
+        const result = await DatabaseService.prisma.user.update({
+          where: { guildId_userId: { guildId, userId } },
+          data: updateData,
+          include: { bank: true, cooldowns: true, upgrades: true },
+        });
+
+        // Process and return the result, mapping bannerUrl to banner_url for consistency
+        const processed = DatabaseService.processUserData(result);
+        if (processed && "bannerUrl" in processed) {
+          processed.banner_url = processed.bannerUrl;
+          delete processed.bannerUrl;
+        }
+        return processed;
       }
+
+      // For numeric fields, try to get current value
+      const currentValue = await this.get(`${guildId}.${userId}.${field}`);
+
+      // If field doesn't exist in the current data, create it with the value
+      if (currentValue === null) {
+        const user = await DatabaseService.findUser(guildId, userId);
+        if (!user) {
+          await DatabaseService.createUser(guildId, userId);
+        }
+
+        // For direct user fields
+        const result = await DatabaseService.prisma.user.update({
+          where: { guildId_userId: { guildId, userId } },
+          data: { [field]: value },
+          include: { bank: true, cooldowns: true, upgrades: true },
+        });
+        return DatabaseService.processUserData(result);
+      }
+
+      // If field exists, use math operation for the update
+      const difference = value - currentValue;
+      return await this.math(
+        path,
+        difference > 0 ? "+" : "-",
+        Math.abs(difference)
+      );
+    } catch (error) {
+      console.error("Error in EconomyService.set:", {
+        path,
+        value,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
       throw error;
     }
   }
 
   static async math(path, operator, number) {
+    if (!path || typeof path !== "string") {
+      throw new Error("Invalid path: must be a non-empty string");
+    }
+
     const [guildId, userId, ...rest] = path.split(".");
+    if (!guildId || !userId) {
+      throw new Error("Invalid path: must include guildId and userId");
+    }
+
     const field = rest.join(".");
-
-    const result = await DatabaseService.withErrorHandling(
-      "math",
-      `${field} ${operator} ${number}`,
-      async () => {
-        const result = await DatabaseService.mathOperation(
-          guildId,
-          userId,
-          field,
-          operator,
-          number
-        );
-
-        // Invalidate cache after math operation
-        await CacheService.invalidateUser(guildId, userId);
-
-        return result;
-      }
-    );
-
-    return result;
-  }
-
-  static async listGuilds() {
-    try {
-      const guilds = await DatabaseService.listGuilds();
-      return guilds.map((guild) => guild.id);
-    } catch (error) {
-      console.error("Error in listGuilds:", error);
-      throw error;
+    if (!field) {
+      throw new Error("Invalid path: must include a field to update");
     }
-  }
 
-  static async getGuildUsers(guildId) {
-    try {
-      // Try to get from cache first
-      const cachedLeaderboard = await CacheService.getLeaderboard(guildId);
-      if (cachedLeaderboard) {
-        return cachedLeaderboard;
-      }
-
-      const users = await DatabaseService.prisma.user.findMany({
-        where: {
-          guildId,
-          OR: [{ balance: { gt: 0 } }, { bank: { amount: { gt: 0 } } }],
-        },
-        select: {
-          userId: true,
-          balance: true,
-          bank: {
-            select: {
-              amount: true,
-              holdingPercentage: true,
-              startedToHold: true,
-            },
-          },
-        },
-        orderBy: {
-          balance: "desc",
-        },
-        take: 100,
-      });
-
-      const processedUsers = users.map((user) => ({
-        userId: user.userId,
-        balance: DatabaseService.safeDecimal(user.balance),
-        bank: user.bank
-          ? {
-              amount: DatabaseService.safeDecimal(user.bank.amount),
-              holdingPercentage: user.bank.holdingPercentage,
-              startedToHold: user.bank.startedToHold,
-            }
-          : null,
-      }));
-
-      // Cache the leaderboard data
-      await CacheService.setLeaderboard(guildId, processedUsers);
-
-      return processedUsers;
-    } catch (error) {
-      console.error("Error in getGuildUsers:", error);
-      throw error;
+    if (!["+", "-", "*", "/"].includes(operator)) {
+      throw new Error(`Invalid operator: ${operator}`);
     }
-  }
 
-  static async getCooldownTime(guildId, userId, type) {
+    if (typeof number !== "number" || isNaN(number)) {
+      throw new Error(`Invalid number: ${number}`);
+    }
+
     try {
-      // Try to get from cache first
-      const cachedCooldown = await CacheService.getCooldown(
+      console.log("Math operation:", {
+        path,
         guildId,
         userId,
-        type
+        field,
+        operator,
+        number,
+      });
+
+      const result = await DatabaseService.mathOperation(
+        guildId,
+        userId,
+        field,
+        operator,
+        number
       );
-      if (cachedCooldown) {
-        return cachedCooldown;
-      }
+      await CacheService.invalidateUser(guildId, userId);
+      return result;
+    } catch (error) {
+      console.error("Error in EconomyService.math:", {
+        path,
+        guildId,
+        userId,
+        field,
+        operator,
+        number,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  // Cooldown Management
+  static async getCooldownTime(guildId, userId, type) {
+    if (!guildId || !userId) {
+      throw new Error("Both guildId and userId are required");
+    }
+    if (!type || !COOLDOWNS[type]) {
+      throw new Error(`Invalid cooldown type: ${type}`);
+    }
+
+    try {
+      // Try cache first
+      const cachedTime = await CacheService.getCooldown(guildId, userId, type);
+      if (cachedTime) return cachedTime;
 
       const timestamp = await DatabaseService.getCooldown(
         guildId,
         userId,
         type
       );
-
-      if (!timestamp) return 0;
-
       const cooldownTime = COOLDOWNS[type];
-      if (!cooldownTime) return 0;
+
+      // If no timestamp or cooldown time, user can perform the action
+      if (!timestamp || !cooldownTime) return 0;
 
       const now = Date.now();
       const expiresAt =
         timestamp +
         (type === "crime"
-          ? cooldownTime.base
+          ? await this.calculateCrimeCooldown(guildId, userId, cooldownTime)
           : typeof cooldownTime === "object"
           ? cooldownTime.base
           : cooldownTime);
 
-      if (now >= expiresAt) return 0;
-
-      if (type === "crime") {
-        const upgrades = await this.getUpgrades(guildId, userId);
-        const crimeUpgrade = upgrades[type];
-        const level = crimeUpgrade?.level || 1;
-        const reduction = level * COOLDOWNS.crime.reduction;
-        const adjustedCooldown = Math.max(
-          COOLDOWNS.crime.min,
-          cooldownTime.base - reduction
-        );
-
-        const adjustedExpiresAt = timestamp + adjustedCooldown;
-        const remainingTime = Math.max(0, adjustedExpiresAt - now);
-
-        // Cache the cooldown
-        await CacheService.setCooldown(guildId, userId, type, remainingTime);
-
-        return remainingTime;
-      }
-
       const remainingTime = Math.max(0, expiresAt - now);
-
-      // Cache the cooldown
       await CacheService.setCooldown(guildId, userId, type, remainingTime);
 
       return remainingTime;
     } catch (error) {
-      console.error("Error in getCooldownTime:", error);
-      throw error;
-    }
-  }
-
-  static async isCooldownActive(guildId, userId, type) {
-    try {
-      const remainingTime = await this.getCooldownTime(guildId, userId, type);
-      return remainingTime > 0;
-    } catch (error) {
-      console.error("Error in isCooldownActive:", error);
-      throw error;
-    }
-  }
-
-  static getUpgradeInfo(type, level) {
-    const upgrade = UPGRADES[type];
-    if (!upgrade) return null;
-
-    const price = Math.floor(
-      upgrade.basePrice * Math.pow(upgrade.priceMultiplier, level - 1)
-    );
-
-    let effect;
-    if (type === "daily") {
-      // For daily, calculate percentage increase
-      effect = Math.floor(100 * (1 + upgrade.effectMultiplier * (level - 1)));
-    } else if (type === "crime") {
-      // For crime, calculate cooldown reduction in minutes
-      effect = Math.floor((upgrade.effectValue * level) / (60 * 1000));
-    }
-
-    return { price, effect };
-  }
-
-  static async getUpgrades(guildId, userId) {
-    try {
-      const upgrades = await DatabaseService.getUpgrades(guildId, userId);
-      const result = {};
-
-      for (const type of Object.keys(UPGRADES)) {
-        const upgrade = upgrades.find((u) => u.upgradeType === type) || {
-          level: 1,
-        };
-        const info = this.getUpgradeInfo(type, upgrade.level);
-
-        result[type] = {
-          level: upgrade.level,
-          price: info.price,
-          effect: info.effect,
-          emoji: UPGRADES[type].emoji,
-        };
-      }
-
-      return result;
-    } catch (error) {
-      console.error("Error in getUpgrades:", error);
-      throw error;
-    }
-  }
-
-  static async purchaseUpgrade(guildId, userId, type) {
-    try {
-      return await DatabaseService.transaction(
-        async (tx) => {
-          const user = await DatabaseService.getUser(guildId, userId);
-          if (!user) return false;
-
-          const currentLevel =
-            user.upgrades.find((u) => u.upgradeType === type)?.level || 1;
-          const upgradeInfo = this.getUpgradeInfo(type, currentLevel);
-
-          if (user.balance < upgradeInfo.price) return false;
-
-          // Perform both operations atomically
-          await Promise.all([
-            DatabaseService.mathOperation(
-              guildId,
-              userId,
-              "balance",
-              "-",
-              upgradeInfo.price
-            ),
-            DatabaseService.updateUpgrade(
-              guildId,
-              userId,
-              type,
-              currentLevel + 1
-            ),
-          ]);
-
-          return true;
-        },
-        {
-          maxAttempts: 3,
-          timeout: 5000,
-        }
-      );
-    } catch (error) {
-      console.error("Error in purchaseUpgrade:", error);
-      throw error;
-    }
-  }
-
-  static calculateLevel(
-    totalXp,
-    multiplier = DEFAULT_VALUES.guild.settings.multiplier
-  ) {
-    const level = Math.max(1, Math.floor(Math.sqrt(totalXp / multiplier)));
-    const xpForCurrentLevel = (level - 1) * (level - 1) * multiplier;
-    const xpForNextLevel = level * level * multiplier;
-    const remainingXp = totalXp - xpForCurrentLevel;
-
-    return {
-      level,
-      currentXP: remainingXp,
-      requiredXP: xpForNextLevel - xpForCurrentLevel,
-      totalXP: totalXp,
-    };
-  }
-
-  static async addXP(guildId, userId, amount) {
-    try {
-      const user = await DatabaseService.mathOperation(
+      console.error("Error in EconomyService.getCooldownTime:", {
         guildId,
         userId,
-        "totalXp",
-        "+",
-        amount
-      );
-
-      // Invalidate cache after XP update
-      await CacheService.invalidateUser(guildId, userId);
-
-      return this.calculateLevel(user.totalXp);
-    } catch (error) {
-      console.error("Error in addXP:", error);
-      if (error.code === "P2028") {
-        // If transaction failed, retry once without transaction
-        const user = await DatabaseService.getUser(guildId, userId);
-        const newXp = user.totalXp + amount;
-        await DatabaseService.updateUser(guildId, userId, { totalXp: newXp });
-        return this.calculateLevel(newXp);
-      }
-      throw error;
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      return 0;
     }
   }
 
-  static async calculateBankBalance(bankData, latestActivity, guildId, userId) {
-    const now = Date.now();
-    const hoursSinceLastActivity = (now - latestActivity) / (60 * 60 * 1000);
-    const minutesSinceLastActivity = (now - latestActivity) / (60 * 1000);
-    const MAX_INACTIVE_HOURS = 48; // 2 days maximum inactivity
-
-    // Log time until auto-removal
-    const hoursRemaining = MAX_INACTIVE_HOURS - hoursSinceLastActivity;
-    const minutesRemaining = hoursRemaining * 60;
-    console.log(
-      `User ${userId} in guild ${guildId} has ${hoursRemaining.toFixed(
-        2
-      )} hours (${minutesRemaining.toFixed(
-        2
-      )} minutes) remaining until auto-removal from holding (${hoursSinceLastActivity.toFixed(
-        2
-      )} hours, ${minutesSinceLastActivity.toFixed(
-        2
-      )} minutes since last activity)`
-    );
-
-    // If inactive for more than 2 days, cap the interest and reset holding
-    if (hoursSinceLastActivity > MAX_INACTIVE_HOURS) {
-      try {
-        // Calculate interest only for the maximum allowed time
-        const annualInterestRate = bankData.holdingPercentage / 100 / 365;
-        const maxDaysAllowed = MAX_INACTIVE_HOURS / 24;
-        const interestMultiplier = 1 + annualInterestRate * maxDaysAllowed;
-
-        const newAmount = DatabaseService.safeDecimal(
-          bankData.amount * interestMultiplier
-        );
-
-        // Reset holding settings but keep money in bank
-        await DatabaseService.transaction(async (tx) => {
-          await tx.userBank.update({
-            where: { guildId_userId: { guildId, userId } },
-            data: {
-              amount: newAmount,
-              startedToHold: 0,
-              holdingPercentage: 0,
-            },
-          });
-        });
-
-        return newAmount;
-      } catch (error) {
-        console.error("Error in calculateBankBalance (inactive reset):", error);
-        throw error;
-      }
-    }
-
-    // Normal interest calculation for active users
-    const annualInterestRate = bankData.holdingPercentage / 100 / 365;
-    const daysElapsed = hoursSinceLastActivity / 24;
-    const interestMultiplier = 1 + annualInterestRate * daysElapsed;
-
+  static async calculateCrimeCooldown(guildId, userId, cooldownTime) {
     try {
-      return await DatabaseService.transaction(async (tx) => {
-        const newAmount = DatabaseService.safeDecimal(
-          bankData.amount * interestMultiplier
-        );
+      const upgrades = await this.getUpgrades(guildId, userId);
+      const crimeUpgrade = upgrades.crime;
+      const level = crimeUpgrade?.level || 1;
+      const reduction = level * COOLDOWNS.crime.reduction;
 
-        // Only update the amount, keep startedToHold unchanged
-        await tx.userBank.update({
-          where: { guildId_userId: { guildId, userId } },
-          data: {
-            amount: newAmount,
-          },
-        });
-
-        return newAmount;
-      });
+      return Math.max(COOLDOWNS.crime.min, cooldownTime.base - reduction);
     } catch (error) {
-      console.error("Error in calculateBankBalance:", error);
-      throw error;
-    }
-  }
-
-  static async updateBankOnInactivity(guildId, userId) {
-    try {
-      return await DatabaseService.transaction(async (tx) => {
-        const user = await DatabaseService.getUser(guildId, userId);
-        if (!user?.bank) return null;
-
-        return await this.calculateBankBalance(
-          user.bank,
-          Number(user.latestActivity),
-          guildId,
-          userId
-        );
+      console.error("Error in EconomyService.calculateCrimeCooldown:", {
+        guildId,
+        userId,
+        cooldownTime,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
       });
-    } catch (error) {
-      console.error("Error in updateBankOnInactivity:", error);
-      throw error;
+      return cooldownTime.base;
     }
   }
 
   static async updateCooldown(guildId, userId, type) {
+    if (!guildId || !userId) {
+      throw new Error("Both guildId and userId are required");
+    }
+    if (!type || !COOLDOWNS[type]) {
+      throw new Error(`Invalid cooldown type: ${type}`);
+    }
+
     try {
-      return await DatabaseService.transaction(
-        async (tx) => {
-          // Set the current timestamp
-          await DatabaseService.updateCooldown(guildId, userId, type);
-          return true;
-        },
-        {
-          maxAttempts: 3,
-          timeout: 5000,
-        }
-      );
+      await DatabaseService.updateCooldown(guildId, userId, type);
+      await CacheService.invalidateUser(guildId, userId);
+      return true;
     } catch (error) {
-      console.error("Error in updateCooldown:", error);
+      console.error("Error in EconomyService.updateCooldown:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
       throw error;
     }
   }
 
-  static async resetCooldown(guildId, userId, type) {
+  // Upgrade Management
+  static getUpgradeInfo(type, level) {
+    if (!type || !UPGRADES[type]) {
+      throw new Error(`Invalid upgrade type: ${type}`);
+    }
+    if (typeof level !== "number" || isNaN(level) || level < 1) {
+      throw new Error(`Invalid level: ${level}`);
+    }
+
     try {
-      await DatabaseService.resetCooldown(guildId, userId, type);
-      return true;
+      const upgrade = UPGRADES[type];
+      const price = Math.floor(
+        upgrade.basePrice * Math.pow(upgrade.priceMultiplier, level - 1)
+      );
+      const effect =
+        type === "daily"
+          ? Math.floor(100 * (1 + upgrade.effectMultiplier * (level - 1)))
+          : Math.floor((upgrade.effectValue * level) / (60 * 1000));
+
+      return { price, effect };
     } catch (error) {
-      console.error("Error in resetCooldown:", error);
+      console.error("Error in EconomyService.getUpgradeInfo:", {
+        type,
+        level,
+        error: error.message,
+        stack: error.stack,
+      });
       throw error;
     }
+  }
+
+  static async getUpgrades(guildId, userId) {
+    if (!guildId || !userId) {
+      throw new Error("Both guildId and userId are required");
+    }
+
+    try {
+      console.log("Getting upgrades for user:", { guildId, userId });
+      const user = await DatabaseService.getUser(guildId, userId);
+
+      if (!user) {
+        throw new Error(`User not found: ${guildId}.${userId}`);
+      }
+
+      const result = {};
+      for (const [type, upgradeConfig] of Object.entries(UPGRADES)) {
+        // Find user's upgrade level for this type
+        const userUpgrade = user.upgrades[type] || { level: 1 };
+        const level = userUpgrade.level;
+
+        // Calculate price for next level
+        const price = Math.floor(
+          upgradeConfig.basePrice *
+            Math.pow(upgradeConfig.priceMultiplier, level - 1)
+        );
+
+        // Calculate effect based on upgrade type
+        let effect;
+        if (type === "daily") {
+          effect = Math.floor(
+            100 * (1 + upgradeConfig.effectMultiplier * (level - 1))
+          );
+        } else if (type === "crime") {
+          effect = Math.floor(
+            (upgradeConfig.effectValue * level) / (60 * 1000)
+          ); // Convert to minutes
+        }
+
+        result[type] = {
+          level,
+          price,
+          effect,
+          emoji: upgradeConfig.emoji,
+        };
+      }
+
+      console.log("Calculated upgrades:", result);
+      return result;
+    } catch (error) {
+      console.error("Error in EconomyService.getUpgrades:", {
+        guildId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  // Bank Management
+  static async calculateBankBalance(bankData, latestActivity, guildId, userId) {
+    if (!bankData || typeof bankData !== "object") {
+      throw new Error("Invalid bank data");
+    }
+    if (!latestActivity || typeof latestActivity !== "number") {
+      throw new Error("Invalid latest activity timestamp");
+    }
+
+    try {
+      const now = Date.now();
+      const hoursSinceLastActivity = (now - latestActivity) / (60 * 60 * 1000);
+      const MAX_INACTIVE_HOURS = 48;
+
+      console.log("Calculating bank balance:", {
+        bankData,
+        latestActivity,
+        hoursSinceLastActivity,
+        guildId,
+        userId,
+      });
+
+      if (hoursSinceLastActivity > MAX_INACTIVE_HOURS) {
+        return await this.handleInactiveBankBalance(
+          bankData,
+          MAX_INACTIVE_HOURS,
+          guildId,
+          userId
+        );
+      }
+
+      return await this.calculateActiveBankBalance(
+        bankData,
+        hoursSinceLastActivity
+      );
+    } catch (error) {
+      console.error("Error in EconomyService.calculateBankBalance:", {
+        bankData,
+        latestActivity,
+        guildId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async handleInactiveBankBalance(bankData, maxHours, guildId, userId) {
+    try {
+      const annualInterestRate = bankData.holdingPercentage / 100 / 365;
+      const maxDaysAllowed = maxHours / 24;
+      const interestMultiplier = 1 + annualInterestRate * maxDaysAllowed;
+      const newAmount = DatabaseService.safeDecimal(
+        bankData.amount * interestMultiplier
+      );
+
+      console.log("Handling inactive bank balance:", {
+        bankData,
+        maxHours,
+        guildId,
+        userId,
+        newAmount,
+      });
+
+      await DatabaseService.updateBank(guildId, userId, {
+        amount: newAmount,
+        startedToHold: 0,
+        holdingPercentage: 0,
+      });
+
+      return newAmount;
+    } catch (error) {
+      console.error("Error in EconomyService.handleInactiveBankBalance:", {
+        bankData,
+        maxHours,
+        guildId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async calculateActiveBankBalance(bankData, hoursElapsed) {
+    try {
+      const annualInterestRate = bankData.holdingPercentage / 100 / 365;
+      const daysElapsed = hoursElapsed / 24;
+      const interestMultiplier = 1 + annualInterestRate * daysElapsed;
+
+      const newAmount = DatabaseService.safeDecimal(
+        bankData.amount * interestMultiplier
+      );
+
+      console.log("Calculated active bank balance:", {
+        bankData,
+        hoursElapsed,
+        newAmount,
+      });
+
+      return newAmount;
+    } catch (error) {
+      console.error("Error in EconomyService.calculateActiveBankBalance:", {
+        bankData,
+        hoursElapsed,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async getGuildUsers(guildId) {
+    if (!guildId) {
+      throw new Error("GuildId is required");
+    }
+
+    try {
+      const users = await DatabaseService.getGuildUsers(guildId);
+      return users.map((user) => DatabaseService.processUserData(user));
+    } catch (error) {
+      console.error("Error in EconomyService.getGuildUsers:", {
+        guildId,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async upgradeLevel(guildId, userId, type) {
+    if (!guildId || !userId) {
+      throw new Error("Both guildId and userId are required");
+    }
+    if (!type || !UPGRADES[type]) {
+      throw new Error(`Invalid upgrade type: ${type}`);
+    }
+
+    try {
+      const result = await DatabaseService.upgradeLevel(guildId, userId, type);
+      await CacheService.invalidateUser(guildId, userId);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error("Error in EconomyService.upgradeLevel:", {
+        guildId,
+        userId,
+        type,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  static async remove(path) {
+    if (!path || typeof path !== "string") {
+      throw new Error("Invalid path: must be a non-empty string");
+    }
+
+    const [guildId, userId, ...rest] = path.split(".");
+    if (!guildId || !userId) {
+      throw new Error("Invalid path: must include guildId and userId");
+    }
+
+    const field = rest.join(".");
+    if (!field) {
+      throw new Error("Invalid path: must include a field to remove");
+    }
+
+    try {
+      console.log("Removing user data:", { guildId, userId, field });
+
+      // Special handling for non-numeric fields
+      if (field === "banner_url" || field === "bannerUrl") {
+        const user = await DatabaseService.findUser(guildId, userId);
+        if (!user) {
+          return null; // Nothing to remove
+        }
+
+        const result = await DatabaseService.prisma.user.update({
+          where: { guildId_userId: { guildId, userId } },
+          data: { bannerUrl: null },
+          include: { bank: true, cooldowns: true, upgrades: true },
+        });
+
+        // Process and return the result
+        const processed = DatabaseService.processUserData(result);
+        if (processed) {
+          processed.banner_url = null;
+          if ("bannerUrl" in processed) delete processed.bannerUrl;
+        }
+        return processed;
+      }
+
+      // For other fields, set to default value from DEFAULT_VALUES
+      const defaultValue = this.getDefaultValue(field);
+      return await this.set(path, defaultValue);
+    } catch (error) {
+      console.error("Error in EconomyService.remove:", {
+        path,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
+      throw error;
+    }
+  }
+
+  // Helper method to get default value for a field
+  static getDefaultValue(field) {
+    const parts = field.split(".");
+    let value = DEFAULT_VALUES;
+
+    for (const part of parts) {
+      if (value && typeof value === "object" && part in value) {
+        value = value[part];
+      } else {
+        return null;
+      }
+    }
+
+    return value;
   }
 }
 
