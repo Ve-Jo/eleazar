@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import EconomyEZ from "../utils/economy.js";
+import EconomyEZ, { DEFAULT_VALUES } from "../utils/economy.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
@@ -113,15 +113,16 @@ export default {
     const userData = await EconomyEZ.get(`${guild.id}.${author.id}`);
     const guildSettings = await EconomyEZ.get(`${guild.id}.settings`);
 
-    const now = Date.now();
-
     try {
       // Check if enough time has passed since last XP gain
-      if (
-        !userData?.message ||
-        now - userData.message >= guildSettings?.message_cooldown * 1000
-      ) {
-        // Add XP and update message timestamp
+      const cooldownTime = await EconomyEZ.getCooldownTime(
+        guild.id,
+        author.id,
+        "message"
+      );
+
+      if (cooldownTime === 0) {
+        // Add XP and update message cooldown
         await EconomyEZ.addXP(
           guild.id,
           author.id,
@@ -129,8 +130,8 @@ export default {
             DEFAULT_VALUES.guild.settings.xp_per_message
         );
 
-        // Update last message timestamp
-        await EconomyEZ.set(`${guild.id}.${author.id}.message`, now);
+        // Update message cooldown
+        await EconomyEZ.updateCooldown(guild.id, author.id, "message");
       }
     } catch (error) {
       console.error("Error handling XP gain:", error);
