@@ -6,47 +6,30 @@ class CacheService {
     this.redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
+      retryStrategy: (times) => Math.min(times * 50, 2000),
     });
 
-    this.redis.on("connect", () => {
-      console.log("Redis connection established successfully");
-    });
+    // Event handlers
+    this.redis.on("connect", () => console.log("Redis connection established"));
+    this.redis.on("error", (err) => console.error("Redis error:", err));
+    this.redis.on("ready", () => console.log("Redis client ready"));
+    this.redis.on("reconnecting", () =>
+      console.log("Redis client reconnecting")
+    );
+    this.redis.on("end", () => console.log("Redis connection ended"));
 
-    this.redis.on("error", (err) => {
-      console.error("Redis connection error:", err);
-    });
-
-    this.redis.on("ready", () => {
-      console.log("Redis client ready");
-    });
-
-    this.redis.on("reconnecting", () => {
-      console.log("Redis client reconnecting");
-    });
-
-    this.redis.on("end", () => {
-      console.log("Redis client connection ended");
-    });
-
-    // Default TTLs in seconds
+    // TTLs in seconds
     this.TTL = {
-      USER: 300 * 60, // 5 minutes -> 300 seconds
-      GUILD: 600 * 60, // 10 minutes -> 600 seconds
-      COOLDOWN: 60 * 60, // 1 minute -> 60 seconds
-      UPGRADE: 1800 * 60, // 30 minutes -> 1800 seconds
-      LEADERBOARD: 300 * 60, // 5 minutes -> 300 seconds
+      USER: 60, // Reduced from 300 to 60 seconds
+      COOLDOWN: 60,
+      LEADERBOARD: 300,
     };
 
     this.PREFIXES = {
       USER: "user:",
-      GUILD: "guild:",
-      COOLDOWN: "cooldown:",
-      UPGRADE: "upgrade:",
-      LEADERBOARD: "leaderboard:",
+      COOLDOWN: "cd:",
+      LEADERBOARD: "lb:",
+      VERSION: "version:", // Add version tracking
     };
   }
 
@@ -55,16 +38,8 @@ class CacheService {
     return `${this.PREFIXES.USER}${guildId}:${userId}`;
   }
 
-  getGuildKey(guildId) {
-    return `${this.PREFIXES.GUILD}${guildId}`;
-  }
-
   getCooldownKey(guildId, userId, type) {
     return `${this.PREFIXES.COOLDOWN}${guildId}:${userId}:${type}`;
-  }
-
-  getUpgradeKey(guildId, userId) {
-    return `${this.PREFIXES.UPGRADE}${guildId}:${userId}`;
   }
 
   getLeaderboardKey(guildId) {
@@ -84,27 +59,7 @@ class CacheService {
 
   async set(key, value, ttl = null) {
     try {
-      // Convert BigInt to Number before serialization
-      const convertBigIntToNumber = (obj) => {
-        if (typeof obj === "bigint") {
-          return Number(obj);
-        }
-        if (Array.isArray(obj)) {
-          return obj.map(convertBigIntToNumber);
-        }
-        if (typeof obj === "object" && obj !== null) {
-          const converted = {};
-          for (const key in obj) {
-            converted[key] = convertBigIntToNumber(obj[key]);
-          }
-          return converted;
-        }
-        return obj;
-      };
-
-      const convertedValue = convertBigIntToNumber(value);
-      const serialized = JSON.stringify(convertedValue);
-
+      const serialized = JSON.stringify(this.convertBigIntToNumber(value));
       if (ttl) {
         await this.redis.setex(key, ttl, serialized);
       } else {
@@ -127,36 +82,123 @@ class CacheService {
     }
   }
 
-  // User caching
+  // Type conversion
+  convertBigIntToNumber(value) {
+    if (typeof value === "bigint") {
+      return Number(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map(this.convertBigIntToNumber.bind(this));
+    }
+    if (typeof value === "object" && value !== null) {
+      const converted = {};
+      for (const key in value) {
+        converted[key] = this.convertBigIntToNumber(value[key]);
+      }
+      return converted;
+    }
+    return value;
+  }
+
+  // Version tracking for cache invalidation
+  async getVersion(guildId, userId) {
+    const key = `${this.PREFIXES.VERSION}${guildId}:${userId}`;
+    const version = await this.redis.get(key);
+    return version ? parseInt(version) : 0;
+  }
+
+  async incrementVersion(guildId, userId) {
+    const key = `${this.PREFIXES.VERSION}${guildId}:${userId}`;
+    return await this.redis.incr(key);
+  }
+
+  // Modified user caching with version tracking
   async getUser(guildId, userId) {
-    const key = this.getUserKey(guildId, userId);
-    return await this.get(key);
+    try {
+      const key = this.getUserKey(guildId, userId);
+      const data = await this.get(key);
+
+      if (!data) {
+        console.log("Cache miss for user:", { guildId, userId });
+        return null;
+      }
+
+      // Check if version matches
+      const currentVersion = await this.getVersion(guildId, userId);
+      console.log("Cache version check:", {
+        guildId,
+        userId,
+        cachedVersion: data._version,
+        currentVersion,
+      });
+
+      if (data._version !== currentVersion) {
+        console.log("Cache version mismatch, invalidating:", {
+          guildId,
+          userId,
+          cachedVersion: data._version,
+          currentVersion,
+        });
+        await this.invalidateUser(guildId, userId);
+        return null;
+      }
+
+      delete data._version;
+      return data;
+    } catch (error) {
+      console.error("Error in getUser:", error);
+      return null;
+    }
   }
 
   async setUser(guildId, userId, userData) {
-    const key = this.getUserKey(guildId, userId);
-    return await this.set(key, userData, this.TTL.USER);
+    try {
+      const key = this.getUserKey(guildId, userId);
+      const version = await this.getVersion(guildId, userId);
+
+      console.log("Setting user data in cache:", {
+        guildId,
+        userId,
+        version,
+        hasData: !!userData,
+      });
+
+      if (!userData) {
+        console.log("No user data to cache");
+        return false;
+      }
+
+      // Add version to cached data
+      const dataToCache = {
+        ...userData,
+        _version: version,
+      };
+
+      const result = await this.set(key, dataToCache, this.TTL.USER);
+      console.log("Cache set result:", { guildId, userId, success: result });
+      return result;
+    } catch (error) {
+      console.error("Error in setUser:", error);
+      return false;
+    }
   }
 
   async invalidateUser(guildId, userId) {
-    const key = this.getUserKey(guildId, userId);
-    return await this.del(key);
-  }
-
-  // Guild caching
-  async getGuild(guildId) {
-    const key = this.getGuildKey(guildId);
-    return await this.get(key);
-  }
-
-  async setGuild(guildId, guildData) {
-    const key = this.getGuildKey(guildId);
-    return await this.set(key, guildData, this.TTL.GUILD);
-  }
-
-  async invalidateGuild(guildId) {
-    const key = this.getGuildKey(guildId);
-    return await this.del(key);
+    try {
+      console.log("Invalidating user cache:", { guildId, userId });
+      const key = this.getUserKey(guildId, userId);
+      await this.incrementVersion(guildId, userId);
+      const result = await this.del(key);
+      console.log("Cache invalidation result:", {
+        guildId,
+        userId,
+        success: result,
+      });
+      return result;
+    } catch (error) {
+      console.error("Error in invalidateUser:", error);
+      return false;
+    }
   }
 
   // Cooldown caching
@@ -168,17 +210,6 @@ class CacheService {
   async setCooldown(guildId, userId, type, timestamp) {
     const key = this.getCooldownKey(guildId, userId, type);
     return await this.set(key, timestamp, this.TTL.COOLDOWN);
-  }
-
-  // Upgrade caching
-  async getUpgrades(guildId, userId) {
-    const key = this.getUpgradeKey(guildId, userId);
-    return await this.get(key);
-  }
-
-  async setUpgrades(guildId, userId, upgrades) {
-    const key = this.getUpgradeKey(guildId, userId);
-    return await this.set(key, upgrades, this.TTL.UPGRADE);
   }
 
   // Leaderboard caching
