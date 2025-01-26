@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import { setTimeout as sleep } from "timers/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -8,9 +9,68 @@ const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 const MAX_RETRIES = 4;
 const INITIAL_DELAY = 1500;
+const WORKER_PATH = path.join(__dirname, "..", "render-server", "worker.js");
+const WORKER_START_TIMEOUT = 10000;
+const WORKER_IDLE_TIMEOUT = 30000;
 
-async function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Worker process management
+let workerProcess = null;
+let lastUsed = Date.now();
+
+async function getWorker() {
+  if (workerProcess && Date.now() - lastUsed < WORKER_IDLE_TIMEOUT) {
+    return workerProcess;
+  }
+
+  if (workerProcess) {
+    workerProcess.kill();
+  }
+
+  console.log("🚀 Starting new render worker process...");
+  workerProcess = spawn("bun", ["run", WORKER_PATH], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      ELEAZAR_PROJECT_ROOT: PROJECT_ROOT,
+      NODE_PATH: path.join(PROJECT_ROOT, "node_modules"),
+    },
+    cwd: PROJECT_ROOT,
+  });
+
+  // Wait for worker to be ready
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("Worker failed to start (timeout)"));
+    }, WORKER_START_TIMEOUT);
+
+    const readyHandler = (data) => {
+      const messages = data.toString("utf8").split("\n");
+      for (const msg of messages) {
+        if (!msg.trim()) continue;
+        try {
+          const message = JSON.parse(msg);
+          if (message.type === "ready") {
+            clearTimeout(timeout);
+            resolve();
+            return;
+          }
+        } catch (err) {
+          console.log("Ignoring startup message:", msg);
+        }
+      }
+    };
+
+    workerProcess.stdout.on("data", readyHandler);
+    workerProcess.stderr.on("data", (data) => {
+      console.log("Worker startup log:", data.toString("utf8").trim());
+    });
+
+    workerProcess.once("exit", (code, signal) => {
+      reject(new Error(`Worker exited during startup (code: ${code}, signal: ${signal})`));
+    });
+  });
+
+  return workerProcess;
 }
 
 /**
@@ -22,6 +82,8 @@ export async function generateRemoteImage(
   config,
   scaling
 ) {
+  let retries = 0;
+  let worker = null;
   let retries = 0;
 
   // Validate banner URL if present
@@ -64,24 +126,9 @@ export async function generateRemoteImage(
         })
       );
 
-      // Spawn worker process
-      const workerPath = path.join(
-        __dirname,
-        "..",
-        "render-server",
-        "worker.js"
-      );
-      console.log("Worker path:", workerPath);
-
-      const workerProcess = spawn("bun", ["run", workerPath], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          ELEAZAR_PROJECT_ROOT: PROJECT_ROOT,
-          NODE_PATH: path.join(PROJECT_ROOT, "node_modules"),
-        },
-        cwd: PROJECT_ROOT,
-      });
+      // Get or create worker process
+      worker = await getWorker();
+      lastUsed = Date.now();
 
       try {
         // Wait for process to be ready
@@ -158,37 +205,29 @@ export async function generateRemoteImage(
         // Send the generation request
         const result = await new Promise((resolve, reject) => {
           let messageBuffer = "";
+          let isResolved = false;
 
           const messageHandler = (data) => {
             try {
-              console.log("Received data from worker");
               messageBuffer += data.toString("utf8");
-              if (!messageBuffer.includes("\n")) {
-                console.log("Partial message received, waiting for more...");
-                return;
-              }
+              if (!messageBuffer.includes("\n")) return;
 
-              console.log("Processing complete message");
               const message = JSON.parse(messageBuffer.trim());
               messageBuffer = "";
 
               if (message.type === "error") {
-                console.error("Worker reported error:", message.error);
+                console.error("Worker error:", message.error);
                 reject(new Error(message.error));
               } else if (message.type === "result") {
-                console.log("Received result message, decoding image...");
                 const buffer = Buffer.from(message.data, "base64");
-                console.log(`Decoded image buffer (${buffer.length} bytes)`);
                 resolve({
                   buffer,
                   contentType: message.contentType,
                 });
-              } else {
-                console.log("Received unknown message type:", message.type);
+                isResolved = true;
               }
             } catch (err) {
-              console.error("Error processing worker message:", err);
-              // Continue collecting data if parse fails
+              console.error("Error processing message:", err);
               if (messageBuffer.length > 1024 * 1024) {
                 reject(new Error("Message buffer overflow"));
               }
@@ -196,46 +235,54 @@ export async function generateRemoteImage(
           };
 
           const errorHandler = (error) => {
-            console.error("Worker process error:", error);
-            reject(new Error("Worker process error: " + error.message));
+            if (!isResolved) {
+              reject(new Error("Worker process error: " + error.message));
+            }
           };
 
-          workerProcess.stdout.on("data", messageHandler);
-          workerProcess.stderr.on("data", (data) => {
+          worker.stdout.on("data", messageHandler);
+          worker.stderr.on("data", (data) => {
             console.log("Worker log:", data.toString("utf8").trim());
           });
-          workerProcess.on("error", errorHandler);
+          worker.on("error", errorHandler);
 
           // Send request
-          console.log("Sending generation request to worker...");
-          const requestData = Buffer.from(
-            JSON.stringify({
-              type: "generate",
-              componentName,
-              props: sanitizedProps,
-              config,
-              scaling,
-            }) + "\n",
-            "utf8"
-          );
-          workerProcess.stdin.write(requestData);
-          console.log("Request sent to worker");
+          const requestData = JSON.stringify({
+            type: "generate",
+            componentName,
+            props: sanitizedProps,
+            config,
+            scaling,
+          }) + "\n";
+          worker.stdin.write(requestData);
 
-          // Cleanup on process exit
-          workerProcess.once("exit", (code, signal) => {
-            console.log(
-              `Worker process exited (code: ${code}, signal: ${signal})`
-            );
-            if (code !== 0) {
+          // Cleanup
+          const cleanup = () => {
+            worker.stdout.removeListener("data", messageHandler);
+            worker.stderr.removeListener("data", messageHandler);
+            worker.removeListener("error", errorHandler);
+          };
+
+          worker.once("exit", (code, signal) => {
+            cleanup();
+            if (!isResolved) {
               reject(new Error(`Worker exited with code ${code} (${signal})`));
             }
           });
+
+          resolve = (() => {
+            const originalResolve = resolve;
+            return (value) => {
+              cleanup();
+              originalResolve(value);
+            };
+          })();
         });
 
         return result;
       } finally {
-        // Always clean up the worker process
-        workerProcess.kill();
+        // Keep worker alive for reuse
+        lastUsed = Date.now();
       }
     } catch (error) {
       retries++;
