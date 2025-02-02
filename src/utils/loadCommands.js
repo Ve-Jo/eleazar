@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Collection } from "discord.js";
-import { syncLocalizations } from "./syncLocalizations.js";
+import { syncAllLocalizations } from "./syncLocalizations.js";
 import i18n from "./i18n.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +16,11 @@ export async function loadCommands(client) {
   // Set default locale before loading commands
   i18n.setLocale("en");
 
+  // Sync all localizations (both commands and components) if LOCALIZATION_SYNC is true
+  if (process.env.LOCALIZATION_SYNC === "true") {
+    await syncAllLocalizations();
+  }
+
   for (const folder of commandFolders) {
     const folderPath = path.join(commandsPath, folder);
     if (!fs.statSync(folderPath).isDirectory()) continue;
@@ -24,11 +29,6 @@ export async function loadCommands(client) {
     if (!fs.existsSync(indexFile)) continue;
 
     try {
-      // Sync localizations before loading command if LOCALIZATION_SYNC is true
-      if (process.env.LOCALIZATION_SYNC === "true") {
-        await syncLocalizations(indexFile);
-      }
-
       // Load the index file first
       const commandIndex = await import(indexFile);
       const command = commandIndex.default;
@@ -41,11 +41,6 @@ export async function loadCommands(client) {
         if (file === "index.js" || !file.endsWith(".js")) continue;
 
         const subcommandPath = path.join(folderPath, file);
-
-        // Sync localizations for subcommand if LOCALIZATION_SYNC is true
-        if (process.env.LOCALIZATION_SYNC === "true") {
-          await syncLocalizations(subcommandPath);
-        }
 
         const subcommandModule = await import(subcommandPath);
         if (
