@@ -1,68 +1,93 @@
-server:
-  port: 2333
-  address: 0.0.0.0
-  http2:
-    enabled: true
-
 plugins:
   youtube:
-    enabled: true
-    allowSearch: true
-    allowDirectVideoIds: true
-    allowDirectPlaylistIds: true
+    enabled: true # Whether this source can be used.
+    allowSearch: true # Whether "ytsearch:" and "ytmsearch:" can be used.
+    allowDirectVideoIds: true # Whether just video IDs can match. If false, only complete URLs will be loaded.
+    allowDirectPlaylistIds: true # Whether just playlist IDs can match. If false, only complete URLs will be loaded.
+    # The clients to use for track loading. See below for a list of valid clients.
+    # Clients are queried in the order they are given (so the first client is queried first and so on...)
     clients:
+      - MUSIC
+      - ANDROID_VR
       - WEB
-      - IOS
+      - WEBEMBEDDED
+    status-check: false
+    retry-on-failure: true
+    use-recommended-options: true
+    max-retry-attempts: 3
+    oauth:
+      enabled: true
   lavasrc:
+    providers: # Custom providers for track loading. This is the default
+      - 'ytsearch:"%ISRC%"' # If ISRC available, search on youtube
+      - "ytmsearch:%QUERY%" # If you want music.youtube results first
+      - "ytsearch:%QUERY%" # If no result found on music.youtube, search on www.youtube
+      - "scsearch:%QUERY%" # Last try to search on soundcloud
+  lyrics:
+    countryCode: us #country code for resolving isrc tracks
     sources:
-      spotify: true
-      youtube: true
+      spotify: true # Enable Spotify source
+      applemusic: false # Enable Apple Music source
+      deezer: false # Enable Deezer source
+      yandexmusic: false # Enable Yandex Music source
+      flowerytts: false # Enable Flowery TTs source
+      youtube: true # Enable YouTube search source
+    lyrics-sources:
+      spotify: true # Enable Spotify lyrics source
+      deezer: false # Enable Deezer lyrics source
+      youtube: true # Enable YouTube lyrics source
+      yandexmusic: false # Enable Yandex Music lyrics source
+      vkmusic: false # Enable Vk Music lyrics source
     spotify:
       clientId: "c525956aba4945ca8e1f56b3c033cf9c"
       clientSecret: "c913ba2ccd764a698d6cd903874535ab"
       countryCode: "US"
       playlistLoadLimit: 6
-      albumLoadLimit: 50
-      resolveArtistsInSearch: true
-      localFiles: false
-    twitch:
-      clientId: null
-      clientSecret: null
-    providers:
-      - "spsearch:{QUERY}" # Spotify search
-      - "ytsearch:{QUERY}" # YouTube search as the primary source
-      - "ytmsearch:{QUERY}" # YouTube Music search
-      - "sprec:{QUERY}" # Spotify recommendations
+      albumLoadLimit: 6
+
+server:
+  port: 8080
+  address: 0.0.0.0
 
 lavalink:
+  plugins:
+    - dependency: "com.dunctebot:skybot-lavalink-plugin:1.7.0"
+      repository: "https://maven.lavalink.dev/releases"
+    - dependency: "com.github.topi314.lavasearch:lavasearch-plugin:1.0.0"
+      repository: "https://maven.topi.wtf/releases"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.3.0"
+      repository: "https://maven.topi.wtf/releases"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.11.3"
+    - dependency: "dev.schlaubi.lyrics:lavalink:2.6.1"
+      repository: "https://maven.lavalink.dev/releases"
+    - dependency: "com.github.topi314.sponsorblock:sponsorblock-plugin:3.0.1"
+      repository: "https://maven.lavalink.dev/releases"
+    - dependency: "com.github.topi314.lavalyrics:lavalyrics-plugin:1.0.0"
+      snapshot: false
   server:
     password: "youshallnotpass"
+    youtubePlaylists: true
+    youtubeSearchEnabled: true
+    buffer:
+      duration: 400
+      size: 256
     sources:
-      youtube: false # DONT CHANGE THIS, WERE USING PLUGINS
+      youtube: false
       bandcamp: true
       soundcloud: true
       twitch: true
-      spotify: false
       vimeo: true
+      mixer: true
       http: true
       local: false
-    plugins:
-      - dependency: "dev.lavalink.youtube:youtube-plugin:1.11.3"
-        repository: "https://maven.lavalink.dev/releases"
-      - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.3.0"
-        repository: "https://maven.lavalink.dev/releases"
-      - dependency: "com.github.topi314.lavasearch:lavasearch-plugin:1.0.0"
-        repository: "https://maven.lavalink.dev/releases"
     bufferDurationMs: 400
     frameBufferDurationMs: 5000
-    opusEncodingQuality: 5
+    opusEncodingQuality: 0
     resamplingQuality: LOW
     trackStuckThresholdMs: 10000
     useSeekGhosting: true
     youtubePlaylistLoadLimit: 6
-    playerUpdateInterval: 15
-    youtubeSearchEnabled: true
-    soundcloudSearchEnabled: true
+    playerUpdateInterval: 5
     gc-warnings: true
     httpConfig:
       forwardHeaders: true
@@ -79,12 +104,12 @@ sentry:
 
 logging:
   file:
-    path: ./logs/
+    max-history: 30
+    max-size: 1GB
+  path: ./logs/
   level:
     root: INFO
-    lavalink: TRACE
-    com.sedmelluq: TRACE
-    dev.arbjerg.lavalink.plugins: DEBUG
+    lavalink: INFO
   request:
     enabled: true
     includeClientInfo: true
@@ -92,7 +117,3 @@ logging:
     includeQueryString: true
     includePayload: true
     maxPayloadLength: 10000
-  logback:
-    rollingpolicy:
-      max-file-size: 1GB
-      max-history: 30
