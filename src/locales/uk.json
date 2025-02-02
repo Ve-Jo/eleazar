@@ -182,7 +182,7 @@
       "upgrades": {
         "daily": {
           "name": "Посилення Щоденної Нагороди",
-          "description": "%{{effect}} до нагороди ({{price}} монет)"
+          "description": "{{effect}}% до нагороди ({{price}} монет)"
         },
         "crime": {
           "name": "Зменшення Перезарядки Злочину",
@@ -246,6 +246,24 @@
       "success": "Банер успішно встановлено!",
       "error": "Виникла помилка під час встановлення банера",
       "imageTooLarge": "Файл зображення занадто великий (максимум 8МБ)"
+    },
+    "work": {
+      "name": "працювати",
+      "description": "Грайте в ігри, щоб заробити гроші",
+      "title": "Вибір гри",
+      "selectCategory": "Виберіть категорію ігор",
+      "playGame": "Грати",
+      "gameStarted": "Запуск {{game}}...",
+      "error": "Сталася помилка під час обробки вашого робочого запиту",
+      "specialCategory": "Спеціально для Eleazar",
+      "oldGames": "Наші старі ігри",
+      "gameError": "Помилка при запуску {{game}}. Будь ласка, спробуйте знову.",
+      "previousButton": "◀",
+      "nextButton": "▶",
+      "specialForCategory": "Спеціально для Eleazar",
+      "categories": {
+        "eleazar": "Спеціально для Eleazar"
+      }
     }
   },
   "music": {
@@ -312,12 +330,16 @@
           "name": "час",
           "description": "Час для перемотки (формат: m:ss або ss)"
         }
-      }
+      },
+      "invalidTimeFormat": "Невірний формат часу. Використовуйте m:ss або ss",
+      "seekBeyondDuration": "Ви не можете перемотати за межі тривалості поточного треку",
+      "seekedTo": "Перемотано до {{time}}"
     },
     "autoplay": {
       "name": "автопрогравання",
       "description": "Перемикати режим автопрогравання",
-      "autoplayToggled": "Режим автопрогравання був переключений на {{enabled}}"
+      "autoplayToggled": "Режим автопрогравання був переключений на {{enabled}}",
+      "autoplayApplied": "Стан автопрогравання було встановлено на {{enabled}}"
     },
     "queue": {
       "name": "черга",
@@ -340,7 +362,8 @@
     },
     "stop": {
       "name": "зупинити",
-      "description": "Зупинити музику"
+      "description": "Зупинити музику",
+      "musicStopped": "Музика зупинена"
     }
   },
   "emotions": {
@@ -597,6 +620,11 @@
       },
       "title": "Команди",
       "noCommands": "Команди не знайдено"
+    },
+    "stats": {
+      "name": "статистика",
+      "title": "Статистика бота",
+      "description": "Переглянути статистику та продуктивність бота"
     }
   },
   "images": {
@@ -697,5 +725,97 @@
       "success": "Канал для рахунку видалено",
       "notSet": "Канал для рахунку не встановлено"
     }
+  },
+  "components": {
+    "2048": {
+      "title": "2048",
+      "score": "Рахунок:"
+    },
+    "Balance": {
+      "title": "Баланс",
+      "wallet": "ГАМАНЕЦЬ",
+      "bank": "БАНК",
+      "annual": "річних"
+    },
+    "Daily": {
+      "title": "Щоденна нагорода",
+      "reward": "Нагорода",
+      "cooldown": "Наступна нагорода через"
+    },
+    "GameLauncher": {
+      "specialFor": "Спеціально для Eleazar",
+      "oldGames": "Наші старі ігри",
+      "gameSelection": "Вибір гри",
+      "userAvatarAlt": "Аватар користувача",
+      "specialForCategory": "Спеціально для Eleazar",
+      "oldGamesCategory": "Наші старі ігри"
+    },
+    "UpgradesDisplay": {
+      "title": "Покращення",
+      "level": "Рівень",
+      "nextLevel": "Наступний рівень",
+      "price": "Ціна",
+      "balance": "Баланс"
+    },
+    "MusicPlayer": {
+      "queue": "Черга",
+      "moreItems": "ще треків",
+      "nowPlaying": "Зараз грає"
+    },
+    "Transfer": {
+      "deposit": "Поповнення",
+      "withdraw": "Вивід",
+      "amount": "Сума"
+    },
+    "Level": {
+      "title": "Рівень",
+      "xp": "Досвіду"
+    },
+    "Crime": {
+      "title": "Злочин",
+      "victim": "Жертва",
+      "robber": "Грабіжник",
+      "success": "Успішний злочин",
+      "fail": "Невдалий злочин"
+    },
+    "Leaderboard": {
+      "title": "Таблиця лідерів",
+      "currentPage": "Поточна сторінка",
+      "sortBy": "Сортування",
+      "total": "Всього"
+    },
+    "Cooldown": {
+      "title": "Перезарядка",
+      "remaining": "залишилось"
+    },
+    "Statistics": {
+      "title": "Статистика",
+      "servers": "{count} серверів",
+      "latency": "{ping} мс",
+      "cache_latency": "Кеш: {ping} мс",
+      "shards": "Шарди",
+      "music": "Музична нода",
+      "music_players": "{count} плеєрів",
+      "render": "Рендер сервер",
+      "render_requests": "{count} запитів",
+      "database": "База даних",
+      "database_ping": "Сер. швидкість: {ping} мс"
+    }
+  },
+  "games": {
+    "2048": {
+      "name": "2048",
+      "startMessage": "Використовуйте стрілки щоб рухати та об'єднувати однакові числа!",
+      "description": "Грайте в класичну гру-головоломку 2048",
+      "score": "Ваш рахунок: {{score}}",
+      "gameOver": "Гра закінчилася! Фінальний рахунок: {{score}}",
+      "invalidMove": "Невірний хід!",
+      "timesOut": "Гра завершена через неактивність! Фінальний рахунок: {{score}}",
+      "notYourGame": "Ця гра не для вас!",
+      "error": "Сталася помилка при запуску гри. Будь ласка, спробуйте знову."
+    }
+  },
+  "options": {
+    "user": {}
   }
 }

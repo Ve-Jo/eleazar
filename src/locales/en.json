@@ -182,7 +182,7 @@
       "upgrades": {
         "daily": {
           "name": "Daily Reward Boost",
-          "description": "%{{effect}} reward ({{price}} coins)"
+          "description": "{{effect}}% reward ({{price}} coins)"
         },
         "crime": {
           "name": "Crime Cooldown Reduction",
@@ -246,6 +246,24 @@
       "success": "Banner has been set successfully!",
       "error": "An error occurred while setting the banner",
       "imageTooLarge": "Image file is too large (maximum 8MB)"
+    },
+    "work": {
+      "name": "work",
+      "description": "Play games to earn money",
+      "title": "Game Selection",
+      "selectCategory": "Select a game category",
+      "playGame": "Play",
+      "gameStarted": "Starting {{game}}...",
+      "error": "An error occurred while processing your work request",
+      "specialCategory": "Specially for Eleazar",
+      "oldGames": "Our old games",
+      "gameError": "Error starting {{game}}. Please try again.",
+      "previousButton": "◀",
+      "nextButton": "▶",
+      "specialForCategory": "Specially for Eleazar",
+      "categories": {
+        "eleazar": "Specially for Eleazar"
+      }
     }
   },
   "music": {
@@ -312,12 +330,16 @@
           "name": "time",
           "description": "Time to seek to (format: m:ss or ss)"
         }
-      }
+      },
+      "invalidTimeFormat": "Invalid time format. Use m:ss or ss",
+      "seekBeyondDuration": "You can't seek beyond the duration of the current track",
+      "seekedTo": "Seeked to {{time}}"
     },
     "autoplay": {
       "name": "autoplay",
       "description": "Toggle autoplay mode",
-      "autoplayToggled": "Autoplay mode has been toggled {{enabled}}"
+      "autoplayToggled": "Autoplay mode has been toggled {{enabled}}",
+      "autoplayApplied": "Autoplay state was set to {{enabled}}"
     },
     "queue": {
       "name": "queue",
@@ -340,7 +362,8 @@
     },
     "stop": {
       "name": "stop",
-      "description": "Stop the music"
+      "description": "Stop the music",
+      "musicStopped": "Music stopped"
     }
   },
   "emotions": {
@@ -597,6 +620,11 @@
       },
       "title": "Commands",
       "noCommands": "No commands found"
+    },
+    "stats": {
+      "name": "stats",
+      "title": "Bot Statistics",
+      "description": "View bot statistics and performance metrics"
     }
   },
   "images": {
@@ -697,5 +725,97 @@
       "success": "Counting channel removed",
       "notSet": "Counting channel is not set"
     }
+  },
+  "components": {
+    "2048": {
+      "title": "2048",
+      "score": "Score:"
+    },
+    "Balance": {
+      "title": "Balance",
+      "wallet": "WALLET",
+      "bank": "BANK",
+      "annual": "annual"
+    },
+    "Daily": {
+      "title": "Daily",
+      "reward": "Reward",
+      "cooldown": "Next daily in"
+    },
+    "GameLauncher": {
+      "specialFor": "Specially for Eleazar",
+      "oldGames": "Our old games",
+      "gameSelection": "Game Selection",
+      "userAvatarAlt": "User Avatar",
+      "specialForCategory": "Specially for Eleazar",
+      "oldGamesCategory": "Our old games"
+    },
+    "UpgradesDisplay": {
+      "title": "Upgrades",
+      "level": "Level",
+      "nextLevel": "Next Level",
+      "price": "Price",
+      "balance": "Balance"
+    },
+    "MusicPlayer": {
+      "queue": "Queue",
+      "moreItems": "more items",
+      "nowPlaying": "Now Playing"
+    },
+    "Transfer": {
+      "deposit": "Deposit",
+      "withdraw": "Withdraw",
+      "amount": "Amount"
+    },
+    "Level": {
+      "title": "Level",
+      "xp": "XP"
+    },
+    "Crime": {
+      "title": "Crime",
+      "victim": "Victim",
+      "robber": "Robber",
+      "success": "Successful Crime",
+      "fail": "Failed Crime"
+    },
+    "Leaderboard": {
+      "title": "Leaderboard",
+      "currentPage": "Current page",
+      "sortBy": "Sort by",
+      "total": "Total"
+    },
+    "Cooldown": {
+      "title": "Cooldown",
+      "remaining": "remaining"
+    },
+    "Statistics": {
+      "title": "Statistics",
+      "servers": "{count} servers",
+      "latency": "{ping} ms",
+      "cache_latency": "Cache: {ping} ms",
+      "shards": "Shards",
+      "music": "Music Node",
+      "music_players": "{count} players",
+      "render": "Render Server",
+      "render_requests": "{count} requests",
+      "database": "Database",
+      "database_ping": "Avg. speed: {ping} ms"
+    }
+  },
+  "games": {
+    "2048": {
+      "name": "2048",
+      "startMessage": "Use the arrows to slide tiles and combine matching numbers!",
+      "description": "Play the classic 2048 puzzle game",
+      "score": "Your Score: {{score}}",
+      "gameOver": "Game Over! Final Score: {{score}}",
+      "invalidMove": "Invalid move!",
+      "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
+      "notYourGame": "This game is not for you!",
+      "error": "There was an error starting the game. Please try again."
+    }
+  },
+  "options": {
+    "user": {}
   }
 }
