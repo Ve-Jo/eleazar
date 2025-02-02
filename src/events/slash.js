@@ -1,5 +1,5 @@
 import { Events, Collection } from "discord.js";
-import EconomyEZ from "../utils/economy.js";
+import Database from "../database/client.js";
 import i18n from "../utils/i18n.js";
 
 const cooldowns = new Collection();
@@ -52,6 +52,7 @@ export default {
     }
 
     try {
+      console.log(interaction.locale);
       let locale = interaction.locale || "en";
       if (locale.includes("-")) {
         locale = locale.split("-")[0];
@@ -76,10 +77,23 @@ export default {
         await command.execute(interaction, i18n);
       }
 
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.latestActivity`,
-        Date.now()
-      );
+      // Update user's last activity
+      await Database.client.user.upsert({
+        where: {
+          guildId_id: {
+            guildId: interaction.guild.id,
+            id: interaction.user.id,
+          },
+        },
+        create: {
+          id: interaction.user.id,
+          guildId: interaction.guild.id,
+          lastActivity: Date.now(),
+        },
+        update: {
+          lastActivity: Date.now(),
+        },
+      });
     } catch (error) {
       console.error(error);
     }

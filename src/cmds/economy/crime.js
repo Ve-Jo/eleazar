@@ -9,7 +9,7 @@ import {
   ComponentType,
   AttachmentBuilder,
 } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -32,11 +32,12 @@ export default {
 
     try {
       // Check cooldown
-      const cooldownTime = await EconomyEZ.getCooldownTime(
+      const cooldownTime = await Database.getCooldown(
         guild.id,
         user.id,
         "crime"
       );
+
       if (cooldownTime > 0) {
         const timeLeft = Math.ceil(cooldownTime / 1000);
 
@@ -63,7 +64,7 @@ export default {
                 }),
               },
             },
-            database: await EconomyEZ.get(`${guild.id}.${user.id}`),
+            database: await Database.getUser(guild.id, user.id),
             locale: interaction.locale,
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
@@ -86,8 +87,18 @@ export default {
       }
 
       // Get all users in the guild with their data
-      const validTargets = (await EconomyEZ.getGuildUsers(guild.id)).filter(
-        (userData) => userData.userId !== user.id && userData.balance > 0
+      const allUsers = await Database.client.user.findMany({
+        where: {
+          guildId: guild.id,
+          id: { not: user.id },
+        },
+        include: {
+          economy: true,
+        },
+      });
+
+      const validTargets = allUsers.filter(
+        (userData) => userData.economy?.balance > 0
       );
 
       if (validTargets.length === 0) {
@@ -106,20 +117,19 @@ export default {
             validTargets.map(async (userData) => {
               let member;
               try {
-                member = await guild.members.fetch(userData.userId);
+                member = await guild.members.fetch(userData.id);
               } catch (error) {
-                console.error(
-                  `Failed to fetch member ${userData.userId}:`,
-                  error
-                );
+                console.error(`Failed to fetch member ${userData.id}:`, error);
                 return null;
               }
               if (!member || member.user.bot) return null;
 
               return {
                 label: member.displayName,
-                description: `${userData.balance.toFixed(0)} coins`,
-                value: userData.userId,
+                description: `${Number(userData.economy?.balance || 0).toFixed(
+                  0
+                )} coins`,
+                value: userData.id,
               };
             })
           ).then((options) => options.filter((opt) => opt !== null))
@@ -141,11 +151,14 @@ export default {
 
         const targetId = collection.values[0];
         const target = await guild.members.fetch(targetId);
-        const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
-        const targetData = await EconomyEZ.get(`${guild.id}.${targetId}`);
+
+        // Get user and target data
+        const userData = await Database.getUser(guild.id, user.id);
+        const targetData = await Database.getUser(guild.id, targetId);
 
         // Calculate success chance and potential rewards based on crime level
-        const crimeLevel = userData.upgrades.crime?.level || 1;
+        const crimeUpgrade = userData.upgrades.find((u) => u.type === "crime");
+        const crimeLevel = crimeUpgrade?.level || 1;
         const successChance = 0.3 + (crimeLevel - 1) * 0.05; // 5% increase per level
         const success = Math.random() < successChance;
 
@@ -154,9 +167,11 @@ export default {
         let amount;
         if (success) {
           // Calculate steal amount (between 1% and maxStealPercent of target's balance)
-          const minStealAmount = Math.floor(targetData.balance * 0.01); // Minimum 1%
+          const minStealAmount = Math.floor(
+            Number(targetData.economy?.balance || 0) * 0.01
+          ); // Minimum 1%
           const maxStealAmount = Math.floor(
-            targetData.balance * maxStealPercent
+            Number(targetData.economy?.balance || 0) * maxStealPercent
           );
           amount = Math.floor(
             minStealAmount + Math.random() * (maxStealAmount - minStealAmount)
@@ -165,44 +180,74 @@ export default {
           amount = Math.max(10, amount);
         } else {
           // Calculate fine amount (between 10 coins and 10% of user's balance)
-          const maxFine = Math.floor(userData.balance * 0.1);
+          const maxFine = Math.floor(
+            Number(userData.economy?.balance || 0) * 0.1
+          );
           amount = Math.max(10, Math.floor(Math.random() * maxFine));
         }
 
-        console.log(`Crime attempt:
-          Success: ${success}
-          Crime Level: ${crimeLevel}
-          Max Steal %: ${(maxStealPercent * 100).toFixed(1)}%
-          Target Balance: ${targetData.balance}
-          User Balance: ${userData.balance}
-          Amount: ${amount}
-        `);
+        // Update balances in a transaction
+        await Database.client.$transaction(async (tx) => {
+          if (success) {
+            // Deduct amount from target
+            await tx.economy.update({
+              where: {
+                userId_guildId: {
+                  userId: targetId,
+                  guildId: guild.id,
+                },
+              },
+              data: {
+                balance: { decrement: amount },
+              },
+            });
 
-        // Update balances
-        if (success) {
-          // Deduct amount from target
-          await EconomyEZ.math(`${guild.id}.${targetId}.balance`, "-", amount);
-          // Add amount to user
-          await EconomyEZ.math(`${guild.id}.${user.id}.balance`, "+", amount);
-          // Update total earned
-          await EconomyEZ.math(
-            `${guild.id}.${user.id}.totalEarned`,
-            "+",
-            amount
-          );
-        } else {
-          // Deduct fine from user
-          await EconomyEZ.math(`${guild.id}.${user.id}.balance`, "-", amount);
-        }
+            // Add amount to user and update stats
+            await tx.economy.update({
+              where: {
+                userId_guildId: {
+                  userId: user.id,
+                  guildId: guild.id,
+                },
+              },
+              data: {
+                balance: { increment: amount },
+              },
+            });
 
-        // Update crime cooldown
-        await EconomyEZ.updateCooldown(guild.id, user.id, "crime");
+            await tx.statistics.update({
+              where: {
+                userId_guildId: {
+                  userId: user.id,
+                  guildId: guild.id,
+                },
+              },
+              data: {
+                totalEarned: { increment: amount },
+              },
+            });
+          } else {
+            // Deduct fine from user
+            await tx.economy.update({
+              where: {
+                userId_guildId: {
+                  userId: user.id,
+                  guildId: guild.id,
+                },
+              },
+              data: {
+                balance: { decrement: amount },
+              },
+            });
+          }
 
-        // Get updated balances
-        const updatedUserData = await EconomyEZ.get(`${guild.id}.${user.id}`);
-        const updatedTargetData = await EconomyEZ.get(
-          `${guild.id}.${targetId}`
-        );
+          // Update crime cooldown
+          await Database.updateCooldown(guild.id, user.id, "crime");
+        });
+
+        // Get updated data
+        const updatedUserData = await Database.getUser(guild.id, user.id);
+        const updatedTargetData = await Database.getUser(guild.id, targetId);
 
         // Generate crime result image
         const pngBuffer = await generateRemoteImage(
@@ -235,7 +280,7 @@ export default {
                   size: 1024,
                 }),
               },
-              balance: updatedTargetData.balance,
+              balance: Number(updatedTargetData.economy?.balance || 0),
             },
             robber: {
               user: {
@@ -247,7 +292,7 @@ export default {
                   size: 1024,
                 }),
               },
-              balance: updatedUserData.balance,
+              balance: Number(updatedUserData.economy?.balance || 0),
             },
             amount: amount,
             success: success,

@@ -8,10 +8,10 @@ export default {
   },
   server: true,
   async preExecute(interaction) {
-    return interaction.reply({
+    /*return interaction.reply({
       content: "Музыкальный плеер пока-что неисправен",
       ephemeral: true,
-    });
+    });*/
     if (!interaction.member.voice.channel) {
       return interaction.reply({
         content: i18n.__("music.notInVoiceChannel"),
@@ -68,6 +68,13 @@ export default {
         en: "Requested by {{author}}",
         ru: "Запрошено {{author}}",
         uk: "Запрошено {{author}}",
+      },
+    },
+    autoplay: {
+      autoplayApplied: {
+        en: "Autoplay state was set to {{enabled}}",
+        ru: "Состояние автопроигрывания было установлено на {{enabled}}",
+        uk: "Стан автопрогравання було встановлено на {{enabled}}",
       },
     },
   },

@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import EconomyEZ, { DEFAULT_VALUES } from "../utils/economy.js";
+import Database from "../database/client.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
@@ -43,9 +43,13 @@ export default {
     }
 
     // Handle counting
-    const guildData = await EconomyEZ.get(`${guild.id}.${guild.id}.settings`);
-    if (guildData && guildData.counting) {
-      const countingData = guildData.counting;
+    const guildSettings = await Database.client.guild.findUnique({
+      where: { id: guild.id },
+      select: { settings: true },
+    });
+
+    if (guildSettings?.settings?.counting) {
+      const countingData = guildSettings.settings.counting;
 
       if (countingData && channel.id === countingData.channel_id) {
         const lastNumber = parseInt(countingData.message);
@@ -66,10 +70,18 @@ export default {
           }
 
           // Update counting data
-          await EconomyEZ.set(`${guild.id}.${guild.id}.counting`, {
-            ...countingData,
-            message: currentNumber + 1,
-            lastwritter: message.author.id,
+          await Database.client.guild.update({
+            where: { id: guild.id },
+            data: {
+              settings: {
+                ...guildSettings.settings,
+                counting: {
+                  ...countingData,
+                  message: currentNumber + 1,
+                  lastwritter: message.author.id,
+                },
+              },
+            },
           });
 
           if (
@@ -95,9 +107,19 @@ export default {
 
               const role = guild.roles.cache.get(countingData.pinnedrole);
               await message.member.roles.add(role);
-              await EconomyEZ.set(`${guild.id}.${guild.id}.counting`, {
-                ...countingData,
-                lastpinnedmember: message.author.id,
+
+              // Update lastpinnedmember
+              await Database.client.guild.update({
+                where: { id: guild.id },
+                data: {
+                  settings: {
+                    ...guildSettings.settings,
+                    counting: {
+                      ...countingData,
+                      lastpinnedmember: message.author.id,
+                    },
+                  },
+                },
               });
             }
 
@@ -110,28 +132,31 @@ export default {
     }
 
     // Handle XP gain
-    const userData = await EconomyEZ.get(`${guild.id}.${author.id}`);
-    const guildSettings = await EconomyEZ.get(`${guild.id}.settings`);
-
     try {
       // Check if enough time has passed since last XP gain
-      const cooldownTime = await EconomyEZ.getCooldownTime(
+      const cooldownTime = await Database.getCooldown(
         guild.id,
         author.id,
         "message"
       );
 
       if (cooldownTime === 0) {
-        // Add XP and update message cooldown
-        await EconomyEZ.addXP(
-          guild.id,
-          author.id,
-          guildSettings?.xp_per_message ||
-            DEFAULT_VALUES.guild.settings.xp_per_message
-        );
+        // Get guild settings for XP amount
+        const guildSettings = await Database.client.guild.findUnique({
+          where: { id: guild.id },
+          select: { settings: true },
+        });
+
+        const xpPerMessage = guildSettings?.settings?.xp_per_message || 15; // Default XP per message
+
+        // Add XP
+        await Database.addXP(guild.id, author.id, xpPerMessage);
 
         // Update message cooldown
-        await EconomyEZ.updateCooldown(guild.id, author.id, "message");
+        await Database.updateCooldown(guild.id, author.id, "message");
+
+        // Increment message count in statistics
+        await Database.incrementMessageCount(guild.id, author.id);
       }
     } catch (error) {
       console.error("Error handling XP gain:", error);

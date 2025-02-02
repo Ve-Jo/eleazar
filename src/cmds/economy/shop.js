@@ -11,7 +11,7 @@ import {
   ComponentType,
   AttachmentBuilder,
 } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database, { UPGRADES } from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -36,9 +36,20 @@ export default {
       let currentUpgrade = 0;
 
       const generateShopMessage = async () => {
-        // Get user data and available upgrades
-        const userData = await EconomyEZ.get(`${guild.id}.${user.id}`);
-        const upgrades = await EconomyEZ.getUpgrades(guild.id, user.id);
+        // Get user data with all relations
+        const userData = await Database.getUser(guild.id, user.id);
+
+        // Get upgrade info for each type
+        const upgradeInfo = {
+          daily: await Database.getUpgradeInfo(
+            "daily",
+            userData.upgrades.find((u) => u.type === "daily")?.level || 1
+          ),
+          crime: await Database.getUpgradeInfo(
+            "crime",
+            userData.upgrades.find((u) => u.type === "crime")?.level || 1
+          ),
+        };
 
         const pngBuffer = await generateRemoteImage(
           "UpgradesDisplay",
@@ -62,23 +73,37 @@ export default {
                 }),
               },
             },
-            database: userData,
+            database: {
+              balance: Number(userData.economy?.balance || 0),
+              bankBalance: Number(userData.bank?.balance || 0),
+              bankRate: userData.bank?.rate || 0,
+              totalEarned: Number(userData.stats?.totalEarned || 0),
+            },
             locale: interaction.locale,
-            upgrades: Object.entries(upgrades).map(([key, upgrade], index) => ({
-              emoji: upgrade.emoji,
-              title: i18n.__(`economy.shop.upgrades.${key}.name`),
-              description: i18n.__(`economy.shop.upgrades.${key}.description`, {
-                effect: upgrade.effect,
+            upgrades: Object.entries(upgradeInfo).map(
+              ([key, upgrade], index) => ({
+                emoji: UPGRADES[key].emoji,
+                title: i18n.__(`economy.shop.upgrades.${key}.name`),
+                description: i18n.__(
+                  `economy.shop.upgrades.${key}.description`,
+                  {
+                    effect:
+                      key === "daily" ? upgrade.effect * 100 : upgrade.effect,
+                    price: upgrade.price,
+                  }
+                ),
+                currentLevel:
+                  userData.upgrades.find((u) => u.type === key)?.level || 1,
+                nextLevel:
+                  (userData.upgrades.find((u) => u.type === key)?.level || 1) +
+                  1,
                 price: upgrade.price,
-              }),
-              currentLevel: upgrade.level,
-              nextLevel: upgrade.level + 1,
-              price: upgrade.price,
-              progress: 50,
-              id: index,
-            })),
+                progress: 50,
+                id: index,
+              })
+            ),
             currentUpgrade,
-            balance: userData.balance,
+            balance: Number(userData.economy?.balance || 0),
           },
           { width: 600, height: 350 },
           { image: 2, emoji: 2 }
@@ -88,6 +113,8 @@ export default {
           name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
         });
 
+        console.log(upgradeInfo);
+
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
@@ -96,21 +123,21 @@ export default {
             {
               label: i18n.__("economy.shop.upgrades.daily.name"),
               description: i18n.__("economy.shop.upgrades.daily.description", {
-                effect: upgrades.daily.effect,
-                price: upgrades.daily.price,
+                effect: upgradeInfo.daily.effect * 100,
+                price: upgradeInfo.daily.price,
               }),
               value: "0",
-              emoji: upgrades.daily.emoji,
+              emoji: UPGRADES["daily"].emoji,
               default: currentUpgrade === 0,
             },
             {
               label: i18n.__("economy.shop.upgrades.crime.name"),
               description: i18n.__("economy.shop.upgrades.crime.description", {
-                effect: upgrades.crime.effect,
-                price: upgrades.crime.price,
+                effect: upgradeInfo.crime.effect,
+                price: upgradeInfo.crime.price,
               }),
               value: "1",
-              emoji: upgrades.crime.emoji,
+              emoji: UPGRADES["crime"].emoji,
               default: currentUpgrade === 1,
             },
           ]);
@@ -130,7 +157,9 @@ export default {
             iconURL: user.displayAvatarURL(),
           })
           .setDescription(
-            i18n.__("economy.shop.description", { balance: userData.balance })
+            i18n.__("economy.shop.description", {
+              balance: Number(userData.economy?.balance || 0),
+            })
           )
           .setImage(
             `attachment://shop.${
@@ -160,22 +189,22 @@ export default {
           await i.update(await generateShopMessage());
         } else if (i.customId === "purchase") {
           const type = currentUpgrade === 0 ? "daily" : "crime";
-          const result = await EconomyEZ.purchaseUpgrade(
-            guild.id,
-            user.id,
-            type
-          );
 
-          if (!result.success) {
-            await i.reply({
-              content: i18n.__("economy.shop.insufficientFunds"),
-              ephemeral: true,
-            });
-            return;
+          try {
+            await Database.purchaseUpgrade(guild.id, user.id, type);
+            // Show updated shop with new upgrade level
+            await i.update(await generateShopMessage());
+          } catch (error) {
+            if (error.message === "Insufficient balance") {
+              await i.reply({
+                content: i18n.__("economy.shop.insufficientFunds"),
+                ephemeral: true,
+              });
+            } else {
+              throw error;
+            }
           }
 
-          // Show updated shop with new upgrade level
-          await i.update(await generateShopMessage());
           collector.stop();
         }
       });
@@ -252,9 +281,9 @@ export default {
           uk: "Посилення Щоденної Нагороди",
         },
         description: {
-          en: "%{{effect}} reward ({{price}} coins)",
-          ru: "%{{effect}} к награде ({{price}} монет)",
-          uk: "%{{effect}} до нагороди ({{price}} монет)",
+          en: "{{effect}}% reward ({{price}} coins)",
+          ru: "{{effect}}% к награде ({{price}} монет)",
+          uk: "{{effect}}% до нагороди ({{price}} монет)",
         },
       },
       crime: {

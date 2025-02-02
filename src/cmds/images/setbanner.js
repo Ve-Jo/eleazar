@@ -5,7 +5,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { AttachmentBuilder, EmbedBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import axios from "axios";
@@ -95,10 +95,19 @@ export async function handleRemoveBanner(interaction) {
 
   try {
     // Remove the banner
-    await EconomyEZ.set(`${guildId}.${userId}.banner_url`, null);
+    await Database.client.user.update({
+      where: {
+        guildId_id: {
+          guildId,
+          id: userId,
+        },
+      },
+      data: {
+        bannerUrl: null,
+      },
+    });
 
     // Try to notify the user
-    const guild = interaction.client.guilds.cache.get(guildId);
     const user = await interaction.client.users.fetch(userId);
     if (user) {
       try {
@@ -192,8 +201,6 @@ export default {
         });
       }
 
-      console.log(attachment);
-
       // Convert ephemeral attachment to permanent before saving
       const permanentUrl = await makePermanentAttachment(
         interaction,
@@ -201,13 +208,30 @@ export default {
       );
 
       // Save the permanent URL
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.banner_url`,
-        permanentUrl
-      );
+      await Database.client.user.upsert({
+        where: {
+          guildId_id: {
+            guildId: interaction.guild.id,
+            id: interaction.user.id,
+          },
+        },
+        create: {
+          id: interaction.user.id,
+          guildId: interaction.guild.id,
+          bannerUrl: permanentUrl,
+          lastActivity: Date.now(),
+        },
+        update: {
+          bannerUrl: permanentUrl,
+          lastActivity: Date.now(),
+        },
+      });
 
-      const userData = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
+      // Get updated user data
+      const userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id,
+        true
       );
 
       await interaction.editReply({
@@ -249,10 +273,7 @@ export default {
               size: 1024,
             }),
           },
-          database: {
-            ...userData,
-            banner_url: permanentUrl, // Use the permanent URL here
-          },
+          database: userData,
         },
         { width: 400, height: 225 },
         { image: 2, emoji: 1 }

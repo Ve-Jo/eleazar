@@ -3,7 +3,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { AttachmentBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import prettyMs from "pretty-ms";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
@@ -26,19 +26,13 @@ export default {
 
     try {
       // Check if cooldown is active
-      const isOnCooldown = await EconomyEZ.isCooldownActive(
+      const cooldownTime = await Database.getCooldown(
         interaction.guild.id,
         interaction.user.id,
         "daily"
       );
 
-      if (isOnCooldown) {
-        const timeLeft = await EconomyEZ.getCooldownTime(
-          interaction.guild.id,
-          interaction.user.id,
-          "daily"
-        );
-
+      if (cooldownTime > 0) {
         let pngBuffer = await generateRemoteImage(
           "Cooldown",
           {
@@ -61,11 +55,13 @@ export default {
                 }),
               },
             },
-            database: await EconomyEZ.get(
-              `${interaction.guild.id}.${interaction.user.id}`
+            database: await Database.getUser(
+              interaction.guild.id,
+              interaction.user.id,
+              true
             ),
             locale: interaction.locale,
-            nextDaily: timeLeft,
+            nextDaily: cooldownTime,
             emoji: "🎁",
           },
           { width: 450, height: 200 },
@@ -83,34 +79,45 @@ export default {
         return interaction.editReply({
           files: [attachment],
           content: i18n.__("economy.daily.cooldown", {
-            time: prettyMs(timeLeft, { verbose: true }),
+            time: prettyMs(cooldownTime, { verbose: true }),
           }),
         });
       }
 
-      // Get user's daily bonus upgrade info
-      const userData = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
+      // Get user data with upgrades
+      const userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id
       );
-      console.log(userData);
-      const dailyLevel = userData.upgrades.daily.level;
+      const dailyUpgrade = userData.upgrades.find((u) => u.type === "daily");
+      const dailyLevel = dailyUpgrade?.level || 1;
       const multiplier = 1 + (dailyLevel - 1) * 0.15; // 15% increase per level
 
       const baseAmount = Math.floor(Math.random() * 90) + 10;
       const amount = Math.floor(baseAmount * multiplier);
 
-      // Update cooldown first
-      await EconomyEZ.updateCooldown(
+      // Start transaction for updating cooldown and balance
+      await Database.client.$transaction(async (tx) => {
+        // Update cooldown
+        await Database.updateCooldown(
+          interaction.guild.id,
+          interaction.user.id,
+          "daily"
+        );
+
+        // Add balance
+        await Database.addBalance(
+          interaction.guild.id,
+          interaction.user.id,
+          amount
+        );
+      });
+
+      // Get updated user data for the image
+      const updatedData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
-        "daily"
-      );
-
-      // Then update balance and get the result
-      const updatedData = await EconomyEZ.math(
-        `${interaction.guild.id}.${interaction.user.id}.balance`,
-        "+",
-        amount
+        true
       );
 
       let pngBuffer = await generateRemoteImage(
@@ -135,7 +142,12 @@ export default {
               }),
             },
           },
-          database: updatedData,
+          database: {
+            balance: Number(updatedData.economy?.balance || 0),
+            bankBalance: Number(updatedData.economy?.bankBalance || 0),
+            bankRate: updatedData.economy?.bankRate || 0,
+            totalEarned: Number(updatedData.stats?.totalEarned || 0),
+          },
           locale: interaction.locale,
           amount: amount,
         },

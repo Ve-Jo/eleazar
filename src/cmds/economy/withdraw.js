@@ -5,7 +5,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -42,30 +42,32 @@ export default {
     const amount = interaction.options.getString("amount");
 
     try {
-      // Get initial user data and update bank balance
-      await EconomyEZ.updateBankOnInactivity(
+      // Get user data with all relations
+      const userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id
       );
-      const initialUser = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
-      );
 
-      if (!initialUser?.bank) {
+      if (!userData?.economy?.bankBalance) {
         return interaction.editReply({
           content: i18n.__("economy.withdraw.noBankAccount"),
           ephemeral: true,
         });
       }
 
-      // Calculate withdrawal amount
+      // Calculate current bank balance with interest
+      const currentBankBalance = await Database.calculateBankBalance(userData);
+
+      // Calculate withdrawal amount with precision
       let amountInt = 0;
+      const preciseCurrentBalance = parseFloat(currentBankBalance);
+
       if (amount === "all") {
-        amountInt = Number(initialUser.bank.amount);
+        amountInt = preciseCurrentBalance;
       } else if (amount === "half") {
-        amountInt = Math.floor(Number(initialUser.bank.amount) / 2);
+        amountInt = preciseCurrentBalance / 2;
       } else {
-        amountInt = parseInt(amount);
+        amountInt = parseFloat(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
             content: i18n.__("economy.withdraw.invalidAmount"),
@@ -74,8 +76,11 @@ export default {
         }
       }
 
+      // Ensure 5 decimal precision
+      amountInt = parseFloat(amountInt.toFixed(5));
+
       // Validate amount
-      if (initialUser.bank.amount < amountInt) {
+      if (preciseCurrentBalance < amountInt) {
         return interaction.editReply({
           content: i18n.__("economy.withdraw.insufficientFunds"),
           ephemeral: true,
@@ -89,25 +94,49 @@ export default {
       }
 
       // Perform the withdrawal transaction
-      const newBankAmount = initialUser.bank.amount - amountInt;
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.bank`,
-        {
-          amount: newBankAmount,
-          startedToHold:
-            newBankAmount === 0 ? 0 : initialUser.bank.startedToHold,
-          holdingPercentage:
-            newBankAmount === 0 ? 0 : initialUser.bank.holdingPercentage,
-        }
-      );
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.balance`,
-        initialUser.balance + amountInt
-      );
+      await Database.client.$transaction(async (tx) => {
+        // Calculate remaining balance after withdrawal
+        const remainingBalance = (preciseCurrentBalance - amountInt).toFixed(5);
+
+        // Update economy record with both balance and bank changes
+        await tx.economy.update({
+          where: {
+            userId_guildId: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            balance: { increment: amountInt },
+            // Set exact remaining balance
+            bankBalance: remainingBalance,
+            bankRate:
+              parseFloat(remainingBalance) <= 0
+                ? "0.00000"
+                : userData.economy.bankRate,
+            bankStartTime: parseFloat(remainingBalance) <= 0 ? 0 : Date.now(), // Reset interest calculation time
+          },
+        });
+
+        // Update user's last activity
+        await tx.user.update({
+          where: {
+            guildId_id: {
+              id: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            lastActivity: Date.now(),
+          },
+        });
+      });
 
       // Get updated user data
-      const updatedUser = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
+      const updatedUser = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id,
+        true
       );
 
       // Generate the transfer image

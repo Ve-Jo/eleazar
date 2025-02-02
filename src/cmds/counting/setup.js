@@ -4,7 +4,7 @@ import {
   OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { PermissionsBitField } from "discord.js";
 import i18n from "../../utils/i18n.js";
 
@@ -156,21 +156,55 @@ export default {
     const channel = interaction.options.getChannel("channel");
     const startNumber = interaction.options.getNumber("start_number") || 1;
     const pinOneEach = interaction.options.getNumber("pin_on_each") || 0;
-    const pinnedRole = interaction.options.getRole("pinned_role") || 0;
+    const pinnedRole = interaction.options.getRole("pinned_role") || {
+      id: "0",
+    };
     const onlyNumbers = interaction.options.getBoolean("only_numbers") || false;
     const noSameUser = interaction.options.getBoolean("no_same_user") || false;
     const noUniqueRole =
       interaction.options.getBoolean("no_unique_role") || false;
 
-    await EconomyEZ.set(`${guild.id}.counting`, {
-      channel_id: channel.id,
-      message: startNumber,
-      pinoneach: pinOneEach,
-      pinnedrole: pinnedRole.id,
-      only_numbers: onlyNumbers,
-      no_same_user: noSameUser,
-      lastwritter: "0",
-      no_unique_role: noUniqueRole,
+    // Get current guild settings
+    const guildData = await Database.client.guild.findUnique({
+      where: { id: guild.id },
+      select: { settings: true },
+    });
+
+    // Update guild settings with new counting data
+    await Database.client.guild.upsert({
+      where: { id: guild.id },
+      create: {
+        id: guild.id,
+        settings: {
+          counting: {
+            channel_id: channel.id,
+            message: startNumber,
+            pinoneach: pinOneEach,
+            pinnedrole: pinnedRole.id,
+            only_numbers: onlyNumbers,
+            no_same_user: noSameUser,
+            lastwritter: "0",
+            no_unique_role: noUniqueRole,
+            lastpinnedmember: "0",
+          },
+        },
+      },
+      update: {
+        settings: {
+          ...guildData?.settings,
+          counting: {
+            channel_id: channel.id,
+            message: startNumber,
+            pinoneach: pinOneEach,
+            pinnedrole: pinnedRole.id,
+            only_numbers: onlyNumbers,
+            no_same_user: noSameUser,
+            lastwritter: "0",
+            no_unique_role: noUniqueRole,
+            lastpinnedmember: "0",
+          },
+        },
+      },
     });
 
     await interaction.reply({
@@ -178,7 +212,7 @@ export default {
         channel: channel.name,
         number: startNumber,
         pinoneach: pinOneEach,
-        pinnedrole: pinnedRole.name,
+        pinnedrole: pinnedRole.name || "None",
         only_numbers: onlyNumbers,
         no_same_user: noSameUser,
         no_unique_role: noUniqueRole,

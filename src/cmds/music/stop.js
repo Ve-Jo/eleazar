@@ -34,7 +34,9 @@ export default {
     }
 
     await player.destroy(`${interaction.user.username} stopped the music`);
-    await interaction.editReply(i18n.__("music.musicStopped"));
+    await interaction.editReply({
+      content: i18n.__("music.stop.musicStopped"),
+    });
   },
   localization_strings: {
     name: {
@@ -46,6 +48,11 @@ export default {
       en: "Stop the music",
       ru: "Остановить музыку",
       uk: "Зупинити музику",
+    },
+    musicStopped: {
+      en: "Music stopped",
+      ru: "Музыка остановлена",
+      uk: "Музика зупинена",
     },
   },
 };

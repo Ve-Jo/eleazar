@@ -10,7 +10,7 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -38,20 +38,28 @@ export default {
 
       const generateLeaderboardMessage = async () => {
         // Get all users in the guild with their data
-        const guildUsers = await EconomyEZ.getGuildUsers(guild.id);
+        const guildUsers = await Database.client.user.findMany({
+          where: { guildId: guild.id },
+          include: {
+            economy: true,
+            stats: true,
+          },
+        });
 
         // Sort users by total balance (balance + bank amount)
         const sortedUsers = guildUsers
           .map((userData) => ({
             ...userData,
-            totalBalance: userData.balance + (userData.bank?.amount || 0),
+            totalBalance:
+              Number(userData.economy?.balance || 0) +
+              Number(userData.economy?.bankBalance || 0),
           }))
           .sort((a, b) => b.totalBalance - a.totalBalance);
 
         // Find user's position in the leaderboard
         if (highlightedPosition === null) {
           const userIndex = sortedUsers.findIndex(
-            (user) => user.userId === interaction.user.id
+            (user) => user.id === interaction.user.id
           );
           if (userIndex !== -1) {
             highlightedPosition = userIndex + 1;
@@ -69,7 +77,7 @@ export default {
         const usersWithNames = await Promise.all(
           usersToDisplay.map(async (userData) => {
             try {
-              const member = await guild.members.fetch(userData.userId);
+              const member = await guild.members.fetch(userData.id);
               return {
                 ...userData,
                 name: member.displayName,
@@ -79,10 +87,7 @@ export default {
                 }),
               };
             } catch (error) {
-              console.error(
-                `Failed to fetch member ${userData.userId}:`,
-                error
-              );
+              console.error(`Failed to fetch member ${userData.id}:`, error);
               return null;
             }
           })
@@ -115,12 +120,12 @@ export default {
             },
             locale: interaction.locale,
             users: validUsers.map((user, index) => ({
-              id: user.userId,
+              id: user.id,
               position: startIndex + index + 1,
               name: user.name,
               avatarURL: user.avatarURL,
-              balance: user.balance,
-              bank: user.bank,
+              balance: Number(user.economy?.balance || 0),
+              bank: Number(user.economy?.bankBalance || 0),
               totalBalance: user.totalBalance,
             })),
             currentPage: page + 1,

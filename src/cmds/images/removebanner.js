@@ -3,7 +3,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { EmbedBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import i18n from "../../utils/i18n.js";
 
 export default {
@@ -23,9 +23,17 @@ export default {
     await interaction.deferReply();
 
     try {
-      await EconomyEZ.remove(
-        `${interaction.guild.id}.${interaction.user.id}.banner_url`
-      );
+      await Database.client.user.update({
+        where: {
+          guildId_id: {
+            guildId: interaction.guild.id,
+            id: interaction.user.id,
+          },
+        },
+        data: {
+          bannerUrl: null,
+        },
+      });
 
       const embed = new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)

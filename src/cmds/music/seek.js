@@ -59,21 +59,21 @@ export default {
 
     if (timeInMs === null) {
       return interaction.editReply({
-        content: i18n.__("music.invalidTimeFormat"),
+        content: i18n.__("music.seek.invalidTimeFormat"),
         ephemeral: true,
       });
     }
 
     if (timeInMs > player.queue.current.info.duration) {
       return interaction.editReply({
-        content: i18n.__("music.seekBeyondDuration"),
+        content: i18n.__("music.seek.seekBeyondDuration"),
         ephemeral: true,
       });
     }
 
     await player.seek(timeInMs);
     return interaction.editReply({
-      content: i18n.__("music.seekedTo", { time: timeString }),
+      content: i18n.__("music.seek.seekedTo", { time: timeString }),
       ephemeral: true,
     });
   },
@@ -110,6 +110,21 @@ export default {
       en: "Seek to a specific time in the current track",
       ru: "Перейти к определенному времени в текущем треке",
       uk: "Перейти до певного часу в поточному треку",
+    },
+    invalidTimeFormat: {
+      en: "Invalid time format. Use m:ss or ss",
+      ru: "Неверный формат времени. Используйте m:ss или ss",
+      uk: "Невірний формат часу. Використовуйте m:ss або ss",
+    },
+    seekBeyondDuration: {
+      en: "You can't seek beyond the duration of the current track",
+      ru: "Вы не можете перемотать за пределы длительности текущего трека",
+      uk: "Ви не можете перемотати за межі тривалості поточного треку",
+    },
+    seekedTo: {
+      en: "Seeked to {{time}}",
+      ru: "Перемотано к {{time}}",
+      uk: "Перемотано до {{time}}",
     },
     options: {
       time: {

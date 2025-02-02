@@ -2,7 +2,7 @@ import {
   SlashCommandSubcommand,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import i18n from "../../utils/i18n.js";
 
 export default {
@@ -21,10 +21,22 @@ export default {
   async execute(interaction) {
     const { guild } = interaction;
 
-    const countingChannel = await EconomyEZ.get(`${guild.id}.counting`);
+    // Get current guild settings
+    const guildData = await Database.client.guild.findUnique({
+      where: { id: guild.id },
+      select: { settings: true },
+    });
 
-    if (countingChannel) {
-      await EconomyEZ.remove(`${guild.id}.counting`);
+    if (guildData?.settings?.counting) {
+      // Remove counting from settings while preserving other settings
+      const { counting, ...otherSettings } = guildData.settings;
+
+      await Database.client.guild.update({
+        where: { id: guild.id },
+        data: {
+          settings: otherSettings,
+        },
+      });
 
       await interaction.reply({
         content: i18n.__("counting.remove.success"),

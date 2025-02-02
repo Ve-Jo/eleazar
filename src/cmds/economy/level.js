@@ -7,7 +7,7 @@ import {
   AttachmentBuilder,
   ApplicationCommandOptionType,
 } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -47,7 +47,8 @@ export default {
       const guildId = interaction.guild.id;
       const userId = targetUser.id;
 
-      const userData = await EconomyEZ.get(`${guildId}.${userId}`);
+      // Get user data with level info
+      const userData = await Database.getUser(guildId, userId);
 
       if (!userData) {
         return interaction.editReply({
@@ -56,7 +57,7 @@ export default {
         });
       }
 
-      const levelInfo = EconomyEZ.calculateLevel(userData.totalXp);
+      const levelInfo = Database.calculateLevel(userData.level?.xp || 0);
 
       const pngBuffer = await generateRemoteImage(
         "Level",
@@ -93,7 +94,7 @@ export default {
           level: levelInfo.level,
           currentXP: levelInfo.currentXP,
           requiredXP: levelInfo.requiredXP,
-          totalXP: userData.totalXp,
+          totalXP: userData.level?.xp || 0,
         },
         { width: 450, height: 200 }
       );

@@ -5,7 +5,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -39,10 +39,14 @@ export default {
   },
   async execute(interaction) {
     await interaction.deferReply();
-    const user = interaction.options.getMember("user") || interaction.user;
+    const user = interaction.options.getMember("user") || interaction.member;
 
-    // Get user data with improved caching
-    const userData = await EconomyEZ.get(`${interaction.guild.id}.${user.id}`);
+    // Get user data with all relations
+    const userData = await Database.getUser(
+      interaction.guild.id,
+      user.id,
+      true
+    );
 
     if (!userData) {
       return interaction.editReply({
@@ -51,14 +55,10 @@ export default {
       });
     }
 
-    // Update bank balance if user has bank account
-    if (userData.bank?.startedToHold) {
-      await EconomyEZ.updateBankOnInactivity(interaction.guild.id, user.id);
-      // Get updated data after bank calculation
-      const updatedData = await EconomyEZ.get(
-        `${interaction.guild.id}.${user.id}`
+    if (userData.economy) {
+      userData.economy.bankBalance = await Database.calculateBankBalance(
+        userData
       );
-      userData.bank = updatedData.bank;
     }
 
     let imageResponse = await generateRemoteImage(

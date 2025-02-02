@@ -5,7 +5,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import EconomyEZ from "../../utils/economy.js";
+import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import i18n from "../../utils/i18n.js";
 
@@ -42,28 +42,19 @@ export default {
     const amount = interaction.options.getString("amount");
 
     try {
-      // Get initial user data and update bank balance
-      await EconomyEZ.updateBankOnInactivity(
+      // Get user data with all relations
+      const userData = await Database.getUser(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
+        true
       );
-      const initialUser = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
-      );
-
-      if (!initialUser?.bank) {
-        return interaction.editReply({
-          content: i18n.__("economy.deposit.noBankAccount"),
-          ephemeral: true,
-        });
-      }
 
       // Calculate deposit amount
       let amountInt = 0;
       if (amount === "all") {
-        amountInt = Number(initialUser.balance);
+        amountInt = Number(userData.economy?.balance || 0);
       } else if (amount === "half") {
-        amountInt = Math.floor(Number(initialUser.balance) / 2);
+        amountInt = Math.floor(Number(userData.economy?.balance || 0) / 2);
       } else {
         amountInt = parseInt(amount);
         if (isNaN(amountInt)) {
@@ -74,8 +65,16 @@ export default {
         }
       }
 
+      // Calculate current bank balance with interest
+      let currentBankBalance = 0;
+      if (userData.economy) {
+        currentBankBalance = parseFloat(
+          await Database.calculateBankBalance(userData)
+        );
+      }
+
       // Validate amount
-      if (initialUser.balance < amountInt) {
+      if (!userData.economy || userData.economy.balance < amountInt) {
         return interaction.editReply({
           content: i18n.__("economy.deposit.insufficientFunds"),
           ephemeral: true,
@@ -88,32 +87,51 @@ export default {
         });
       }
 
+      // Calculate bank rate based on level
+      const xp = Number(userData.level?.xp?.toString() || 0); // Convert BigInt to Number
+      const levelInfo = Database.calculateLevel(xp);
+      const bankRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
+
       // Perform the deposit transaction
-      const levelInfo = EconomyEZ.calculateLevel(initialUser.totalXp);
-      const holdingPercentage = 300 + levelInfo.level * 10; // Base 300% + level bonus
+      await Database.client.$transaction(async (tx) => {
+        // Update economy record with both balance and bank changes
+        // When depositing, we need to consider existing bank balance with earned interest
+        await tx.economy.update({
+          where: {
+            userId_guildId: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            balance: { decrement: amountInt },
+            // Set exact value including current balance with interest plus new deposit
+            bankBalance: (currentBankBalance + amountInt).toFixed(5),
+            bankRate: bankRate,
+            // Always reset bankStartTime when depositing to start fresh interest calculation
+            bankStartTime: Date.now(),
+          },
+        });
 
-      // First update the bank
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.bank`,
-        {
-          amount: initialUser.bank.amount + amountInt,
-          startedToHold: initialUser.bank.startedToHold || Date.now(),
-          holdingPercentage: Math.max(
-            holdingPercentage,
-            initialUser.bank.holdingPercentage || 0
-          ),
-        }
-      );
-
-      // Then update the balance
-      await EconomyEZ.set(
-        `${interaction.guild.id}.${interaction.user.id}.balance`,
-        initialUser.balance - amountInt
-      );
+        // Update user's last activity
+        await tx.user.update({
+          where: {
+            guildId_id: {
+              id: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            lastActivity: Date.now(),
+          },
+        });
+      });
 
       // Get updated user data
-      const updatedUser = await EconomyEZ.get(
-        `${interaction.guild.id}.${interaction.user.id}`
+      const updatedUser = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id,
+        true
       );
 
       // Generate the transfer image
