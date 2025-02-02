@@ -4,7 +4,18 @@ import { loadEvents } from "./src/utils/loadEvents.js";
 import { Memer } from "memer.ts";
 import { AutomaticSpeechRecognition, TextToImage } from "deepinfra";
 import Groq from "groq-sdk";
+import Database from "./src/database/client.js";
 import Replicate from "replicate";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
+
+// Import preview server if enabled
+const previewApp =
+  process.env.PREVIEW === "true"
+    ? (await import("./src/render-server/preview.js")).default
+    : null;
 
 console.log("Starting bot...");
 
@@ -80,7 +91,22 @@ client.deepinfra = {
   ),
 };
 
+await Database.initialize();
 await client.login(process.env.DISCORD_TOKEN);
+Database.startPingCollection(client);
+
+// Start preview server if enabled
+if (previewApp) {
+  const port = 2333;
+  const server = previewApp.app.listen(port, () => {
+    console.log(`Preview server running at http://localhost:${port}`);
+  });
+
+  // Handle WebSocket upgrades
+  server.on("upgrade", (request, socket, head) => {
+    previewApp.handleUpgrade(request, socket, head);
+  });
+}
 
 /*startResourceMonitor(5000);*/
 
