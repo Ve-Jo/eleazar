@@ -177,7 +177,7 @@ export default {
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
-        filter: (i) => i.user.id === user.id,
+        filter: (i) => i.user.id === interaction.user.id,
         time: 60000,
       });
 

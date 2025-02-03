@@ -88,27 +88,29 @@ export default {
       }
 
       // Calculate bank rate based on level
-      const xp = Number(userData.level?.xp?.toString() || 0); // Convert BigInt to Number
+      const xp = Number(userData.level?.xp?.toString() || 0);
       const levelInfo = Database.calculateLevel(xp);
       const bankRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
 
-      // Perform the deposit transaction
+      const userId = interaction.user.id;
+      const guildId = interaction.guild.id;
+
+      // Perform deposit operation in single transaction
       await Database.client.$transaction(async (tx) => {
         // Update economy record with both balance and bank changes
-        // When depositing, we need to consider existing bank balance with earned interest
         await tx.economy.update({
           where: {
             userId_guildId: {
-              userId: interaction.user.id,
-              guildId: interaction.guild.id,
+              userId,
+              guildId,
             },
           },
           data: {
-            balance: { decrement: amountInt },
-            // Set exact value including current balance with interest plus new deposit
+            balance: {
+              decrement: amountInt,
+            },
             bankBalance: (currentBankBalance + amountInt).toFixed(5),
-            bankRate: bankRate,
-            // Always reset bankStartTime when depositing to start fresh interest calculation
+            bankRate: bankRate.toFixed(5),
             bankStartTime: Date.now(),
           },
         });
@@ -117,8 +119,8 @@ export default {
         await tx.user.update({
           where: {
             guildId_id: {
-              id: interaction.user.id,
-              guildId: interaction.guild.id,
+              id: userId,
+              guildId,
             },
           },
           data: {
@@ -127,7 +129,7 @@ export default {
         });
       });
 
-      // Get updated user data
+      // Get updated user data directly from database
       const updatedUser = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
