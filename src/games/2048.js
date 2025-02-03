@@ -1,6 +1,7 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import i18n from "../utils/i18n.js";
 import { generateRemoteImage } from "../utils/remoteImageGenerator.js";
+import Database from "../database/client.js";
 
 export default {
   id: "2048",
@@ -14,6 +15,28 @@ export default {
         .map(() => Array(4).fill(0)),
       score: 0,
       gameOver: false,
+      moves: 0,
+      startTime: Date.now(),
+      earning: 0,
+    };
+
+    // Calculate earning based on score, time and moves efficiency
+    const calculateEarning = (state) => {
+      const timeInMinutes = (Date.now() - state.startTime) / 60000;
+      const moveEfficiency = state.score / (state.moves || 1);
+
+      // Combined formula that takes into account:
+      // - Base earning (1% of score)
+      // - Move efficiency (higher score per move = higher multiplier)
+      // - Time bonus (faster completion = higher multiplier)
+      const earning =
+        state.score *
+        0.01 * // Base earning
+        (1 + moveEfficiency / 10) * // Move efficiency multiplier
+        (1 + (5 - timeInMinutes) / 5); // Time multiplier
+
+      // Ensure minimum earning of 1
+      return earning;
     };
 
     // Add initial tiles
@@ -49,6 +72,7 @@ export default {
         {
           grid: gameState.grid,
           score: gameState.score,
+          earning: gameState.earning,
           locale: interaction.locale,
           interaction: {
             user: {
@@ -79,11 +103,13 @@ export default {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
         inactivityTimeout = setTimeout(async () => {
           if (!gameState.gameOver) {
+            gameState.earning = calculateEarning(gameState);
             const { buffer: finalBoard } = await generateRemoteImage(
               "2048",
               {
                 grid: gameState.grid,
                 score: gameState.score,
+                earning: gameState.earning,
                 locale: interaction.locale,
                 interaction: {
                   user: {
@@ -98,10 +124,17 @@ export default {
               { image: 2, emoji: 1 }
             );
 
+            // Add earnings to user's balance
+            await Database.addBalance(
+              interaction.guildId,
+              interaction.user.id,
+              gameState.earning
+            );
+
             await message.edit({
               content: `${i18n.__("games.2048.timesOut", {
                 score: gameState.score,
-              })}`,
+              })} (+${gameState.earning.toFixed(1)} 💵)`,
               files: [{ attachment: finalBoard, name: "2048.png" }],
               components: [],
             });
@@ -129,6 +162,11 @@ export default {
         if (i.customId === "left") moved = moveLeft(gameState);
         if (i.customId === "right") moved = moveRight(gameState);
 
+        if (moved) {
+          gameState.moves++;
+          gameState.earning = calculateEarning(gameState);
+        }
+
         if (moved && !gameState.gameOver) {
           addRandomTile(gameState);
           if (checkGameOver(gameState)) {
@@ -137,6 +175,7 @@ export default {
               {
                 grid: gameState.grid,
                 score: gameState.score,
+                earning: gameState.earning,
                 locale: i.locale,
                 interaction: {
                   user: {
@@ -151,10 +190,17 @@ export default {
               { image: 2, emoji: 1 }
             );
 
+            // Add earnings to user's balance
+            await Database.addBalance(
+              interaction.guildId,
+              interaction.user.id,
+              gameState.earning
+            );
+
             await i.update({
               content: `${i18n.__("games.2048.gameOver", {
                 score: gameState.score,
-              })}`,
+              })} (+${gameState.earning.toFixed(1)} 💵)`,
               files: [{ attachment: finalBoard, name: "2048.png" }],
               components: [],
             });
@@ -169,6 +215,7 @@ export default {
           {
             grid: gameState.grid,
             score: gameState.score,
+            earning: gameState.earning,
             locale: interaction.locale,
             interaction: {
               user: {

@@ -1,5 +1,5 @@
 const Game2048 = (props) => {
-  let { grid, score, interaction, i18n } = props;
+  let { grid, score, earning, interaction, i18n } = props;
 
   const translations = Object.entries(Game2048.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -11,13 +11,22 @@ const Game2048 = (props) => {
 
   if (!grid) {
     grid = [
-      [0, 2, 0, 0],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
+      [0, 2, 4, 8],
+      [0, 0, 0, 16],
+      [0, 0, 0, 32],
+      [0, 256, 128, 64],
     ];
-    score = 25;
+    score = 10;
+    earning = 250;
   }
+
+  const getScaleFontSize = (number) => {
+    const numStr = number.toString();
+    if (numStr.length <= 3) return "30px";
+    if (numStr.length <= 4) return "26px";
+    if (numStr.length <= 5) return "22px";
+    return "18px";
+  };
 
   const tileColors = {
     0: "#CDC1B4",
@@ -40,7 +49,7 @@ const Game2048 = (props) => {
     backgroundColor: "#BBADA0",
     borderRadius: "10px",
     fontFamily: "Inter600",
-    padding: "20px",
+    padding: "25px",
     display: "flex",
     flexDirection: "column",
     gap: "10px",
@@ -59,17 +68,45 @@ const Game2048 = (props) => {
     color: value < 8 ? "#776E65" : "#F9F6F2",
   });
 
+  const scoreContainerStyle = {
+    display: "flex",
+    alignItems: "stretch",
+    gap: "10px",
+    marginBottom: "20px",
+    minHeight: "60px",
+  };
+
   const scoreStyle = {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
+    minWidth: 0,
+    flex: "1 1 auto",
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     color: "#FFFFFF",
     padding: "10px 15px",
     borderRadius: "10px",
-    fontSize: "30px",
     fontWeight: "bold",
-    marginBottom: "20px",
+  };
+
+  const scoreContentStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    fontSize: getScaleFontSize(`${score}  `),
+  };
+
+  const earningStyle = {
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: "rgba(65, 194, 69, 0.71)",
+    color: "#FFFFFF",
+    padding: "10px 15px",
+    borderRadius: "10px",
+    fontWeight: "bold",
+    fontSize: getScaleFontSize(earning.toFixed(1)),
   };
 
   const avatarStyle = {
@@ -77,24 +114,32 @@ const Game2048 = (props) => {
     height: "40px",
     borderRadius: "25%",
     objectFit: "cover",
+    flexShrink: 0,
   };
 
   return (
     <div style={containerStyle}>
-      <div style={scoreStyle}>
-        <img
-          src={
-            interaction?.user?.avatarURL ||
-            "https://cdn.discordapp.com/embed/avatars/0.png"
-          }
-          alt="User Avatar"
-          width={40}
-          height={40}
-          style={avatarStyle}
-        />
-        <span>
-          {translations.score} {score}
-        </span>
+      <div style={scoreContainerStyle}>
+        <div style={scoreStyle}>
+          <div style={scoreContentStyle}>
+            <img
+              src={
+                interaction?.user?.avatarURL ||
+                "https://cdn.discordapp.com/embed/avatars/0.png"
+              }
+              alt="User Avatar"
+              width={40}
+              height={40}
+              style={avatarStyle}
+            />
+            <span>
+              {translations.score} {score}
+            </span>
+          </div>
+        </div>
+        <div style={earningStyle}>
+          <span>+{earning.toFixed(1)} 💵</span>
+        </div>
       </div>
       {grid.map((row, rowIndex) => (
         <div key={rowIndex} style={{ display: "flex", gap: "10px" }}>
