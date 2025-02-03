@@ -1,7 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import Redis from "ioredis";
-
-const CACHE_PREFIX = "eleazar:";
 
 // Utility function to handle BigInt serialization
 function serializeWithBigInt(data) {
@@ -84,7 +81,7 @@ export const DEFAULT_VALUES = {
   ping: {
     music: { players: 0, ping: 0 },
     render: { recentRequests: 0, ping: 0 },
-    database: { averageSpeed: 0, ping: 0, cachingPing: 0 },
+    database: { averageSpeed: 0, ping: 0 },
   },
   guild: {
     settings: {},
@@ -93,27 +90,6 @@ export const DEFAULT_VALUES = {
 
 class Database {
   constructor() {
-    // Initialize Redis client
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT) || 6379,
-      keyPrefix: CACHE_PREFIX,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      maxRetriesPerRequest: 3,
-    });
-
-    // Redis error handling
-    this.redis.on("error", (error) => {
-      console.error("Redis connection error:", error);
-    });
-
-    this.redis.on("ready", () => {
-      console.log("Redis connection established");
-    });
-
     this.client = new PrismaClient({
       log:
         process.env.NODE_ENV === "production" ? ["error"] : ["query", "error"],
@@ -124,128 +100,34 @@ class Database {
       },
     });
 
-    // Ping collection interval
-    this.pingInterval = null;
-    this.collectionInterval = 60000; // 1 minute
-
-    // Cache middleware with performance monitoring
+    // Performance monitoring middleware
     this.client.$use(async (params, next) => {
       const start = Date.now();
-      const isReadOperation = ["findUnique", "findFirst", "findMany"].includes(
-        params.action
-      );
 
-      if (isReadOperation) {
-        try {
-          // Skip caching for transactions
-          if (params.runInTransaction) {
-            return next(params);
-          }
+      try {
+        const result = await next(params);
+        const duration = Date.now() - start;
 
-          // Generate cache key based on query parameters and model relationships
-          const cacheKey = `${params.model}:${params.action}:${
-            params.args?.include
-              ? `${JSON.stringify(params.args)}:include:${JSON.stringify(
-                  params.args.include
-                )}`
-              : JSON.stringify(params.args)
-          }`;
-
-          // Try to get from cache first
-          const cached = await this.redis.get(cacheKey);
-          if (cached) {
-            const duration = Date.now() - start;
-            if (duration > 100) {
-              console.log(`Cache hit (${duration}ms):`, {
-                model: params.model,
-                action: params.action,
-              });
-            }
-            return deserializeWithBigInt(cached);
-          }
-
-          // If not in cache, query database
-          const result = await next(params);
-          const duration = Date.now() - start;
-
-          // Cache the result if it exists with model-specific TTL
-          if (result) {
-            const modelTTLs = {
-              economy: 60, // 1 minute TTL for economy data
-              statistics: 300, // 5 minutes TTL for statistics
-              user: 300, // 5 minutes TTL for user data
-            };
-            const ttl = modelTTLs[params.model] || 300; // Default 5 minutes TTL
-            await this.redis.setex(cacheKey, ttl, serializeWithBigInt(result));
-          }
-
-          if (duration > 500) {
-            console.warn(`Slow query (${duration}ms):`, {
-              model: params.model,
-              action: params.action,
-              args: params.args,
-              duration,
-            });
-          }
-
-          return result;
-        } catch (error) {
-          console.error("Cache operation failed:", error);
-          return next(params);
-        }
-      } else {
-        // For write operations, invalidate related cache
-        try {
-          if (params.model) {
-            // Get all related models from the operation
-            const relatedModels = new Set([params.model]);
-            if (params.args?.include) {
-              Object.keys(params.args.include).forEach((model) =>
-                relatedModels.add(model.toLowerCase())
-              );
-            }
-            if (params.args?.data?.connect) {
-              Object.keys(params.args.data.connect).forEach((model) =>
-                relatedModels.add(model.toLowerCase())
-              );
-            }
-
-            // Invalidate cache for all related models
-            for (const model of relatedModels) {
-              await this.redis.del(`${model}:*`);
-            }
-          }
-        } catch (error) {
-          console.error("Cache invalidation failed:", error);
+        if (duration > 500) {
+          console.warn(`Slow operation (${duration}ms):`, {
+            model: params.model,
+            action: params.action,
+            args: params.args,
+          });
         }
 
-        // Execute write operation and track performance
-        try {
-          const result = await next(params);
-          const duration = Date.now() - start;
-
-          if (duration > 500) {
-            console.warn(`Slow write operation (${duration}ms):`, {
-              model: params.model,
-              action: params.action,
-              args: params.args,
-              duration,
-            });
+        return result;
+      } catch (error) {
+        const duration = Date.now() - start;
+        console.error(
+          `Operation ${params.model}.${params.action} failed after ${duration}ms`,
+          {
+            error: error.message,
+            stack: error.stack,
+            params,
           }
-
-          return result;
-        } catch (error) {
-          const duration = Date.now() - start;
-          console.error(
-            `Write operation ${params.model}.${params.action} failed after ${duration}ms`,
-            {
-              error: error.message,
-              stack: error.stack,
-              params,
-            }
-          );
-          throw error;
-        }
+        );
+        throw error;
       }
     });
 
@@ -275,21 +157,18 @@ class Database {
     // Handle cleanup
     process.on("beforeExit", async () => {
       await this.disconnect();
-      await this.redis.quit();
       process.exit(0);
     });
 
     process.on("SIGINT", async () => {
       console.log("\nReceived SIGINT. Cleaning up...");
       await this.disconnect();
-      await this.redis.quit();
       process.exit(0);
     });
 
     process.on("SIGTERM", async () => {
       console.log("\nReceived SIGTERM. Cleaning up...");
       await this.disconnect();
-      await this.redis.quit();
       process.exit(0);
     });
 
@@ -321,8 +200,7 @@ class Database {
   async disconnect() {
     try {
       await this.client.$disconnect();
-      await this.redis.quit();
-      console.log("Database and Redis connections closed successfully");
+      console.log("Database connection closed successfully");
     } catch (error) {
       console.error("Error disconnecting from database:", error);
       throw error;

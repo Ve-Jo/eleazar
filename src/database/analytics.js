@@ -1,4 +1,9 @@
+const COLLECTION_INTERVAL = 60000; // 1 minute
+
 export default {
+  // Store interval reference
+  pingInterval: null,
+
   async logAnalytics(type, data) {
     return this.client.analytics.create({
       data: {
@@ -22,14 +27,13 @@ export default {
     try {
       // Get Postgres latency
       const postgresStart = Date.now();
-      await this.client.analytics.findMany({ take: 1 });
+      await this.client.$queryRaw`SELECT 1`; // Lighter query for latency check
       const postgresLatency = Date.now() - postgresStart;
 
       return {
         database: {
           averageSpeed: postgresLatency,
           ping: postgresLatency,
-          cachingPing: 0, // No Redis anymore
         },
         render: {
           recentRequests: 0,
@@ -38,7 +42,16 @@ export default {
       };
     } catch (error) {
       console.error("Error collecting system pings:", error);
-      return null;
+      return {
+        database: {
+          averageSpeed: 0,
+          ping: 0,
+        },
+        render: {
+          recentRequests: 0,
+          ping: 0,
+        },
+      };
     }
   },
 
@@ -60,7 +73,10 @@ export default {
       return musicData;
     } catch (error) {
       console.error("Error collecting music pings:", error);
-      return null;
+      return {
+        players: 0,
+        ping: 0,
+      };
     }
   },
 
@@ -118,23 +134,29 @@ export default {
       };
 
       await this.logAnalytics("ping", pingData);
-      console.log("Ping data recorded successfully");
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Ping data recorded");
+      }
     } catch (error) {
       console.error("Error recording ping:", error);
     }
   },
 
   startPingCollection(client) {
-    if (this.pingInterval) clearInterval(this.pingInterval);
+    this.stopPingCollection(); // Clear any existing interval
     this.pingInterval = setInterval(
       () => this.recordPing(client),
-      this.collectionInterval
+      COLLECTION_INTERVAL
     );
     console.log("Ping collection started");
   },
 
   stopPingCollection() {
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    console.log("Ping collection stopped");
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+      console.log("Ping collection stopped");
+    }
   },
 };
