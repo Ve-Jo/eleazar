@@ -92,11 +92,11 @@ const Statistics = (props) => {
     latency:
       i18n.__("statistics.latency") ||
       `${Math.floor(Math.random() * 100) + 1} мс`,
-    cache_latency:
+    /*cache_latency:
       i18n.__("statistics.cache_latency") ||
-      `Кэш: ${Math.floor(Math.random() * 10) + 1} мс`,
+      `Кэш: ${Math.floor(Math.random() * 10) + 1} мс`,*/
     shards: i18n.__("statistics.shards") || "Шарды",
-    music: i18n.__("statistics.music") || "Музыкал. нода",
+    /*music: i18n.__("statistics.music") || "Музыкал. нода",
     music_players:
       i18n.__("statistics.music_players") ||
       `${Math.floor(Math.random() * 10) + 1} плееров`,
@@ -107,7 +107,7 @@ const Statistics = (props) => {
     database: i18n.__("statistics.database") || "База данных",
     database_ping:
       i18n.__("statistics.database_ping") ||
-      `Сред. скорость: ${Math.floor(Math.random() * 10) + 1} мс`,
+      `Сред. скорость: ${Math.floor(Math.random() * 10) + 1} мс`,*/
   };
 
   // Initialize database if not provided
@@ -117,7 +117,7 @@ const Statistics = (props) => {
         guilds_stats: Array.from({ length: 100 }, () => {
           return Math.floor(Math.random() * 100) + 1;
         }),
-        database_pings: Array.from({ length: 10 }, () => {
+        /*database_pings: Array.from({ length: 10 }, () => {
           return Math.floor(Math.random() * 100) + 1;
         }),
         render_pings: Array.from({ length: 10 }, () => {
@@ -125,7 +125,7 @@ const Statistics = (props) => {
         }),
         music_pings: Array.from({ length: 10 }, () => {
           return Math.floor(Math.random() * 100) + 1;
-        }),
+        }),*/
       },
       avatar_url: "https://cdn.discordapp.com/embed/avatars/0.png",
     };
@@ -174,7 +174,7 @@ const Statistics = (props) => {
     <div
       style={{
         width: "320px",
-        height: "310px",
+        height: "210px",
         position: "relative",
         backgroundColor: "black",
         fontFamily: "Inter800, sans-serif",
@@ -218,7 +218,6 @@ const Statistics = (props) => {
             />
           </div>
         </div>
-
         {/*Servers counter with the line graph*/}
         <div
           style={{
@@ -254,7 +253,6 @@ const Statistics = (props) => {
             />
           </div>
         </div>
-
         {/* Gray rectangle, right upper text "Shards" */}
         <div
           style={{
@@ -403,10 +401,10 @@ const Statistics = (props) => {
             })}
           </div>
         </div>
-
         {/* Three rectangles container */}
         <div
           style={{
+            opacity: 0,
             display: "flex",
             gap: "8px",
             width: "295px",
@@ -434,13 +432,7 @@ const Statistics = (props) => {
                 color: "#A4A4A4",
                 flexDirection: "column",
               }}
-            >
-              {translations.music.split(" ").map((word, index) => (
-                <div key={index} style={{ display: "flex" }}>
-                  {word}
-                </div>
-              ))}
-            </div>
+            ></div>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <div
                 style={{
@@ -473,9 +465,7 @@ const Statistics = (props) => {
             </div>
             <div
               style={{ color: "#A4A4A4", fontSize: "7px", marginTop: "-5px" }}
-            >
-              {translations.music_players}
-            </div>
+            ></div>
           </div>
 
           {/* Render Server Rectangle */}
@@ -499,13 +489,7 @@ const Statistics = (props) => {
                 color: "#A4A4A4",
                 flexDirection: "column",
               }}
-            >
-              {translations.render.split(" ").map((word, index) => (
-                <div key={index} style={{ display: "flex" }}>
-                  {word}
-                </div>
-              ))}
-            </div>
+            ></div>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <div
                 style={{
@@ -580,13 +564,7 @@ const Statistics = (props) => {
                 color: "#A4A4A4",
                 flexDirection: "column",
               }}
-            >
-              {translations.database.split(" ").map((word, index) => (
-                <div key={index} style={{ display: "flex" }}>
-                  {word}
-                </div>
-              ))}
-            </div>
+            ></div>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <div
                 style={{
