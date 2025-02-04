@@ -7,7 +7,6 @@ import {
 import { AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import sharp from "sharp";
-import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -53,7 +52,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
 
     const attachment = interaction.options.getAttachment("image");

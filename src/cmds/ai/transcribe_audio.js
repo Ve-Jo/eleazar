@@ -11,7 +11,6 @@ import { pipeline } from "stream/promises";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { promisify } from "util";
-import i18n from "../../utils/i18n.js";
 
 const unlinkAsync = promisify(fs.unlink);
 
@@ -124,7 +123,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
 
     const audioAttachment = interaction.options.getAttachment("audio");

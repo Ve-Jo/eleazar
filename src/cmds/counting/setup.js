@@ -6,7 +6,6 @@ import {
 } from "../../utils/builders/index.js";
 import Database from "../../database/client.js";
 import { PermissionsBitField } from "discord.js";
-import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -138,7 +137,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     const { guild } = interaction;
 
     //check if user has manage_channels perms

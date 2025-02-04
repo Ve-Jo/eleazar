@@ -6,7 +6,6 @@ import {
 } from "../../utils/builders/index.js";
 import { AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
-import i18n from "../../utils/i18n.js";
 import { Client } from "@gradio/client";
 
 export default {
@@ -114,7 +113,7 @@ export default {
     subcommand.addOption(seedOption);
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
 
     let prompt = interaction.options.getString("prompt");

@@ -12,7 +12,6 @@ import {
   ComponentType,
 } from "discord.js";
 import HMFull from "hmfull";
-import i18n from "../../utils/i18n.js";
 
 const sfwImages = [
   "neko",
@@ -62,7 +61,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     const image = interaction.options.getString("image");
 
     async function getValidImageUrl() {

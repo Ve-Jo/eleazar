@@ -11,7 +11,6 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import i18n from "../../utils/i18n.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -32,7 +31,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
     const commands = [];
     const categories = new Set();

@@ -4,7 +4,6 @@ import {
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import i18n from "../../utils/i18n.js";
 import Database from "../../database/client.js";
 
 export default {
@@ -20,59 +19,35 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
 
     // Get historical analytics data
     const pingStats = await Database.getAnalytics("ping", 10);
 
-    // Process metrics data from the latest record
-    const latestMetrics = pingStats[0]?.data || {};
-    const {
-      music = { players: 0, ping: 0 },
-      render = { ping: 0, recentRequests: 0 },
-      database = { ping: 0, cachingPing: 0, averageSpeed: 0 },
-      shards = {},
-      serversCount = 0,
-    } = latestMetrics;
-
-    // Extract ping history from analytics records
-    const pingHistory = pingStats.reduce(
-      (acc, record) => {
-        const data = record.data || {};
-        if (data.music?.ping) acc.music.push(data.music.ping);
-        if (data.render?.ping) acc.render.push(data.render.ping);
-        if (data.database?.ping) acc.database.push(data.database.ping);
-        return acc;
-      },
-      { music: [], render: [], database: [] }
-    );
+    const latestData = pingStats[0]?.data || {};
+    const { shards = {}, serversCount = 0 } = latestData;
 
     // Format shard stats from the data
     const shardStats = Object.entries(shards).map(([id, data]) => ({
       id: Number(id),
       guilds: data.guildsOnShard,
-      ping: Array(6).fill(data.shardPing), // Fill ping history with current ping
+      ping: Array(6).fill(0), // Zeroed out ping history
     }));
 
-    // If no shards data, use single shard mode
-    if (shardStats.length === 0) {
+    // If no shards data, use single shard mode with the total server count
+    if (shardStats.length === 0 && serversCount > 0) {
       shardStats.push({
         id: 0,
         guilds: serversCount,
-        ping: Array(6).fill(interaction.client.ws.ping),
+        ping: Array(6).fill(0),
       });
     }
 
-    // Get guild count history
-    const guildStats = await Database.getAnalytics("guilds", 100);
-
-    console.log({
-      guilds_stats: guildStats.map((stat) => stat.data.count || 0),
-      database_pings: pingHistory.database,
-      render_pings: pingHistory.render,
-      music_pings: pingHistory.music,
-    });
+    // Extract server counts from ping history for graph
+    const serverCountHistory = pingStats
+      .map((record) => record.data?.serversCount || 0)
+      .reverse();
 
     // Generate the image using the Statistics component
     let imageResponse = await generateRemoteImage(
@@ -86,10 +61,10 @@ export default {
         },
         database: {
           bot_stats: {
-            guilds_stats: guildStats.map((stat) => stat.data.count || 0),
-            database_pings: pingHistory.database,
-            render_pings: pingHistory.render,
-            music_pings: pingHistory.music,
+            guilds_stats: serverCountHistory,
+            database_pings: Array(10).fill(0),
+            render_pings: Array(10).fill(0),
+            music_pings: Array(10).fill(0),
           },
           avatar_url: interaction.client.user.displayAvatarURL({
             extension: "png",
@@ -97,7 +72,7 @@ export default {
           }),
         },
       },
-      { width: 320, height: 310 },
+      { width: 320, height: 210 },
       { image: 2, emoji: 1 }
     );
 

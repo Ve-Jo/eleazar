@@ -7,7 +7,6 @@ import {
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -37,7 +36,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.member;
 

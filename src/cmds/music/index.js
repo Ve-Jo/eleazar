@@ -1,5 +1,5 @@
 import { I18nCommandBuilder } from "../../utils/builders/index.js";
-import i18n from "../../utils/i18n.js";
+
 export default {
   data: () => {
     const i18nBuilder = new I18nCommandBuilder("music");
@@ -7,7 +7,7 @@ export default {
     return command;
   },
   server: true,
-  async preExecute(interaction) {
+  async preExecute(interaction, i18n) {
     /*return interaction.reply({
       content: "Музыкальный плеер пока-что неисправен",
       ephemeral: true,

@@ -6,7 +6,6 @@ import {
 } from "../../utils/builders/index.js";
 import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import Database from "../../database/client.js";
-import i18n from "../../utils/i18n.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import axios from "axios";
 
@@ -163,7 +162,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
     const attachment = interaction.options.getAttachment("image");
 

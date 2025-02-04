@@ -12,7 +12,6 @@ import {
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import i18n from "../../utils/i18n.js";
 import { loadGames } from "../../utils/loadGames.js";
 
 export default {
@@ -28,15 +27,18 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
 
     try {
       // Load games and organize into categories
-      const gamesCollection = await loadGames();
+      const gamesCollection = await loadGames(i18n);
+
+      console.log(interaction.locale);
+      console.log(i18n.getLocale());
 
       // Create games object with categories
-      const games = {
+      let games = {
         [`${i18n.__("components.GameLauncher.specialForCategory")}`]: {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
@@ -46,14 +48,14 @@ export default {
         },
       };
 
-      console.log(JSON.stringify(games, null, 2));
-      console.log(interaction.locale);
-
       let selectedGame = null;
       let highlightedGame = 0;
       let currentCategory = 0;
 
-      const generateGameMessage = async () => {
+      const generateGameMessage = async (locale) => {
+        // Ensure locale is set before any i18n operations
+        await i18n.setLocale(locale);
+
         // Get user data
         const userData = await Database.getUser(
           interaction.guild.id,
@@ -87,15 +89,13 @@ export default {
             database: userData,
             games: games,
             selectedGame,
+            currentLocale: i18n.getLocale(), // Pass current locale explicitly
             highlightedGame,
             highlightedCategory: currentCategory,
             i18n,
           },
           { width: 750, height: 450 }
         );
-
-        console.log(interaction.locale);
-        console.log(i18n.__("economy.work.title"));
 
         const attachment = new AttachmentBuilder(pngBuffer.buffer, {
           name: `work_games.${
@@ -115,9 +115,6 @@ export default {
             }`
           )
           .setTimestamp();
-
-        console.log(interaction.locale);
-        console.log(i18n.__("economy.work.title"));
 
         // Create category select menu
         const categoryNames = Object.keys(games);
@@ -173,7 +170,9 @@ export default {
         };
       };
 
-      const message = await interaction.editReply(await generateGameMessage());
+      const message = await interaction.editReply(
+        await generateGameMessage(interaction.locale)
+      );
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
@@ -188,12 +187,12 @@ export default {
           currentCategory = parseInt(i.values[0]);
           highlightedGame = 0;
           selectedGame = null;
-          await i.update(await generateGameMessage());
+          await i.update(await generateGameMessage(interaction.locale));
         } else if (i.customId === "prev_game") {
           if (highlightedGame > 0) {
             highlightedGame--;
             selectedGame = null;
-            await i.update(await generateGameMessage());
+            await i.update(await generateGameMessage(interaction.locale));
           }
         } else if (i.customId === "next_game") {
           const currentCategoryGames =
@@ -201,7 +200,7 @@ export default {
           if (highlightedGame < currentCategoryGames.length - 1) {
             highlightedGame++;
             selectedGame = null;
-            await i.update(await generateGameMessage());
+            await i.update(await generateGameMessage(interaction.locale));
           }
         } else if (i.customId === "select_game") {
           const game =

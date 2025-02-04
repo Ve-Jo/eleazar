@@ -12,7 +12,6 @@ import {
   ComponentType,
 } from "discord.js";
 import HMFull from "hmfull";
-import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -59,7 +58,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     const emotion = interaction.options.getString("emotion");
 
     async function getValidImageUrl() {

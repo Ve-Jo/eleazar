@@ -4,7 +4,6 @@ import {
   OptionType,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -35,7 +34,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
       interaction.guild.id

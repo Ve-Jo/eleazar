@@ -2,7 +2,7 @@ import {
   SlashCommandSubcommand,
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
-import i18n from "../../utils/i18n.js";
+
 export default {
   data: () => {
     const i18nBuilder = new I18nCommandBuilder("music", "stop");
@@ -16,7 +16,7 @@ export default {
 
     return subcommand;
   },
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
       interaction.guild.id
