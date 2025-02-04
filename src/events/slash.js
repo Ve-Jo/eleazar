@@ -60,7 +60,7 @@ export default {
       await i18n.setLocale(locale);
 
       if (command.preExecute) {
-        await command.preExecute(interaction);
+        await command.preExecute(interaction, i18n);
       }
 
       // Handle subcommand execution
