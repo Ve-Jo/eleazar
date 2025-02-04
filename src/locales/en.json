@@ -743,8 +743,6 @@
       "cooldown": "Next daily in"
     },
     "GameLauncher": {
-      "specialFor": "Specially for Eleazar",
-      "oldGames": "Our old games",
       "gameSelection": "Game Selection",
       "userAvatarAlt": "User Avatar",
       "specialForCategory": "Specially for Eleazar",
@@ -800,6 +798,10 @@
       "render_requests": "{count} requests",
       "database": "Database",
       "database_ping": "Avg. speed: {ping} ms"
+    },
+    "Snake": {
+      "title": "Snake",
+      "score": "Score:"
     }
   },
   "games": {
@@ -807,6 +809,17 @@
       "name": "2048",
       "startMessage": "Use the arrows to slide tiles and combine matching numbers!",
       "description": "Play the classic 2048 puzzle game",
+      "score": "Your Score: {{score}}",
+      "gameOver": "Game Over! Final Score: {{score}}",
+      "invalidMove": "Invalid move!",
+      "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
+      "notYourGame": "This game is not for you!",
+      "error": "There was an error starting the game. Please try again."
+    },
+    "snake": {
+      "name": "Snake",
+      "startMessage": "Use the arrows to move the snake! 🐍",
+      "description": "Play classic snake game",
       "score": "Your Score: {{score}}",
       "gameOver": "Game Over! Final Score: {{score}}",
       "invalidMove": "Invalid move!",
