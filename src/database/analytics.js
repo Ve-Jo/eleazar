@@ -22,62 +22,26 @@ export default {
     });
   },
 
-  // System Monitoring
+  // Simplified to return zeroes
   async collectSystemPings() {
-    try {
-      // Get Postgres latency
-      const postgresStart = Date.now();
-      await this.client.$queryRaw`SELECT 1`; // Lighter query for latency check
-      const postgresLatency = Date.now() - postgresStart;
-
-      return {
-        database: {
-          averageSpeed: postgresLatency,
-          ping: postgresLatency,
-        },
-        render: {
-          recentRequests: 0,
-          ping: 0, // This should be implemented based on your render server
-        },
-      };
-    } catch (error) {
-      console.error("Error collecting system pings:", error);
-      return {
-        database: {
-          averageSpeed: 0,
-          ping: 0,
-        },
-        render: {
-          recentRequests: 0,
-          ping: 0,
-        },
-      };
-    }
+    return {
+      database: {
+        averageSpeed: 0,
+        ping: 0,
+      },
+      render: {
+        recentRequests: 0,
+        ping: 0,
+      },
+    };
   },
 
-  async collectMusicPings(client) {
-    try {
-      if (!client.lavalink?.isInitialized) return null;
-
-      const nodes = client.lavalink.nodeManager.nodes;
-      let musicData = {
-        players: 0,
-        ping: 0,
-      };
-
-      for (const node of nodes.values()) {
-        musicData.players += node.stats.players;
-        musicData.ping = node.stats.latency;
-      }
-
-      return musicData;
-    } catch (error) {
-      console.error("Error collecting music pings:", error);
-      return {
-        players: 0,
-        ping: 0,
-      };
-    }
+  // Simplified to return zeroes
+  async collectMusicPings() {
+    return {
+      players: 0,
+      ping: 0,
+    };
   },
 
   async collectShardPings(client) {
@@ -88,9 +52,10 @@ export default {
       // Use client.guilds.cache.size for single-shard bots
       if (!client.ws.shards) {
         totalGuilds = client.guilds.cache.size;
+        // For non-sharded bots, still use the same structure but with shard 0
         shardsData[0] = {
-          guilds: totalGuilds,
-          ping: client.ws.ping,
+          guildsOnShard: totalGuilds,
+          shardPing: 0, // Zeroed out ping
         };
       } else {
         for (const shard of client.ws.shards.values()) {
@@ -99,7 +64,7 @@ export default {
           ).size;
           shardsData[shard.id] = {
             guildsOnShard: guildCount,
-            shardPing: shard.ping,
+            shardPing: 0, // Zeroed out ping
           };
           totalGuilds += guildCount;
         }
@@ -120,17 +85,13 @@ export default {
 
   async recordPing(client) {
     try {
-      const [systemPings, musicPings, shardPings] = await Promise.all([
-        this.collectSystemPings(),
-        this.collectMusicPings(client),
-        this.collectShardPings(client),
-      ]);
+      const shardPings = await this.collectShardPings(client);
 
       const pingData = {
         ...shardPings,
-        music: musicPings,
-        render: systemPings?.render,
-        database: systemPings?.database,
+        music: await this.collectMusicPings(),
+        render: (await this.collectSystemPings()).render,
+        database: (await this.collectSystemPings()).database,
       };
 
       await this.logAnalytics("ping", pingData);
