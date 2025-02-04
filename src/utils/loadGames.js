@@ -3,17 +3,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Collection } from "discord.js";
 import { syncAllLocalizations } from "./syncLocalizations.js";
-import i18n from "./i18n.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function loadGames() {
+export async function loadGames(i18n) {
   const games = new Collection();
   const gamesPath = path.join(__dirname, "../games");
-
-  // Set default locale before loading games
-  i18n.setLocale("en");
 
   // Sync all localizations if LOCALIZATION_SYNC is true
   if (process.env.LOCALIZATION_SYNC === "true") {
