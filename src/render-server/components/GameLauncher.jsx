@@ -9,9 +9,10 @@ const GameLauncher = (props) => {
     highlightedCategory = 0,
     width = 750,
     height = 450,
+    gameStats = { 2048: { highScore: 0 }, snake: { highScore: 0 } },
   } = props;
 
-  // Get translations from i18n based on the static translation object
+  // Rest of the imports and initial setup remains the same...
   const translations = Object.entries(GameLauncher.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
@@ -20,8 +21,6 @@ const GameLauncher = (props) => {
     {}
   );
 
-  // Transform category keys to their localized names
-  // Define default categories
   const defaultCategories = {
     eleazar: {
       translationKey: "specialForCategory",
@@ -32,13 +31,15 @@ const GameLauncher = (props) => {
           title: "2048",
           emoji: "🎲",
         },
+        {
+          id: "2048",
+          title: "2048",
+          emoji: "🎲",
+        },
       ],
     },
   };
 
-  console.log(translations);
-
-  // Use provided games or fall back to default categories
   const groupedGames =
     games ||
     Object.entries(defaultCategories).reduce((acc, [key, category]) => {
@@ -49,15 +50,12 @@ const GameLauncher = (props) => {
       return acc;
     }, {});
 
-  // Transform games object to use localized category names
   const transformedGames = Object.entries(groupedGames).reduce(
     (acc, [key, value]) => {
-      // If the key matches a category translation key, use the localized version
       const categoryKey = Object.entries(defaultCategories).find(
         ([_, category]) => translations[category.translationKey] === key
       );
 
-      // Use the localized category name or fallback to the original key
       const localizedKey = categoryKey
         ? translations[defaultCategories[categoryKey[0]].translationKey]
         : key;
@@ -70,7 +68,6 @@ const GameLauncher = (props) => {
     {}
   );
 
-  // Helper function to check if category and game should be visible
   const isCategoryVisible = (categoryIndex) => {
     return categoryIndex - 1 <= highlightedCategory;
   };
@@ -81,12 +78,129 @@ const GameLauncher = (props) => {
     return false;
   };
 
+  const renderGameCard = (game, gameIndex, categoryIndex) => {
+    if (!isGameVisible(categoryIndex, gameIndex)) return null;
+
+    // Get high score either from game object or gameStats
+    const highScore = game.highScore || gameStats[game.id]?.highScore || 0;
+    console.log(`Rendering game ${game.id} with highScore:`, highScore);
+
+    const isHighlighted =
+      highlightedGame === gameIndex && categoryIndex === highlightedCategory;
+    const BORDER_RADIUS = 18;
+    const HIGHLIGHT_BORDER = 6;
+
+    return (
+      <div
+        key={game.id}
+        style={{
+          minWidth: "200px",
+          height: "130px",
+          display: "flex",
+          backgroundColor: selectedGame === game.id ? "#FFA500" : "#1DB935",
+          borderRadius: `${BORDER_RADIUS}px`,
+          border: isHighlighted
+            ? `${HIGHLIGHT_BORDER}px solid #FFA500`
+            : "none",
+          position: "relative",
+          flexShrink: 0,
+          overflow: "hidden",
+        }}
+      >
+        {game.thumbnail ? (
+          <img
+            src={game.thumbnail}
+            alt={game.title}
+            width={200}
+            height={100}
+            style={{
+              width: "100%",
+              height: "80%",
+              objectFit: "cover",
+              position: "absolute",
+              display: "flex",
+              top: 0,
+              left: 0,
+              borderRadius: isHighlighted
+                ? `${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
+                    BORDER_RADIUS - HIGHLIGHT_BORDER
+                  }px 0 0`
+                : `${BORDER_RADIUS}px ${BORDER_RADIUS}px 0 0`,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "80%",
+              backgroundColor: "rgba(255, 255, 255, 0.1)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              fontSize: "64px",
+              borderRadius: isHighlighted
+                ? `${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
+                    BORDER_RADIUS - HIGHLIGHT_BORDER
+                  }px 0 0`
+                : `${BORDER_RADIUS}px ${BORDER_RADIUS}px 0 0`,
+            }}
+          >
+            {game.emoji}
+          </div>
+        )}
+        <div
+          style={{
+            fontSize: "24px",
+            fontWeight: "bold",
+            position: "absolute",
+            bottom: "30px",
+            right: "0px",
+            display: "flex",
+            padding: "4px 8px",
+            borderRadius: "12px",
+            backgroundColor: "rgba(0, 0, 0, 0.25)",
+            fontFamily: "Inter600",
+          }}
+        >
+          {game.title}
+        </div>
+        {/* High Score Display */}
+        <div
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            position: "absolute",
+            bottom: "0",
+            left: "0",
+            right: "0",
+            height: "30px",
+            backgroundColor: isHighlighted ? "#FFA500" : "rgba(0, 0, 0, 0)",
+            fontFamily: "Inter600",
+            borderRadius: isHighlighted
+              ? `0 0 ${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
+                  BORDER_RADIUS - HIGHLIGHT_BORDER
+                }px`
+              : `0 0 ${BORDER_RADIUS}px ${BORDER_RADIUS}px`,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {translations.highScore}: {highScore}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       style={{
         width,
         height,
-        backgroundColor: "#2196f3",
+        backgroundColor: "#3DAA4E",
         borderRadius: "20px",
         padding: "25px",
         color: "white",
@@ -95,6 +209,7 @@ const GameLauncher = (props) => {
         flexDirection: "column",
       }}
     >
+      {/* Header section */}
       <div
         style={{
           fontSize: "24px",
@@ -135,6 +250,7 @@ const GameLauncher = (props) => {
           </div>
         </div>
       </div>
+      {/* Games grid section */}
       <div
         style={{
           display: "flex",
@@ -195,78 +311,7 @@ const GameLauncher = (props) => {
                   }}
                 >
                   {categoryData.games_list.map((game, gameIndex) => {
-                    if (!isGameVisible(categoryIndex, gameIndex)) return null;
-                    return (
-                      <div
-                        key={game.id}
-                        style={{
-                          minWidth: "200px",
-                          height: "100px",
-                          display: "flex",
-                          backgroundColor:
-                            selectedGame === game.id ? "#FFA500" : "#1976d2",
-                          borderRadius: "18px",
-                          border:
-                            highlightedGame === gameIndex &&
-                            categoryIndex === highlightedCategory
-                              ? "6px solid #FFA500"
-                              : "none",
-                          position: "relative",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {game.thumbnail ? (
-                          <img
-                            src={game.thumbnail}
-                            alt={game.title}
-                            width={200}
-                            height={100}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              borderRadius: "12px",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              backgroundColor: "rgba(255, 255, 255, 0.1)",
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              display: "flex",
-                              justifyContent: "center",
-                              alignItems: "center",
-                              fontSize: "64px",
-                            }}
-                          >
-                            {game.emoji}
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            fontSize: "24px",
-                            fontWeight: "bold",
-                            position: "absolute",
-                            bottom: "0px",
-                            right: "0px",
-                            padding: "4px 8px",
-                            borderRadius: "16px",
-                            backgroundColor: "rgba(0, 0, 0, 0.25)",
-                            fontFamily: "Inter600",
-                            display: "flex",
-                          }}
-                        >
-                          {game.title}
-                        </div>
-                      </div>
-                    );
+                    return renderGameCard(game, gameIndex, categoryIndex);
                   })}
                 </div>
               </div>
@@ -278,10 +323,8 @@ const GameLauncher = (props) => {
   );
 };
 
-// Static translations object with organized structure
+// Static translations object
 GameLauncher.localization_strings = {
-  // Category translations
-  // These keys should match the translationKey in defaultCategories
   specialForCategory: {
     en: "Specially for Eleazar",
     ru: "Специально для Eleazar",
@@ -292,18 +335,6 @@ GameLauncher.localization_strings = {
     ru: "Наши старые игры",
     uk: "Наші старі ігри",
   },
-
-  // To add a new category:
-  // 1. Add translation key here
-  // 2. Add category to defaultCategories with matching translationKey
-  // Example:
-  // newCategory: {
-  //   en: "New Category",
-  //   ru: "Новая категория",
-  //   uk: "Нова категорія",
-  // },
-
-  // UI element translations
   gameSelection: {
     en: "Game Selection",
     ru: "Выбор игры",
@@ -313,6 +344,11 @@ GameLauncher.localization_strings = {
     en: "User Avatar",
     ru: "Аватар пользователя",
     uk: "Аватар користувача",
+  },
+  highScore: {
+    en: "Record",
+    ru: "Рекорд",
+    uk: "Рекорд",
   },
 };
 
