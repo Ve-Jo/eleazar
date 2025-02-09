@@ -149,8 +149,8 @@ export default {
 
         const xpPerMessage = guildSettings?.settings?.xp_per_message || 15; // Default XP per message
 
-        // Add XP
-        await Database.addXP(guild.id, author.id, xpPerMessage);
+        // Add XP with specific type for chat messages
+        await Database.addXP(guild.id, author.id, xpPerMessage, "chat");
 
         // Update message cooldown
         await Database.updateCooldown(guild.id, author.id, "message");
