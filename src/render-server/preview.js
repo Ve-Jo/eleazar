@@ -10,8 +10,13 @@ import { WebSocketServer } from "ws";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const COMPONENTS_DIR = path.join(__dirname, "components");
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 const app = express();
+
+// Serve static files from public directory
+app.use(express.static(PUBLIC_DIR));
+
 const wss = new WebSocketServer({ noServer: true });
 
 // Track active WebSocket connections and their settings
@@ -165,8 +170,8 @@ function createMockData(lang = "en", Component = null) {
       economy: {
         balance: 1000.5,
         bankBalance: 5000.75,
-        bankRate: 5,
-        bankStartTime: Date.now() - 3600000,
+        bankRate: 25,
+        bankStartTime: 25,
       },
       avatar_url: "https://cdn.discordapp.com/embed/avatars/0.png",
       bot_stats: {
