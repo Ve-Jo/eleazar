@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-// Utility function to handle BigInt serialization
-function serializeWithBigInt(data) {
+export function serializeWithBigInt(data) {
   return JSON.stringify(data, (_, value) => {
     if (typeof value === "bigint") {
       return { type: "BigInt", value: value.toString() };
@@ -14,7 +13,7 @@ function serializeWithBigInt(data) {
   });
 }
 
-function deserializeWithBigInt(jsonString) {
+export function deserializeWithBigInt(jsonString) {
   return JSON.parse(jsonString, (_, value) => {
     if (value && typeof value === "object") {
       if (value.type === "BigInt") {
@@ -240,4 +239,6 @@ class Database {
   }
 }
 
-export default new Database();
+// Export the Database class instance without initializing
+const instance = new Database();
+export default instance;

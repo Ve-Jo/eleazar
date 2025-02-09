@@ -1,7 +1,9 @@
-import prisma from "./client.js";
+import Database from "./client.js";
 
 const musicDB = {
-  client: prisma.client,
+  get client() {
+    return Database.client;
+  },
 
   async savePlayer(player) {
     if (!player?.guildId) {
