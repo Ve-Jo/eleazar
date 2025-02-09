@@ -112,9 +112,9 @@ const Balance = (props) => {
               style={{
                 backgroundColor: "rgba(255, 255, 255, 0.2)",
                 borderRadius:
-                  database.economy.bankStartTime &&
+                  database.economy.bankStartTime > 0 &&
                   database.economy.bankRate > 0
-                    ? "0 10px 0 0"
+                    ? "0 10px 10px 0"
                     : "0 10px 10px 10px",
                 padding: "5px 15px",
                 display: "flex",
@@ -122,7 +122,6 @@ const Balance = (props) => {
                 alignSelf: "flex-start",
                 minWidth: "150px",
                 maxWidth: "300px",
-                width: "100%",
               }}
             >
               <span
@@ -134,14 +133,11 @@ const Balance = (props) => {
               >
                 💳
               </span>
-              <div
-                style={{ display: "flex", flexDirection: "column", flex: 1 }}
-              >
+              <div style={{ display: "flex", flexDirection: "column" }}>
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    width: "100%",
                     alignItems: "center",
                   }}
                 >
@@ -154,25 +150,25 @@ const Balance = (props) => {
                   >
                     {translations.bank.toUpperCase()}
                   </span>
-                  {database.economy.bankStartTime &&
-                    database.economy.bankRate > 0 && (
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          opacity: "0.6",
-                          color: "rgba(255, 255, 255, 1)",
-                          marginBottom: "-5px",
-                          display: "flex",
-                        }}
-                      >
-                        ≈
-                        {(
-                          database.economy.bankBalance *
-                          (database.economy.bankRate / 100 / 8760)
-                        ).toFixed(3)}
-                        /h
-                      </span>
-                    )}
+                  {database.economy.bankStartTime > 0 &&
+                  database.economy.bankRate > 0 ? (
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        opacity: "0.6",
+                        color: "rgba(255, 255, 255, 1)",
+                        marginBottom: "-5px",
+                        display: "flex",
+                      }}
+                    >
+                      ≈
+                      {(
+                        database.economy.bankBalance *
+                        (database.economy.bankRate / 100 / 8760)
+                      ).toFixed(3)}
+                      /h
+                    </span>
+                  ) : null}
                 </div>
                 <div
                   style={{
@@ -182,7 +178,7 @@ const Balance = (props) => {
                     alignItems: "baseline",
                   }}
                 >
-                  {database.economy.bankStartTime ? (
+                  {database.economy.bankStartTime > 0 ? (
                     <>
                       <span style={{ display: "flex" }}>
                         {Math.floor(database.economy.bankBalance)}
@@ -215,45 +211,44 @@ const Balance = (props) => {
                 </div>
               </div>
             </div>
-            {database.economy.bankStartTime &&
-              database.economy.bankRate > 0 && (
-                <div
+            {database.economy.bankStartTime > 0 &&
+            database.economy.bankRate > 0 ? (
+              <div
+                style={{
+                  backgroundColor: "rgba(255, 166, 0, 1)",
+                  borderRadius: "0 10px 10px 10px",
+                  padding: "5px 15px",
+                  display: "flex",
+                  marginTop: "-5px",
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  minWidth: "150px",
+                  maxWidth: "300px",
+                }}
+              >
+                <span
                   style={{
-                    backgroundColor: "rgba(255, 166, 0, 1)",
-                    borderRadius: "0 0 10px 10px",
-                    padding: "5px 15px",
+                    fontSize: "14px",
                     display: "flex",
-                    marginTop: "-5px",
-                    alignItems: "center",
-                    alignSelf: "flex-start",
-                    minWidth: "150px",
-                    maxWidth: "300px",
-                    width: "100%",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: "14px",
-                      display: "flex",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {database.economy.bankRate || "{holdingPercentage}"}
-                    {"% "}
-                    {translations.annual} (
-                    {prettyMilliseconds(
-                      Date.now() - database.economy.bankStartTime,
-                      {
-                        colonNotation: true,
-                        secondsDecimalDigits: 0,
-                      }
-                    )}
-                    )
-                  </span>
-                </div>
-              )}
+                  {database.economy.bankRate || "{holdingPercentage}"}
+                  {"% "}
+                  {translations.annual} (
+                  {prettyMilliseconds(
+                    Date.now() - database.economy.bankStartTime,
+                    {
+                      colonNotation: true,
+                      secondsDecimalDigits: 0,
+                    }
+                  )}
+                  )
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
         <div
