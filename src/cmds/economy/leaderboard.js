@@ -1,6 +1,7 @@
 import {
   SlashCommandSubcommand,
   I18nCommandBuilder,
+  SlashCommandOption,
 } from "../../utils/builders/index.js";
 import {
   EmbedBuilder,
@@ -22,6 +23,21 @@ export default {
       description: i18nBuilder.translate("description"),
       name_localizations: i18nBuilder.getLocalizations("name"),
       description_localizations: i18nBuilder.getLocalizations("description"),
+      options: [
+        new SlashCommandOption({
+          name: "category",
+          description: "Category to display",
+          type: 3, // String
+          required: false,
+          choices: [
+            { name: "Total Balance", value: "total" },
+            { name: "Balance", value: "balance" },
+            { name: "Bank Balance", value: "bank" },
+            { name: "Level", value: "level" },
+            { name: "Games", value: "games" },
+          ],
+        }),
+      ],
     });
 
     return subcommand;
@@ -29,6 +45,7 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const { guild } = interaction;
+    let category = interaction.options.getString("category") || "total";
 
     try {
       let page = 0;
@@ -42,20 +59,43 @@ export default {
           include: {
             economy: true,
             stats: true,
+            level: true,
           },
         });
 
-        // Sort users by total balance (balance + bank amount)
+        // Sort users based on category
         const sortedUsers = guildUsers
-          .map((userData) => ({
-            ...userData,
-            totalBalance:
-              Number(userData.economy?.balance || 0) +
-              Number(userData.economy?.bankBalance || 0),
-          }))
-          .sort((a, b) => b.totalBalance - a.totalBalance);
+          .map((userData) => {
+            let sortValue = 0;
+            switch (category) {
+              case "total":
+                sortValue =
+                  Number(userData.economy?.balance || 0) +
+                  Number(userData.economy?.bankBalance || 0);
+                break;
+              case "balance":
+                sortValue = Number(userData.economy?.balance || 0);
+                break;
+              case "bank":
+                sortValue = Number(userData.economy?.bankBalance || 0);
+                break;
+              case "level":
+                sortValue = Number(userData.level?.xp || 0);
+                break;
+              case "games":
+                const gameRecords = userData.stats?.gameRecords
+                  ? userData.stats.gameRecords
+                  : { 2048: { highScore: 0 }, snake: { highScore: 0 } };
+                sortValue = Math.max(
+                  gameRecords["2048"]?.highScore || 0,
+                  gameRecords.snake?.highScore || 0
+                );
+                break;
+            }
+            return { ...userData, sortValue };
+          })
+          .sort((a, b) => b.sortValue - a.sortValue);
 
-        // Find user's position in the leaderboard
         if (highlightedPosition === null) {
           const userIndex = sortedUsers.findIndex(
             (user) => user.id === interaction.user.id
@@ -118,14 +158,19 @@ export default {
               },
             },
             locale: interaction.locale,
+            category,
             users: validUsers.map((user, index) => ({
               id: user.id,
               position: startIndex + index + 1,
               name: user.name,
               avatarURL: user.avatarURL,
+              value: user.sortValue,
               balance: Number(user.economy?.balance || 0),
               bank: Number(user.economy?.bankBalance || 0),
-              totalBalance: user.totalBalance,
+              level: Database.calculateLevel(Number(user.level?.xp || 0)).level,
+              totalBalance:
+                Number(user.economy?.balance || 0) +
+                Number(user.economy?.bankBalance || 0),
             })),
             currentPage: page + 1,
             totalPages,
@@ -143,7 +188,10 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(process.env.EMBED_COLOR)
           .setAuthor({
-            name: i18n.__("economy.leaderboard.title"),
+            name: `${i18n.__("economy.leaderboard.title")} - ${
+              i18n.__("economy.leaderboard.categories." + category) ||
+              "Total Balance"
+            }`,
             iconURL: interaction.user.displayAvatarURL(),
           })
           .setImage(
@@ -174,15 +222,56 @@ export default {
         let components = [buttonRow];
 
         if (validUsers.length > 0) {
+          // Create category selector
+          const categoryMenu = new StringSelectMenuBuilder()
+            .setCustomId("select_category")
+            .setPlaceholder("Select Category")
+            .addOptions([
+              {
+                label: i18n.__("economy.leaderboard.categories.total"),
+                value: "total",
+                default: category === "total",
+              },
+              {
+                label: i18n.__("economy.leaderboard.categories.balance"),
+                value: "balance",
+                default: category === "balance",
+              },
+              {
+                label: i18n.__("economy.leaderboard.categories.bank"),
+                value: "bank",
+                default: category === "bank",
+              },
+              {
+                label: i18n.__("economy.leaderboard.categories.level"),
+                value: "level",
+                default: category === "level",
+              },
+              {
+                label: i18n.__("economy.leaderboard.categories.games"),
+                value: "games",
+                default: category === "games",
+              },
+            ]);
+
+          const categoryRow = new ActionRowBuilder().addComponents(
+            categoryMenu
+          );
+          components.push(categoryRow);
+
+          // Create user selector
           const selectOptions = validUsers.map((user, index) => ({
             label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
             value: (startIndex + index + 1).toString(),
-            description: `Total: ${user.totalBalance.toFixed(0)}`.slice(0, 50),
+            description: `${
+              i18n.__("economy.leaderboard.categories." + category) ||
+              "Total Balance"
+            }: ${user.sortValue}`.slice(0, 50),
           }));
 
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId("select_user")
-            .setPlaceholder(i18n.__("economy.leaderboard.selectUser"))
+            .setPlaceholder("Select User")
             .addOptions(selectOptions);
 
           const selectRow = new ActionRowBuilder().addComponents(selectMenu);
@@ -217,6 +306,11 @@ export default {
           await i.update(await generateLeaderboardMessage());
         } else if (i.customId === "select_user") {
           highlightedPosition = parseInt(i.values[0]);
+          await i.update(await generateLeaderboardMessage());
+        } else if (i.customId === "select_category") {
+          category = i.values[0];
+          page = 0;
+          highlightedPosition = null;
           await i.update(await generateLeaderboardMessage());
         }
       });
@@ -254,6 +348,38 @@ export default {
       en: "Select a user to view details",
       ru: "Выберите пользователя для просмотра деталей",
       uk: "Виберіть користувача для перегляду деталей",
+    },
+    selectCategory: {
+      en: "Select category to view",
+      ru: "Выберите категорию для просмотра",
+      uk: "Виберіть категорію для перегляду",
+    },
+    categories: {
+      total: {
+        en: "Total Balance",
+        ru: "Общий баланс",
+        uk: "Загальний баланс",
+      },
+      balance: {
+        en: "Balance",
+        ru: "Баланс",
+        uk: "Баланс",
+      },
+      bank: {
+        en: "Bank Balance",
+        ru: "Банковский баланс",
+        uk: "Банківський баланс",
+      },
+      level: {
+        en: "Level",
+        ru: "Уровень",
+        uk: "Рівень",
+      },
+      games: {
+        en: "Games",
+        ru: "Игры",
+        uk: "Ігри",
+      },
     },
     selectedUser: {
       en: "Selected user at position {{position}}",
