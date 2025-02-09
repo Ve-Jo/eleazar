@@ -12,10 +12,10 @@ export default {
     const include = includeRelations
       ? {
           economy: true,
-          level: true,
+          Level: true,
           cooldowns: true,
           upgrades: true,
-          stats: true,
+          stats: true, // Changed from statistics to stats to match schema
         }
       : {};
 
@@ -49,9 +49,15 @@ export default {
     const { economy, level, cooldowns, upgrades, stats, ...userData } = data;
 
     return this.client.$transaction(async (tx) => {
-      // Create base user
-      const user = await tx.user.create({
-        data: {
+      // Upsert base user instead of create
+      const user = await tx.user.upsert({
+        where: {
+          guildId_id: {
+            guildId,
+            id: userId,
+          },
+        },
+        create: {
           id: userId,
           guildId,
           lastActivity: Date.now(),
@@ -72,10 +78,14 @@ export default {
               messageCount: DEFAULT_VALUES.stats.messageCount,
               commandCount: DEFAULT_VALUES.stats.commandCount,
               lastUpdated: Date.now(),
+              gameRecords: JSON.stringify({
+                2048: { highScore: 0 },
+                snake: { highScore: 0 },
+              }),
               ...stats,
             },
           },
-          level: {
+          Level: {
             create: {
               xp: 0,
               ...level,
@@ -96,14 +106,85 @@ export default {
             ),
           },
         },
+        update: {
+          lastActivity: Date.now(),
+          ...userData,
+          // Update related records if they exist
+          economy: {
+            upsert: {
+              create: {
+                balance: DEFAULT_VALUES.economy.balance,
+                bankBalance: DEFAULT_VALUES.economy.bankBalance,
+                bankRate: DEFAULT_VALUES.economy.bankRate,
+                bankStartTime: DEFAULT_VALUES.economy.bankStartTime,
+                ...economy,
+              },
+              update: {
+                ...economy,
+              },
+            },
+          },
+          stats: {
+            upsert: {
+              create: {
+                totalEarned: 0,
+                messageCount: DEFAULT_VALUES.stats.messageCount,
+                commandCount: DEFAULT_VALUES.stats.commandCount,
+                lastUpdated: Date.now(),
+                gameRecords: JSON.stringify({
+                  2048: { highScore: 0 },
+                  snake: { highScore: 0 },
+                }),
+                ...stats,
+              },
+              update: {
+                ...stats,
+              },
+            },
+          },
+          Level: {
+            upsert: {
+              create: {
+                xp: 0,
+                ...level,
+              },
+              update: {
+                ...level,
+              },
+            },
+          },
+          cooldowns: {
+            upsert: {
+              create: {
+                data: JSON.stringify(DEFAULT_VALUES.cooldowns),
+                ...cooldowns,
+              },
+              update: {
+                ...cooldowns,
+              },
+            },
+          },
+        },
         include: {
           economy: true,
           stats: true,
-          level: true,
+          Level: true,
           cooldowns: true,
           upgrades: true,
         },
       });
+
+      // Handle upgrades separately since they're a one-to-many relation
+      if (!user.upgrades || user.upgrades.length === 0) {
+        await tx.upgrade.createMany({
+          data: Object.entries(DEFAULT_VALUES.upgrades).map(([type, data]) => ({
+            userId,
+            guildId,
+            type,
+            level: data.level,
+          })),
+        });
+      }
 
       return user;
     });
@@ -132,7 +213,7 @@ export default {
     }
 
     if (level) {
-      updateData.level = {
+      updateData.Level = {
         upsert: {
           create: { ...level },
           update: { ...level },
@@ -164,7 +245,7 @@ export default {
       data: updateData,
       include: {
         economy: true,
-        level: true,
+        Level: true,
         cooldowns: true,
         upgrades: true,
       },
@@ -189,6 +270,30 @@ export default {
     });
   },
 
+  async ensureGuildUser(guildId, userId) {
+    return await this.client.$transaction(async (prisma) => {
+      await prisma.guild.upsert({
+        where: { id: guildId },
+        create: { id: guildId, settings: {} },
+        update: {},
+      });
+
+      return await prisma.user.upsert({
+        where: {
+          guildId_id: { guildId, id: userId },
+        },
+        create: {
+          id: userId,
+          guildId,
+          lastActivity: Date.now(),
+        },
+        update: {
+          lastActivity: Date.now(),
+        },
+      });
+    });
+  },
+
   // Guild Operations
   async getGuild(guildId) {
     return this.client.guild.findUnique({
@@ -203,5 +308,56 @@ export default {
       create: { id: guildId, ...data },
       update: data,
     });
+  },
+
+  async getGameRecords(guildId, userId) {
+    const user = await this.getUser(guildId, userId);
+    if (!user?.stats) {
+      // Return default game records if no stats exist
+      return {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
+    }
+    return JSON.parse(user.stats.gameRecords);
+  },
+
+  async updateGameHighScore(guildId, userId, gameId, newScore) {
+    const user = await this.getUser(guildId, userId);
+    if (!user?.stats) {
+      return false;
+    }
+
+    try {
+      const gameRecords = JSON.parse(user.stats.gameRecords);
+      const currentHighScore = gameRecords[gameId]?.highScore || 0;
+
+      // Only update if new score is higher
+      if (newScore > currentHighScore) {
+        gameRecords[gameId] = {
+          ...gameRecords[gameId],
+          highScore: newScore,
+        };
+
+        await this.client.statistics.update({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+          data: {
+            gameRecords: JSON.stringify(gameRecords),
+          },
+        });
+
+        return true; // Indicates a new high score was set
+      }
+
+      return false; // No new high score
+    } catch (error) {
+      console.error("Error updating game high score:", error);
+      return false;
+    }
   },
 };

@@ -77,23 +77,8 @@ export default {
         await command.execute(interaction, i18n);
       }
 
-      // Update user's last activity
-      await Database.client.user.upsert({
-        where: {
-          guildId_id: {
-            guildId: interaction.guild.id,
-            id: interaction.user.id,
-          },
-        },
-        create: {
-          id: interaction.user.id,
-          guildId: interaction.guild.id,
-          lastActivity: Date.now(),
-        },
-        update: {
-          lastActivity: Date.now(),
-        },
-      });
+      // Update user's last activity - with guild creation if needed
+      await Database.ensureGuildUser(interaction.guild.id, interaction.user.id);
     } catch (error) {
       console.error(error);
     }
