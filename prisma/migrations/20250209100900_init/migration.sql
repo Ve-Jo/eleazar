@@ -30,6 +30,18 @@ CREATE TABLE "economy" (
 );
 
 -- CreateTable
+CREATE TABLE "levels" (
+    "id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "guild_id" TEXT NOT NULL,
+    "xp" BIGINT NOT NULL DEFAULT 0,
+    "gameXp" BIGINT NOT NULL DEFAULT 0,
+    "season_xp" BIGINT NOT NULL DEFAULT 0,
+
+    CONSTRAINT "levels_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "statistics" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -38,18 +50,11 @@ CREATE TABLE "statistics" (
     "message_count" INTEGER NOT NULL DEFAULT 0,
     "command_count" INTEGER NOT NULL DEFAULT 0,
     "last_updated" BIGINT NOT NULL DEFAULT 0,
+    "game_records" JSONB NOT NULL DEFAULT '{"2048": {"highScore": 0}, "snake": {"highScore": 0}}',
+    "xp_stats" JSONB NOT NULL DEFAULT '{"chat": 0, "voice": 0}',
+    "game_xp_stats" JSONB NOT NULL DEFAULT '{"snake": 0, "2048": 0}',
 
     CONSTRAINT "statistics_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "levels" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "guild_id" TEXT NOT NULL,
-    "xp" BIGINT NOT NULL DEFAULT 0,
-
-    CONSTRAINT "levels_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -83,6 +88,31 @@ CREATE TABLE "analytics" (
     CONSTRAINT "analytics_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "music_players" (
+    "guild_id" TEXT NOT NULL,
+    "voice_channel_id" TEXT NOT NULL,
+    "text_channel_id" TEXT NOT NULL,
+    "queue" JSONB NOT NULL DEFAULT '[]',
+    "current_track" JSONB,
+    "position" INTEGER NOT NULL DEFAULT 0,
+    "volume" INTEGER NOT NULL DEFAULT 100,
+    "repeat_mode" TEXT NOT NULL DEFAULT 'off',
+    "autoplay" BOOLEAN NOT NULL DEFAULT false,
+    "filters" JSONB NOT NULL DEFAULT '{}',
+    "last_updated" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "music_players_pkey" PRIMARY KEY ("guild_id")
+);
+
+-- CreateTable
+CREATE TABLE "global_settings" (
+    "id" TEXT NOT NULL DEFAULT 'singleton',
+    "season_start" BIGINT NOT NULL DEFAULT 0,
+
+    CONSTRAINT "global_settings_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "users_guild_id_idx" ON "users"("guild_id");
 
@@ -102,6 +132,18 @@ CREATE INDEX "economy_guildId_idx" ON "economy"("guildId");
 CREATE UNIQUE INDEX "economy_userId_guildId_key" ON "economy"("userId", "guildId");
 
 -- CreateIndex
+CREATE INDEX "levels_xp_idx" ON "levels"("xp");
+
+-- CreateIndex
+CREATE INDEX "levels_gameXp_idx" ON "levels"("gameXp");
+
+-- CreateIndex
+CREATE INDEX "levels_season_xp_idx" ON "levels"("season_xp");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "levels_user_id_guild_id_key" ON "levels"("user_id", "guild_id");
+
+-- CreateIndex
 CREATE INDEX "statistics_total_earned_idx" ON "statistics"("total_earned");
 
 -- CreateIndex
@@ -112,12 +154,6 @@ CREATE INDEX "statistics_command_count_idx" ON "statistics"("command_count");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "statistics_user_id_guild_id_key" ON "statistics"("user_id", "guild_id");
-
--- CreateIndex
-CREATE INDEX "levels_xp_idx" ON "levels"("xp");
-
--- CreateIndex
-CREATE UNIQUE INDEX "levels_user_id_guild_id_key" ON "levels"("user_id", "guild_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "cooldowns_user_id_guild_id_key" ON "cooldowns"("user_id", "guild_id");
@@ -141,10 +177,10 @@ ALTER TABLE "users" ADD CONSTRAINT "users_guild_id_fkey" FOREIGN KEY ("guild_id"
 ALTER TABLE "economy" ADD CONSTRAINT "economy_userId_guildId_fkey" FOREIGN KEY ("userId", "guildId") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "statistics" ADD CONSTRAINT "statistics_user_id_guild_id_fkey" FOREIGN KEY ("user_id", "guild_id") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "levels" ADD CONSTRAINT "levels_user_id_guild_id_fkey" FOREIGN KEY ("user_id", "guild_id") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "levels" ADD CONSTRAINT "levels_user_id_guild_id_fkey" FOREIGN KEY ("user_id", "guild_id") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "statistics" ADD CONSTRAINT "statistics_user_id_guild_id_fkey" FOREIGN KEY ("user_id", "guild_id") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "cooldowns" ADD CONSTRAINT "cooldowns_user_id_guild_id_fkey" FOREIGN KEY ("user_id", "guild_id") REFERENCES "users"("user_id", "guild_id") ON DELETE CASCADE ON UPDATE CASCADE;

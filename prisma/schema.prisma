@@ -8,26 +8,26 @@ generator client {
 }
 
 model Guild {
-  id        String   @id @map("guild_id")
-  settings  Json     @default("{}")
-  users     User[]
+  id       String @id @map("guild_id")
+  settings Json   @default("{}")
+  users    User[]
 
   @@map("guilds")
 }
 
 model User {
-  id           String   @id @map("user_id")
-  guildId      String   @map("guild_id")
-  bannerUrl    String?  @map("banner_url")
-  lastActivity BigInt   @map("last_activity") @default(0)
-  
+  id           String  @id @map("user_id")
+  guildId      String  @map("guild_id")
+  bannerUrl    String? @map("banner_url")
+  lastActivity BigInt  @default(0) @map("last_activity")
+
   // Relations
-  guild        Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  economy      Economy?
-  level        Level?
-  stats        Statistics?
-  cooldowns    Cooldown?
-  upgrades     Upgrade[]
+  guild     Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  economy   Economy?
+  stats     Statistics?
+  cooldowns Cooldown?
+  upgrades  Upgrade[]
+  Level     Level?
 
   @@unique([guildId, id])
   @@index([guildId])
@@ -37,14 +37,14 @@ model User {
 
 // Frequently accessed economy data
 model Economy {
-  id          String   @id @default(cuid())
-  userId      String
-  guildId     String
-  balance     Decimal  @default(0) @db.Decimal(10, 5)
-  bankBalance Decimal  @default(0) @db.Decimal(10, 5)
-  bankRate    Decimal  @default(0) @db.Decimal(10, 5)
+  id            String  @id @default(cuid())
+  userId        String
+  guildId       String
+  balance       Decimal @default(0) @db.Decimal(10, 5)
+  bankBalance   Decimal @default(0) @db.Decimal(10, 5)
+  bankRate      Decimal @default(0) @db.Decimal(10, 5)
   bankStartTime BigInt  @default(0)
-  user        User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user          User    @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([userId])
@@ -52,18 +52,41 @@ model Economy {
   @@map("economy")
 }
 
-// Statistics for tracking all counters and metrics
-model Statistics {
-  id           String   @id @default(cuid())
-  userId       String   @map("user_id")
-  guildId      String   @map("guild_id")
-  totalEarned  Decimal  @map("total_earned") @db.Decimal(20, 5) @default(0)
-  messageCount Int      @map("message_count") @default(0)
-  commandCount Int      @map("command_count") @default(0)
-  lastUpdated  BigInt   @map("last_updated") @default(0)
+// Level tracking
+model Level {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  guildId  String @map("guild_id")
+  xp       BigInt @default(0)
+  gameXp   BigInt @default(0)
+  seasonXp BigInt @default(0) @map("season_xp")
 
   // Relations
-  user         User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+
+  @@unique([userId, guildId])
+  @@index([xp])
+  @@index([gameXp])
+  @@index([seasonXp])
+  @@map("levels")
+}
+
+// Statistics for tracking all counters and metrics
+model Statistics {
+  id           String  @id @default(cuid())
+  userId       String  @map("user_id")
+  guildId      String  @map("guild_id")
+  totalEarned  Decimal @default(0) @map("total_earned") @db.Decimal(20, 5)
+  messageCount Int     @default(0) @map("message_count")
+  commandCount Int     @default(0) @map("command_count")
+  lastUpdated  BigInt  @default(0) @map("last_updated")
+  gameRecords  Json    @default("{\"2048\": {\"highScore\": 0}, \"snake\": {\"highScore\": 0}}") @map("game_records")
+  // Detailed XP tracking
+  xpStats      Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
+  gameXpStats  Json    @default("{\"snake\": 0, \"2048\": 0}") @map("game_xp_stats")
+
+  // Relations
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([totalEarned])
@@ -72,30 +95,15 @@ model Statistics {
   @@map("statistics")
 }
 
-// Frequently accessed level data
-model Level {
-  id           String   @id @default(cuid())
-  userId       String   @map("user_id")
-  guildId      String   @map("guild_id")
-  xp           BigInt   @default(0)
-  
-  // Relations
-  user         User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
-
-  @@unique([userId, guildId])
-  @@index([xp])
-  @@map("levels")
-}
-
 // Cooldowns table for frequent updates
 model Cooldown {
-  id           String   @id @default(cuid())
-  userId       String   @map("user_id")
-  guildId      String   @map("guild_id")
-  data         Json     @default("{}")  // Stores all cooldown timestamps
-  
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  data    Json   @default("{}") // Stores all cooldown timestamps
+
   // Relations
-  user         User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@map("cooldowns")
@@ -103,14 +111,14 @@ model Cooldown {
 
 // Upgrades table for frequent access
 model Upgrade {
-  id           String   @id @default(cuid())
-  userId       String   @map("user_id")
-  guildId      String   @map("guild_id")
-  type         String   // "daily" or "crime"
-  level        Int      @default(1)
-  
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  type    String // "daily" or "crime"
+  level   Int    @default(1)
+
   // Relations
-  user         User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId, type])
   @@index([type])
@@ -118,10 +126,10 @@ model Upgrade {
 }
 
 model Analytics {
-  id           Int      @id @default(autoincrement())
-  timestamp    BigInt   @default(0)
-  type         String   // "ping", "economy", etc.
-  data         Json     // Flexible storage for different metric types
+  id        Int    @id @default(autoincrement())
+  timestamp BigInt @default(0)
+  type      String // "ping", "economy", etc.
+  data      Json // Flexible storage for different metric types
 
   @@index([timestamp])
   @@index([type])
@@ -129,17 +137,24 @@ model Analytics {
 }
 
 model MusicPlayer {
-  id              String   @id @map("guild_id") // Discord guild ID
-  voiceChannelId  String   @map("voice_channel_id") // Voice channel the bot is connected to
-  textChannelId   String   @map("text_channel_id") // Text channel for player messages 
-  queue           Json     @map("queue") @default("[]") // Current queue of tracks
-  currentTrack    Json?    @map("current_track") // Currently playing track
-  position        Int      @map("position") @default(0) // Current position in the track (ms)
-  volume          Int      @map("volume") @default(100)
-  repeatMode      String   @map("repeat_mode") @default("off") // off, track, or queue
-  autoplay        Boolean  @map("autoplay") @default(false)
-  filters         Json     @map("filters") @default("{}")   // Active audio filters
-  lastUpdated     DateTime @map("last_updated") @updatedAt
+  id             String   @id @map("guild_id") // Discord guild ID
+  voiceChannelId String   @map("voice_channel_id") // Voice channel the bot is connected to
+  textChannelId  String   @map("text_channel_id") // Text channel for player messages 
+  queue          Json     @default("[]") @map("queue") // Current queue of tracks
+  currentTrack   Json?    @map("current_track") // Currently playing track
+  position       Int      @default(0) @map("position") // Current position in the track (ms)
+  volume         Int      @default(100) @map("volume")
+  repeatMode     String   @default("off") @map("repeat_mode") // off, track, or queue
+  autoplay       Boolean  @default(false) @map("autoplay")
+  filters        Json     @default("{}") @map("filters") // Active audio filters
+  lastUpdated    DateTime @updatedAt @map("last_updated")
 
   @@map("music_players")
+}
+
+model GlobalSettings {
+  id          String @id @default("singleton")
+  seasonStart BigInt @default(0) @map("season_start")
+  
+  @@map("global_settings")
 }
