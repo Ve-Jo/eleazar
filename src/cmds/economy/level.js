@@ -46,27 +46,60 @@ export default {
       const guildId = interaction.guild.id;
       const userId = targetUser.id;
 
-      // Get user data with level info
-      const userData = await Database.getUser(guildId, userId);
+      // Get raw level data directly from the database to ensure we have accurate seasonXp
+      const [levelData, globalSettings] = await Promise.all([
+        Database.client.level.findUnique({
+          where: {
+            userId_guildId: { userId, guildId },
+          },
+          select: {
+            xp: true,
+            gameXp: true,
+            seasonXp: true,
+          },
+        }),
+        Database.client.globalSettings.findUnique({
+          where: { id: "singleton" },
+        }),
+      ]);
 
-      if (!userData) {
+      if (!levelData) {
         return interaction.editReply({
           content: i18n.__("economy.level.userNotFound"),
           ephemeral: true,
         });
       }
 
-      const levelInfo = Database.calculateLevel(userData.level?.xp || 0);
+      // Calculate all level types including season
+      const calculatedLevels = {
+        activity: Database.calculateLevel(levelData.xp),
+        gaming: Database.calculateLevel(levelData.gameXp),
+        season: Database.calculateLevel(levelData.seasonXp),
+      };
+
+      // Get season timing data
+      const seasonStart = new Date(
+        Number(globalSettings?.seasonStart || Date.now())
+      );
+      const seasonEnd = new Date(
+        seasonStart.getFullYear(),
+        seasonStart.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      ).getTime();
 
       const pngBuffer = await generateRemoteImage(
-        "Level",
+        "Level2",
         {
           interaction: {
             user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
+              id: targetUser.id,
+              username: targetUser.username,
+              displayName: targetUser.displayName,
+              avatarURL: targetUser.displayAvatarURL({
                 extension: "png",
                 size: 1024,
               }),
@@ -81,21 +114,22 @@ export default {
             },
           },
           locale: interaction.locale,
-          targetUser: {
-            id: targetUser.id,
-            username: targetUser.username,
-            displayName: targetUser.displayName,
-            avatarURL: targetUser.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
-          level: levelInfo.level,
-          currentXP: levelInfo.currentXP,
-          requiredXP: levelInfo.requiredXP,
-          totalXP: userData.level?.xp || 0,
+          i18n,
+          // Activity level data
+          level: calculatedLevels.activity.level,
+          currentXP: calculatedLevels.activity.currentXP,
+          requiredXP: calculatedLevels.activity.requiredXP,
+          // Gaming level data
+          gameLevel: calculatedLevels.gaming.level,
+          gameCurrentXP: calculatedLevels.gaming.currentXP,
+          gameRequiredXP: calculatedLevels.gaming.requiredXP,
+          // Season level data
+          seasonXP: Number(levelData.seasonXp), // Convert BigInt to Number
+          seasonEnds: seasonEnd,
+          seasonStart: Number(globalSettings?.seasonStart || Date.now()),
         },
-        { width: 450, height: 200 }
+        { width: 400, height: 254 },
+        { image: 2, emoji: 1 }
       );
 
       const attachment = new AttachmentBuilder(pngBuffer.buffer, {
@@ -112,8 +146,10 @@ export default {
           `attachment://level.${
             pngBuffer.contentType === "image/gif" ? "gif" : "png"
           }`
-        )
-        .setTimestamp();
+        );
+
+      // Remove the detailed XP breakdown fields as they're now shown in the Level2 component
+      embed.setTimestamp();
 
       await interaction.editReply({
         embeds: [embed],
@@ -152,11 +188,6 @@ export default {
         },
       },
     },
-    title: {
-      en: "Level Information",
-      ru: "Информация об уровне",
-      uk: "Інформація про рівень",
-    },
     userNotFound: {
       en: "User not found",
       ru: "Пользователь не найден",
@@ -169,3 +200,26 @@ export default {
     },
   },
 };
+
+// Helper functions for emojis
+function getActivityEmoji(type) {
+  switch (type) {
+    case "chat":
+      return "💭";
+    case "voice":
+      return "🎤";
+    default:
+      return "⭐";
+  }
+}
+
+function getGameEmoji(game) {
+  switch (game) {
+    case "snake":
+      return "🐍";
+    case "2048":
+      return "🎲";
+    default:
+      return "🎮";
+  }
+}
