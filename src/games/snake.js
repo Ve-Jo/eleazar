@@ -3,29 +3,80 @@ import i18n from "../utils/i18n.js";
 import { generateRemoteImage } from "../utils/remoteImageGenerator.js";
 import Database from "../database/client.js";
 
-export default {
-  id: "snake",
-  title: "Snake",
-  emoji: "🐍",
-  async execute(interaction) {
-    // Initialize game state
-    const gameState = {
+// Game state management for multi-user synchronization
+const activeGames = new Map();
+
+// GameState manager for handling synchronized states
+class GameState {
+  constructor(channelId, userId, messageId, guildId) {
+    this.channelId = channelId;
+    this.userId = userId;
+    this.guildId = guildId;
+    this.messageId = messageId;
+    this.lastUpdateTime = Date.now();
+    this.lastImageGenTime = Date.now();
+    this.state = this.createInitialState();
+    this.forceRenderFrame = false;
+  }
+
+  createInitialState() {
+    return {
       gridSize: 5,
       grid: Array(5)
         .fill()
         .map(() => Array(5).fill(0)),
       score: 0,
       gameOver: false,
-      snake: [{ x: 2, y: 2 }], // Start snake in middle
+      snake: [{ x: 2, y: 2 }],
       direction: "right",
       food: null,
       moves: 0,
       startTime: Date.now(),
       earning: 0,
     };
+  }
 
-    // Add initial food
-    addFood(gameState);
+  updateTimestamp() {
+    this.lastUpdateTime = Date.now();
+  }
+
+  updateImageTimestamp() {
+    this.lastImageGenTime = Date.now();
+  }
+}
+
+// Change game state management to use composite key
+function getGameKey(channelId, userId) {
+  return `${channelId}-${userId}`;
+}
+
+export default {
+  id: "snake",
+  title: "Snake",
+  emoji: "🐍",
+  async execute(interaction) {
+    const channelId = interaction.channelId;
+    const userId = interaction.user.id;
+    const gameKey = getGameKey(channelId, userId);
+
+    // Check if user already has a running game
+    const hasRunningGame = activeGames.has(gameKey);
+
+    if (hasRunningGame) {
+      return interaction.reply({
+        content: i18n.__("games.snake.alreadyRunning"),
+        ephemeral: true,
+      });
+    }
+
+    // Initialize game state with guild ID
+    const initialState = new GameState(
+      channelId,
+      userId,
+      null,
+      interaction.guildId
+    );
+    addFood(initialState.state);
 
     // Calculate earning based on score and time
     const calculateEarning = (state) => {
@@ -38,7 +89,7 @@ export default {
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + (5 - timeInMinutes) / 5); // Time multiplier
 
-      return Math.max(1, earning); // Minimum earning of 1
+      return earning;
     };
 
     // Helper function to wrap coordinates around grid edges
@@ -65,7 +116,7 @@ export default {
           },
         },
         { width: 400, height: 490 },
-        { image: 2, emoji: 1 }
+        { image: 1, emoji: 1 }
       );
     };
 
@@ -92,20 +143,38 @@ export default {
     const row = new ActionRowBuilder().addComponents(buttons);
 
     try {
-      // Generate initial board
+      // Get current stats to display high score at start
+      const gameRecords = await Database.getGameRecords(
+        interaction.guildId,
+        interaction.user.id
+      );
+      const currentHighScore = gameRecords?.snake?.highScore || 0;
+
       const { buffer } = await generateGameBoard(
-        gameState,
+        initialState.state,
         interaction.locale,
         interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
       );
 
       // Send initial game board
       const message = await interaction.followUp({
-        content: i18n.__("games.snake.startMessage"),
+        content:
+          i18n.__("games.snake.startMessage") +
+          `\nHigh Score: ${currentHighScore}`,
         files: [{ attachment: buffer, name: "snake.png" }],
         components: [row],
         fetchReply: true,
       });
+
+      // Store game state with message ID
+      initialState.messageId = message.id;
+      activeGames.set(gameKey, initialState);
+
+      // Clean up on game end
+      const cleanup = () => {
+        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        activeGames.delete(gameKey);
+      };
 
       // Handle moves
       const collector = message.createMessageComponentCollector();
@@ -114,10 +183,10 @@ export default {
       const resetInactivityTimer = () => {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
         inactivityTimeout = setTimeout(async () => {
-          if (!gameState.gameOver) {
-            gameState.earning = calculateEarning(gameState);
+          if (!initialState.state.gameOver) {
+            initialState.state.earning = calculateEarning(initialState.state);
             const { buffer: finalBoard } = await generateGameBoard(
-              gameState,
+              initialState.state,
               interaction.locale,
               interaction.user.displayAvatarURL({
                 extension: "png",
@@ -125,20 +194,52 @@ export default {
               })
             );
 
-            // Add earnings to user's balance
-            await Database.addBalance(
-              interaction.guildId,
-              interaction.user.id,
-              gameState.earning
+            const timePlayed =
+              (Date.now() - initialState.state.startTime) / 1000;
+            const gameXP = Math.floor(
+              timePlayed * 2 + initialState.state.score * 5
             );
 
-            await message.edit({
-              content: `${i18n.__("games.snake.timesOut", {
-                score: gameState.score,
-              })} (+${gameState.earning.toFixed(1)} 💵)`,
-              files: [{ attachment: finalBoard, name: "snake.png" }],
-              components: [],
-            });
+            try {
+              // Save high score first
+              const isNewRecord = await Database.updateGameHighScore(
+                interaction.guildId,
+                interaction.user.id,
+                "snake",
+                initialState.state.score
+              );
+
+              // Add XP
+              await Database.addGameXP(
+                interaction.guildId,
+                interaction.user.id,
+                gameXP,
+                "snake"
+              );
+
+              // Add earnings
+              await Database.addBalance(
+                interaction.guildId,
+                interaction.user.id,
+                initialState.state.earning
+              );
+
+              await message.edit({
+                content: `${i18n.__("games.snake.timesOut", {
+                  score: initialState.state.score,
+                })} (+${initialState.state.earning.toFixed(
+                  1
+                )} 💵, +${gameXP} Game XP)${
+                  isNewRecord ? " 🏆 New High Score!" : ""
+                }`,
+                files: [{ attachment: finalBoard, name: "snake.png" }],
+                components: [],
+              });
+            } catch (error) {
+              console.error("Error saving timeout results:", error);
+            }
+
+            cleanup();
             collector.stop();
           }
         }, 30000);
@@ -147,7 +248,10 @@ export default {
       resetInactivityTimer();
 
       collector.on("collect", async (i) => {
-        if (i.user.id !== interaction.user.id) {
+        const gameInstance = activeGames.get(gameKey);
+
+        // Validate game exists and user has permission
+        if (!gameInstance || i.user.id !== gameInstance.userId) {
           await i.reply({
             content: i18n.__("games.snake.notYourGame"),
             ephemeral: true,
@@ -155,116 +259,183 @@ export default {
           return;
         }
 
+        // Defer the button interaction
+        await i.deferUpdate();
+
         resetInactivityTimer();
 
-        const prevDirection = gameState.direction;
+        const state = gameInstance.state;
+        const prevDirection = state.direction;
         let validMove = true;
+
+        // Update game state timestamp
+        gameInstance.updateTimestamp();
 
         // Check if the move is valid (not reversing direction)
         switch (i.customId) {
           case "up":
             validMove = prevDirection !== "down";
-            if (validMove) gameState.direction = "up";
+            if (validMove) state.direction = "up";
             break;
           case "down":
             validMove = prevDirection !== "up";
-            if (validMove) gameState.direction = "down";
+            if (validMove) state.direction = "down";
             break;
           case "left":
             validMove = prevDirection !== "right";
-            if (validMove) gameState.direction = "left";
+            if (validMove) state.direction = "left";
             break;
           case "right":
             validMove = prevDirection !== "left";
-            if (validMove) gameState.direction = "right";
+            if (validMove) state.direction = "right";
             break;
         }
 
         if (validMove) {
-          gameState.moves++;
-          gameState.earning = calculateEarning(gameState);
+          state.moves++;
+          state.earning = calculateEarning(state);
 
           // Move snake
-          const head = { ...gameState.snake[0] };
+          const head = { ...state.snake[0] };
 
           // Update coordinates based on direction
-          switch (gameState.direction) {
+          switch (state.direction) {
             case "up":
-              head.y = wrapCoordinate(head.y - 1, gameState.gridSize);
+              head.y = wrapCoordinate(head.y - 1, state.gridSize);
               break;
             case "down":
-              head.y = wrapCoordinate(head.y + 1, gameState.gridSize);
+              head.y = wrapCoordinate(head.y + 1, state.gridSize);
               break;
             case "left":
-              head.x = wrapCoordinate(head.x - 1, gameState.gridSize);
+              head.x = wrapCoordinate(head.x - 1, state.gridSize);
               break;
             case "right":
-              head.x = wrapCoordinate(head.x + 1, gameState.gridSize);
+              head.x = wrapCoordinate(head.x + 1, state.gridSize);
               break;
           }
 
           // Check if snake hit itself
-          if (checkCollision(head, gameState.snake)) {
-            gameState.gameOver = true;
+          if (checkCollision(head, state.snake)) {
+            state.gameOver = true;
           } else {
             // Add new head
-            gameState.snake.unshift(head);
+            state.snake.unshift(head);
 
             // Check if snake ate food
-            if (head.x === gameState.food.x && head.y === gameState.food.y) {
-              gameState.score += 10;
+            if (head.x === state.food.x && head.y === state.food.y) {
+              state.score += 10;
               // Check if grid needs to expand
-              if (
-                gameState.snake.length >
-                gameState.gridSize * gameState.gridSize * 0.75
-              ) {
-                expandGrid(gameState);
+              if (state.snake.length > state.gridSize * state.gridSize * 0.75) {
+                expandGrid(state);
               }
-              addFood(gameState);
+              addFood(state);
             } else {
               // Remove tail if no food eaten
-              gameState.snake.pop();
+              state.snake.pop();
             }
           }
         }
 
-        const { buffer: newBoard } = await generateGameBoard(
-          gameState,
-          interaction.locale,
-          interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
-        );
+        // Prepare message update
+        let messageContent, messageFiles, messageComponents;
 
-        if (gameState.gameOver) {
-          // Add earnings to user's balance
-          await Database.addBalance(
-            interaction.guildId,
-            interaction.user.id,
-            gameState.earning
+        if (!state.gameOver) {
+          messageContent = validMove
+            ? `${i18n.__("games.snake.score", { score: state.score })}`
+            : `${i18n.__("games.snake.invalidMove")}`;
+          messageComponents = [row];
+
+          const { buffer: newBoard } = await generateGameBoard(
+            state,
+            interaction.locale,
+            interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            })
           );
+          gameInstance.updateImageTimestamp();
+          messageFiles = [{ attachment: newBoard, name: "snake.png" }];
+        } else {
+          console.log("Game over, final score:", state.score);
 
-          await i.update({
-            content: `${i18n.__("games.snake.gameOver", {
-              score: gameState.score,
-            })} (+${gameState.earning.toFixed(1)} 💵)`,
-            files: [{ attachment: newBoard, name: "snake.png" }],
-            components: [],
-          });
-          if (inactivityTimeout) clearTimeout(inactivityTimeout);
-          collector.stop();
+          try {
+            // Generate final game over board first
+            const { buffer: gameOverBoard } = await generateGameBoard(
+              state,
+              interaction.locale,
+              interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              })
+            );
+
+            // Calculate XP
+            const timePlayed = (Date.now() - state.startTime) / 1000;
+            const gameXP = Math.floor(timePlayed * 2 + state.score * 5);
+
+            // Save high score first
+            const isNewRecord = await Database.updateGameHighScore(
+              interaction.guildId,
+              interaction.user.id,
+              "snake",
+              state.score
+            );
+
+            // Add XP
+            await Database.addGameXP(
+              interaction.guildId,
+              interaction.user.id,
+              gameXP,
+              "snake"
+            );
+
+            // Add earnings
+            await Database.addBalance(
+              interaction.guildId,
+              interaction.user.id,
+              state.earning
+            );
+
+            await message.edit({
+              content: `${i18n.__("games.snake.gameOver", {
+                score: state.score,
+              })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
+                isNewRecord ? " 🏆 New High Score!" : ""
+              }`,
+              files: [{ attachment: gameOverBoard, name: "snake.png" }],
+              components: [],
+            });
+
+            cleanup();
+            collector.stop();
+          } catch (error) {
+            console.error("Error saving game results:", error);
+            await message.edit({
+              content: i18n.__("games.snake.error"),
+              components: [],
+            });
+          }
           return;
         }
 
-        await i.update({
-          content: validMove
-            ? `${i18n.__("games.snake.score", { score: gameState.score })}`
-            : `${i18n.__("games.snake.invalidMove")}`,
-          files: [{ attachment: newBoard, name: "snake.png" }],
-          components: [row],
+        // Get and update the game message
+        const gameMessage = await i.channel.messages.fetch(
+          gameInstance.messageId
+        );
+        await gameMessage.edit({
+          content: messageContent,
+          files: messageFiles,
+          components: messageComponents,
         });
+
+        if (state.gameOver) {
+          cleanup();
+          collector.stop();
+        }
       });
 
       collector.on("end", () => {
-        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        cleanup();
       });
     } catch (error) {
       console.error("Error executing game snake:", error);
@@ -277,6 +448,11 @@ export default {
     }
   },
   localization_strings: {
+    alreadyRunning: {
+      en: "A snake game is already running in this channel!",
+      ru: "Игра в змейку уже запущена в этом канале!",
+      uk: "Гра в змійку вже запущена в цьому каналі!",
+    },
     name: {
       en: "Snake",
       ru: "Змейка",
@@ -324,7 +500,6 @@ export default {
     },
   },
 };
-
 // Game logic functions
 
 // Add food at random empty position

@@ -3,13 +3,23 @@ import i18n from "../utils/i18n.js";
 import { generateRemoteImage } from "../utils/remoteImageGenerator.js";
 import Database from "../database/client.js";
 
-export default {
-  id: "2048",
-  title: "2048",
-  emoji: "🎲",
-  async execute(interaction) {
-    // Initialize game state
-    const gameState = {
+// Game state management for multi-user synchronization
+const activeGames = new Map();
+
+// GameState manager for handling synchronized states
+class GameState {
+  constructor(channelId, userId, messageId, guildId) {
+    this.channelId = channelId;
+    this.userId = userId;
+    this.guildId = guildId;
+    this.messageId = messageId;
+    this.lastUpdateTime = Date.now();
+    this.lastImageGenTime = Date.now();
+    this.state = this.createInitialState();
+  }
+
+  createInitialState() {
+    const state = {
       grid: Array(4)
         .fill()
         .map(() => Array(4).fill(0)),
@@ -20,28 +30,71 @@ export default {
       earning: 0,
     };
 
-    // Calculate earning based on score, time and moves efficiency
+    // Add initial tiles
+    addRandomTile(state);
+    addRandomTile(state);
+
+    return state;
+  }
+
+  updateTimestamp() {
+    this.lastUpdateTime = Date.now();
+  }
+
+  updateImageTimestamp() {
+    this.lastImageGenTime = Date.now();
+  }
+}
+
+// Change game state management to use composite key
+function getGameKey(channelId, userId) {
+  return `${channelId}-${userId}`;
+}
+
+export default {
+  id: "2048",
+  title: "2048",
+  emoji: "🎲",
+  async execute(interaction) {
+    const channelId = interaction.channelId;
+    const userId = interaction.user.id;
+    const gameKey = getGameKey(channelId, userId);
+
+    // Add safety check for interaction state
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply();
+    }
+
+    // Check if user already has a running game
+    const hasRunningGame = activeGames.has(gameKey);
+
+    if (hasRunningGame) {
+      return interaction.followUp({
+        content: i18n.__("games.2048.alreadyRunning"),
+        ephemeral: true,
+      });
+    }
+
+    const initialState = new GameState(
+      channelId,
+      userId,
+      null,
+      interaction.guildId
+    );
+
+    // Calculate earning based on score and time
     const calculateEarning = (state) => {
       const timeInMinutes = (Date.now() - state.startTime) / 60000;
       const moveEfficiency = state.score / (state.moves || 1);
 
-      // Combined formula that takes into account:
-      // - Base earning (1% of score)
-      // - Move efficiency (higher score per move = higher multiplier)
-      // - Time bonus (faster completion = higher multiplier)
       const earning =
         state.score *
         0.01 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + (5 - timeInMinutes) / 5); // Time multiplier
 
-      // Ensure minimum earning of 1
       return earning;
     };
-
-    // Add initial tiles
-    addRandomTile(gameState);
-    addRandomTile(gameState);
 
     // Create game controls
     const buttons = [
@@ -66,13 +119,19 @@ export default {
     const row = new ActionRowBuilder().addComponents(buttons);
 
     try {
-      // Generate board image
+      // Get current stats to display high score at start
+      const gameRecords = await Database.getGameRecords(
+        interaction.guildId,
+        interaction.user.id
+      );
+      const currentHighScore = gameRecords?.["2048"]?.highScore || 0;
+
       const { buffer } = await generateRemoteImage(
         "2048",
         {
-          grid: gameState.grid,
-          score: gameState.score,
-          earning: gameState.earning,
+          grid: initialState.state.grid,
+          score: initialState.state.score,
+          earning: initialState.state.earning,
           locale: interaction.locale,
           interaction: {
             user: {
@@ -84,16 +143,28 @@ export default {
           },
         },
         { width: 400, height: 490 },
-        { image: 2, emoji: 1 }
+        { image: 1, emoji: 1 }
       );
 
       // Send initial game board
       const message = await interaction.followUp({
-        content: i18n.__("games.2048.startMessage"),
+        content:
+          i18n.__("games.2048.startMessage") +
+          `\nHigh Score: ${currentHighScore}`,
         files: [{ attachment: buffer, name: "2048.png" }],
         components: [row],
         fetchReply: true,
       });
+
+      // Store game state with message ID
+      initialState.messageId = message.id;
+      activeGames.set(gameKey, initialState);
+
+      // Clean up on game end
+      const cleanup = () => {
+        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        activeGames.delete(gameKey);
+      };
 
       // Handle moves
       const collector = message.createMessageComponentCollector();
@@ -102,14 +173,15 @@ export default {
       const resetInactivityTimer = () => {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
         inactivityTimeout = setTimeout(async () => {
-          if (!gameState.gameOver) {
-            gameState.earning = calculateEarning(gameState);
+          const gameInstance = activeGames.get(gameKey);
+          if (!gameInstance?.state.gameOver) {
+            gameInstance.state.earning = calculateEarning(gameInstance.state);
             const { buffer: finalBoard } = await generateRemoteImage(
               "2048",
               {
-                grid: gameState.grid,
-                score: gameState.score,
-                earning: gameState.earning,
+                grid: gameInstance.state.grid,
+                score: gameInstance.state.score,
+                earning: gameInstance.state.earning,
                 locale: interaction.locale,
                 interaction: {
                   user: {
@@ -124,20 +196,37 @@ export default {
               { image: 2, emoji: 1 }
             );
 
-            // Add earnings to user's balance
+            // Calculate game XP for timeout case
+            const timePlayed =
+              (Date.now() - gameInstance.state.startTime) / 1000;
+            const gameXP = Math.floor(
+              timePlayed * 2 + // Base XP from time
+                gameInstance.state.score * 0.5 // Score bonus
+            );
+
+            await Database.addGameXP(
+              interaction.guildId,
+              interaction.user.id,
+              gameXP,
+              "2048"
+            );
+
             await Database.addBalance(
               interaction.guildId,
               interaction.user.id,
-              gameState.earning
+              gameInstance.state.earning
             );
 
             await message.edit({
               content: `${i18n.__("games.2048.timesOut", {
-                score: gameState.score,
-              })} (+${gameState.earning.toFixed(1)} 💵)`,
+                score: gameInstance.state.score,
+              })} (+${gameInstance.state.earning.toFixed(
+                1
+              )} 💵, +${gameXP} Game XP)`,
               files: [{ attachment: finalBoard, name: "2048.png" }],
               components: [],
             });
+            cleanup();
             collector.stop();
           }
         }, 30000);
@@ -146,7 +235,10 @@ export default {
       resetInactivityTimer();
 
       collector.on("collect", async (i) => {
-        if (i.user.id !== interaction.user.id) {
+        const gameInstance = activeGames.get(gameKey);
+
+        // Validate game exists and user has permission
+        if (!gameInstance || i.user.id !== gameInstance.userId) {
           await i.reply({
             content: i18n.__("games.2048.notYourGame"),
             ephemeral: true,
@@ -154,93 +246,142 @@ export default {
           return;
         }
 
+        // Defer the button interaction
+        await i.deferUpdate();
+
         resetInactivityTimer();
 
+        const state = gameInstance.state;
         let moved = false;
-        if (i.customId === "up") moved = moveUp(gameState);
-        if (i.customId === "down") moved = moveDown(gameState);
-        if (i.customId === "left") moved = moveLeft(gameState);
-        if (i.customId === "right") moved = moveRight(gameState);
 
-        if (moved) {
-          gameState.moves++;
-          gameState.earning = calculateEarning(gameState);
+        // Update game state timestamp
+        gameInstance.updateTimestamp();
+
+        // Handle moves based on direction
+        switch (i.customId) {
+          case "up":
+            moved = moveUp(state);
+            break;
+          case "down":
+            moved = moveDown(state);
+            break;
+          case "left":
+            moved = moveLeft(state);
+            break;
+          case "right":
+            moved = moveRight(state);
+            break;
         }
 
-        if (moved && !gameState.gameOver) {
-          addRandomTile(gameState);
-          if (checkGameOver(gameState)) {
-            const { buffer: finalBoard } = await generateRemoteImage(
-              "2048",
-              {
-                grid: gameState.grid,
-                score: gameState.score,
-                earning: gameState.earning,
-                locale: i.locale,
-                interaction: {
-                  user: {
-                    avatarURL: i.user.displayAvatarURL({
-                      extension: "png",
-                      size: 1024,
-                    }),
-                  },
-                },
-              },
-              { width: 400, height: 490 },
-              { image: 2, emoji: 1 }
-            );
+        if (moved) {
+          state.moves++;
+          state.earning = calculateEarning(state);
+          addRandomTile(state);
 
-            // Add earnings to user's balance
-            await Database.addBalance(
-              interaction.guildId,
-              interaction.user.id,
-              gameState.earning
-            );
-
-            await i.update({
-              content: `${i18n.__("games.2048.gameOver", {
-                score: gameState.score,
-              })} (+${gameState.earning.toFixed(1)} 💵)`,
-              files: [{ attachment: finalBoard, name: "2048.png" }],
-              components: [],
-            });
-            if (inactivityTimeout) clearTimeout(inactivityTimeout);
-            collector.stop();
-            return;
+          if (checkGameOver(state)) {
+            state.gameOver = true;
           }
         }
 
-        const { buffer: newBoard } = await generateRemoteImage(
-          "2048",
-          {
-            grid: gameState.grid,
-            score: gameState.score,
-            earning: gameState.earning,
-            locale: interaction.locale,
-            interaction: {
-              user: {
-                avatarURL: interaction.user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
+        // Prepare message update
+        let messageContent, messageFiles, messageComponents;
+
+        if (!state.gameOver) {
+          messageContent = moved
+            ? `${i18n.__("games.2048.score", { score: state.score })}`
+            : `${i18n.__("games.2048.invalidMove")}`;
+          messageComponents = [row];
+        } else {
+          const { buffer: newBoard } = await generateRemoteImage(
+            "2048",
+            {
+              grid: state.grid,
+              score: state.score,
+              earning: state.earning,
+              locale: interaction.locale,
+              interaction: {
+                user: {
+                  avatarURL: interaction.user.displayAvatarURL({
+                    extension: "png",
+                    size: 1024,
+                  }),
+                },
               },
             },
-          },
-          { width: 400, height: 490 },
-          { image: 2, emoji: 1 }
-        );
+            { width: 400, height: 490 },
+            { image: 2, emoji: 1 }
+          );
+          gameInstance.updateImageTimestamp();
+          messageFiles = [{ attachment: newBoard, name: "2048.png" }];
 
-        await i.update({
-          content: moved
-            ? `${i18n.__("games.2048.score", { score: gameState.score })}`
-            : `${i18n.__("games.2048.invalidMove")}`,
-          files: [{ attachment: newBoard, name: "2048.png" }],
-          components: [row],
-        });
+          // Get and update the game message
+          const gameMessage = await i.channel.messages.fetch(
+            gameInstance.messageId
+          );
+          await gameMessage.edit({
+            content: messageContent,
+            files: messageFiles,
+            components: messageComponents,
+          });
+
+          if (state.gameOver) {
+            try {
+              // Calculate final values consistently with what's shown
+              const timePlayed = (Date.now() - state.startTime) / 1000;
+              const gameXP = Math.floor(
+                timePlayed * 2 + // Base XP from time played
+                  state.score * 0.5 // Same XP multiplier as display
+              );
+
+              // Update high score first
+              const isNewRecord = await Database.updateGameHighScore(
+                interaction.guildId,
+                interaction.user.id,
+                "2048",
+                state.score
+              );
+
+              // Add XP and earnings using the same values as display
+              await Database.addGameXP(
+                interaction.guildId,
+                interaction.user.id,
+                gameXP,
+                "2048"
+              );
+
+              await Database.addBalance(
+                interaction.guildId,
+                interaction.user.id,
+                state.earning // Use the exact earning value shown
+              );
+
+              await message.edit({
+                content: `${i18n.__("games.2048.gameOver", {
+                  score: state.score,
+                })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
+                  isNewRecord ? " 🏆 New High Score!" : ""
+                }`,
+                files: [{ attachment: newBoard, name: "2048.png" }],
+                components: [],
+              });
+
+              cleanup();
+              collector.stop();
+            } catch (error) {
+              console.error("Error executing game 2048:", error);
+              if (!interaction.replied) {
+                await interaction.reply({
+                  content: i18n.__("games.2048.error"),
+                  ephemeral: true,
+                });
+              }
+            }
+          }
+        }
       });
 
       collector.on("end", () => {
-        if (inactivityTimeout) clearTimeout(inactivityTimeout);
+        cleanup();
       });
     } catch (error) {
       console.error("Error executing game 2048:", error);
@@ -253,6 +394,11 @@ export default {
     }
   },
   localization_strings: {
+    alreadyRunning: {
+      en: "A 2048 game is already running in this channel!",
+      ru: "Игра 2048 уже запущена в этом канале!",
+      uk: "Гра 2048 вже запущена в цьому каналі!",
+    },
     name: {
       en: "2048",
       ru: "2048",
