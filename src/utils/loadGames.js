@@ -1,51 +1,96 @@
-import fs from "fs/promises";
-import path from "path";
+import { readdirSync } from "fs";
+import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { Collection } from "discord.js";
-import { syncAllLocalizations } from "./syncLocalizations.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const gamesCache = new Map();
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Load available games from the games directory
+ * @param {object} i18n - i18n instance for localization
+ * @returns {Map} Map of games with their data
+ */
 export async function loadGames(i18n) {
-  const games = new Collection();
-  const gamesPath = path.join(__dirname, "../games");
-
-  // Sync all localizations if LOCALIZATION_SYNC is true
-  if (process.env.LOCALIZATION_SYNC === "true") {
-    await syncAllLocalizations();
+  // First check if we have cached games
+  if (gamesCache.has("games")) {
+    return gamesCache.get("games");
   }
 
   try {
-    const gameFiles = await fs.readdir(gamesPath);
+    // Get available games using correct path resolution
+    const gamesDir = join(__dirname, "..", "games");
+    console.log("Loading games from directory:", gamesDir);
+    const gameFiles = readdirSync(gamesDir).filter((file) =>
+      file.endsWith(".js")
+    );
+    console.log("Found game files:", gameFiles);
 
-    for (const file of gameFiles) {
-      if (!file.endsWith(".js")) continue;
-
-      const gamePath = path.join(gamesPath, file);
-      const gameModule = await import(gamePath);
-
-      if (gameModule.default) {
-        const game = gameModule.default;
-
-        // If game.data is a function, call it with i18n
-        if (typeof game.data === "function") {
-          try {
-            game.data = game.data(i18n);
-          } catch (error) {
-            console.error(`Error building game data for ${file}:`, error);
-            continue;
+    // Import and process each game
+    const gameModules = await Promise.all(
+      gameFiles.map(async (file) => {
+        try {
+          console.log("Importing game module:", file);
+          // Use proper path for imports
+          const gameModule = await import(join(gamesDir, file));
+          if (!gameModule.default) {
+            console.error(`Game module ${file} has no default export`);
+            return null;
           }
+          const game = gameModule.default;
+          if (!game.id || !game.title || !game.emoji) {
+            console.error(
+              `Game module ${file} is missing required properties:`,
+              {
+                id: game.id,
+                title: game.title,
+                emoji: game.emoji,
+              }
+            );
+            return null;
+          }
+          const gameData = {
+            id: game.id,
+            title:
+              game.localization_strings?.name?.[i18n.getLocale()] || game.title,
+            emoji: game.emoji,
+          };
+          console.log("Successfully loaded game:", gameData);
+          return gameData;
+        } catch (error) {
+          console.error(`Error loading game module ${file}:`, error);
+          return null;
         }
+      })
+    );
 
-        // Add game to collection
-        games.set(game.id || path.basename(file, ".js"), game);
-        console.log(`Loaded game: ${game.id || path.basename(file, ".js")}`);
+    // Create games map
+    const games = new Map();
+    for (const game of gameModules.filter(Boolean)) {
+      if (game) {
+        games.set(game.id, game);
       }
     }
+
+    console.log("Final games map:", Array.from(games.entries()));
+
+    // Cache games globally
+    gamesCache.set("games", games);
+
+    // Add cache invalidation after 5 minutes
+    setTimeout(() => {
+      gamesCache.delete("games");
+    }, 5 * 60 * 1000);
+
+    return games;
   } catch (error) {
     console.error("Error loading games:", error);
+    return new Map();
   }
+}
 
-  return games;
+/**
+ * Clear games cache
+ */
+export function clearGamesCache() {
+  gamesCache.clear();
 }

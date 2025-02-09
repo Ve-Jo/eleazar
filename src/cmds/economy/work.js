@@ -13,6 +13,7 @@ import {
 import Database from "../../database/client.js";
 import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
 import { loadGames } from "../../utils/loadGames.js";
+import { DEFAULT_VALUES } from "../../database/client.js";
 
 export default {
   data: () => {
@@ -31,20 +32,42 @@ export default {
     await interaction.deferReply();
 
     try {
-      // Load games and organize into categories
-      const gamesCollection = await loadGames(i18n);
+      // Load games and convert Map to array
+      const gamesMap = await loadGames(i18n);
+      const gamesArray = Array.from(gamesMap.values());
 
-      console.log(interaction.locale);
-      console.log(i18n.getLocale());
+      if (gamesArray.length === 0) {
+        throw new Error("No games found");
+      }
+
+      // Get user's game records and ensure user exists with default values
+      const userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id
+      );
+      if (!userData.economy) {
+        await Database.createUser(interaction.guild.id, interaction.user.id, {
+          economy: DEFAULT_VALUES.economy,
+          stats: DEFAULT_VALUES.stats,
+        });
+      }
+
+      const gameRecords = userData?.stats?.gameRecords || {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
 
       // Create games object with categories
-      let games = {
+      const games = {
         [`${i18n.__("components.GameLauncher.specialForCategory")}`]: {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
             size: 1024,
           }),
-          games_list: Array.from(gamesCollection.values()),
+          games_list: gamesArray.map((game) => ({
+            ...game,
+            highScore: gameRecords[game.id]?.highScore || 0,
+          })),
         },
       };
 
@@ -56,11 +79,44 @@ export default {
         // Ensure locale is set before any i18n operations
         await i18n.setLocale(locale);
 
-        // Get user data
-        const userData = await Database.getUser(
+        // Get fresh user data with defaults if needed
+        let userData = await Database.getUser(
           interaction.guild.id,
           interaction.user.id
         );
+        if (!userData.economy) {
+          userData = await Database.createUser(
+            interaction.guild.id,
+            interaction.user.id,
+            {
+              economy: DEFAULT_VALUES.economy,
+              stats: DEFAULT_VALUES.stats,
+            }
+          );
+        }
+
+        // Get fresh game records to ensure we have the latest data
+        const currentGameRecords = await Database.getGameRecords(
+          interaction.guild.id,
+          interaction.user.id
+        );
+
+        const categoryNames = Object.keys(games);
+        const currentCategoryGames =
+          games[categoryNames[currentCategory]].games_list;
+        const currentGame = currentCategoryGames[highlightedGame];
+
+        console.log(
+          "Current game records for image generation:",
+          currentGameRecords
+        );
+        console.log("Current category games:", currentCategoryGames);
+
+        // Log the data being sent to the image generator
+        console.log("Sending to image generator:", {
+          games,
+          gameStats: currentGameRecords,
+        });
 
         // Generate game launcher image
         const pngBuffer = await generateRemoteImage(
@@ -89,10 +145,11 @@ export default {
             database: userData,
             games: games,
             selectedGame,
-            currentLocale: i18n.getLocale(), // Pass current locale explicitly
+            currentLocale: i18n.getLocale(),
             highlightedGame,
             highlightedCategory: currentCategory,
             i18n,
+            gameStats: currentGameRecords, // Use fresh game records
           },
           { width: 750, height: 450 }
         );
@@ -104,7 +161,7 @@ export default {
         });
 
         const embed = new EmbedBuilder()
-          .setColor(process.env.EMBED_COLOR)
+          .setColor("#3DAA4E")
           .setAuthor({
             name: i18n.__("economy.work.title"),
             iconURL: interaction.user.displayAvatarURL(),
@@ -117,21 +174,16 @@ export default {
           .setTimestamp();
 
         // Create category select menu
-        const categoryNames = Object.keys(games);
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_category")
           .setPlaceholder(i18n.__("economy.work.selectCategory"))
           .addOptions(
             categoryNames.map((category, index) => ({
-              label: category, // category is already translated at this point
+              label: category,
               value: index.toString(),
               default: currentCategory === index,
             }))
           );
-
-        // Get current category games
-        const currentCategoryGames =
-          games[categoryNames[currentCategory]].games_list;
 
         // Create navigation buttons
         const prevButton = new ButtonBuilder()
@@ -182,6 +234,16 @@ export default {
 
       collector.on("collect", async (i) => {
         const categoryNames = Object.keys(games);
+        const currentCategoryGames =
+          games[categoryNames[currentCategory]]?.games_list;
+
+        if (!currentCategoryGames || currentCategoryGames.length === 0) {
+          await i.reply({
+            content: i18n.__("economy.work.noGamesAvailable"),
+            ephemeral: true,
+          });
+          return;
+        }
 
         if (i.customId === "select_category") {
           currentCategory = parseInt(i.values[0]);
@@ -195,16 +257,21 @@ export default {
             await i.update(await generateGameMessage(interaction.locale));
           }
         } else if (i.customId === "next_game") {
-          const currentCategoryGames =
-            games[categoryNames[currentCategory]].games_list;
           if (highlightedGame < currentCategoryGames.length - 1) {
             highlightedGame++;
             selectedGame = null;
             await i.update(await generateGameMessage(interaction.locale));
           }
         } else if (i.customId === "select_game") {
-          const game =
-            games[categoryNames[currentCategory]].games_list[highlightedGame];
+          const game = currentCategoryGames[highlightedGame];
+          if (!game) {
+            await i.reply({
+              content: i18n.__("economy.work.gameNotFound"),
+              ephemeral: true,
+            });
+            return;
+          }
+
           selectedGame = game.id;
           // Remove components before starting game
           await i.update({ components: [] });
@@ -278,6 +345,16 @@ export default {
       en: "Error starting {{game}}. Please try again.",
       ru: "Ошибка при запуске {{game}}. Пожалуйста, попробуйте снова.",
       uk: "Помилка при запуску {{game}}. Будь ласка, спробуйте знову.",
+    },
+    noGamesAvailable: {
+      en: "No games are currently available.",
+      ru: "В данный момент игры недоступны.",
+      uk: "На даний момент ігри недоступні.",
+    },
+    gameNotFound: {
+      en: "The selected game was not found.",
+      ru: "Выбранная игра не найдена.",
+      uk: "Вибрана гра не знайдена.",
     },
   },
 };
