@@ -116,7 +116,15 @@
       "footer": "Page {{page}} of {{totalPages}}",
       "title": "Server Leaderboard",
       "selectedUser": "Selected user at position {{position}}",
-      "error": "An error occurred while processing your leaderboard request"
+      "error": "An error occurred while processing your leaderboard request",
+      "selectCategory": "Select category to view",
+      "categories": {
+        "total": "Total Balance",
+        "balance": "Balance",
+        "bank": "Bank Balance",
+        "level": "Level",
+        "games": "Games"
+      }
     },
     "level": {
       "name": "level",
@@ -130,7 +138,10 @@
         }
       },
       "info": "{{user}}'s Level Information:\n• Level: **{{level}}**\n• XP: **{{currentXP}}**/**{{nextLevelXP}}** ({{progress}}%)\n• Total XP: **{{totalXP}}**",
-      "error": "An error occurred while processing your level request"
+      "error": "An error occurred while processing your level request",
+      "activityBreakdown": "Activity Breakdown",
+      "gamingBreakdown": "Gaming Breakdown",
+      "noData": "No data available"
     },
     "deposit": {
       "name": "deposit",
@@ -263,7 +274,9 @@
       "specialForCategory": "Specially for Eleazar",
       "categories": {
         "eleazar": "Specially for Eleazar"
-      }
+      },
+      "noGamesAvailable": "No games are currently available.",
+      "gameNotFound": "The selected game was not found."
     }
   },
   "music": {
@@ -746,7 +759,8 @@
       "gameSelection": "Game Selection",
       "userAvatarAlt": "User Avatar",
       "specialForCategory": "Specially for Eleazar",
-      "oldGamesCategory": "Our old games"
+      "oldGamesCategory": "Our old games",
+      "highScore": "Record"
     },
     "UpgradesDisplay": {
       "title": "Upgrades",
@@ -767,7 +781,8 @@
     },
     "Level": {
       "title": "Level",
-      "xp": "XP"
+      "xp": "XP",
+      "gameLevel": "Game Level"
     },
     "Crime": {
       "title": "Crime",
@@ -802,6 +817,11 @@
     "Snake": {
       "title": "Snake",
       "score": "Score:"
+    },
+    "Level2": {
+      "season": "Season",
+      "games": "Games",
+      "chat": "Chat"
     }
   },
   "games": {
@@ -814,7 +834,10 @@
       "invalidMove": "Invalid move!",
       "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
       "notYourGame": "This game is not for you!",
-      "error": "There was an error starting the game. Please try again."
+      "error": "There was an error starting the game. Please try again.",
+      "highScore": "High Score: {{score}}",
+      "newHighScore": "🎉 New High Score! Previous: {{score}}",
+      "alreadyRunning": "A 2048 game is already running in this channel!"
     },
     "snake": {
       "name": "Snake",
@@ -825,7 +848,10 @@
       "invalidMove": "Invalid move!",
       "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
       "notYourGame": "This game is not for you!",
-      "error": "There was an error starting the game. Please try again."
+      "error": "There was an error starting the game. Please try again.",
+      "highScore": "High Score: {{score}}",
+      "newHighScore": "🎉 New High Score! Previous: {{score}}",
+      "alreadyRunning": "A snake game is already running in this channel!"
     }
   },
   "options": {
