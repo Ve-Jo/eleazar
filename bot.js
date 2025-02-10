@@ -93,6 +93,12 @@ client.deepinfra = {
 
 await Database.initialize();
 await client.login(process.env.DISCORD_TOKEN);
+
+// Check for season transition every hour
+setInterval(async () => {
+  await Database.checkAndUpdateSeason();
+}, 60 * 60 * 1000);
+
 Database.startPingCollection(client);
 
 // Start preview server if enabled

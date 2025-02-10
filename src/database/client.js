@@ -189,9 +189,131 @@ class Database {
       await this.client.$connect();
       console.log("Database connection initialized successfully");
       await this.initializeModules();
+      await this.initializeSeason();
       return this;
     } catch (error) {
       console.error("Failed to initialize database connection:", error);
+      throw error;
+    }
+  }
+
+  async initializeSeason() {
+    try {
+      const now = new Date();
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const seasonEnds = nextMonth.getTime() - 1;
+
+      const currentSeason = await this.client.seasons.findUnique({
+        where: { id: "current" },
+      });
+
+      if (!currentSeason) {
+        // First time initialization
+        await this.client.seasons.create({
+          data: {
+            id: "current",
+            seasonEnds,
+            seasonNumber: 1,
+          },
+        });
+        console.log("First season initialized");
+        return;
+      }
+
+      // Check if current season has ended
+      if (now.getTime() >= currentSeason.seasonEnds) {
+        await this.client.seasons.update({
+          where: { id: "current" },
+          data: {
+            seasonEnds,
+            seasonNumber: currentSeason.seasonNumber + 1,
+          },
+        });
+
+        // Reset all season XP
+        await this.client.level.updateMany({
+          data: { seasonXp: 0n },
+        });
+
+        console.log(
+          `New season ${
+            currentSeason.seasonNumber + 1
+          } started, reset all season XP`
+        );
+      }
+
+      console.log("Season check completed");
+    } catch (error) {
+      console.error("Error initializing season:", error);
+      throw error;
+    }
+  }
+
+  async checkAndUpdateSeason() {
+    try {
+      const now = new Date();
+      const currentSeason = await this.client.seasons.findUnique({
+        where: { id: "current" },
+      });
+
+      if (!currentSeason || now.getTime() >= currentSeason.seasonEnds) {
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const newSeasonEnds = nextMonth.getTime() - 1;
+
+        await this.client.seasons.upsert({
+          where: { id: "current" },
+          create: {
+            id: "current",
+            seasonEnds: newSeasonEnds,
+            seasonNumber: 1,
+          },
+          update: {
+            seasonEnds: newSeasonEnds,
+            seasonNumber: { increment: 1 },
+          },
+        });
+
+        // Reset all season XP
+        await this.client.level.updateMany({
+          data: { seasonXp: 0n },
+        });
+
+        console.log("New season started, reset all season XP");
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Error checking season:", error);
+      throw error;
+    }
+  }
+
+  async getCurrentSeason() {
+    try {
+      const season = await this.client.seasons.findUnique({
+        where: { id: "current" },
+      });
+
+      if (!season) {
+        // Initialize first season if not exists
+        const nextMonth = new Date(
+          new Date().getFullYear(),
+          new Date().getMonth() + 1,
+          1
+        );
+        return await this.client.seasons.create({
+          data: {
+            id: "current",
+            seasonEnds: nextMonth.getTime() - 1,
+            seasonNumber: 1,
+          },
+        });
+      }
+
+      return season;
+    } catch (error) {
+      console.error("Error getting current season:", error);
       throw error;
     }
   }
@@ -225,6 +347,7 @@ class Database {
       );
 
       // Import and initialize each module
+      // Each module includes a methods for database, for each database table (economy, level, music, guild_user, counter, cooldowns, upgrades, etc in the same folder)
       for (const file of moduleFiles) {
         const module = await import(`./${file}`);
         this.getAllMethods(module.default).forEach((method) => {
