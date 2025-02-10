@@ -27,7 +27,7 @@ function log(...args) {
 
 function cleanup(cleanupFn) {
   if (cleanupFn) cleanupFn();
-  
+
   // Clear any tracked requests
   workerPool.activeRequests.clear();
 
@@ -357,7 +357,10 @@ export async function generateRemoteImage(
         type: "generate",
         id: requestId,
         componentName,
-        props: sanitizedProps,
+        props: {
+          ...sanitizedProps,
+          _timestamp: Date.now(), // Add timestamp to ensure fresh render
+        },
         config,
         scaling,
       };
