@@ -152,9 +152,10 @@ model MusicPlayer {
   @@map("music_players")
 }
 
-model GlobalSettings {
-  id          String @id @default("singleton")
-  seasonStart BigInt @default(0) @map("season_start")
+model Seasons {
+  id          String @id @default("current")
+  seasonEnds  BigInt @map("season_ends")
+  seasonNumber Int    @default(1) @map("season_number")
   
-  @@map("global_settings")
+  @@map("seasons")
 }
