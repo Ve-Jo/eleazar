@@ -173,15 +173,20 @@ export default {
   },
 
   calculateInterest(principal, annualRate, timeMs) {
-    // Convert time to years (milliseconds to years)
-    const timeInYears = timeMs / (365 * 24 * 60 * 60 * 1000);
+    // Convert milliseconds to years with proper precision
+    const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000; // milliseconds in a year
+    const timeInYears = Number((timeMs / MS_PER_YEAR).toFixed(10)); // limit decimal precision
+    const rate = annualRate / 100;
 
-    // Calculate interest using simple annual percentage
-    // If annual rate is 300%, after one year balance should be 4x initial (original + 300%)
-    const multiplier = 1 + (annualRate / 100) * timeInYears;
-    const finalAmount = principal * multiplier;
+    // Calculate simple interest for the elapsed time period
+    // I = P * r * t where:
+    // P = principal
+    // r = interest rate (as decimal)
+    // t = time in years
+    const interest = Number((principal * rate * timeInYears).toFixed(10));
 
-    return finalAmount.toFixed(5);
+    // Return principal plus earned interest with 5 decimal places
+    return (principal + interest).toFixed(5);
   },
 
   async calculateBankBalance(user) {
@@ -202,7 +207,12 @@ export default {
 
       if (!currentBank) return "0.00000";
 
-      // If user is inactive for more than 2 days
+      // Just return current balance if bank is not active
+      if (!currentBank.bankStartTime || !currentBank.bankRate) {
+        return currentBank.bankBalance;
+      }
+
+      // If user is inactive for more than 2 days, calculate final balance and reset bank
       if (inactiveTime > BANK_MAX_INACTIVE_MS) {
         const formattedBalance = this.calculateInterest(
           parseFloat(currentBank.bankBalance),
@@ -228,28 +238,13 @@ export default {
         return formattedBalance;
       }
 
-      // For active users, calculate interest for the actual elapsed time
+      // For active users, display current balance with projected interest
       const timeElapsed = currentTime - Number(currentBank.bankStartTime);
-      const formattedBalance = this.calculateInterest(
+      return this.calculateInterest(
         parseFloat(currentBank.bankBalance),
         parseFloat(currentBank.bankRate),
         timeElapsed
       );
-
-      // Update the bank balance while keeping the rate and start time
-      await tx.economy.update({
-        where: {
-          userId_guildId: {
-            userId: user.id,
-            guildId: user.guildId,
-          },
-        },
-        data: {
-          bankBalance: formattedBalance,
-        },
-      });
-
-      return formattedBalance;
     });
   },
 };

@@ -157,15 +157,20 @@ const Balance = (props) => {
                         fontSize: "14px",
                         opacity: "0.6",
                         color: "rgba(255, 255, 255, 1)",
-                        marginBottom: "-5px",
                         display: "flex",
                       }}
                     >
                       ≈
-                      {(
-                        database.economy.bankBalance *
-                        (database.economy.bankRate / 100 / 8760)
-                      ).toFixed(3)}
+                      {(() => {
+                        const MS_PER_HOUR = 60 * 60 * 1000; // milliseconds in an hour
+                        const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000; // milliseconds in a year
+                        const hourlyRate =
+                          (database.economy.bankRate / 100) *
+                          (MS_PER_HOUR / MS_PER_YEAR);
+                        return (
+                          database.economy.bankBalance * hourlyRate
+                        ).toFixed(3);
+                      })()}
                       /h
                     </span>
                   ) : null}
