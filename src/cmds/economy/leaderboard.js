@@ -35,6 +35,7 @@ export default {
             { name: "Bank Balance", value: "bank" },
             { name: "Level", value: "level" },
             { name: "Games", value: "games" },
+            { name: "Season", value: "season" }, // Add new season category
           ],
         }),
       ],
@@ -53,34 +54,66 @@ export default {
       let highlightedPosition = null;
 
       const generateLeaderboardMessage = async () => {
-        // Get all users in the guild with their data
-        const guildUsers = await Database.client.user.findMany({
-          where: { guildId: guild.id },
-          include: {
-            economy: true,
-            stats: true,
-            level: true,
-          },
-        });
+        // Get users based on category
+        let guildUsers;
+
+        if (category === "season") {
+          // For season category, fetch global users ordered by seasonXp
+          guildUsers = await Database.client.level.findMany({
+            orderBy: {
+              seasonXp: "desc",
+            },
+            take: 250, // Limit to reasonable amount
+            include: {
+              user: true,
+            },
+          });
+
+          // Transform the data to match the expected structure
+          guildUsers = guildUsers.map((level) => ({
+            id: level.user.id,
+            seasonXp: level.seasonXp,
+            guildId: level.guildId,
+          }));
+        } else {
+          // For guild-specific categories
+          guildUsers = await Database.client.user.findMany({
+            where: { guildId: guild.id },
+            include: {
+              economy: true,
+              stats: true,
+              Level: true,
+            },
+          });
+        }
 
         // Sort users based on category
         const sortedUsers = guildUsers
           .map((userData) => {
             let sortValue = 0;
+            let displayValue = 0; // New variable for display value
             switch (category) {
+              case "season":
+                sortValue = Number(userData.seasonXp || 0);
+                displayValue = sortValue;
+                break;
               case "total":
                 sortValue =
                   Number(userData.economy?.balance || 0) +
                   Number(userData.economy?.bankBalance || 0);
+                displayValue = sortValue;
                 break;
               case "balance":
                 sortValue = Number(userData.economy?.balance || 0);
+                displayValue = sortValue;
                 break;
               case "bank":
                 sortValue = Number(userData.economy?.bankBalance || 0);
+                displayValue = sortValue;
                 break;
               case "level":
-                sortValue = Number(userData.level?.xp || 0);
+                sortValue = Number(userData.Level?.xp || 0);
+                displayValue = Database.calculateLevel(sortValue).level;
                 break;
               case "games":
                 const gameRecords = userData.stats?.gameRecords
@@ -90,9 +123,10 @@ export default {
                   gameRecords["2048"]?.highScore || 0,
                   gameRecords.snake?.highScore || 0
                 );
+                displayValue = sortValue;
                 break;
             }
-            return { ...userData, sortValue };
+            return { ...userData, sortValue, displayValue };
           })
           .sort((a, b) => b.sortValue - a.sortValue);
 
@@ -164,13 +198,24 @@ export default {
               position: startIndex + index + 1,
               name: user.name,
               avatarURL: user.avatarURL,
-              value: user.sortValue,
+              value: user.displayValue,
+              // Include all relevant data for each user
               balance: Number(user.economy?.balance || 0),
               bank: Number(user.economy?.bankBalance || 0),
-              level: Database.calculateLevel(Number(user.level?.xp || 0)).level,
               totalBalance:
                 Number(user.economy?.balance || 0) +
                 Number(user.economy?.bankBalance || 0),
+              xpStats: user.stats?.xpStats || { chat: 0, voice: 0 },
+              gameRecords: user.stats?.gameRecords || {
+                2048: { highScore: 0 },
+                snake: { highScore: 0 },
+              },
+              seasonStats: user.Level
+                ? {
+                    rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
+                    totalXP: Number(user.Level.seasonXp || 0),
+                  }
+                : null,
             })),
             currentPage: page + 1,
             totalPages,
@@ -251,6 +296,11 @@ export default {
                 label: i18n.__("economy.leaderboard.categories.games"),
                 value: "games",
                 default: category === "games",
+              },
+              {
+                label: i18n.__("economy.leaderboard.categories.season"),
+                value: "season",
+                default: category === "season",
               },
             ]);
 
@@ -379,6 +429,11 @@ export default {
         en: "Games",
         ru: "Игры",
         uk: "Ігри",
+      },
+      season: {
+        en: "Season XP",
+        ru: "Сезонный опыт",
+        uk: "Сезонний досвід",
       },
     },
     selectedUser: {
