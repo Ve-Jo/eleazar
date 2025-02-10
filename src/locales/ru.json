@@ -123,7 +123,8 @@
         "balance": "Баланс",
         "bank": "Банковский баланс",
         "level": "Уровень",
-        "games": "Игры"
+        "games": "Игры",
+        "season": "Сезонный опыт"
       }
     },
     "level": {
@@ -781,7 +782,31 @@
       "title": "Таблица лидеров",
       "currentPage": "Текущая страница",
       "sortBy": "Сортировка",
-      "total": "Всего"
+      "total": "Всего",
+      "categories": {
+        "total": "Общий баланс",
+        "balance": "Баланс",
+        "bank": "Банковский баланс",
+        "level": "Уровень",
+        "games": "Игры",
+        "season": "Сезонный опыт"
+      },
+      "position": "Позиция",
+      "chatXP": "Опыт чата",
+      "voiceXP": "Голосовой опыт",
+      "seasonRank": "Ранг сезона",
+      "totalSeasonXP": "Всего опыта за сезон",
+      "highScore": "Рекорд",
+      "totalExperience": "Всего опыта",
+      "gamingExperience": "Игровой опыт",
+      "gameScore": "Игровой счет",
+      "snakeScore": "Счет в Snake",
+      "_2048Score": "Счет в 2048",
+      "voiceTime": "Время в голосе",
+      "messageCount": "Сообщений",
+      "commandCount": "Команд использовано",
+      "totalStats": "Общая статистика",
+      "rank": "Ранг"
     },
     "Cooldown": {
       "title": "Перезарядка",

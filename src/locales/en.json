@@ -123,7 +123,8 @@
         "balance": "Balance",
         "bank": "Bank Balance",
         "level": "Level",
-        "games": "Games"
+        "games": "Games",
+        "season": "Season XP"
       }
     },
     "level": {
@@ -795,7 +796,31 @@
       "title": "Leaderboard",
       "currentPage": "Current page",
       "sortBy": "Sort by",
-      "total": "Total"
+      "total": "Total",
+      "categories": {
+        "total": "Total Balance",
+        "balance": "Balance",
+        "bank": "Bank Balance",
+        "level": "Level",
+        "games": "Games",
+        "season": "Season XP"
+      },
+      "position": "Position",
+      "chatXP": "Chat XP",
+      "voiceXP": "Voice XP",
+      "seasonRank": "Season Rank",
+      "totalSeasonXP": "Total Season XP",
+      "highScore": "High Score",
+      "totalExperience": "Total Experience",
+      "gamingExperience": "Gaming Experience",
+      "gameScore": "Game Score",
+      "snakeScore": "Snake Score",
+      "_2048Score": "2048 Score",
+      "voiceTime": "Voice Time",
+      "messageCount": "Messages",
+      "commandCount": "Commands Used",
+      "totalStats": "Total Stats",
+      "rank": "Rank"
     },
     "Cooldown": {
       "title": "Cooldown",
