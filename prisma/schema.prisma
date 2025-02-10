@@ -79,11 +79,13 @@ model Statistics {
   totalEarned  Decimal @default(0) @map("total_earned") @db.Decimal(20, 5)
   messageCount Int     @default(0) @map("message_count")
   commandCount Int     @default(0) @map("command_count")
+  voiceTime    BigInt  @default(0) @map("voice_time") // Added field for voice time tracking in milliseconds
   lastUpdated  BigInt  @default(0) @map("last_updated")
   gameRecords  Json    @default("{\"2048\": {\"highScore\": 0}, \"snake\": {\"highScore\": 0}}") @map("game_records")
   // Detailed XP tracking
   xpStats      Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
   gameXpStats  Json    @default("{\"snake\": 0, \"2048\": 0}") @map("game_xp_stats")
+  interactionStats Json @default("{\"commands\":{}, \"buttons\":{}, \"selectMenus\":{}, \"modals\":{}}") @map("interaction_stats")
 
   // Relations
   user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)

@@ -147,21 +147,63 @@ export default {
           select: { settings: true },
         });
 
-        const xpPerMessage = guildSettings?.settings?.xp_per_message || 15; // Default XP per message
+        const xpPerMessage = guildSettings?.settings?.xp_per_message || 15;
+
+        // Get current XP stats
+        const stats = await Database.client.statistics.findUnique({
+          where: {
+            userId_guildId: { userId: author.id, guildId: guild.id },
+          },
+          select: { xpStats: true },
+        });
+
+        let xpStats = stats?.xpStats || {};
+        if (typeof xpStats === "string") {
+          xpStats = JSON.parse(xpStats);
+        }
+
+        // Initialize or update channel XP tracking
+        if (!xpStats.channels) {
+          xpStats.channels = {};
+        }
+        if (!xpStats.channels[channel.id]) {
+          xpStats.channels[channel.id] = {
+            name: channel.name,
+            chat: 0,
+            voice: 0,
+          };
+        }
+
+        // Update XP stats
+        xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
+        xpStats.channels[channel.id].chat += xpPerMessage;
 
         // Add XP with specific type for chat messages
+        await Database.client.statistics.upsert({
+          where: {
+            userId_guildId: { userId: author.id, guildId: guild.id },
+          },
+          create: {
+            userId: author.id,
+            guildId: guild.id,
+            xpStats,
+            user: {
+              connect: {
+                guildId_id: { guildId: guild.id, id: author.id },
+              },
+            },
+          },
+          update: {
+            xpStats,
+          },
+        });
+
         await Database.addXP(guild.id, author.id, xpPerMessage, "chat");
-
-        // Update message cooldown
         await Database.updateCooldown(guild.id, author.id, "message");
-
-        // Increment message count in statistics
         await Database.incrementMessageCount(guild.id, author.id);
       }
     } catch (error) {
       console.error("Error handling XP gain:", error);
-      // Don't throw the error to prevent the bot from crashing
-      // Just log it and continue
     }
   },
 };
