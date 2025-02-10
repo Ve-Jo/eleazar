@@ -47,7 +47,7 @@ export default {
       const userId = targetUser.id;
 
       // Get raw level data directly from the database to ensure we have accurate seasonXp
-      const [levelData, globalSettings] = await Promise.all([
+      const [levelData, currentSeason] = await Promise.all([
         Database.client.level.findUnique({
           where: {
             userId_guildId: { userId, guildId },
@@ -58,9 +58,7 @@ export default {
             seasonXp: true,
           },
         }),
-        Database.client.globalSettings.findUnique({
-          where: { id: "singleton" },
-        }),
+        Database.getCurrentSeason(),
       ]);
 
       if (!levelData) {
@@ -76,20 +74,6 @@ export default {
         gaming: Database.calculateLevel(levelData.gameXp),
         season: Database.calculateLevel(levelData.seasonXp),
       };
-
-      // Get season timing data
-      const seasonStart = new Date(
-        Number(globalSettings?.seasonStart || Date.now())
-      );
-      const seasonEnd = new Date(
-        seasonStart.getFullYear(),
-        seasonStart.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999
-      ).getTime();
 
       const pngBuffer = await generateRemoteImage(
         "Level2",
@@ -124,9 +108,9 @@ export default {
           gameCurrentXP: calculatedLevels.gaming.currentXP,
           gameRequiredXP: calculatedLevels.gaming.requiredXP,
           // Season level data
-          seasonXP: Number(levelData.seasonXp), // Convert BigInt to Number
-          seasonEnds: seasonEnd,
-          seasonStart: Number(globalSettings?.seasonStart || Date.now()),
+          seasonXP: Number(levelData.seasonXp),
+          seasonEnds: currentSeason.seasonEnds,
+          seasonNumber: currentSeason.seasonNumber,
         },
         { width: 400, height: 254 },
         { image: 2, emoji: 1 }

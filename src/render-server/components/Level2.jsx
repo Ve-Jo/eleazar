@@ -13,6 +13,23 @@ const StyledRectangle = ({
   progressBarMaxXP = 100,
   roundness = 0,
 }) => {
+  // Format the timer text to ensure it's always showing days/hours left
+  const formatTimer = (timeStr) => {
+    if (!timeStr) return "";
+    const parts = timeStr.split(":");
+    if (parts.length === 2) {
+      // if it's just hours:minutes
+      return parts.join(":");
+    }
+    // Convert days to a more readable format
+    const days = Math.floor(parseInt(parts[0]) / 24);
+    const hours = parseInt(parts[0]) % 24;
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    }
+    return `${hours}h ${parts[1]}m`;
+  };
+
   // Calculate progress as a percentage between 0-100
   const progress = Math.min((progressBarXP / progressBarMaxXP) * 100, 100);
   const calculated_percentage = (400 / 100) * progress;
@@ -108,7 +125,7 @@ const StyledRectangle = ({
           right: "5px",
           display: "flex",
           bottom: "-3px",
-          fontSize: "62px",
+          fontSize: "57px",
           ...primaryTextStyles,
         }}
       >
@@ -125,7 +142,7 @@ const StyledRectangle = ({
             ...timerTextStyles,
           }}
         >
-          {timerText}
+          {formatTimer(timerText)}
         </div>
       )}
       {progressBar && (
@@ -170,8 +187,20 @@ const Level2 = (props) => {
     gameLevel = 1,
     seasonXP = 25,
     seasonEnds = Date.now() + 1000 * 60 * 60 * 24 * 7,
+    seasonNumber = 1,
     i18n,
   } = props;
+
+  // Calculate remaining time more precisely
+  const timeRemaining = Math.max(0, seasonEnds - Date.now());
+  const formattedTime = prettyMilliseconds(timeRemaining, {
+    colonNotation: true,
+    compact: false,
+    formatSubMilliseconds: false,
+    separateMilliseconds: false,
+    secondsDecimalDigits: 0,
+  });
+
   const translations = Object.entries(Level2.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
@@ -200,11 +229,9 @@ const Level2 = (props) => {
 
       <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
         <StyledRectangle
-          primaryText={translations.season}
+          primaryText={`${translations.season} ${seasonNumber}`}
           secondaryText={`${seasonXP}XP`}
-          timerText={prettyMilliseconds(seasonEnds - Date.now(), {
-            colonNotation: true,
-          })}
+          timerText={formattedTime}
           roundness="10px 10px 0 0"
           color="#8732a8"
         />

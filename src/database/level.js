@@ -1,29 +1,8 @@
 export default {
   async addXP(guildId, userId, amount, type = "chat") {
     return await this.client.$transaction(async (prisma) => {
-      // Get or create global settings
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      const newSeasonStart = new Date(currentYear, currentMonth, 1).getTime();
-
-      const globalSettings = await prisma.globalSettings.upsert({
-        where: { id: "singleton" },
-        create: { id: "singleton", seasonStart: newSeasonStart },
-        update: {},
-      });
-
-      // Check if we need to reset season
-      if (globalSettings.seasonStart < newSeasonStart) {
-        await prisma.globalSettings.update({
-          where: { id: "singleton" },
-          data: { seasonStart: newSeasonStart },
-        });
-
-        // Reset all season XP
-        await prisma.level.updateMany({
-          data: { seasonXp: 0n },
-        });
-      }
+      // Check and update season if needed
+      await this.checkAndUpdateSeason();
 
       // Update XP and season XP for the user
       const updatedLevel = await prisma.level.upsert({
@@ -77,6 +56,9 @@ export default {
   async addGameXP(guildId, userId, amount, gameType) {
     // Start a transaction to update both Level and Statistics
     return await this.client.$transaction(async (prisma) => {
+      // Check and update season if needed
+      await this.checkAndUpdateSeason();
+
       // Update total game XP and season XP in Level model
       const level = await prisma.level.upsert({
         where: {
