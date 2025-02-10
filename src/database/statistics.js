@@ -108,4 +108,42 @@ export default {
       return false;
     }
   },
+
+  async getInteractionStats(guildId, userId) {
+    try {
+      const stats = await this.client.statistics.findUnique({
+        where: {
+          userId_guildId: { userId, guildId },
+        },
+        select: { interactionStats: true },
+      });
+
+      if (!stats) return null;
+
+      let interactionStats = stats.interactionStats;
+      if (typeof interactionStats === "string") {
+        interactionStats = JSON.parse(interactionStats);
+      }
+
+      return {
+        commands: interactionStats.commands || {},
+        buttons: interactionStats.buttons || {},
+        selectMenus: interactionStats.selectMenus || {},
+        modals: interactionStats.modals || {},
+      };
+    } catch (error) {
+      console.error("Error getting interaction stats:", error);
+      return null;
+    }
+  },
+
+  async getMostUsedInteractions(guildId, userId, type, limit = 5) {
+    const stats = await this.getInteractionStats(guildId, userId);
+    if (!stats || !stats[type]) return [];
+
+    return Object.entries(stats[type])
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, limit)
+      .map(([name, count]) => ({ name, count }));
+  },
 };
