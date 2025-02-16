@@ -142,7 +142,8 @@
       "error": "Произошла ошибка при обработке запроса уровня",
       "activityBreakdown": "Детали активности",
       "gamingBreakdown": "Детали игр",
-      "noData": "Нет данных"
+      "noData": "Нет данных",
+      "voiceTime": "Сейчас в голосовом: {{hours}}ч {{minutes}}м | Заработано: {{xp}} XP ({{rate}} XP/мин)"
     },
     "deposit": {
       "name": "внести",

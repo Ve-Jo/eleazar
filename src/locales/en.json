@@ -142,7 +142,8 @@
       "error": "An error occurred while processing your level request",
       "activityBreakdown": "Activity Breakdown",
       "gamingBreakdown": "Gaming Breakdown",
-      "noData": "No data available"
+      "noData": "No data available",
+      "voiceTime": "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)"
     },
     "deposit": {
       "name": "deposit",

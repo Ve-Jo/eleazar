@@ -142,7 +142,8 @@
       "error": "Сталася помилка під час обробки запиту рівня",
       "activityBreakdown": "Деталі активності",
       "gamingBreakdown": "Деталі ігор",
-      "noData": "Немає даних"
+      "noData": "Немає даних",
+      "voiceTime": "Зараз в голосовому: {{hours}}г {{minutes}}х | Зароблено: {{xp}} XP ({{rate}} XP/хв)"
     },
     "deposit": {
       "name": "внести",
