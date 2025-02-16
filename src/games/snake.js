@@ -1,6 +1,6 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import i18n from "../utils/i18n.js";
-import { generateRemoteImage } from "../utils/remoteImageGenerator.js";
+import { generateImage } from "../utils/imageGenerator.js";
 import Database from "../database/client.js";
 
 // Game state management for multi-user synchronization
@@ -102,7 +102,7 @@ export default {
     // Helper function to generate game board image
     const generateGameBoard = async (state, userLocale, userAvatarURL) => {
       updateGridState(state);
-      return generateRemoteImage(
+      return generateImage(
         "Snake",
         {
           grid: state.grid,
@@ -115,7 +115,6 @@ export default {
             },
           },
         },
-        { width: 400, height: 490 },
         { image: 1, emoji: 1 }
       );
     };
@@ -150,7 +149,7 @@ export default {
       );
       const currentHighScore = gameRecords?.snake?.highScore || 0;
 
-      const { buffer } = await generateGameBoard(
+      const buffer = await generateGameBoard(
         initialState.state,
         interaction.locale,
         interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
@@ -185,7 +184,7 @@ export default {
         inactivityTimeout = setTimeout(async () => {
           if (!initialState.state.gameOver) {
             initialState.state.earning = calculateEarning(initialState.state);
-            const { buffer: finalBoard } = await generateGameBoard(
+            const finalBoard = await generateGameBoard(
               initialState.state,
               interaction.locale,
               interaction.user.displayAvatarURL({
@@ -345,7 +344,7 @@ export default {
             : `${i18n.__("games.snake.invalidMove")}`;
           messageComponents = [row];
 
-          const { buffer: newBoard } = await generateGameBoard(
+          const newBoard = await generateGameBoard(
             state,
             interaction.locale,
             interaction.user.displayAvatarURL({
@@ -360,7 +359,7 @@ export default {
 
           try {
             // Generate final game over board first
-            const { buffer: gameOverBoard } = await generateGameBoard(
+            const gameOverBoard = await generateGameBoard(
               state,
               interaction.locale,
               interaction.user.displayAvatarURL({
