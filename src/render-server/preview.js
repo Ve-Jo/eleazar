@@ -1,5 +1,5 @@
 import express from "express";
-import { generateImage } from "../utils/render/imageGenerator.js";
+import { generateImage } from "../utils/imageGenerator.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
@@ -503,7 +503,7 @@ app.get("/:componentName/image", async (req, res) => {
       Component,
       createMockData(lang, Component),
       {},
-      { image: 1, emoji: 1 }
+      { image: 2, emoji: 2 }
     );
 
     if (!buffer || !Buffer.isBuffer(buffer)) {
