@@ -92,7 +92,96 @@ client.deepinfra = {
 };
 
 await Database.initialize();
+
+// Check and reinitialize voice sessions for existing voice users
+async function initializeVoiceSessions() {
+  console.log("Checking existing voice sessions...");
+
+  try {
+    // First, get and clean up all existing sessions
+    const existingSessions = await Database.client.voiceSession.findMany();
+    console.log(
+      `[Voice Init] Found ${existingSessions.length} existing sessions`
+    );
+
+    for (const session of existingSessions) {
+      const guild = client.guilds.cache.get(session.guildId);
+      if (!guild) {
+        console.log(
+          `[Voice Init] Removing session for guild ${session.guildId} (guild not found)`
+        );
+        await Database.removeVoiceSession(session.guildId, session.userId);
+        continue;
+      }
+
+      const member = await guild.members
+        .fetch(session.userId)
+        .catch(() => null);
+      if (!member || !member.voice.channelId) {
+        console.log(
+          `[Voice Init] User ${session.userId} not in voice, processing final XP`
+        );
+        // Calculate and add XP for interrupted session
+        await Database.calculateAndAddVoiceXP(
+          session.guildId,
+          session.userId,
+          session
+        );
+        await Database.removeVoiceSession(session.guildId, session.userId);
+        continue;
+      }
+
+      // Check if user is in the same channel as recorded
+      if (member.voice.channelId !== session.channelId) {
+        console.log(
+          `[Voice Init] User ${session.userId} in different channel, updating session`
+        );
+        await Database.removeVoiceSession(session.guildId, session.userId);
+      }
+    }
+
+    // Now create new sessions for current voice users
+    for (const [guildId, guild] of client.guilds.cache) {
+      const voiceChannels = guild.channels.cache.filter(
+        (channel) => channel.type === 2
+      );
+
+      for (const [channelId, channel] of voiceChannels) {
+        const nonBotMembers = channel.members.filter(
+          (member) => !member.user.bot
+        );
+
+        if (nonBotMembers.size >= 1) {
+          console.log(
+            `[Voice Init] Found ${nonBotMembers.size} users in ${channel.name} (${guild.name})`
+          );
+
+          for (const [memberId, member] of nonBotMembers) {
+            await Database.createVoiceSession(
+              guildId,
+              memberId,
+              channelId,
+              Date.now()
+            );
+            console.log(
+              `[Voice Init] Created/Updated session for ${member.user.tag}`
+            );
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(
+      "[Voice Init] Error during voice session initialization:",
+      error
+    );
+  }
+
+  console.log("Voice session initialization complete");
+}
+
 await client.login(process.env.DISCORD_TOKEN);
+await initializeVoiceSessions();
 
 // Check for season transition every hour
 setInterval(async () => {

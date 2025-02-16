@@ -8,7 +8,7 @@ import {
   ApplicationCommandOptionType,
 } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -46,20 +46,26 @@ export default {
       const guildId = interaction.guild.id;
       const userId = targetUser.id;
 
-      // Get raw level data directly from the database to ensure we have accurate seasonXp
-      const [levelData, currentSeason] = await Promise.all([
-        Database.client.level.findUnique({
-          where: {
-            userId_guildId: { userId, guildId },
-          },
-          select: {
-            xp: true,
-            gameXp: true,
-            seasonXp: true,
-          },
-        }),
-        Database.getCurrentSeason(),
-      ]);
+      // Get all necessary data in parallel
+      const [levelData, currentSeason, voiceSession, guildSettings] =
+        await Promise.all([
+          Database.client.level.findUnique({
+            where: {
+              userId_guildId: { userId, guildId },
+            },
+            select: {
+              xp: true,
+              gameXp: true,
+              seasonXp: true,
+            },
+          }),
+          Database.getCurrentSeason(),
+          Database.getVoiceSession(guildId, userId),
+          Database.client.guild.findUnique({
+            where: { id: guildId },
+            select: { settings: true },
+          }),
+        ]);
 
       if (!levelData) {
         return interaction.editReply({
@@ -68,14 +74,37 @@ export default {
         });
       }
 
-      // Calculate all level types including season
+      // Calculate current voice XP if user is in voice
+      let currentVoiceXP = 0;
+      let voiceTimeString = "";
+      if (voiceSession) {
+        const timeSpent = Date.now() - Number(voiceSession.joinedAt);
+        const minutes = timeSpent / 60000;
+        const xpPerMinute = guildSettings?.settings?.xp_per_voice_minute || 1;
+        currentVoiceXP = Math.floor(minutes * xpPerMinute);
+
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = Math.floor(minutes % 60);
+        voiceTimeString = i18n.__("economy.level.voiceTime", {
+          hours,
+          minutes: remainingMinutes,
+          xp: currentVoiceXP,
+          rate: xpPerMinute,
+        });
+      }
+
+      // Calculate all level types including season and potential voice XP
       const calculatedLevels = {
-        activity: Database.calculateLevel(levelData.xp),
+        activity: Database.calculateLevel(
+          levelData.xp + BigInt(currentVoiceXP)
+        ),
         gaming: Database.calculateLevel(levelData.gameXp),
-        season: Database.calculateLevel(levelData.seasonXp),
+        season: Database.calculateLevel(
+          levelData.seasonXp + BigInt(currentVoiceXP)
+        ),
       };
 
-      const pngBuffer = await generateRemoteImage(
+      const buffer = await generateImage(
         "Level2",
         {
           interaction: {
@@ -99,7 +128,7 @@ export default {
           },
           locale: interaction.locale,
           i18n,
-          // Activity level data
+          // Activity level data with current voice XP
           level: calculatedLevels.activity.level,
           currentXP: calculatedLevels.activity.currentXP,
           requiredXP: calculatedLevels.activity.requiredXP,
@@ -107,17 +136,20 @@ export default {
           gameLevel: calculatedLevels.gaming.level,
           gameCurrentXP: calculatedLevels.gaming.currentXP,
           gameRequiredXP: calculatedLevels.gaming.requiredXP,
-          // Season level data
-          seasonXP: Number(levelData.seasonXp),
+          // Season level data with current voice XP
+          seasonXP: Number(levelData.seasonXp) + currentVoiceXP,
           seasonEnds: currentSeason.seasonEnds,
           seasonNumber: currentSeason.seasonNumber,
         },
-        { width: 400, height: 254 },
         { image: 2, emoji: 1 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-        name: `level.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+      const attachment = new AttachmentBuilder(buffer, {
+        name: `level.${
+          buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46
+            ? "gif"
+            : "png"
+        }`,
       });
 
       const embed = new EmbedBuilder()
@@ -128,11 +160,17 @@ export default {
         })
         .setImage(
           `attachment://level.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`
         );
 
-      // Remove the detailed XP breakdown fields as they're now shown in the Level2 component
+      // Add voice XP info if user is in voice
+      if (voiceSession) {
+        embed.setFooter({ text: voiceTimeString });
+      }
+
       embed.setTimestamp();
 
       await interaction.editReply({
@@ -181,6 +219,11 @@ export default {
       en: "An error occurred while processing your level request",
       ru: "Произошла ошибка при обработке запроса уровня",
       uk: "Сталася помилка під час обробки запиту рівня",
+    },
+    voiceTime: {
+      en: "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
+      ru: "Сейчас в голосовом: {{hours}}ч {{minutes}}м | Заработано: {{xp}} XP ({{rate}} XP/мин)",
+      uk: "Зараз в голосовому: {{hours}}г {{minutes}}х | Зароблено: {{xp}} XP ({{rate}} XP/хв)",
     },
   },
 };

@@ -28,6 +28,7 @@ model User {
   cooldowns Cooldown?
   upgrades  Upgrade[]
   Level     Level?
+  VoiceSession VoiceSession?
 
   @@unique([guildId, id])
   @@index([guildId])
@@ -160,4 +161,18 @@ model Seasons {
   seasonNumber Int    @default(1) @map("season_number")
   
   @@map("seasons")
+}
+
+model VoiceSession {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  guildId         String   @map("guild_id")
+  channelId       String   @map("channel_id")
+  joinedAt        BigInt   @map("joined_at")
+  user            User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+
+  @@unique([userId, guildId])
+  @@index([channelId])
+  @@index([joinedAt])
+  @@map("voice_sessions")
 }
