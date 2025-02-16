@@ -19,8 +19,8 @@ export default {
         try {
           await message.channel.sendTyping();
           const transcription = await transcribeAudio(
-            message.client,
-            audioAttachment.url
+            audioAttachment.url,
+            message.client
           );
 
           if (transcription.length > 2000) {
@@ -30,7 +30,7 @@ export default {
             }
           } else {
             await message.reply(
-              `Transcription of voice message:\n\n${transcription.text}\n\n[DEBUG: ${transcription.provider}, ${transcription.language}]`
+              `Transcription of voice message:\n\n${transcription}`
             );
           }
         } catch (error) {
@@ -175,8 +175,8 @@ export default {
         }
 
         // Update XP stats
-        xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
         xpStats.channels[channel.id].chat += xpPerMessage;
+        xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
 
         // Add XP with specific type for chat messages
         await Database.client.statistics.upsert({
@@ -184,17 +184,31 @@ export default {
             userId_guildId: { userId: author.id, guildId: guild.id },
           },
           create: {
-            userId: author.id,
-            guildId: guild.id,
-            xpStats,
             user: {
-              connect: {
-                guildId_id: { guildId: guild.id, id: author.id },
+              connectOrCreate: {
+                where: {
+                  guildId_id: { guildId: guild.id, id: author.id },
+                },
+                create: {
+                  id: author.id,
+                  guildId: guild.id,
+                  guild: {
+                    connectOrCreate: {
+                      where: { id: guild.id },
+                      create: { id: guild.id },
+                    },
+                  },
+                },
               },
             },
+            xpStats,
+            messageCount: 1,
+            lastUpdated: Date.now(),
           },
           update: {
             xpStats,
+            messageCount: { increment: 1 },
+            lastUpdated: Date.now(),
           },
         });
 

@@ -42,14 +42,20 @@ async function updateInteractionStats(
         userId_guildId: { userId, guildId },
       },
       create: {
-        userId,
-        guildId,
-        interactionStats,
         user: {
           connect: {
             guildId_id: { guildId, id: userId },
           },
         },
+        interactionStats,
+        totalEarned: 0,
+        messageCount: 0,
+        commandCount: 0,
+        voiceTime: 0n,
+        lastUpdated: BigInt(Date.now()),
+        gameRecords: { 2048: { highScore: 0 }, snake: { highScore: 0 } },
+        xpStats: { chat: 0, voice: 0 },
+        gameXpStats: { snake: 0, 2048: 0 },
       },
       update: {
         interactionStats,
