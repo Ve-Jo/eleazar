@@ -12,7 +12,7 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -169,64 +169,64 @@ export default {
         const validUsers = usersWithNames.filter((user) => user !== null);
 
         // Generate leaderboard image
-        const pngBuffer = await generateRemoteImage(
-          "Leaderboard",
-          {
-            interaction: {
-              user: {
-                id: interaction.user.id,
-                username: interaction.user.username,
-                displayName: interaction.user.displayName,
-                avatarURL: interaction.user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              guild: {
-                id: guild.id,
-                name: guild.name,
-                iconURL: guild.iconURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
+        const pngBuffer = await generateImage("Leaderboard", {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
             },
-            locale: interaction.locale,
-            category,
-            users: validUsers.map((user, index) => ({
-              id: user.id,
-              position: startIndex + index + 1,
-              name: user.name,
-              avatarURL: user.avatarURL,
-              value: user.displayValue,
-              // Include all relevant data for each user
-              balance: Number(user.economy?.balance || 0),
-              bank: Number(user.economy?.bankBalance || 0),
-              totalBalance:
-                Number(user.economy?.balance || 0) +
-                Number(user.economy?.bankBalance || 0),
-              xpStats: user.stats?.xpStats || { chat: 0, voice: 0 },
-              gameRecords: user.stats?.gameRecords || {
-                2048: { highScore: 0 },
-                snake: { highScore: 0 },
-              },
-              seasonStats: user.Level
-                ? {
-                    rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
-                    totalXP: Number(user.Level.seasonXp || 0),
-                  }
-                : null,
-            })),
-            currentPage: page + 1,
-            totalPages,
-            highlightedPosition,
+            guild: {
+              id: guild.id,
+              name: guild.name,
+              iconURL: guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          { width: 400, height: 775 }
-        );
+          locale: interaction.locale,
+          category,
+          users: validUsers.map((user, index) => ({
+            id: user.id,
+            position: startIndex + index + 1,
+            name: user.name,
+            avatarURL: user.avatarURL,
+            value: user.displayValue,
+            // Include all relevant data for each user
+            balance: Number(user.economy?.balance || 0),
+            bank: Number(user.economy?.bankBalance || 0),
+            totalBalance:
+              Number(user.economy?.balance || 0) +
+              Number(user.economy?.bankBalance || 0),
+            xpStats: user.stats?.xpStats || { chat: 0, voice: 0 },
+            gameRecords: user.stats?.gameRecords || {
+              2048: { highScore: 0 },
+              snake: { highScore: 0 },
+            },
+            seasonStats: user.Level
+              ? {
+                  rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
+                  totalXP: Number(user.Level.seasonXp || 0),
+                }
+              : null,
+          })),
+          currentPage: page + 1,
+          totalPages,
+          highlightedPosition,
+        });
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        const attachment = new AttachmentBuilder(pngBuffer, {
           name: `leaderboard.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`,
         });
 

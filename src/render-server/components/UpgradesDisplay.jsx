@@ -378,6 +378,11 @@ const UpgradesDisplay = (props) => {
   );
 };
 
+UpgradesDisplay.dimensions = {
+  width: 600,
+  height: 350,
+};
+
 // Static translations object that will be synchronized
 UpgradesDisplay.localization_strings = {
   title: {

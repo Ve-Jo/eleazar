@@ -10,13 +10,11 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
-import fs from "fs";
-import path from "path";
+import { generateImage } from "../../utils/imageGenerator.js";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default {
   data: () => {
@@ -107,46 +105,51 @@ export default {
     const visibleCount = 1;
 
     const generateCommandImage = async () => {
-      return await generateRemoteImage(
-        "SettingsDisplay",
-        {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
+      const pngBuffer = await generateImage("SettingsDisplay", {
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
           },
-          locale: interaction.locale,
-          settings: commands,
-          highlightedPosition,
-          visibleCount,
-          height: 700,
-          width: 600,
-          maxSettingsHided: 4,
-          maxSettingsHidedWidth: 450,
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
         },
-        { width: 600, height: 700 }
-      );
+        locale: interaction.locale,
+        settings: commands,
+        highlightedPosition,
+        visibleCount,
+        height: 700,
+        width: 600,
+        maxSettingsHided: 4,
+        maxSettingsHidedWidth: 450,
+      });
+
+      const attachment = new AttachmentBuilder(pngBuffer, {
+        name: `commands.${
+          pngBuffer[0] === 0x47 &&
+          pngBuffer[1] === 0x49 &&
+          pngBuffer[2] === 0x46
+            ? "gif"
+            : "png"
+        }`,
+      });
+
+      return attachment;
     };
 
     const updateMessage = async () => {
-      const pngBuffer = await generateCommandImage();
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-        name: "commands.png",
-      });
+      const attachment = await generateCommandImage();
 
       const embed = new EmbedBuilder()
         .setTimestamp()

@@ -179,6 +179,11 @@ const Snake = (props) => {
   );
 };
 
+Snake.dimensions = {
+  width: 400,
+  height: 490,
+};
+
 Snake.localization_strings = {
   title: {
     en: "Snake",

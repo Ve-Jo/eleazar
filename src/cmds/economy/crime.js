@@ -10,7 +10,7 @@ import {
   AttachmentBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -41,7 +41,7 @@ export default {
         const timeLeft = Math.ceil(cooldownTime / 1000);
 
         // Generate cooldown image
-        const pngBuffer = await generateRemoteImage(
+        const pngBuffer = await generateImage(
           "Cooldown",
           {
             interaction: {
@@ -68,7 +68,6 @@ export default {
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
           },
-          { width: 450, height: 200 },
           { image: 2, emoji: 2 }
         );
 
@@ -249,59 +248,59 @@ export default {
         const updatedTargetData = await Database.getUser(guild.id, targetId);
 
         // Generate crime result image
-        const pngBuffer = await generateRemoteImage(
-          "Crime",
-          {
-            interaction: {
-              user: {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                avatarURL: user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              guild: {
-                id: guild.id,
-                name: guild.name,
-                iconURL: guild.iconURL({ extension: "png", size: 1024 }),
-              },
+        const pngBuffer = await generateImage("Crime", {
+          interaction: {
+            user: {
+              id: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              avatarURL: user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
             },
-            locale: interaction.locale,
-            victim: {
-              user: {
-                id: target.id,
-                username: target.user.username,
-                displayName: target.displayName,
-                avatarURL: target.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              balance: Number(updatedTargetData.economy?.balance || 0),
+            guild: {
+              id: guild.id,
+              name: guild.name,
+              iconURL: guild.iconURL({ extension: "png", size: 1024 }),
             },
-            robber: {
-              user: {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                avatarURL: user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              balance: Number(updatedUserData.economy?.balance || 0),
-            },
-            amount: amount,
-            success: success,
           },
-          { width: 450, height: 200 }
-        );
+          locale: interaction.locale,
+          victim: {
+            user: {
+              id: target.id,
+              username: target.user.username,
+              displayName: target.displayName,
+              avatarURL: target.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            balance: Number(updatedTargetData.economy?.balance || 0),
+          },
+          robber: {
+            user: {
+              id: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              avatarURL: user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            balance: Number(updatedUserData.economy?.balance || 0),
+          },
+          amount: amount,
+          success: success,
+        });
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        const attachment = new AttachmentBuilder(pngBuffer, {
           name: `crime.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`,
         });
 

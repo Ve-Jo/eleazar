@@ -606,6 +606,11 @@ const Statistics = (props) => {
   );
 };
 
+Statistics.dimensions = {
+  width: 320,
+  height: 210,
+};
+
 Statistics.localization_strings = {
   title: {
     en: "Statistics",

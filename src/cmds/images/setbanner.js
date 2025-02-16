@@ -6,7 +6,7 @@ import {
 } from "../../utils/builders/index.js";
 import { AttachmentBuilder, EmbedBuilder } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 import axios from "axios";
 
 const BANNER_LOGS = {
@@ -240,7 +240,7 @@ export default {
       // Clear any cached data for this user
       if (typeof Bun !== "undefined") Bun.gc();
 
-      let imageResponse = await generateRemoteImage(
+      let imageResponse = await generateImage(
         "Balance",
         {
           interaction: {
@@ -274,20 +274,27 @@ export default {
           },
           database: userData,
         },
-        { width: 400, height: 225 },
         { image: 2, emoji: 1 }
       );
 
-      const final_attachment = new AttachmentBuilder(imageResponse.buffer, {
+      const final_attachment = new AttachmentBuilder(imageResponse, {
         name: `balance.${
-          imageResponse.contentType === "image/gif" ? "gif" : "png"
+          imageResponse[0] === 0x47 &&
+          imageResponse[1] === 0x49 &&
+          imageResponse[2] === 0x46
+            ? "gif"
+            : "png"
         }`,
       });
 
       await interaction.editReply({
         content: i18n.__(
           `images.setbanner.success.${
-            imageResponse.contentType === "image/gif" ? "gif" : "static"
+            imageResponse[0] === 0x47 &&
+            imageResponse[1] === 0x49 &&
+            imageResponse[2] === 0x46
+              ? "gif"
+              : "static"
           }`
         ),
         files: [final_attachment],

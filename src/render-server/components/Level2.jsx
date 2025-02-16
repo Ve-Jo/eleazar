@@ -275,6 +275,11 @@ const Level2 = (props) => {
   );
 };
 
+Level2.dimensions = {
+  width: 400,
+  height: 254,
+};
+
 Level2.localization_strings = {
   season: {
     ru: "Сезон",

@@ -1,16 +1,8 @@
+import React from "react";
 import prettyMilliseconds from "pretty-ms";
 
 const Balance = (props) => {
   const { interaction, database, i18n } = props;
-
-  // Get translations from i18n based on the static translation object
-  const translations = Object.entries(Balance.localization_strings).reduce(
-    (acc, [key, translations]) => ({
-      ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
-    }),
-    {}
-  );
 
   const containerStyle = {
     width: "400px",
@@ -60,7 +52,7 @@ const Balance = (props) => {
               style={{ borderRadius: "5px" }}
             />
             <h2 style={{ margin: "0", fontSize: "24px", display: "flex" }}>
-              {translations.title}!
+              {i18n.__("title")}!
             </h2>
           </div>
           <div
@@ -95,7 +87,7 @@ const Balance = (props) => {
                 <span
                   style={{ fontSize: "14px", opacity: "0.8", display: "flex" }}
                 >
-                  {translations.wallet.toUpperCase()}
+                  {i18n.__("wallet").toUpperCase()}
                 </span>
                 <span
                   style={{
@@ -148,7 +140,7 @@ const Balance = (props) => {
                       display: "flex",
                     }}
                   >
-                    {translations.bank.toUpperCase()}
+                    {i18n.__("bank").toUpperCase()}
                   </span>
                   {database.economy.bankStartTime > 0 &&
                   database.economy.bankRate > 0 ? (
@@ -162,8 +154,8 @@ const Balance = (props) => {
                     >
                       ≈
                       {(() => {
-                        const MS_PER_HOUR = 60 * 60 * 1000; // milliseconds in an hour
-                        const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000; // milliseconds in a year
+                        const MS_PER_HOUR = 60 * 60 * 1000;
+                        const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
                         const hourlyRate =
                           (database.economy.bankRate / 100) *
                           (MS_PER_HOUR / MS_PER_YEAR);
@@ -242,9 +234,9 @@ const Balance = (props) => {
                 >
                   {database.economy.bankRate || "{holdingPercentage}"}
                   {"% "}
-                  {translations.annual} (
+                  {i18n.__("annual")} (
                   {prettyMilliseconds(
-                    Date.now() - database.economy.bankStartTime,
+                    Date.now() - Number(database.economy.bankStartTime),
                     {
                       colonNotation: true,
                       secondsDecimalDigits: 0,
@@ -308,7 +300,13 @@ const Balance = (props) => {
   );
 };
 
-// Static translations object that will be synchronized
+// Add static dimensions property
+Balance.dimensions = {
+  width: 400,
+  height: 235,
+};
+
+// Static translations object used by imageGenerator
 Balance.localization_strings = {
   title: {
     en: "Balance",

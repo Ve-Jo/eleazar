@@ -153,6 +153,11 @@ const Daily = (props) => {
   );
 };
 
+Daily.dimensions = {
+  width: 450,
+  height: 200,
+};
+
 // Static translations object that will be synchronized
 Daily.localization_strings = {
   title: {

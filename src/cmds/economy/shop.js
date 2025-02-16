@@ -12,7 +12,7 @@ import {
   AttachmentBuilder,
 } from "discord.js";
 import Database, { UPGRADES } from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -50,7 +50,7 @@ export default {
           ),
         };
 
-        const pngBuffer = await generateRemoteImage(
+        const pngBuffer = await generateImage(
           "UpgradesDisplay",
           {
             interaction: {
@@ -104,12 +104,17 @@ export default {
             currentUpgrade,
             balance: Number(userData.economy?.balance || 0),
           },
-          { width: 600, height: 350 },
           { image: 2, emoji: 2 }
         );
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-          name: `shop.${pngBuffer.contentType === "image/gif" ? "gif" : "png"}`,
+        const attachment = new AttachmentBuilder(pngBuffer, {
+          name: `shop.${
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
+          }`,
         });
 
         console.log(upgradeInfo);

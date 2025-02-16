@@ -202,7 +202,8 @@ const Level = (props) => {
               color: "#98FB98",
             }}
           >
-            {translations.gameLevel} {gameLevel} • {gameCurrentXP} / {gameRequiredXP} {translations.xp}
+            {translations.gameLevel} {gameLevel} • {gameCurrentXP} /{" "}
+            {gameRequiredXP} {translations.xp}
           </div>
         </div>
         <div
@@ -265,6 +266,11 @@ const Level = (props) => {
       </div>
     </div>
   );
+};
+
+Level.dimensions = {
+  width: 450,
+  height: 200,
 };
 
 // Static translations object that will be synchronized

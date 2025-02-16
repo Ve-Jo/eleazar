@@ -11,7 +11,7 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames } from "../../utils/loadGames.js";
 import { DEFAULT_VALUES } from "../../database/client.js";
 
@@ -119,44 +119,44 @@ export default {
         });
 
         // Generate game launcher image
-        const pngBuffer = await generateRemoteImage(
-          "GameLauncher",
-          {
-            interaction: {
-              user: {
-                id: interaction.user.id,
-                username: interaction.user.username,
-                displayName: interaction.user.displayName,
-                avatarURL: interaction.user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              guild: {
-                id: interaction.guild.id,
-                name: interaction.guild.name,
-                iconURL: interaction.guild.iconURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
+        const pngBuffer = await generateImage("GameLauncher", {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
             },
-            locale: interaction.locale,
-            database: userData,
-            games: games,
-            selectedGame,
-            currentLocale: i18n.getLocale(),
-            highlightedGame,
-            highlightedCategory: currentCategory,
-            i18n,
-            gameStats: currentGameRecords, // Use fresh game records
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          { width: 750, height: 450 }
-        );
+          locale: interaction.locale,
+          database: userData,
+          games: games,
+          selectedGame,
+          currentLocale: i18n.getLocale(),
+          highlightedGame,
+          highlightedCategory: currentCategory,
+          i18n,
+          gameStats: currentGameRecords, // Use fresh game records
+        });
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        const attachment = new AttachmentBuilder(pngBuffer, {
           name: `work_games.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`,
         });
 
@@ -168,7 +168,11 @@ export default {
           })
           .setImage(
             `attachment://work_games.${
-              pngBuffer.contentType === "image/gif" ? "gif" : "png"
+              pngBuffer[0] === 0x47 &&
+              pngBuffer[1] === 0x49 &&
+              pngBuffer[2] === 0x46
+                ? "gif"
+                : "png"
             }`
           )
           .setTimestamp();

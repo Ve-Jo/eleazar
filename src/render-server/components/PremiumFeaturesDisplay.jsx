@@ -242,4 +242,9 @@ const PremiumFeaturesDisplay = (props) => {
   );
 };
 
+PremiumFeaturesDisplay.dimensions = {
+  width: 950,
+  height: 650,
+};
+
 export default PremiumFeaturesDisplay;

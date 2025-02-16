@@ -6,7 +6,7 @@ import {
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -139,40 +139,40 @@ export default {
       );
 
       // Generate the transfer image
-      const pngBuffer = await generateRemoteImage(
-        "Transfer",
-        {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-              locale: interaction.user.locale,
-            },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
+      const pngBuffer = await generateImage("Transfer", {
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
+            locale: interaction.user.locale,
           },
-          locale: interaction.locale,
-          database: updatedUser,
-          amount: amountInt,
-          isDeposit: false,
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
         },
-        { width: 400, height: 200 }
-      );
+        locale: interaction.locale,
+        database: { ...updatedUser },
+        amount: amountInt,
+        isDeposit: false,
+      });
 
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+      const attachment = new AttachmentBuilder(pngBuffer, {
         name: `withdraw.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
+          pngBuffer[0] === 0x47 &&
+          pngBuffer[1] === 0x49 &&
+          pngBuffer[2] === 0x46
+            ? "gif"
+            : "png"
         }`,
       });
 
@@ -181,7 +181,11 @@ export default {
         .setTimestamp()
         .setImage(
           `attachment://withdraw.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`
         )
         .setAuthor({

@@ -380,4 +380,9 @@ const SettingsDisplay = (props) => {
   );
 };
 
+SettingsDisplay.dimensions = {
+  width: 600,
+  height: 650,
+};
+
 export default SettingsDisplay;

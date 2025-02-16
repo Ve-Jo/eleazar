@@ -422,6 +422,11 @@ const MusicPlayer = (props) => {
   );
 };
 
+MusicPlayer.dimensions = {
+  width: 525,
+  height: 200,
+};
+
 // Static translations object that will be synchronized
 MusicPlayer.localization_strings = {
   queue: {

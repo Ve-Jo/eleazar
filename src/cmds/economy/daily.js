@@ -5,7 +5,7 @@ import {
 import { AttachmentBuilder } from "discord.js";
 import Database from "../../database/client.js";
 import prettyMs from "pretty-ms";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -32,7 +32,7 @@ export default {
       );
 
       if (cooldownTime > 0) {
-        let pngBuffer = await generateRemoteImage(
+        let pngBuffer = await generateImage(
           "Cooldown",
           {
             interaction: {
@@ -63,13 +63,16 @@ export default {
             nextDaily: cooldownTime,
             emoji: "🎁",
           },
-          { width: 450, height: 200 },
           { image: 2, emoji: 2 }
         );
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+        const attachment = new AttachmentBuilder(pngBuffer, {
           name: `daily_cooldown.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
+            pngBuffer[0] === 0x47 &&
+            pngBuffer[1] === 0x49 &&
+            pngBuffer[2] === 0x46
+              ? "gif"
+              : "png"
           }`,
         });
 
@@ -84,7 +87,7 @@ export default {
       }
 
       // Get user data with upgrades
-      const userData = await Database.getUser(
+      let userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id
       );
@@ -112,46 +115,34 @@ export default {
         );
       });
 
-      // Get updated user data for the image
-      const updatedData = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
+      userData = await Database.getUser(interaction.guild.id, user.id, true);
 
-      let pngBuffer = await generateRemoteImage(
-        "Daily",
-        {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
+      let pngBuffer = await generateImage("Daily", {
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
           },
-          database: {
-            balance: Number(updatedData.economy?.balance || 0),
-            bankBalance: Number(updatedData.economy?.bankBalance || 0),
-            bankRate: updatedData.economy?.bankRate || 0,
-            totalEarned: Number(updatedData.stats?.totalEarned || 0),
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
           },
-          locale: interaction.locale,
-          amount: amount,
         },
-        { width: 450, height: 200 }
-      );
+        database: {
+          ...userData,
+        },
+        locale: interaction.locale,
+        amount: amount,
+      });
 
       const attachment = new AttachmentBuilder(pngBuffer.buffer, {
         name: `daily_claimed.${

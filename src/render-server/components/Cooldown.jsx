@@ -159,6 +159,11 @@ const Cooldown = (props) => {
   );
 };
 
+Cooldown.dimensions = {
+  width: 450,
+  height: 200,
+};
+
 // Static translations object that will be synchronized
 Cooldown.localization_strings = {
   title: {

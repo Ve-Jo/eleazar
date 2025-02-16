@@ -151,6 +151,11 @@ const Transfer = (props) => {
   );
 };
 
+Transfer.dimensions = {
+  width: 400,
+  height: 200,
+};
+
 // Static translations object that will be synchronized
 Transfer.localization_strings = {
   deposit: {

@@ -6,7 +6,7 @@ import {
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import Database from "../../database/client.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -40,7 +40,6 @@ export default {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.member;
 
-    // Get user data with all relations
     const userData = await Database.getUser(
       interaction.guild.id,
       user.id,
@@ -60,7 +59,7 @@ export default {
       );
     }
 
-    let imageResponse = await generateRemoteImage(
+    const buffer = await generateImage(
       "Balance",
       {
         interaction: {
@@ -83,43 +82,29 @@ export default {
           },
         },
         locale: interaction.locale,
-        targetUser: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          avatarURL: user.displayAvatarURL({
-            extension: "png",
-            size: 1024,
-          }),
-        },
         database: {
           ...userData,
         },
       },
-      { width: 400, height: 235 },
       { image: 2, emoji: 1 }
     );
 
-    const attachment = new AttachmentBuilder(imageResponse.buffer, {
-      name: `balance.${
-        imageResponse.contentType === "image/gif" ? "gif" : "png"
-      }`,
+    // Detect if the result is a GIF
+    const isGif =
+      buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+
+    const attachment = new AttachmentBuilder(buffer, {
+      name: `balance.${isGif ? "gif" : "png"}`,
     });
 
     let balance_embed = new EmbedBuilder()
       .setTimestamp()
       .setColor(process.env.EMBED_COLOR)
-      .setImage(
-        `attachment://balance.${
-          imageResponse.contentType === "image/gif" ? "gif" : "png"
-        }`
-      )
+      .setImage(`attachment://balance.${isGif ? "gif" : "png"}`)
       .setAuthor({
         name: i18n.__("economy.balance.title"),
         iconURL: user.avatarURL(),
       });
-
-    imageResponse = null;
 
     await interaction.editReply({
       embeds: [balance_embed],

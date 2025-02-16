@@ -323,6 +323,11 @@ const GameLauncher = (props) => {
   );
 };
 
+GameLauncher.dimensions = {
+  width: 750,
+  height: 450,
+};
+
 // Static translations object
 GameLauncher.localization_strings = {
   specialForCategory: {

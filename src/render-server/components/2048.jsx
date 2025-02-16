@@ -161,6 +161,11 @@ const Game2048 = (props) => {
   );
 };
 
+Game2048.dimensions = {
+  width: 400,
+  height: 490,
+};
+
 Game2048.localization_strings = {
   title: {
     en: "2048",

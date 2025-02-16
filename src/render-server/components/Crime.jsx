@@ -222,6 +222,11 @@ const Crime = (props) => {
   );
 };
 
+Crime.dimensions = {
+  width: 450,
+  height: 200,
+};
+
 // Static translations object that will be synchronized
 Crime.localization_strings = {
   title: {

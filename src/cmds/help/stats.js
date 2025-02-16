@@ -3,7 +3,7 @@ import {
   I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import { generateRemoteImage } from "../../utils/remoteImageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.js";
 import Database from "../../database/client.js";
 
 export default {
@@ -50,7 +50,7 @@ export default {
       .reverse();
 
     // Generate the image using the Statistics component
-    let imageResponse = await generateRemoteImage(
+    let imageResponse = await generateImage(
       "Statistics",
       {
         interaction: {
@@ -71,14 +71,18 @@ export default {
             size: 1024,
           }),
         },
+        locale: interaction.locale,
       },
-      { width: 320, height: 210 },
       { image: 2, emoji: 1 }
     );
 
-    const attachment = new AttachmentBuilder(imageResponse.buffer, {
+    const attachment = new AttachmentBuilder(imageResponse, {
       name: `stats.${
-        imageResponse.contentType === "image/gif" ? "gif" : "png"
+        imageResponse[0] === 0x47 &&
+        imageResponse[1] === 0x49 &&
+        imageResponse[2] === 0x46
+          ? "gif"
+          : "png"
       }`,
     });
 
@@ -87,7 +91,11 @@ export default {
       .setColor(process.env.EMBED_COLOR)
       .setImage(
         `attachment://stats.${
-          imageResponse.contentType === "image/gif" ? "gif" : "png"
+          imageResponse[0] === 0x47 &&
+          imageResponse[1] === 0x49 &&
+          imageResponse[2] === 0x46
+            ? "gif"
+            : "png"
         }`
       )
       .setAuthor({

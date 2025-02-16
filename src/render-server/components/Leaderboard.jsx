@@ -653,6 +653,11 @@ const Leaderboard = (props) => {
   );
 };
 
+Leaderboard.dimensions = {
+  width: 400,
+  height: 755,
+};
+
 // Static translations object that will be synchronized
 Leaderboard.localization_strings = {
   title: {
