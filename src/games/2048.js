@@ -1,6 +1,6 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import i18n from "../utils/i18n.js";
-import { generateRemoteImage } from "../utils/remoteImageGenerator.js";
+import { generateImage } from "../utils/imageGenerator.js";
 import Database from "../database/client.js";
 
 // Game state management for multi-user synchronization
@@ -126,7 +126,7 @@ export default {
       );
       const currentHighScore = gameRecords?.["2048"]?.highScore || 0;
 
-      const { buffer } = await generateRemoteImage(
+      const buffer = await generateImage(
         "2048",
         {
           grid: initialState.state.grid,
@@ -142,7 +142,6 @@ export default {
             },
           },
         },
-        { width: 400, height: 490 },
         { image: 1, emoji: 1 }
       );
 
@@ -176,7 +175,7 @@ export default {
           const gameInstance = activeGames.get(gameKey);
           if (!gameInstance?.state.gameOver) {
             gameInstance.state.earning = calculateEarning(gameInstance.state);
-            const { buffer: finalBoard } = await generateRemoteImage(
+            const finalBoard = await generateImage(
               "2048",
               {
                 grid: gameInstance.state.grid,
@@ -278,21 +277,8 @@ export default {
           state.earning = calculateEarning(state);
           addRandomTile(state);
 
-          if (checkGameOver(state)) {
-            state.gameOver = true;
-          }
-        }
-
-        // Prepare message update
-        let messageContent, messageFiles, messageComponents;
-
-        if (!state.gameOver) {
-          messageContent = moved
-            ? `${i18n.__("games.2048.score", { score: state.score })}`
-            : `${i18n.__("games.2048.invalidMove")}`;
-          messageComponents = [row];
-        } else {
-          const { buffer: newBoard } = await generateRemoteImage(
+          // Generate new game board image after valid move
+          const buffer = await generateImage(
             "2048",
             {
               grid: state.grid,
@@ -308,32 +294,25 @@ export default {
                 },
               },
             },
-            { width: 400, height: 490 },
-            { image: 2, emoji: 1 }
+            { image: 1, emoji: 1 }
           );
-          gameInstance.updateImageTimestamp();
-          messageFiles = [{ attachment: newBoard, name: "2048.png" }];
 
-          // Get and update the game message
-          const gameMessage = await i.channel.messages.fetch(
-            gameInstance.messageId
-          );
-          await gameMessage.edit({
-            content: messageContent,
-            files: messageFiles,
-            components: messageComponents,
+          // Update the message with new game state
+          await message.edit({
+            content: `${i18n.__("games.2048.score", { score: state.score })}`,
+            files: [{ attachment: buffer, name: "2048.png" }],
+            components: [row],
           });
 
-          if (state.gameOver) {
-            try {
-              // Calculate final values consistently with what's shown
-              const timePlayed = (Date.now() - state.startTime) / 1000;
-              const gameXP = Math.floor(
-                timePlayed * 2 + // Base XP from time played
-                  state.score * 0.5 // Same XP multiplier as display
-              );
+          if (checkGameOver(state)) {
+            state.gameOver = true;
 
-              // Update high score first
+            try {
+              // Calculate final values
+              const timePlayed = (Date.now() - state.startTime) / 1000;
+              const gameXP = Math.floor(timePlayed * 2 + state.score * 0.5);
+
+              // Update high score
               const isNewRecord = await Database.updateGameHighScore(
                 interaction.guildId,
                 interaction.user.id,
@@ -341,7 +320,7 @@ export default {
                 state.score
               );
 
-              // Add XP and earnings using the same values as display
+              // Add XP and earnings
               await Database.addGameXP(
                 interaction.guildId,
                 interaction.user.id,
@@ -352,7 +331,27 @@ export default {
               await Database.addBalance(
                 interaction.guildId,
                 interaction.user.id,
-                state.earning // Use the exact earning value shown
+                state.earning
+              );
+
+              // Generate final game board
+              const finalBoard = await generateImage(
+                "2048",
+                {
+                  grid: state.grid,
+                  score: state.score,
+                  earning: state.earning,
+                  locale: interaction.locale,
+                  interaction: {
+                    user: {
+                      avatarURL: interaction.user.displayAvatarURL({
+                        extension: "png",
+                        size: 1024,
+                      }),
+                    },
+                  },
+                },
+                { image: 1, emoji: 1 }
               );
 
               await message.edit({
@@ -361,7 +360,7 @@ export default {
                 })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
                   isNewRecord ? " 🏆 New High Score!" : ""
                 }`,
-                files: [{ attachment: newBoard, name: "2048.png" }],
+                files: [{ attachment: finalBoard, name: "2048.png" }],
                 components: [],
               });
 
@@ -377,6 +376,12 @@ export default {
               }
             }
           }
+        } else {
+          // For invalid moves, just update the message content
+          await message.edit({
+            content: `${i18n.__("games.2048.invalidMove")}`,
+            components: [row],
+          });
         }
       });
 
