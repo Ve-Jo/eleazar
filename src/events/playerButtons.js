@@ -31,27 +31,33 @@ export default {
             const modes = ["off", "track", "queue"];
             const currentIndex = modes.indexOf(player.repeatMode);
             const newMode = modes[(currentIndex + 1) % modes.length];
-            await player.setRepeatMode(newMode);
+
+            // Force trigger repeat mode update event
+            player.repeatMode = newMode;
+            // Explicitly emit the event
+            player.emit("playerRepeatModeUpdate", player, newMode);
+
             break;
           }
           case "pause": {
-            player.paused ? await player.resume() : await player.pause();
+            if (player.paused) {
+              await player.resume();
+              // Let playerResume event handle the state saving
+            } else {
+              await player.pause();
+              // Let playerPause event handle the state saving
+            }
             break;
           }
           case "skip": {
             try {
               await player.skip();
+              // Let trackEnd event handle the state saving
             } catch (error) {
               let autoplay = player.get("autoplay_enabled");
-              if (autoplay) {
-                if (player.queue.current) {
-                  await player.seek(player.queue.current.info.duration);
-                } else {
-                  return interaction.reply({
-                    content: i18n.__("music.skippingSongError"),
-                    ephemeral: true,
-                  });
-                }
+              if (autoplay && player.queue.current) {
+                await player.seek(player.queue.current.info.duration);
+                // Let playerSeek event handle the state saving
               } else {
                 return interaction.reply({
                   content: i18n.__("music.skippingSongError"),
@@ -71,6 +77,7 @@ export default {
             const previousTrack =
               player.queue.previous[player.queue.previous.length - 1];
             await player.queue.add(previousTrack, 0);
+            // Let trackAdd event handle the state saving
 
             await interaction.reply(
               `<@${interaction.user.id}> ` +
@@ -81,23 +88,30 @@ export default {
 
             if (!player.playing) {
               await player.play();
+              // Let trackStart event handle the state saving
             }
             break;
           }
           case "autoplay": {
-            await player.set(
-              "autoplay_enabled",
-              !player.get("autoplay_enabled")
-            );
-            interaction
+            const newState = !player.get("autoplay_enabled");
+            // Set the state
+            player.set("autoplay_enabled", newState);
+            // Force a player update event to save the state
+            player.emit("playerUpdate", {
+              guildId: player.guildId,
+              state: player.state,
+            });
+
+            await interaction
               .reply({
                 content:
                   `<@${interaction.user.id}> ` +
                   i18n.__("music.autoplay.autoplayApplied", {
-                    enabled: player.get("autoplay_enabled") ? "ON" : "OFF",
+                    enabled: newState ? "ON" : "OFF",
                   }),
               })
               .then((int) => setTimeout(() => int.delete(), 5000));
+            break;
           }
         }
 

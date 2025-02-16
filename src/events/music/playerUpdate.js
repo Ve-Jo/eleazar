@@ -6,6 +6,17 @@ export default {
   async execute(client, player) {
     console.log("PlayerUpdate execute called");
 
+    // Check voice connection status
+    if (!player.connected) {
+      console.log("Player not connected to voice, attempting to reconnect...");
+      try {
+        await player.connect();
+        console.log("Successfully reconnected to voice channel");
+      } catch (error) {
+        console.error("Failed to reconnect to voice channel:", error);
+      }
+    }
+
     if (!player?.playing || player?.paused) {
       console.log("Player not playing or is paused");
       return;

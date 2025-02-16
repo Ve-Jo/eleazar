@@ -4,57 +4,64 @@ import { createMusicButtons } from "../../utils/musicButtons.js";
 export default {
   name: "trackStart",
   async execute(client, player, track) {
-    console.log(`Track ${track.info.title} started`);
-
-    let channel = client?.channels?.cache?.get(player.options.textChannelId);
-    if (!channel) {
-      channel = await client.channels.fetch(player.options.textChannelId);
-    }
-    if (!channel) return;
-
-    // Find and delete any existing music player messages
-    const messages = await channel.messages.fetch({ limit: 20 });
-    const existingPlayerMessages = messages.filter(
-      (msg) =>
-        msg.author.id === client.user.id &&
-        msg.embeds.length > 0 &&
-        msg.embeds[0].image?.url.includes("musicplayer.png")
-    );
-
-    // Delete old player messages
-    if (existingPlayerMessages.size > 0) {
-      try {
-        await channel.bulkDelete(existingPlayerMessages);
-      } catch (error) {
-        // If bulk delete fails (messages too old), delete individually
-        for (const msg of existingPlayerMessages.values()) {
-          try {
-            await msg.delete();
-          } catch (err) {
-            console.error("Error deleting message:", err);
-          }
+    try {
+      // Ensure voice connection is active
+      if (!player.connected) {
+        console.log(
+          "Voice connection not found in trackStart, attempting to connect..."
+        );
+        try {
+          await player.connect();
+          // Wait for connection to stabilize
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error("Failed to establish voice connection:", error);
+          return;
         }
       }
-    }
 
-    const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
-      track,
-      player
-    );
+      const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
+        track,
+        player
+      );
 
-    const updatedButtons = createMusicButtons(player);
-    try {
-      const message = await channel.send({
+      // Delete previous now playing message if it exists
+      if (player.nowPlayingMessage) {
+        try {
+          await player.nowPlayingMessage.delete();
+        } catch (error) {
+          console.error(
+            "Could not delete previous now playing message:",
+            error
+          );
+        }
+      }
+
+      // Send new now playing message
+      const textChannel = await client.channels
+        .fetch(player.textChannelId)
+        .catch(() => null);
+      if (!textChannel) {
+        console.error("Text channel not found");
+        return;
+      }
+
+      const message = await textChannel.send({
         embeds: [embed],
         files: [attachment],
-        components: [updatedButtons],
+        components: [createMusicButtons(player)],
       });
 
-      // Store the message reference directly
+      // Store the message reference
       player.nowPlayingMessage = message;
-      console.log("Now playing message created and stored:", message.id);
+
+      // Verify message was stored
+      console.log("Now playing message stored:", {
+        messageId: message.id,
+        channelId: message.channelId,
+      });
     } catch (error) {
-      console.error("Error sending now playing message:", error);
+      console.error("Error in trackStart event:", error);
     }
   },
 };

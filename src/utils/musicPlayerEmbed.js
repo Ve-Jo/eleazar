@@ -1,6 +1,6 @@
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import i18n from "./i18n.js";
-import { generateRemoteImage } from "./remoteImageGenerator.js";
+import { generateImage } from "./imageGenerator.js";
 
 let lastGeneratedImage = null;
 let lastGeneratedImageTimestamp = 0;
@@ -10,7 +10,7 @@ export async function createOrUpdateMusicPlayerEmbed(
   player,
   oldEmbed = null
 ) {
-  let locale = track.requester.locale || "en";
+  let locale = track.requester?.locale || "en";
   if (locale.includes("-")) {
     locale = locale.split("-")[0];
   }
@@ -31,80 +31,80 @@ export async function createOrUpdateMusicPlayerEmbed(
 
   console.log(player.queue.previous);
 
+  // Get avatar URL with fallback
+  const getAvatarUrl = (user) => {
+    if (!user)
+      return `https://cdn.discordapp.com/embed/avatars/${Math.floor(
+        Math.random() * 5
+      )}.png`;
+    return typeof user.displayAvatarURL === "function"
+      ? user.displayAvatarURL({ extension: "png", size: 256 })
+      : user.avatarURL ||
+          `https://cdn.discordapp.com/embed/avatars/${Math.floor(
+            Math.random() * 5
+          )}.png`;
+  };
+
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
-    const imageData = await generateRemoteImage(
-      "MusicPlayer",
-      {
-        currentSong: {
-          title: track.info.title,
-          artist: track.info.author,
-          thumbnail: track.info.artworkUrl,
-          addedBy: track.requester.username,
-          addedByAvatar: track.requester.displayAvatarURL({
-            extension: "png",
-            size: 256,
-          }),
-          duration: track.info.duration,
-          user: {
-            id: track.requester.id,
-            username: track.requester.username,
-            displayName: track.requester.displayName,
-            avatarURL: track.requester.displayAvatarURL({
-              extension: "png",
-              size: 256,
-            }),
-          },
-        },
-        locale: track.requester.locale,
-        previousSong: previousSong
-          ? {
-              title: previousSong.info.title,
-              duration: previousSong.info.duration,
-              thumbnail: previousSong.info.artworkUrl,
-              user: {
-                id: previousSong.requester.id,
-                username: previousSong.requester.username,
-                displayName: previousSong.requester.displayName,
-                avatarURL: previousSong.requester.displayAvatarURL({
-                  extension: "png",
-                  size: 256,
-                }),
-              },
-            }
-          : undefined,
-        nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
-          title: t.info.title,
-          duration: t.info.duration,
-          thumbnail: t.info.artworkUrl,
-          user: {
-            id: t.requester.id,
-            username: t.requester.username,
-            displayName: t.requester.displayName,
-            avatarURL: t.requester.displayAvatarURL({
-              extension: "png",
-              size: 256,
-            }),
-          },
-        })),
-        queueLength: player.queue.tracks.length,
-        currentTime: player.position,
+    lastGeneratedImage = await generateImage("MusicPlayer", {
+      currentSong: {
+        title: track.info.title,
+        artist: track.info.author,
+        thumbnail: track.info.artworkUrl,
+        addedBy: track.requester?.username || "Unknown User",
+        addedByAvatar: getAvatarUrl(track.requester),
         duration: track.info.duration,
-        userAvatar: track.requester.displayAvatarURL({
-          extension: "png",
-          size: 256,
-        }),
+        user: {
+          id: track.requester?.id || "unknown",
+          username: track.requester?.username || "Unknown User",
+          displayName: track.requester?.displayName || "Unknown User",
+          avatarURL: getAvatarUrl(track.requester),
+        },
       },
-      { width: 525, height: 200 }
-    );
-
-    lastGeneratedImage = imageData;
+      locale: track.requester?.locale || "en",
+      previousSong: previousSong
+        ? {
+            title: previousSong.info.title,
+            duration: previousSong.info.duration,
+            thumbnail: previousSong.info.artworkUrl,
+            user: {
+              id: previousSong.requester?.id || "unknown",
+              username: previousSong.requester?.username || "Unknown User",
+              displayName:
+                previousSong.requester?.displayName || "Unknown User",
+              avatarURL: getAvatarUrl(previousSong.requester),
+            },
+          }
+        : undefined,
+      nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
+        title: t.info.title,
+        duration: t.info.duration,
+        thumbnail: t.info.artworkUrl,
+        user: {
+          id: t.requester?.id || "unknown",
+          username: t.requester?.username || "Unknown User",
+          displayName: t.requester?.displayName || "Unknown User",
+          avatarURL: getAvatarUrl(t.requester),
+        },
+      })),
+      queueLength: player.queue.tracks.length,
+      currentTime: player.position,
+      duration: track.info.duration,
+      userAvatar: getAvatarUrl(track.requester),
+    });
     lastGeneratedImageTimestamp = currentTime;
   }
 
-  const attachment = new AttachmentBuilder(lastGeneratedImage.buffer, {
-    name: "musicplayer.png",
+  const attachment = new AttachmentBuilder(lastGeneratedImage, {
+    name: `musicplayer.${
+      lastGeneratedImage[0] === 0x47 &&
+      lastGeneratedImage[1] === 0x49 &&
+      lastGeneratedImage[2] === 0x46
+        ? "gif"
+        : "png"
+    }`,
   });
 
   const embedBase = oldEmbed ? EmbedBuilder.from(oldEmbed) : new EmbedBuilder();
@@ -114,9 +114,9 @@ export async function createOrUpdateMusicPlayerEmbed(
     .setImage("attachment://musicplayer.png")
     .setFooter({
       text: i18n.__("music.player.footerText", {
-        author: track.requester.username,
+        author: track.requester?.username || "Unknown User",
       }),
-      iconURL: track.requester.displayAvatarURL({ size: 128 }),
+      iconURL: getAvatarUrl(track.requester),
     })
     .setTimestamp();
 
