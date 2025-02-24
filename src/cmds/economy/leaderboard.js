@@ -12,7 +12,10 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
-import { generateImage } from "../../utils/imageGenerator.js";
+import {
+  generateImage,
+  processImageColors,
+} from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
@@ -35,7 +38,7 @@ export default {
             { name: "Bank Balance", value: "bank" },
             { name: "Level", value: "level" },
             { name: "Games", value: "games" },
-            { name: "Season", value: "season" }, // Add new season category
+            { name: "Season", value: "season" },
           ],
         }),
       ],
@@ -52,8 +55,23 @@ export default {
       let page = 0;
       const pageSize = 10;
       let highlightedPosition = null;
+      let currentTotalPages = 1;
+      let sortedUsers = [];
 
-      const generateLeaderboardMessage = async () => {
+      async function findMyself() {
+        if (highlightedPosition === null) {
+          const userIndex = sortedUsers.findIndex(
+            (user) => user.id === interaction.user.id
+          );
+          if (userIndex !== -1) {
+            highlightedPosition = userIndex + 1;
+            // Adjust page to show the user's position
+            page = Math.floor(userIndex / pageSize);
+          }
+        }
+      }
+
+      async function generateLeaderboardMessage() {
         // Get users based on category
         let guildUsers;
 
@@ -79,7 +97,10 @@ export default {
           // For guild-specific categories
           guildUsers = await Database.client.user.findMany({
             where: { guildId: guild.id },
-            include: {
+            select: {
+              id: true,
+              guildId: true,
+              bannerUrl: true,
               economy: true,
               stats: true,
               Level: true,
@@ -88,7 +109,7 @@ export default {
         }
 
         // Sort users based on category
-        const sortedUsers = guildUsers
+        sortedUsers = guildUsers
           .map((userData) => {
             let sortValue = 0;
             let displayValue = 0; // New variable for display value
@@ -119,10 +140,9 @@ export default {
                 const gameRecords = userData.stats?.gameRecords
                   ? userData.stats.gameRecords
                   : { 2048: { highScore: 0 }, snake: { highScore: 0 } };
-                sortValue = Math.max(
-                  gameRecords["2048"]?.highScore || 0,
-                  gameRecords.snake?.highScore || 0
-                );
+                sortValue =
+                  (gameRecords["2048"]?.highScore || 0) +
+                  (gameRecords.snake?.highScore || 0);
                 displayValue = sortValue;
                 break;
             }
@@ -130,34 +150,27 @@ export default {
           })
           .sort((a, b) => b.sortValue - a.sortValue);
 
-        if (highlightedPosition === null) {
-          const userIndex = sortedUsers.findIndex(
-            (user) => user.id === interaction.user.id
-          );
-          if (userIndex !== -1) {
-            highlightedPosition = userIndex + 1;
-            // Adjust page to show the user's position
-            page = Math.floor(userIndex / pageSize);
-          }
-        }
-
-        const totalPages = Math.ceil(sortedUsers.length / pageSize);
+        currentTotalPages = Math.ceil(sortedUsers.length / pageSize);
         const startIndex = page * pageSize;
         const endIndex = startIndex + pageSize;
         const usersToDisplay = sortedUsers.slice(startIndex, endIndex);
 
-        // Fetch member data for each user
-        const usersWithNames = await Promise.all(
+        // Fetch member data and process colors for each user
+        const usersWithData = await Promise.all(
           usersToDisplay.map(async (userData) => {
             try {
               const member = await guild.members.fetch(userData.id);
+              const avatarURL = member.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              });
+              const colorProps = await processImageColors(avatarURL);
+
               return {
                 ...userData,
                 name: member.displayName,
-                avatarURL: member.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
+                avatarURL,
+                coloring: colorProps,
               };
             } catch (error) {
               console.error(`Failed to fetch member ${userData.id}:`, error);
@@ -166,7 +179,7 @@ export default {
           })
         );
 
-        const validUsers = usersWithNames.filter((user) => user !== null);
+        const validUsers = usersWithData.filter((user) => user !== null);
 
         // Generate leaderboard image
         const pngBuffer = await generateImage("Leaderboard", {
@@ -197,37 +210,36 @@ export default {
             name: user.name,
             avatarURL: user.avatarURL,
             value: user.displayValue,
+            coloring: user.coloring,
             // Include all relevant data for each user
+            bannerUrl: user.bannerUrl,
             balance: Number(user.economy?.balance || 0),
             bank: Number(user.economy?.bankBalance || 0),
             totalBalance:
               Number(user.economy?.balance || 0) +
               Number(user.economy?.bankBalance || 0),
-            xpStats: user.stats?.xpStats || { chat: 0, voice: 0 },
+            xp: Number(user.Level?.xp || 0),
+            level: Database.calculateLevel(Number(user.Level?.xp || 0)).level,
+            xpStats: {
+              chat: Number(user.stats?.xpStats?.chat || 0),
+              voice: Number(user.stats?.xpStats?.voice || 0),
+            },
             gameRecords: user.stats?.gameRecords || {
               2048: { highScore: 0 },
               snake: { highScore: 0 },
             },
-            seasonStats: user.Level
-              ? {
-                  rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
-                  totalXP: Number(user.Level.seasonXp || 0),
-                }
-              : null,
+            seasonStats: {
+              rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
+              totalXP: Number(user.Level?.seasonXp || 0),
+            },
           })),
           currentPage: page + 1,
-          totalPages,
+          totalPages: Math.max(1, currentTotalPages),
           highlightedPosition,
         });
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `leaderboard.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`,
+          name: `leaderboard.png`,
         });
 
         const embed = new EmbedBuilder()
@@ -239,11 +251,7 @@ export default {
             }`,
             iconURL: interaction.user.displayAvatarURL(),
           })
-          .setImage(
-            `attachment://leaderboard.${
-              pngBuffer.contentType === "image/gif" ? "gif" : "png"
-            }`
-          )
+          .setImage(`attachment://leaderboard.png`)
           .setTimestamp();
 
         // Create navigation buttons
@@ -251,13 +259,20 @@ export default {
           .setCustomId("prev_page")
           .setLabel("◀")
           .setStyle(ButtonStyle.Primary)
-          .setDisabled(page === 0);
+          .setDisabled(page <= 0);
 
         const nextButton = new ButtonBuilder()
           .setCustomId("next_page")
           .setLabel("▶")
           .setStyle(ButtonStyle.Primary)
-          .setDisabled(page >= totalPages - 1);
+          .setDisabled(page >= currentTotalPages - 1);
+
+        console.log("Button states:", {
+          page,
+          currentTotalPages,
+          prevDisabled: page <= 0,
+          nextDisabled: page >= currentTotalPages - 1,
+        });
 
         const buttonRow = new ActionRowBuilder().addComponents(
           prevButton,
@@ -333,11 +348,17 @@ export default {
           files: [attachment],
           components,
         };
-      };
+      }
 
-      const message = await interaction.editReply(
-        await generateLeaderboardMessage()
-      );
+      const initialMessage = await generateLeaderboardMessage();
+      await findMyself();
+      console.log("Initial state:", {
+        page,
+        currentTotalPages,
+        highlightedPosition,
+        category,
+      });
+      const message = await interaction.editReply(initialMessage);
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
@@ -347,21 +368,49 @@ export default {
 
       collector.on("collect", async (i) => {
         if (i.customId === "prev_page") {
-          page = Math.max(0, page - 1);
-          highlightedPosition = null;
-          await i.update(await generateLeaderboardMessage());
+          console.log("Previous page clicked", {
+            currentPage: page,
+            currentTotalPages,
+            isDisabled: page <= 0,
+          });
+          if (page > 0) {
+            page--;
+            console.log("Moving to previous page:", page);
+            highlightedPosition = null;
+            const message = await generateLeaderboardMessage();
+            await i.update(message);
+          }
         } else if (i.customId === "next_page") {
-          page++;
-          highlightedPosition = null;
-          await i.update(await generateLeaderboardMessage());
+          console.log("Next page clicked", {
+            currentPage: page,
+            currentTotalPages,
+            isDisabled: page >= currentTotalPages - 1,
+          });
+
+          if (page < currentTotalPages - 1) {
+            page++;
+            console.log("Moving to next page:", page);
+            highlightedPosition = null;
+            const message = await generateLeaderboardMessage();
+            await i.update(message);
+          }
         } else if (i.customId === "select_user") {
           highlightedPosition = parseInt(i.values[0]);
-          await i.update(await generateLeaderboardMessage());
+          const message = await generateLeaderboardMessage();
+          console.log("Select user:", { highlightedPosition });
+          await i.update(message);
         } else if (i.customId === "select_category") {
           category = i.values[0];
           page = 0;
           highlightedPosition = null;
-          await i.update(await generateLeaderboardMessage());
+          const message = await generateLeaderboardMessage();
+          console.log("Category changed:", {
+            category,
+            page,
+            currentTotalPages,
+            highlightedPosition,
+          });
+          await i.update(message);
         }
       });
 

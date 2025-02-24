@@ -3,12 +3,16 @@ const Leaderboard = (props) => {
     users,
     currentPage = 1,
     totalPages = 3,
-    highlightedPosition = 1,
-    width = 400,
-    height = 755,
+    highlightedPosition = 2,
+    width = 550,
+    height = 670,
     i18n,
-    category = "bank",
+    category = "total",
   } = props;
+
+  //highlightedPosition = 2;
+
+  //category = "games";
 
   // Transform translations to match the expected structure
   const translations = {};
@@ -30,7 +34,6 @@ const Leaderboard = (props) => {
   console.log(JSON.stringify(props, null, 2));
 
   const usersPerPage = 10;
-
   const startIndex = (currentPage - 1) * usersPerPage;
   const endIndex = startIndex + usersPerPage;
 
@@ -86,20 +89,61 @@ const Leaderboard = (props) => {
           ? generateEconomyData()
           : null;
 
+        const levelData = {
+          level: Math.floor(Math.random() * 100) + 1,
+          xp: Math.floor(Math.random() * 100000),
+          xpStats: {
+            chat: Math.floor(Math.random() * 50000),
+            voice: Math.floor(Math.random() * 50000),
+          },
+        };
+
+        const gameData = {
+          gameRecords: {
+            2048: { highScore: Math.floor(Math.random() * 8192) },
+            snake: { highScore: Math.floor(Math.random() * 200) },
+          },
+        };
+
+        const seasonData = {
+          seasonStats: {
+            rank: index + 1,
+            totalXP: Math.floor(Math.random() * 100000),
+          },
+        };
+
         return {
           id: (1000000000 + index).toString(),
           name: `${randomUsername}${Math.floor(Math.random() * 999)}`,
+          avatarURL: `https://cdn.discordapp.com/embed/avatars/${
+            index % 5
+          }.png`,
+          coloring: {
+            textColor: "#FFFFFF",
+            secondaryTextColor: "rgba(255, 255, 255, 0.8)",
+            tertiaryTextColor: "rgba(255, 255, 255, 0.4)",
+            backgroundGradient: "linear-gradient(145deg, #5865F2, #4752C4)",
+            overlayBackground: "rgba(255, 255, 255, 0.2)",
+          },
           value: economyData
             ? category === "balance"
               ? economyData.balance
               : category === "bank"
               ? economyData.bank
               : economyData.value
+            : category === "2048"
+            ? gameData.gameRecords["2048"].highScore
+            : category === "snake"
+            ? gameData.gameRecords.snake.highScore
             : generateRandomValue(category),
           ...(economyData && {
             balance: economyData.balance,
             bank: economyData.bank,
+            totalBalance: economyData.value,
           }),
+          ...levelData,
+          ...gameData,
+          ...seasonData,
         };
       })
       .sort((a, b) => b.value - a.value);
@@ -146,9 +190,11 @@ const Leaderboard = (props) => {
       case "season":
         return `${formattedNumber} XP`; // Moved XP to end to align numbers
       case "games":
-        return formattedNumber;
+      case "2048":
+      case "snake":
+        return formattedNumber; // Show raw score for game categories
       default:
-        return `$${formattedNumber}`;
+        return `$${formattedNumber}`; // Add $ for economy categories
     }
   };
 
@@ -162,89 +208,95 @@ const Leaderboard = (props) => {
       label: translations.position || "Position",
     });
 
-    // Add all economy info
-    if (
-      user.balance !== undefined ||
-      user.bank !== undefined ||
-      user.totalBalance !== undefined
-    ) {
-      info.push(
-        {
+    // Handle money-related categories
+    if (["total", "balance", "bank"].includes(category)) {
+      // Show other money stats except the current one
+      if (category !== "balance") {
+        info.push({
           icon: "💰",
           value: user.balance,
           prefix: "$",
           label: translations.categories?.balance || "Balance",
-        },
-        {
+        });
+      }
+      if (category !== "bank") {
+        info.push({
           icon: "💳",
           value: user.bank,
           prefix: "$",
           label: translations.categories?.bank || "Bank Balance",
-        },
-        {
+        });
+      }
+      if (category !== "total") {
+        info.push({
           icon: "🏦",
           value: user.totalBalance,
           prefix: "$",
           label: translations.categories?.total || "Total Balance",
-        }
-      );
+        });
+      }
+      return info;
     }
 
-    // Add XP info if available
-    if (user.xpStats) {
+    // Handle level category
+    if (category === "level") {
       info.push(
         {
           icon: "💭",
-          value: user.xpStats.chat,
+          value: user.xpStats?.chat,
           label: translations.chatXP || "Chat XP",
         },
         {
           icon: "🎙️",
-          value: user.xpStats.voice,
+          value: user.xpStats?.voice,
           label: translations.voiceXP || "Voice XP",
         }
       );
+      return info;
     }
 
-    // Add season info if available
-    if (user.seasonStats) {
+    // Handle season category
+    if (category === "season" && user.seasonStats) {
+      info.push({
+        icon: "📊",
+        value: user.seasonStats?.rank,
+        label: translations.seasonRank || "Season Rank",
+      });
+      return info;
+    }
+
+    // Handle games category - show individual game scores since main value shows total
+    if (category === "games" && user.gameRecords) {
       info.push(
         {
-          icon: "📊",
-          value: user.seasonStats.rank,
-          label: translations.seasonRank || "Season Rank",
+          icon: "🎮",
+          value: user.gameRecords["2048"]?.highScore,
+          label: `2048 ${translations.highScore || "High Score"}`,
         },
         {
-          icon: "⭐",
-          value: user.seasonStats.totalXP,
-          label: translations.totalSeasonXP || "Total Season XP",
+          icon: "🐍",
+          value: user.gameRecords.snake?.highScore,
+          label: `Snake ${translations.highScore || "High Score"}`,
         }
       );
+      return info;
     }
 
-    // Add game records if available
-    if (user.gameRecords) {
-      Object.entries(user.gameRecords).forEach(([game, record]) => {
-        info.push({
-          icon: game === "2048" ? "🎮" : "🐍",
-          value: record.highScore,
-          label: `${game} ${translations.highScore || "High Score"}`,
-        });
-      });
-    }
+    // For any other category, return just position
 
-    // Filter out entries with undefined or null values and sort by value
+    // Filter out entries with undefined, null, or 0 values and sort by value
     return info
-      .filter((item) => item.value !== undefined && item.value !== null)
+      .filter((item) => item.value != null && item.value !== 0)
       .sort((a, b) => Number(b.value) - Number(a.value));
   };
 
-  const renderInfoCard = (info) => (
+  const renderInfoCard = (info, coloring) => (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        backgroundColor: "rgba(255, 255, 255, 0.2)",
+        backgroundColor:
+          coloring?.overlayBackground || "rgba(255, 255, 255, 0.2)",
         borderRadius: "8px",
         padding: "4px 8px",
         minWidth: "60px", // Reduced from 80px
@@ -276,7 +328,7 @@ const Leaderboard = (props) => {
       <div
         style={{
           fontSize: "9px",
-          opacity: 0.8,
+          color: coloring?.secondaryTextColor || "rgba(255, 255, 255, 0.8)",
           textAlign: "center",
           marginTop: "2px",
           whiteSpace: "nowrap",
@@ -302,11 +354,12 @@ const Leaderboard = (props) => {
         style={{
           display: "flex",
           flexDirection: "column",
-          color: "white",
-          backgroundColor: "#4791DB",
+          position: "relative",
+          color: user.coloring?.textColor || "white",
+          background: user.coloring?.backgroundGradient || "#4791DB",
           borderRadius: "0 0 10px 10px",
-          padding: "4px",
-          border: "3px solid gold",
+          padding: "8px",
+          border: "none",
           borderTop: "none",
           marginTop: "-1px",
           gap: "4px",
@@ -316,12 +369,13 @@ const Leaderboard = (props) => {
           <div
             key={rowIndex}
             style={{
+              position: "relative",
               display: "flex",
               gap: "4px",
               justifyContent: "flex-start",
             }}
           >
-            {row.map((info) => renderInfoCard(info))}
+            {row.map((info) => renderInfoCard(info, user.coloring))}
           </div>
         ))}
       </div>
@@ -347,18 +401,14 @@ const Leaderboard = (props) => {
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            color: "white",
+            color: user.coloring?.textColor || "white",
             paddingLeft: "10px",
-            backgroundColor: isHighlighted
-              ? "rgba(255, 255, 255, 0.2)"
-              : "transparent",
-            border: isHighlighted ? "3px solid gold" : "none",
-            borderBottom: isHighlighted ? "none" : "none",
+            backgroundColor: "transparent",
+            border: "none",
             borderRadius: isHighlighted ? "10px 10px 0 0" : "0",
             width: "100%",
             maxWidth: "100%",
-            boxSizing: "border-box",
-            overflow: "hidden",
+            overflow: isHighlighted ? "visible" : "hidden",
           }}
         >
           {!isHighlighted && (
@@ -372,6 +422,7 @@ const Leaderboard = (props) => {
                 fontWeight: "bold",
                 minWidth: "24px",
                 maxWidth: "24px",
+                color: "white",
               }}
             >
               {position}.
@@ -381,20 +432,14 @@ const Leaderboard = (props) => {
           <div
             style={{
               display: "flex",
-              backgroundColor:
-                position === 1
-                  ? "gold"
-                  : position === 2
-                  ? "silver"
-                  : position === 3
-                  ? "#cd7f32"
-                  : !isHighlighted
-                  ? "rgba(255, 255, 255, 0.1)"
-                  : "transparent",
+              position: "relative",
+              overflow: "hidden",
+              background:
+                user.coloring?.backgroundGradient || "rgba(255, 255, 255, 0.1)",
               borderRadius: isHighlighted
                 ? "7px 7px 0px 0px"
                 : position === startIndex + 1
-                ? "10px 10px 0px 0px"
+                ? "10px 10px 10px 0px"
                 : position === highlightedPosition + 1
                 ? "0px 10px 0px 0px"
                 : position === highlightedPosition - 1
@@ -408,20 +453,35 @@ const Leaderboard = (props) => {
               justifyContent: "space-between",
               flex: 1,
               padding: "2px",
-              minWidth: 0, // Add this to allow flex shrinking
+              minWidth: 0,
             }}
           >
+            {user.bannerUrl && (
+              <img
+                src={user.bannerUrl}
+                style={{
+                  position: "absolute",
+                  top: "0",
+                  width: "101%",
+                  height: isHighlighted ? "200%" : "107%",
+                  objectFit: "cover",
+                  transform: "scale(1.2)",
+                  filter: "blur(5px)",
+                }}
+              />
+            )}
             <div
               style={{
                 display: "flex",
                 flexDirection: "row",
+                position: "relative",
                 alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0)",
+                backgroundColor: "transparent",
                 borderRadius: "10px",
                 padding: "5px",
-                minWidth: 0, // Allow flex shrinking
-                flex: 1, // Take available space
-                marginRight: "10px", // Add spacing between name and value
+                minWidth: 0,
+                flex: 1,
+                marginRight: "10px",
               }}
             >
               <div
@@ -430,7 +490,7 @@ const Leaderboard = (props) => {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0, // Prevent avatar from shrinking
+                  flexShrink: 0,
                 }}
               >
                 <img
@@ -444,13 +504,14 @@ const Leaderboard = (props) => {
                   style={{ borderRadius: "15%", display: "block" }}
                 />
               </div>
+
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "center",
-                  minWidth: 0, // Allow flex shrinking
-                  flex: 1, // Take available space
+                  minWidth: 0,
+                  flex: 1,
                 }}
               >
                 <div
@@ -461,13 +522,22 @@ const Leaderboard = (props) => {
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    maxWidth: "100%", // Use percentage instead of fixed width
+                    maxWidth: "100%",
+                    color: user.coloring?.textColor || "white",
                   }}
                 >
                   {user.name}
                 </div>
                 {isHighlighted && (
-                  <div style={{ fontSize: "8px", display: "flex" }}>
+                  <div
+                    style={{
+                      fontSize: "8px",
+                      display: "flex",
+                      color:
+                        user.coloring?.secondaryTextColor ||
+                        "rgba(255, 255, 255, 0.8)",
+                    }}
+                  >
                     #{user.id}
                   </div>
                 )}
@@ -478,25 +548,28 @@ const Leaderboard = (props) => {
                 fontSize: `${valueFontSize}px`,
                 fontWeight: "bold",
                 display: "flex",
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                backgroundColor:
+                  user.coloring?.overlayBackground ||
+                  "rgba(255, 255, 255, 0.2)",
+                color: user.coloring?.textColor || "white",
                 borderRadius: "10px",
                 marginRight: "10px",
                 padding: "5px 10px",
                 alignItems: "center",
                 justifyContent: "flex-end",
-                minWidth: "80px",
+                minWidth: "0px",
                 maxWidth: "120px",
-                overflow: "visible", // Changed from hidden to visible
+                overflow: "visible",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
-                position: "relative", // Add position relative
-                zIndex: 1, // Ensure value appears above other elements if it overflows
+                position: "relative",
               }}
             >
               {getValueString(user.value, category)}
             </div>
           </div>
         </div>
+
         {isHighlighted && renderHighlightedSection(user)}
       </div>
     );
@@ -507,25 +580,24 @@ const Leaderboard = (props) => {
       style={{
         width: width,
         height: height,
-        padding: "10px",
         display: "flex",
         flexDirection: "column",
         fontFamily: "Inter600, sans-serif",
         backgroundColor: "#2196f3",
-        borderRadius: "20px",
+        borderRadius: "10px",
         boxSizing: "border-box",
       }}
     >
       <div
         style={{
           backgroundColor: "#1976d2",
-          borderRadius: "15px",
+          borderRadius: "5px",
           padding: "10px",
           display: "flex",
           flexDirection: "column",
           width: "100%",
           maxWidth: "100%",
-          height: height - 75,
+          height: height - 55,
           overflowY: "auto",
           overflowX: "hidden",
           boxSizing: "border-box",
@@ -565,14 +637,13 @@ const Leaderboard = (props) => {
         style={{
           fontSize: "16px",
           display: "flex",
-          marginTop: "10px",
+          padding: "15px",
           color: "white",
           borderRadius: "10px",
-          padding: "5px",
           alignItems: "center",
           justifyContent: "space-between",
           width: "100%",
-          height: 45,
+          height: 50,
           boxSizing: "border-box",
         }}
       >
@@ -654,8 +725,8 @@ const Leaderboard = (props) => {
 };
 
 Leaderboard.dimensions = {
-  width: 400,
-  height: 755,
+  width: 550,
+  height: 670,
 };
 
 // Static translations object that will be synchronized
