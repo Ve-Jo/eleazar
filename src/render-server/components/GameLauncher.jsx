@@ -10,7 +10,16 @@ const GameLauncher = (props) => {
     width = 750,
     height = 450,
     gameStats = { 2048: { highScore: 0 }, snake: { highScore: 0 } },
+    coloring,
   } = props;
+
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring || {};
 
   // Rest of the imports and initial setup remains the same...
   const translations = Object.entries(GameLauncher.localization_strings).reduce(
@@ -90,6 +99,15 @@ const GameLauncher = (props) => {
     const BORDER_RADIUS = 18;
     const HIGHLIGHT_BORDER = 6;
 
+    const cardBackground =
+      selectedGame === game.id
+        ? coloring?.isDarkText
+          ? "rgba(255, 165, 0, 0.8)"
+          : "#FFA500"
+        : coloring?.isDarkText
+        ? "rgba(29, 185, 53, 0.8)"
+        : "#1DB935";
+
     return (
       <div
         key={game.id}
@@ -97,10 +115,12 @@ const GameLauncher = (props) => {
           minWidth: "200px",
           height: "130px",
           display: "flex",
-          backgroundColor: selectedGame === game.id ? "#FFA500" : "#1DB935",
+          backgroundColor: cardBackground,
           borderRadius: `${BORDER_RADIUS}px`,
           border: isHighlighted
-            ? `${HIGHLIGHT_BORDER}px solid #FFA500`
+            ? `${HIGHLIGHT_BORDER}px solid ${
+                coloring?.isDarkText ? "rgba(255, 165, 0, 0.8)" : "#FFA500"
+              }`
             : "none",
           position: "relative",
           flexShrink: 0,
@@ -161,8 +181,9 @@ const GameLauncher = (props) => {
             display: "flex",
             padding: "4px 8px",
             borderRadius: "12px",
-            backgroundColor: "rgba(0, 0, 0, 0.25)",
+            backgroundColor: overlayBackground || "rgba(0, 0, 0, 0.25)",
             fontFamily: "Inter600",
+            color: textColor || "#FFFFFF",
           }}
         >
           {game.title}
@@ -177,7 +198,11 @@ const GameLauncher = (props) => {
             left: "0",
             right: "0",
             height: "30px",
-            backgroundColor: isHighlighted ? "#FFA500" : "rgba(0, 0, 0, 0)",
+            backgroundColor: isHighlighted
+              ? coloring?.isDarkText
+                ? "rgba(255, 165, 0, 0.8)"
+                : "#FFA500"
+              : "rgba(0, 0, 0, 0)",
             fontFamily: "Inter600",
             borderRadius: isHighlighted
               ? `0 0 ${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
@@ -187,6 +212,7 @@ const GameLauncher = (props) => {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
+            color: textColor || "#FFFFFF",
           }}
         >
           {translations.highScore}: {highScore}
@@ -200,13 +226,13 @@ const GameLauncher = (props) => {
       style={{
         width,
         height,
-        backgroundColor: "#3DAA4E",
         borderRadius: "20px",
         padding: "25px",
-        color: "white",
+        color: textColor,
         fontFamily: "Inter600, sans-serif",
         display: "flex",
         flexDirection: "column",
+        background: backgroundGradient,
       }}
     >
       {/* Header section */}
@@ -223,11 +249,22 @@ const GameLauncher = (props) => {
       >
         <img
           src={interaction.user.avatarURL}
-          style={{ width: "100px", height: "100px", borderRadius: "20%" }}
+          style={{
+            width: "100px",
+            height: "100px",
+            borderRadius: "20%",
+            backgroundColor: overlayBackground,
+          }}
           alt={translations.userAvatarAlt}
         />
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ fontSize: "64px", display: "flex" }}>
+          <div
+            style={{
+              fontSize: "64px",
+              display: "flex",
+              color: textColor,
+            }}
+          >
             {translations.gameSelection}
           </div>
           <div style={{ display: "flex" }}>
@@ -235,11 +272,12 @@ const GameLauncher = (props) => {
               style={{
                 display: "flex",
                 alignItems: "center",
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                backgroundColor: overlayBackground,
                 borderRadius: "10px",
                 padding: "10px",
                 gap: "5px",
                 alignSelf: "flex-start",
+                color: textColor,
               }}
             >
               <span style={{ display: "flex" }}>💵</span>
@@ -291,28 +329,43 @@ const GameLauncher = (props) => {
                       height: "60px",
                       borderRadius: "25%",
                       marginRight: "5px",
+                      backgroundColor: overlayBackground,
                     }}
                   />
-                  <span style={{ fontSize: "36px", display: "flex" }}>
+                  <span
+                    style={{
+                      fontSize: "36px",
+                      display: "flex",
+                      color: textColor,
+                    }}
+                  >
                     {category}
                   </span>
                 </div>
                 <div
                   style={{
+                    position: "relative",
+                    marginBottom: "10px",
                     display: "flex",
-                    gap: "15px",
-                    paddingBottom: "10px",
-                    marginRight: "-25px",
-                    paddingRight: "25px",
-                    overflowX: "auto",
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
-                    WebkitOverflowScrolling: "touch",
                   }}
                 >
-                  {categoryData.games_list.map((game, gameIndex) => {
-                    return renderGameCard(game, gameIndex, categoryIndex);
-                  })}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "15px",
+                      paddingBottom: "10px",
+                      marginRight: "-25px",
+                      paddingRight: "25px",
+                      overflowX: "auto",
+                      msOverflowStyle: "none",
+                      WebkitOverflowScrolling: "touch",
+                      scrollbarWidth: "none",
+                    }}
+                  >
+                    {categoryData.games_list.map((game, gameIndex) =>
+                      renderGameCard(game, gameIndex, categoryIndex)
+                    )}
+                  </div>
                 </div>
               </div>
             );
