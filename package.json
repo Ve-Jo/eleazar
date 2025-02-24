@@ -17,6 +17,7 @@
     "axios": "^1.7.9",
     "bing-translate-api": "^4.0.2",
     "chokidar": "^4.0.1",
+    "color-thief-bun": "^1.0.3",
     "crypto": "^1.0.1",
     "deepinfra": "^2.0.2",
     "discord.js": "^14.16.1",
