@@ -1,5 +1,12 @@
 const Transfer = (props) => {
-  let { interaction, database, amount, isDeposit, i18n } = props;
+  let { interaction, database, amount, isDeposit, i18n, coloring } = props;
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring || {};
 
   // Get translations from i18n based on the static translation object
   const translations = Object.entries(Transfer.localization_strings).reduce(
@@ -19,16 +26,16 @@ const Transfer = (props) => {
       style={{
         width: "400px",
         height: "200px",
-        backgroundColor: database.bannerUrl ? "rgba(0, 0, 0, 0.6)" : "#2196f3",
         borderRadius: database.bannerUrl ? "0px" : "20px",
         padding: "10px 20px 20px 20px",
-        color: "white",
+        color: textColor,
         fontFamily: "Inter600, sans-serif",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         position: "relative",
         overflow: "hidden",
+        background: backgroundGradient,
       }}
     >
       <div
@@ -45,7 +52,13 @@ const Transfer = (props) => {
             alignItems: "center",
           }}
         >
-          <h2 style={{ margin: "0 0 10px 0", fontSize: "24px" }}>
+          <h2
+            style={{
+              margin: "0 0 10px 0",
+              fontSize: "24px",
+              color: textColor,
+            }}
+          >
             {isDeposit ? translations.deposit : translations.withdraw}
           </h2>
           <div
@@ -55,9 +68,9 @@ const Transfer = (props) => {
               right: "0",
               width: "100px",
               height: "100px",
-              borderRadius: "50%",
+              borderRadius: "25px",
               overflow: "hidden",
-              backgroundColor: "#1565c0",
+              backgroundColor: overlayBackground,
               display: "flex",
             }}
           >
@@ -83,7 +96,7 @@ const Transfer = (props) => {
         >
           <div
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: overlayBackground,
               borderRadius: "10px",
               padding: "5px 10px",
               display: "flex",
@@ -91,7 +104,13 @@ const Transfer = (props) => {
             }}
           >
             <span style={{ fontSize: "24px", marginRight: "10px" }}>💵</span>
-            <span style={{ fontSize: "24px", fontWeight: "bold" }}>
+            <span
+              style={{
+                fontSize: "24px",
+                fontWeight: "bold",
+                color: textColor,
+              }}
+            >
               {database.economy.balance.toFixed(2) || "{balance}"}
             </span>
           </div>
@@ -104,7 +123,8 @@ const Transfer = (props) => {
               margin: "5px 0",
               justifyContent: "center",
               alignItems: "center",
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: overlayBackground,
+              color: secondaryTextColor,
             }}
           >
             <span style={{ fontSize: "15px", fontWeight: "bold" }}>
@@ -114,7 +134,7 @@ const Transfer = (props) => {
           </div>
           <div
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: overlayBackground,
               borderRadius: "10px",
               padding: "5px 10px",
               display: "flex",
@@ -123,7 +143,13 @@ const Transfer = (props) => {
             }}
           >
             <span style={{ fontSize: "24px", marginRight: "10px" }}>💳</span>
-            <span style={{ fontSize: "24px", fontWeight: "bold" }}>
+            <span
+              style={{
+                fontSize: "24px",
+                fontWeight: "bold",
+                color: textColor,
+              }}
+            >
               {database.economy.bankBalance.toFixed(2) || "{bank}"}
             </span>
           </div>
@@ -138,10 +164,16 @@ const Transfer = (props) => {
           width: "100%",
         }}
       >
-        <span style={{ fontSize: "14px", opacity: "0.2" }}>
+        <span
+          style={{
+            fontSize: "14px",
+            opacity: "0.2",
+            color: tertiaryTextColor,
+          }}
+        >
           #{interaction?.user?.id || "{id}"}
         </span>
-        <span style={{ fontSize: "16px" }}>
+        <span style={{ fontSize: "16px", color: textColor }}>
           {interaction?.user?.username ||
             interaction?.user?.displayName ||
             "{username}"}
