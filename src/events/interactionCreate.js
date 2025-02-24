@@ -43,8 +43,20 @@ async function updateInteractionStats(
       },
       create: {
         user: {
-          connect: {
-            guildId_id: { guildId, id: userId },
+          connectOrCreate: {
+            where: {
+              guildId_id: { guildId, id: userId },
+            },
+            create: {
+              id: userId,
+              guild: {
+                connectOrCreate: {
+                  where: { id: guildId },
+                  create: { id: guildId },
+                },
+              },
+              lastActivity: BigInt(Date.now()),
+            },
           },
         },
         interactionStats,
