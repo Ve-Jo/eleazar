@@ -1,38 +1,179 @@
-import React from "react";
 import prettyMilliseconds from "pretty-ms";
 
 const Balance = (props) => {
-  const { interaction, database, i18n } = props;
+  const renderBanknotes = (
+    amount,
+    maxRowLength,
+    startX,
+    baseY,
+    style,
+    division,
+    xspacing
+  ) => {
+    const totalBanknotes = Math.ceil(amount / division);
 
-  const containerStyle = {
-    width: "400px",
-    height: "235px",
-    borderRadius: database.bannerUrl ? "0px" : "20px",
-    padding: "20px",
-    color: "white",
-    fontFamily: "Inter600, sans-serif",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    position: "relative",
-    overflow: "hidden",
-    backgroundColor: database.bannerUrl ? "rgba(0, 0, 0, 0.6)" : "#2196f3",
+    const fullRows = Math.floor(totalBanknotes / maxRowLength);
+    const remaining = totalBanknotes % maxRowLength;
+    const rowsNeeded = fullRows + (remaining > 0 ? 1 : 0);
+
+    const banknotes = [];
+    let currentIndex = 0;
+
+    for (let row = 0; row < rowsNeeded; row++) {
+      const banknotesInThisRow = row < fullRows ? maxRowLength : remaining;
+
+      const xSpacing = xspacing || 15;
+      const totalWidth = banknotesInThisRow * xSpacing;
+      const startXPos = startX - totalWidth / 2;
+
+      // Place banknotes in this row
+      for (let col = 0; col < banknotesInThisRow; col++) {
+        if (currentIndex >= totalBanknotes) break;
+
+        // Add small random offset for natural look
+        const randomOffset = Math.random() * 3 - 1;
+        const ySpacing = 5; // Vertical spacing between rows
+
+        const xPos = startXPos + col * xSpacing + randomOffset;
+        const yPos = baseY - row * ySpacing; // Rows stack upwards
+
+        // Apply styling based on the style parameter
+        if (style === "banknotes") {
+          // Green banknotes with orange stripe
+          banknotes.push(
+            <div
+              key={currentIndex}
+              style={{
+                position: "absolute",
+                left: `${xPos}px`,
+                top: `${yPos}px`,
+                width: "15px",
+                height: "5px",
+                background: "#4CAF50",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.3,
+              }}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: "3px",
+                  height: "100%",
+                  background: "#FF9800", // Orange stripe
+                }}
+              />
+            </div>
+          );
+        } else if (style === "bars") {
+          // Green golden bars (solid gold with green border for effect)
+          banknotes.push(
+            <div
+              key={currentIndex}
+              style={{
+                position: "absolute",
+                left: `${xPos}px`,
+                top: `${yPos}px`,
+                width: "15px",
+                height: "5px",
+                background: "#DAA520", // Gold gradient
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: 0.3,
+              }}
+            />
+          );
+        }
+        currentIndex++;
+      }
+    }
+
+    return banknotes;
   };
 
+  // Example usage:
+  // For 6000 units (6 banknotes), it will create a single row centered at X = 60
+  // For 11000 units (11 banknotes), it will create a pyramid (e.g., 5, 4, 2) centered at X = 60
+
+  const { interaction, database, i18n, coloring } = props;
+
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring;
+
+  //database.economy.bankBalance = 0;
+
+  const bankStartTime = database?.economy?.bankStartTime || 0;
+  const bankRate = database?.economy?.bankRate || 0;
+  const bankBalance = database?.economy?.bankBalance || 0;
+  const walletBalance = database?.economy?.balance || 0;
+
+  const mainBackground = database?.bannerUrl
+    ? "transparent"
+    : backgroundGradient;
   return (
-    <div style={containerStyle}>
+    <div
+      style={{
+        display: "flex",
+        width: "400px",
+        height: "235px",
+        borderRadius: database?.bannerUrl ? "0px" : "20px",
+        padding: "20px",
+        color: textColor,
+        fontFamily: "Inter600, sans-serif",
+        position: "relative",
+        overflow: "hidden",
+        background: mainBackground,
+      }}
+    >
+      {renderBanknotes(walletBalance, 8, 95, 115, "banknotes", 50, 18)}
+
+      {/* Banner Background */}
+      {database?.bannerUrl && (
+        <div
+          style={{
+            position: "absolute",
+            display: "flex",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 0,
+            overflow: "hidden",
+          }}
+        >
+          <img
+            src={database.bannerUrl}
+            alt="Banner"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center",
+              filter: "blur(8px)",
+              transform: "scale(1.1)",
+            }}
+          />
+        </div>
+      )}
       {/* Content */}
       <div
         style={{
           position: "relative",
           zIndex: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
           width: "100%",
+          display: "flex",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+        <div
+          style={{ width: "260px", display: "flex", flexDirection: "column" }}
+        >
           <div
             style={{
               display: "flex",
@@ -43,7 +184,7 @@ const Balance = (props) => {
           >
             <img
               src={
-                interaction.guild.iconURL ||
+                interaction?.guild?.iconURL ||
                 "https://cdn.discordapp.com/embed/avatars/0.png"
               }
               alt="Guild Icon"
@@ -51,10 +192,18 @@ const Balance = (props) => {
               height={24}
               style={{ borderRadius: "5px" }}
             />
-            <h2 style={{ margin: "0", fontSize: "24px", display: "flex" }}>
+            <h2
+              style={{
+                margin: "0",
+                fontSize: "24px",
+                display: "flex",
+                color: textColor,
+              }}
+            >
               {i18n.__("title")}!
             </h2>
           </div>
+          {renderBanknotes(bankBalance, 10, 95, 161, "bars", 100, 18)}
           <div
             style={{
               display: "flex",
@@ -65,91 +214,103 @@ const Balance = (props) => {
           >
             <div
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                display: "flex",
+                backgroundColor: overlayBackground,
                 borderRadius: "10px 10px 10px 0",
                 padding: "5px 15px",
-                display: "flex",
                 alignItems: "center",
                 alignSelf: "flex-start",
                 minWidth: "150px",
               }}
             >
-              <span
+              <div
                 style={{
+                  display: "flex",
                   fontSize: "24px",
                   marginRight: "15px",
-                  display: "flex",
                 }}
               >
                 💵
-              </span>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span
-                  style={{ fontSize: "14px", opacity: "0.8", display: "flex" }}
-                >
-                  {i18n.__("wallet").toUpperCase()}
-                </span>
-                <span
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <div
                   style={{
-                    fontSize: "28px",
-                    fontWeight: "bold",
                     display: "flex",
+                    fontSize: "14px",
+                    color: secondaryTextColor,
+                    opacity: "0.8",
                   }}
                 >
-                  {database.economy.balance.toFixed(2) || "{balance}"}
-                </span>
+                  {i18n.__("wallet").toUpperCase()}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: "28px",
+                    fontWeight: "bold",
+                    color: textColor,
+                  }}
+                >
+                  {walletBalance.toFixed(2) || "{balance}"}
+                </div>
               </div>
             </div>
+
             <div
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                display: "flex",
+                backgroundColor: overlayBackground,
                 borderRadius:
-                  database.economy.bankStartTime > 0 &&
-                  database.economy.bankRate > 0
+                  bankStartTime > 0 && bankRate > 0
                     ? "0 10px 10px 0"
                     : "0 10px 10px 10px",
                 padding: "5px 15px",
-                display: "flex",
                 alignItems: "center",
                 alignSelf: "flex-start",
                 minWidth: "150px",
                 maxWidth: "300px",
               }}
             >
-              <span
+              <div
                 style={{
+                  display: "flex",
                   fontSize: "24px",
                   marginRight: "15px",
-                  display: "flex",
                 }}
               >
                 💳
-              </span>
+              </div>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    width: "100%",
                   }}
                 >
-                  <span
+                  <div
                     style={{
+                      display: "flex",
                       fontSize: "14px",
                       opacity: "0.8",
-                      display: "flex",
+                      color: secondaryTextColor,
                     }}
                   >
                     {i18n.__("bank").toUpperCase()}
-                  </span>
-                  {database.economy.bankStartTime > 0 &&
-                  database.economy.bankRate > 0 ? (
-                    <span
+                  </div>
+                  {bankStartTime > 0 && bankRate > 0 ? (
+                    <div
                       style={{
+                        display: "flex",
                         fontSize: "14px",
                         opacity: "0.6",
-                        color: "rgba(255, 255, 255, 1)",
-                        display: "flex",
+                        color: textColor,
                       }}
                     >
                       ≈
@@ -157,65 +318,65 @@ const Balance = (props) => {
                         const MS_PER_HOUR = 60 * 60 * 1000;
                         const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
                         const hourlyRate =
-                          (database.economy.bankRate / 100) *
-                          (MS_PER_HOUR / MS_PER_YEAR);
-                        return (
-                          database.economy.bankBalance * hourlyRate
-                        ).toFixed(3);
+                          (bankRate / 100) * (MS_PER_HOUR / MS_PER_YEAR);
+                        return (bankBalance * hourlyRate).toFixed(3);
                       })()}
                       /h
-                    </span>
+                    </div>
                   ) : null}
                 </div>
                 <div
                   style={{
+                    display: "flex",
                     fontSize: "28px",
                     fontWeight: "bold",
-                    display: "flex",
                     alignItems: "baseline",
+                    width: "100%",
                   }}
                 >
-                  {database.economy.bankStartTime > 0 ? (
-                    <>
-                      <span style={{ display: "flex" }}>
-                        {Math.floor(database.economy.bankBalance)}
-                      </span>
-                      <span style={{ display: "flex" }}>.</span>
+                  {bankStartTime > 0 ? (
+                    <div style={{ display: "flex", alignItems: "baseline" }}>
                       <div style={{ display: "flex" }}>
-                        {(database.economy.bankBalance % 1)
+                        {Math.floor(bankBalance)}
+                      </div>
+                      <div style={{ display: "flex" }}>.</div>
+                      <div style={{ display: "flex" }}>
+                        {(bankBalance % 1)
                           .toFixed(5)
                           .substring(2)
                           .split("")
                           .map((digit, i) => (
-                            <span
+                            <div
                               key={i}
                               style={{
+                                display: "flex",
                                 fontSize: i < 2 ? 28 : 18,
                                 paddingTop: i < 2 ? 0 : 10,
-                                display: "flex",
                               }}
                             >
                               {digit}
-                            </span>
+                            </div>
                           ))}
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <span style={{ display: "flex" }}>
-                      {database.economy.bankBalance.toFixed(2) || "{bank}"}
-                    </span>
+                    <div style={{ display: "flex" }}>
+                      {bankBalance.toFixed(2) || "{bank}"}
+                    </div>
                   )}
                 </div>
               </div>
             </div>
-            {database.economy.bankStartTime > 0 &&
-            database.economy.bankRate > 0 ? (
+            {bankStartTime > 0 && bankRate > 0 ? (
               <div
                 style={{
-                  backgroundColor: "rgba(255, 166, 0, 1)",
+                  display: "flex",
+                  backgroundColor: coloring?.isDarkText
+                    ? "rgba(255, 166, 0, 0.3)"
+                    : "rgba(255, 166, 0, 1)",
+                  color: coloring?.isDarkText ? "#000" : "#FFF",
                   borderRadius: "0 10px 10px 10px",
                   padding: "5px 15px",
-                  display: "flex",
                   marginTop: "-5px",
                   alignItems: "center",
                   alignSelf: "flex-start",
@@ -223,57 +384,64 @@ const Balance = (props) => {
                   maxWidth: "300px",
                 }}
               >
-                <span
+                <div
                   style={{
-                    fontSize: "14px",
                     display: "flex",
+                    fontSize: "14px",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                   }}
                 >
-                  {database.economy.bankRate || "{holdingPercentage}"}
+                  {bankRate || "{holdingPercentage}"}
                   {"% "}
                   {i18n.__("annual")} (
-                  {prettyMilliseconds(
-                    Date.now() - Number(database.economy.bankStartTime),
-                    {
-                      colonNotation: true,
-                      secondsDecimalDigits: 0,
-                    }
-                  )}
+                  {prettyMilliseconds(Date.now() - Number(bankStartTime), {
+                    colonNotation: true,
+                    secondsDecimalDigits: 0,
+                  })}
                   )
-                </span>
+                </div>
               </div>
             ) : null}
           </div>
         </div>
         <div
           style={{
+            display: "flex",
             width: "110px",
             height: "110px",
             borderRadius: "25px",
             overflow: "hidden",
             backgroundColor: "rgba(0, 0, 0, 0.3)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            position: "absolute",
+            top: "5px",
+            right: "5px",
           }}
         >
-          <img
-            src={
-              interaction.user.avatarURL ||
-              "https://cdn.discordapp.com/embed/avatars/0.png"
-            }
-            alt="User"
-            width="110"
-            height="110"
+          <div
             style={{
-              objectFit: "cover",
-              borderRadius: "25px",
               display: "flex",
+              width: "100%",
+              height: "100%",
+              justifyContent: "center",
+              alignItems: "center",
             }}
-          />
+          >
+            <img
+              src={
+                interaction?.user?.avatarURL ||
+                "https://cdn.discordapp.com/embed/avatars/0.png"
+              }
+              alt="User"
+              width="110"
+              height="110"
+              style={{
+                objectFit: "cover",
+                borderRadius: "25px",
+              }}
+            />
+          </div>
         </div>
       </div>
       <div
@@ -287,15 +455,34 @@ const Balance = (props) => {
           right: "6%",
         }}
       >
-        <span style={{ fontSize: "16px", display: "flex" }}>
-          {interaction.user.username ||
-            interaction.user.displayName ||
+        <div
+          style={{
+            display: "flex",
+            fontSize: "16px",
+            color: textColor,
+            width: "100%",
+            justifyContent: "flex-end",
+          }}
+        >
+          {interaction?.user?.username ||
+            interaction?.user?.displayName ||
             "{username}"}
-        </span>
-        <span style={{ fontSize: "12px", opacity: "0.4", display: "flex" }}>
-          #{interaction.user.id || "{id}"}
-        </span>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            fontSize: "12px",
+            opacity: "0.4",
+            color: tertiaryTextColor,
+            width: "100%",
+            justifyContent: "flex-end",
+          }}
+        >
+          #{interaction?.user?.id || "{id}"}
+        </div>
       </div>
+      {/* Render banknotes above the Balance rectangle */}
     </div>
   );
 };
