@@ -8,7 +8,16 @@ const SettingsDisplay = (props) => {
     maxSettingsHided = 5,
     maxSettingsHidedWidth = 320,
     maxCategoriesDistance = 0,
+    coloring,
   } = props;
+
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring || {};
 
   if (!settings)
     settings = [
@@ -164,6 +173,7 @@ const SettingsDisplay = (props) => {
                     opacity: 0.7,
                     marginBottom: "5px",
                     display: "flex",
+                    color: secondaryTextColor,
                   }}
                 >
                   {category}
@@ -181,7 +191,7 @@ const SettingsDisplay = (props) => {
                         <div
                           key={`category-setting-${index}`}
                           style={{
-                            backgroundColor: "rgba(255, 255, 255, 0.5)",
+                            backgroundColor: overlayBackground,
                             borderRadius: "5px",
                             padding: "2px 6px",
                             fontSize: "20px",
@@ -190,6 +200,7 @@ const SettingsDisplay = (props) => {
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
+                            color: textColor,
                           }}
                         >
                           {setting.title}
@@ -199,13 +210,14 @@ const SettingsDisplay = (props) => {
                   {categorySettings.length > maxSettingsHided && (
                     <div
                       style={{
-                        backgroundColor: "rgba(255, 255, 255, 0.5)",
+                        backgroundColor: overlayBackground,
                         borderRadius: "5px",
                         padding: "2px 6px",
                         display: "flex",
                         fontSize: "20px",
                         fontWeight: "bold",
                         marginLeft: "5px",
+                        color: textColor,
                       }}
                     >
                       +{categorySettings.length - maxSettingsHided}
@@ -236,7 +248,7 @@ const SettingsDisplay = (props) => {
                     <div
                       key={`blurred-${position}-${category}-${index}`}
                       style={{
-                        backgroundColor: "rgba(255, 255, 255, 0.3)",
+                        backgroundColor: overlayBackground,
                         borderRadius: "10px",
                         padding: "5px 10px",
                         margin: "0 5px 5px 0",
@@ -244,6 +256,7 @@ const SettingsDisplay = (props) => {
                         fontSize: "26px",
                         fontWeight: "bold",
                         whiteSpace: "nowrap",
+                        color: textColor,
                       }}
                     >
                       {setting.title}
@@ -263,16 +276,16 @@ const SettingsDisplay = (props) => {
       style={{
         width: width,
         height: height,
-        backgroundColor: "#2196f3",
         borderRadius: "20px",
         padding: "20px",
-        color: "white",
+        color: textColor,
         fontFamily: "Inter600, sans-serif",
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-start",
         position: "relative",
         overflowY: "auto",
+        background: backgroundGradient,
       }}
     >
       {renderBlurredSettings(blurredSettingsTop, "top")}
@@ -283,14 +296,18 @@ const SettingsDisplay = (props) => {
           <div
             key={actualIndex}
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.3)",
+              backgroundColor: overlayBackground,
               borderRadius: "10px",
               padding: "10px",
               display: "flex",
               flexDirection: "column",
               border:
                 highlightedPosition === actualIndex
-                  ? "5px solid #FFA500"
+                  ? `5px solid ${
+                      coloring?.isDarkText
+                        ? "rgba(255, 165, 0, 0.8)"
+                        : "#FFA500"
+                    }`
                   : "none",
             }}
           >
@@ -302,6 +319,7 @@ const SettingsDisplay = (props) => {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                color: textColor,
               }}
             >
               <span>{setting.title}</span>
@@ -310,9 +328,12 @@ const SettingsDisplay = (props) => {
                   fontSize: "32px",
                   fontWeight: "bold",
                   marginBottom: "5px",
-                  backgroundColor: "#FFA500",
+                  backgroundColor: coloring?.isDarkText
+                    ? "rgba(255, 165, 0, 0.8)"
+                    : "#FFA500",
                   borderRadius: "10px",
                   padding: "5px 10px",
+                  color: textColor,
                 }}
               >
                 {setting.category}
@@ -321,10 +342,10 @@ const SettingsDisplay = (props) => {
             <div
               style={{
                 fontSize: "24px",
-                opacity: "0.8",
                 display: "flex",
                 flexDirection: "column",
                 marginBottom: "5px",
+                color: secondaryTextColor,
               }}
             >
               {setting.description}
@@ -342,13 +363,16 @@ const SettingsDisplay = (props) => {
                     <div
                       key={idx}
                       style={{
-                        backgroundColor: "#FFA500",
+                        backgroundColor: coloring?.isDarkText
+                          ? "rgba(255, 165, 0, 0.8)"
+                          : "#FFA500",
                         borderRadius: "5px",
                         padding: "5px 5px",
                         display: "flex",
                         fontSize: "24px",
                         fontWeight: "bold",
                         alignSelf: "flex-start",
+                        color: textColor,
                       }}
                     >
                       {value.split(/(<[^>]+>)/).map((part, partIdx) =>
@@ -356,10 +380,13 @@ const SettingsDisplay = (props) => {
                           <span
                             key={partIdx}
                             style={{
-                              backgroundColor: "#FFD700",
+                              backgroundColor: coloring?.isDarkText
+                                ? "rgba(255, 215, 0, 0.8)"
+                                : "#FFD700",
                               margin: "0 3px",
                               borderRadius: "5px",
                               padding: "0 3px",
+                              color: textColor,
                             }}
                           >
                             {part}
