@@ -1,14 +1,14 @@
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
-import sharp from "sharp"; // Keep for GIF processing for now
+import sharp from "sharp";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import GIFEncoder from "gifencoder";
 import React from "react";
 import twemoji from "@twemoji/api";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
+import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
 
 // Configure Bun's garbage collector if available
 if (typeof Bun !== "undefined" && Bun.gc) {
@@ -22,8 +22,10 @@ const TEMP_DIR = join(__dirname, "..", "temp");
 const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5MB limit
 const BANNER_TIMEOUT = 5000; // 5 seconds
 
-// Cache instance for emojis
+// Cache instances
 const emojiCache = new Map();
+const colorCache = new Map();
+const COLOR_CACHE_MAX_SIZE = 30;
 
 // Fonts configuration
 let fonts = null;
@@ -81,16 +83,32 @@ async function loadFonts() {
 // Enhanced cleanup function with GC trigger
 export async function cleanup(forceGC = true) {
   emojiCache.clear();
+  colorCache.clear();
   sharp.cache(false);
   if (forceGC && global.gc) {
     global.gc();
   }
 }
 
+// Helper function to manage color cache size
+function manageColorCache() {
+  if (colorCache.size > COLOR_CACHE_MAX_SIZE) {
+    const oldestKey = colorCache.keys().next().value;
+    colorCache.delete(oldestKey);
+  }
+}
+
 // Enhanced emoji handling with proper resource cleanup
 export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
+  // Handle undefined/null emoji
+  if (!emoji) return null;
+
   const emojiCode = twemoji.convert.toCodePoint(emoji);
-  const cacheKey = `${emojiCode}-${emojiScaling}`;
+  if (!emojiCode) return null;
+
+  // Validate scaling factor
+  const validatedScaling = Math.min(Math.max(emojiScaling, 0.5), 3);
+  const cacheKey = `${emojiCode}-${validatedScaling}`;
 
   if (emojiCache.has(cacheKey)) {
     return emojiCache.get(cacheKey);
@@ -101,11 +119,12 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
     const response = await fetch(svgUrl);
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      console.warn(`Failed to fetch emoji ${emojiCode}: ${response.status}`);
+      return null;
     }
 
     const svgData = await response.text();
-    const scaledSize = Math.round(64 * emojiScaling);
+    const scaledSize = Math.round(64 * validatedScaling);
     const scaledSvg = svgData.replace(
       /width="[^"]+" height="[^"]+"/,
       `width="${scaledSize}" height="${scaledSize}"`
@@ -119,7 +138,11 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
       resvg = new Resvg(scaledSvg);
       pngData = resvg.render();
       const pngBuffer = pngData.asPng();
+
       base64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
+    } catch (error) {
+      console.error(`Failed to render emoji ${emoji}:`, error);
+      return null;
     } finally {
       // Ensure resources are freed even if there's an error
       if (pngData) pngData.free?.();
@@ -141,58 +164,6 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
     console.error(`Failed to load emoji ${emoji}:`, error);
     return null;
   }
-}
-
-// Optimized GIF processing with proper resource cleanup
-export async function processGifFrames(
-  buffer,
-  width,
-  height,
-  overlayBuffer,
-  overlayAlpha = 0.85
-) {
-  const metadata = await sharp(buffer).metadata();
-  const encoder = new GIFEncoder(width, height);
-  encoder.start();
-  encoder.setRepeat(0);
-  encoder.setQuality(10);
-  encoder.setDispose(2);
-
-  // Reuse canvas
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-
-  try {
-    for (let i = 0; i < metadata.pages; i++) {
-      // Get, process, and composite frame
-      const frameBuffer = await sharp(buffer, { page: i })
-        .resize(width, height, { fit: "cover" })
-        .png()
-        .toBuffer();
-      let processed = sharp(frameBuffer);
-      if (overlayBuffer) {
-        processed = processed.composite([
-          {
-            input: overlayBuffer,
-            blend: "over",
-            opacity: overlayAlpha,
-          },
-        ]);
-      }
-      const processedFrameBuffer = await processed.toBuffer();
-      const image = await loadImage(processedFrameBuffer);
-
-      // Render to canvas and add GIF frame
-      ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(image, 0, 0);
-      encoder.setDelay(metadata.delay[i] || 40);
-      encoder.addFrame(ctx);
-    }
-  } finally {
-    // Make sure to finish even if error occurs
-    encoder.finish();
-  }
-  return encoder.out.getData();
 }
 
 // Helper function to format values
@@ -242,6 +213,242 @@ export function formatValue(value) {
   return value;
 }
 
+// Helper function to validate RGB values
+function validateRGB(r, g, b) {
+  const isValidComponent = (c) =>
+    typeof c === "number" && !isNaN(c) && c >= 0 && c <= 255;
+  return isValidComponent(r) && isValidComponent(g) && isValidComponent(b);
+}
+
+// Helper function to convert RGB values to Discord color integer
+function rgbToDiscordColor(r, g, b) {
+  if (
+    typeof r !== "number" ||
+    typeof g !== "number" ||
+    typeof b !== "number" ||
+    !validateRGB(r, g, b)
+  ) {
+    return process.env.EMBED_COLOR || "#2B2D31";
+  }
+  const hexValue = ((r << 16) + (g << 8) + b).toString(16).toUpperCase();
+  return "#" + hexValue.padStart(6, "0");
+}
+
+// Color processing utilities
+function rgbToHsl(r, g, b) {
+  // Validate RGB values
+  if (!validateRGB(r, g, b)) {
+    console.error("Invalid RGB values:", { r, g, b });
+    return [0, 0, 0]; // Return black as fallback
+  }
+
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h,
+    s,
+    l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+function getLuminance(r, g, b) {
+  const [rs, gs, bs] = [r, g, b].map((c) => {
+    c = c / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+}
+
+function processColors(dominantColor, options = {}) {
+  const { gradientAngle = Math.floor(Math.random() * 360) } = options;
+
+  const isRGBColor = (color) => color?.startsWith("rgb");
+  if (!isRGBColor(dominantColor)) {
+    console.warn("Invalid color format, expected RGB string:", dominantColor);
+    return getDefaultColors();
+  }
+
+  const rgbMatch = dominantColor.match(/\d+/g);
+  if (!rgbMatch || rgbMatch.length < 3) {
+    console.warn(
+      "Could not extract RGB values from color string:",
+      dominantColor
+    );
+    return getDefaultColors();
+  }
+
+  const [r, g, b] = rgbMatch.slice(0, 3).map(Number);
+  if (!validateRGB(r, g, b)) {
+    console.error("Invalid RGB values after parsing:", { r, g, b });
+    return getDefaultColors();
+  }
+
+  const luminance = getLuminance(r, g, b);
+  const isDarkText = luminance > 0.5;
+
+  return {
+    textColor: isDarkText ? "#000000" : "#FFFFFF",
+    secondaryTextColor: isDarkText
+      ? "rgba(0, 0, 0, 0.8)"
+      : "rgba(255, 255, 255, 0.8)",
+    tertiaryTextColor: isDarkText
+      ? "rgba(0, 0, 0, 0.4)"
+      : "rgba(255, 255, 255, 0.4)",
+    isDarkText,
+    backgroundGradient: `linear-gradient(${gradientAngle}deg, ${dominantColor}, ${dominantColor})`,
+    overlayBackground: isDarkText
+      ? "rgba(0, 0, 0, 0.1)"
+      : "rgba(255, 255, 255, 0.2)",
+  };
+}
+
+export async function processImageColors(imageUrl) {
+  try {
+    console.log("Processing image colors for URL:", imageUrl); // Debug log
+
+    // Fetch and preprocess the image with blur
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.error(`Failed to fetch image: ${response.status}`);
+      return getDefaultColors();
+    }
+
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
+    console.log("Image fetched, size:", imageBuffer.length); // Debug log
+
+    const blurredBuffer = await sharp(imageBuffer)
+      .resize(50, 50, { fit: "inside" })
+      .blur(20)
+      .toBuffer();
+    console.log("Image processed with sharp"); // Debug log
+
+    // Get dominant color from the blurred image
+    const dominantColor = await getColorFromURL(
+      Buffer.from(blurredBuffer).buffer
+    );
+    console.log("Extracted dominant color:", dominantColor); // Debug log
+
+    if (!dominantColor || dominantColor.length !== 3) {
+      console.error("No color extracted from image:", imageUrl);
+      return getDefaultColors();
+    }
+
+    const [r, g, b] = dominantColor;
+    if (!validateRGB(r, g, b)) {
+      console.error("Invalid RGB color values:", dominantColor);
+      return getDefaultColors();
+    }
+
+    const primaryColor = {
+      rgb: [r, g, b],
+      hsl: rgbToHsl(r, g, b),
+      luminance: getLuminance(r, g, b),
+      rgbStr: `rgb(${r}, ${g}, ${b})`,
+    };
+
+    const secondaryHSL = [...primaryColor.hsl];
+    secondaryHSL[1] = Math.max(0.1, primaryColor.hsl[1] * 0.9);
+    secondaryHSL[2] = Math.max(
+      0.15,
+      Math.min(
+        0.85,
+        primaryColor.hsl[2] * (primaryColor.hsl[2] > 0.5 ? 0.9 : 1.1)
+      )
+    );
+
+    const hueToRgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    const [h, s, l] = secondaryHSL;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+
+    const secondaryColor = {
+      rgb: [
+        Math.round(hueToRgb(p, q, h + 1 / 3) * 255),
+        Math.round(hueToRgb(p, q, h) * 255),
+        Math.round(hueToRgb(p, q, h - 1 / 3) * 255),
+      ],
+      hsl: secondaryHSL,
+      rgbStr: `rgb(${Math.round(hueToRgb(p, q, h + 1 / 3) * 255)}, ${Math.round(
+        hueToRgb(p, q, h) * 255
+      )}, ${Math.round(hueToRgb(p, q, h - 1 / 3) * 255)})`,
+    };
+
+    const gradientAngle = 145;
+    const isDarkText = primaryColor.luminance > 0.5;
+
+    return {
+      textColor: isDarkText ? "#000000" : "#FFFFFF",
+      secondaryTextColor: isDarkText
+        ? "rgba(0, 0, 0, 0.8)"
+        : "rgba(255, 255, 255, 0.8)",
+      tertiaryTextColor: isDarkText
+        ? "rgba(0, 0, 0, 0.4)"
+        : "rgba(255, 255, 255, 0.4)",
+      isDarkText,
+      backgroundGradient: `linear-gradient(${gradientAngle}deg, ${primaryColor.rgbStr}, ${secondaryColor.rgbStr})`,
+      overlayBackground: isDarkText
+        ? "rgba(0, 0, 0, 0.1)"
+        : "rgba(255, 255, 255, 0.2)",
+      embedColor: rgbToDiscordColor(...primaryColor.rgb),
+    };
+  } catch (error) {
+    console.error("Failed to process image colors:", error);
+    return getDefaultColors();
+  }
+}
+
+// Helper function to provide default colors when color extraction fails
+function getDefaultColors() {
+  // Default to a pleasant blue color scheme
+  const defaultColor = { r: 33, g: 150, b: 243 }; // Material Blue
+  return {
+    textColor: "#FFFFFF",
+    secondaryTextColor: "rgba(255, 255, 255, 0.8)",
+    tertiaryTextColor: "rgba(255, 255, 255, 0.4)",
+    isDarkText: false,
+    backgroundGradient: `linear-gradient(145deg, rgb(${defaultColor.r}, ${
+      defaultColor.g
+    }, ${defaultColor.b}), rgb(${defaultColor.r * 0.8}, ${
+      defaultColor.g * 0.8
+    }, ${defaultColor.b}))`,
+    overlayBackground: "rgba(255, 255, 255, 0.2)",
+    embedColor: rgbToDiscordColor(
+      defaultColor.r,
+      defaultColor.g,
+      defaultColor.b
+    ),
+  };
+}
+
 // Enhanced image generation with proper resource management
 export async function generateImage(
   component,
@@ -276,15 +483,55 @@ export async function generateImage(
       Component = component;
     }
 
-    const width = Component.dimensions?.width || 800;
-    const height = Component.dimensions?.height || 400;
-    const sanitizedProps = JSON.parse(
-      JSON.stringify(props, (_, value) =>
-        typeof value === "bigint" ? Number(value) : value
-      )
-    );
+    // Process colors and ensure proper structure
+    let colorProps;
+    if (props.dominantColor === "user" || !props.dominantColor) {
+      const imageUrl =
+        props.database?.bannerUrl || props.interaction.user.avatarURL;
+      colorProps = await processImageColors(imageUrl);
+    } else if (props.dominantColor) {
+      colorProps = processColors(props.dominantColor, {
+        hueRotation: props.hueRotation,
+        gradientAngle: props.gradientAngle,
+      });
+    }
+
+    // Ensure we always have valid color properties
+    if (!colorProps) {
+      colorProps = getDefaultColors();
+    }
+
+    // Create a new props object with properly structured coloring
+    props = {
+      ...props,
+      coloring: {
+        ...colorProps,
+        // Ensure all style properties are strings or numbers
+        backgroundGradient:
+          typeof colorProps.backgroundGradient === "string"
+            ? colorProps.backgroundGradient
+            : "linear-gradient(145deg, rgb(33, 150, 243), rgb(33, 150, 243))",
+      },
+    };
+
+    // Ensure dimensions are properly structured
+    const dimensions = {
+      width: Number(Component.dimensions?.width || 800),
+      height: Number(Component.dimensions?.height || 400),
+    };
+
+    // Sanitize and format props
+    const sanitizedProps = {
+      ...JSON.parse(
+        JSON.stringify(props, (_, value) =>
+          typeof value === "bigint" ? Number(value) : value
+        )
+      ),
+      style: { display: "flex" }, // Ensure root element has flex display
+    };
+
     const formattedProps = formatValue(sanitizedProps);
-    console.log(formattedProps);
+    console.log("Formatted props:", formattedProps);
 
     if (Component.localization_strings && formattedProps.locale) {
       formattedProps.i18n = {
@@ -317,69 +564,156 @@ export async function generateImage(
       };
     }
 
-    const svg = await satori(<Component {...formattedProps} />, {
-      width,
-      height,
-      fonts,
-      loadAdditionalAsset: async (code, segment) =>
-        code === "emoji" ? await fetchEmojiSvg(segment, scaling.emoji) : null,
-    });
+    // Helper function to load image assets
+    async function loadImageAsset(url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+
+        const contentType = response.headers.get("content-type");
+        // Only allow specific image types
+        if (
+          !contentType ||
+          !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(
+            contentType.toLowerCase()
+          )
+        ) {
+          console.warn(
+            `Unsupported image type: ${
+              contentType || "unknown"
+            } for URL: ${url}`
+          );
+          return null;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString(
+          "base64"
+        )}`;
+      } catch (error) {
+        console.warn("Failed to load image asset:", error.message);
+        return null;
+      }
+    }
+
+    // Ensure dimensions are always provided
+    let svg;
+    try {
+      svg = await satori(<Component {...formattedProps} />, {
+        width: dimensions.width,
+        height: dimensions.height,
+        fonts,
+        loadAdditionalAsset: async (code, segment) => {
+          if (code === "emoji") {
+            return await fetchEmojiSvg(segment, scaling.emoji);
+          }
+          if (code === "image") {
+            const imageData = await loadImageAsset(segment);
+            if (!imageData) return null;
+            return imageData;
+          }
+          return null;
+        },
+      });
+      console.log("SVG generation completed");
+    } catch (error) {
+      if (error.message?.includes("Image size cannot be determined")) {
+        console.warn("Image size error, using default dimensions");
+        svg = await satori(<Component {...formattedProps} />, {
+          width: 800,
+          height: 400,
+          fonts,
+          loadAdditionalAsset: async (code, segment) => {
+            if (code === "emoji") {
+              return await fetchEmojiSvg(segment, scaling.emoji);
+            }
+            if (code === "image") {
+              const imageData = await loadImageAsset(segment);
+              if (!imageData) return null;
+              return imageData;
+            }
+            return null;
+          },
+        });
+      } else {
+        throw error;
+      }
+    }
 
     try {
+      if (!svg || typeof svg !== "string") {
+        throw new Error("Invalid SVG generated by satori");
+      }
+
       resvg = new Resvg(svg, {
         fitTo: {
           mode: "width",
-          value: width * scaling.image,
+          value: dimensions.width * scaling.image,
         },
       });
       renderedImage = resvg.render();
+      console.log("Image rendered successfully");
       pngBuffer = renderedImage.asPng();
+
+      // Validate and ensure proper buffer handling
+      if (!Buffer.isBuffer(pngBuffer)) {
+        console.error("PNG Buffer is not a valid buffer:", typeof pngBuffer);
+        throw new Error("Invalid PNG buffer generated");
+      }
+
+      console.log("PNG Buffer created:", pngBuffer.length, "bytes");
+
+      // Ensure compatibility with discord.js
+      pngBuffer = Buffer.from(pngBuffer);
     } finally {
       // Ensure resources are freed
       if (renderedImage) renderedImage.free?.();
       if (resvg) resvg.free?.();
     }
 
-    if (props.database?.bannerUrl) {
-      try {
-        const response = await fetch(props.database.bannerUrl, {
-          size: MAX_BANNER_SIZE,
-          timeout: BANNER_TIMEOUT,
-        });
+    // Banner is now handled by the component itself
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const bannerBuffer = Buffer.from(await response.arrayBuffer());
-        const metadata = await sharp(bannerBuffer).metadata();
-        const isGif = metadata.format === "gif" && metadata.pages > 1;
-
-        if (isGif) {
-          return await processGifFrames(
-            bannerBuffer,
-            width * scaling.image,
-            height * scaling.image,
-            pngBuffer
-          );
-        } else {
-          return await sharp(bannerBuffer)
-            .resize(width * scaling.image, height * scaling.image, {
-              fit: "cover",
-            })
-            .composite([{ input: pngBuffer, blend: "over" }])
-            .png()
-            .toBuffer();
-        }
-      } catch (error) {
-        console.error("Banner processing failed:", error);
-        return pngBuffer;
-      }
-    }
     await cleanup();
-    return pngBuffer;
+
+    // Log buffer information for debugging
+    console.log("Original buffer type:", typeof pngBuffer);
+    console.log("Is Buffer?", Buffer.isBuffer(pngBuffer));
+    console.log("Buffer length:", pngBuffer?.length);
+
+    // Ensure proper Buffer conversion
+    const finalBuffer = Buffer.isBuffer(pngBuffer)
+      ? pngBuffer
+      : Buffer.from(pngBuffer);
+
+    // Verify final buffer
+    console.log("Final buffer type:", typeof finalBuffer);
+    console.log("Final is Buffer?", Buffer.isBuffer(finalBuffer));
+    console.log("Final buffer length:", finalBuffer.length);
+
+    // Return buffer directly
+    return props.returnDominant ? [finalBuffer, props.coloring] : finalBuffer;
   } catch (error) {
     console.error("Image generation failed:", error);
     throw error;
+  }
+
+  // Cleanup function for temporary files
+  async function cleanupTempFiles() {
+    try {
+      const files = await fs.readdir(TEMP_DIR);
+      const now = Date.now();
+
+      for (const file of files) {
+        const filePath = join(TEMP_DIR, file);
+        const stats = await fs.stat(filePath);
+
+        // Delete files older than 1 hour
+        if (now - stats.mtimeMs > 3600000) {
+          await fs.unlink(filePath);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to cleanup temporary files:", error);
+    }
   }
 }
