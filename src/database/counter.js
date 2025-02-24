@@ -3,14 +3,26 @@ export default {
   async incrementMessageCount(guildId, userId) {
     return this.client.statistics.upsert({
       where: {
-        userId_guildId: {
-          userId,
-          guildId,
-        },
+        userId_guildId: { userId, guildId },
       },
       create: {
-        userId,
-        guildId,
+        user: {
+          connectOrCreate: {
+            where: {
+              guildId_id: { guildId, id: userId },
+            },
+            create: {
+              id: userId,
+              guild: {
+                connectOrCreate: {
+                  where: { id: guildId },
+                  create: { id: guildId },
+                },
+              },
+              lastActivity: BigInt(Date.now()),
+            },
+          },
+        },
         messageCount: 1,
         commandCount: 0,
         totalEarned: 0,
@@ -26,14 +38,26 @@ export default {
   async incrementCommandCount(guildId, userId) {
     return this.client.statistics.upsert({
       where: {
-        userId_guildId: {
-          userId,
-          guildId,
-        },
+        userId_guildId: { userId, guildId },
       },
       create: {
-        userId,
-        guildId,
+        user: {
+          connectOrCreate: {
+            where: {
+              guildId_id: { guildId, id: userId },
+            },
+            create: {
+              id: userId,
+              guild: {
+                connectOrCreate: {
+                  where: { id: guildId },
+                  create: { id: guildId },
+                },
+              },
+              lastActivity: BigInt(Date.now()),
+            },
+          },
+        },
         messageCount: 0,
         commandCount: 1,
         totalEarned: 0,

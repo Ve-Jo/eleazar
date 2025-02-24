@@ -191,15 +191,15 @@ export default {
                 },
                 create: {
                   id: author.id,
-                  guildId: guild.id,
                   guild: {
                     connectOrCreate: {
                       where: { id: guild.id },
-                      create: { id: guild.id },
-                    },
+                      create: { id: guild.id }
+                    }
                   },
-                },
-              },
+                  lastActivity: BigInt(Date.now())
+                }
+              }
             },
             xpStats,
             messageCount: 1,
