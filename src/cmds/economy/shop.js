@@ -50,7 +50,7 @@ export default {
           ),
         };
 
-        const pngBuffer = await generateImage(
+        const [pngBuffer, dominantColor] = await generateImage(
           "UpgradesDisplay",
           {
             interaction: {
@@ -103,18 +103,14 @@ export default {
             ),
             currentUpgrade,
             balance: Number(userData.economy?.balance || 0),
+            dominantColor: "user",
+            returnDominant: true,
           },
           { image: 2, emoji: 2 }
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `shop.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`,
+          name: `shop.png`,
         });
 
         console.log(upgradeInfo);
@@ -155,7 +151,7 @@ export default {
         const buttonRow = new ActionRowBuilder().addComponents(purchaseButton);
 
         const embed = new EmbedBuilder()
-          .setColor(process.env.EMBED_COLOR)
+          .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
           .setAuthor({
             name: i18n.__("economy.shop.title"),
             iconURL: user.displayAvatarURL(),
@@ -165,11 +161,7 @@ export default {
               balance: Number(userData.economy?.balance || 0),
             })
           )
-          .setImage(
-            `attachment://shop.${
-              pngBuffer.contentType === "image/gif" ? "gif" : "png"
-            }`
-          )
+          .setImage(`attachment://shop.png`)
           .setTimestamp();
 
         return {

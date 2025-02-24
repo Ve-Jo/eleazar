@@ -272,31 +272,17 @@ export default {
               size: 1024,
             }),
           },
-          database: userData,
+          database: { ...userData },
         },
         { image: 2, emoji: 1 }
       );
 
       const final_attachment = new AttachmentBuilder(imageResponse, {
-        name: `balance.${
-          imageResponse[0] === 0x47 &&
-          imageResponse[1] === 0x49 &&
-          imageResponse[2] === 0x46
-            ? "gif"
-            : "png"
-        }`,
+        name: `balance.png`,
       });
 
       await interaction.editReply({
-        content: i18n.__(
-          `images.setbanner.success.${
-            imageResponse[0] === 0x47 &&
-            imageResponse[1] === 0x49 &&
-            imageResponse[2] === 0x46
-              ? "gif"
-              : "static"
-          }`
-        ),
+        content: i18n.__(`images.setbanner.success.png`),
         files: [final_attachment],
       });
     } catch (error) {

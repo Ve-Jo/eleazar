@@ -67,6 +67,8 @@ export default {
             locale: interaction.locale,
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
+            dominantColor: "user",
+            returnDominant: true,
           },
           { image: 2, emoji: 2 }
         );
@@ -295,13 +297,7 @@ export default {
         });
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`,
+          name: `crime.png`,
         });
 
         const embed = new EmbedBuilder()
@@ -318,11 +314,7 @@ export default {
                 })
               : i18n.__("economy.crime.failTarget", { amount })
           )
-          .setImage(
-            `attachment://crime.${
-              pngBuffer.contentType === "image/gif" ? "gif" : "png"
-            }`
-          )
+          .setImage(`attachment://crime.png`)
           .setTimestamp();
 
         return interaction.editReply({

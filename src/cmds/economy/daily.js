@@ -67,13 +67,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `daily_cooldown.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`,
+          name: `daily_cooldown.png`,
         });
 
         pngBuffer = null;
@@ -115,39 +109,45 @@ export default {
         );
       });
 
-      userData = await Database.getUser(interaction.guild.id, user.id, true);
+      userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id,
+        true
+      );
 
-      let pngBuffer = await generateImage("Daily", {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
+      let pngBuffer = await generateImage(
+        "Daily",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
+          database: {
+            ...userData,
           },
+          locale: interaction.locale,
+          amount: amount,
         },
-        database: {
-          ...userData,
-        },
-        locale: interaction.locale,
-        amount: amount,
-      });
+        { image: 1, emoji: 2 }
+      );
 
       const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-        name: `daily_claimed.${
-          pngBuffer.contentType === "image/gif" ? "gif" : "png"
-        }`,
+        name: `daily_claimed.png`,
       });
 
       pngBuffer = null;

@@ -1,6 +1,8 @@
 import {
   SlashCommandSubcommand,
   I18nCommandBuilder,
+  SlashCommandOption,
+  OptionType,
 } from "../../utils/builders/index.js";
 import {
   EmbedBuilder,
@@ -24,6 +26,26 @@ export default {
       description: i18nBuilder.translate("description"),
       name_localizations: i18nBuilder.getLocalizations("name"),
       description_localizations: i18nBuilder.getLocalizations("description"),
+      options: [
+        new SlashCommandOption({
+          type: OptionType.STRING,
+          name: "game",
+          description: i18nBuilder.translateOption("game", "description"),
+          required: false,
+          name_localizations: i18nBuilder.getOptionLocalizations(
+            "game",
+            "name"
+          ),
+          description_localizations: i18nBuilder.getOptionLocalizations(
+            "game",
+            "description"
+          ),
+          choices: [
+            { name: "Snake", value: "snake" },
+            { name: "2048", value: "2048" },
+          ],
+        }),
+      ],
     });
 
     return subcommand;
@@ -38,6 +60,21 @@ export default {
 
       if (gamesArray.length === 0) {
         throw new Error("No games found");
+      }
+
+      // Check if a specific game was requested
+      const requestedGame = interaction.options.getString("game");
+      if (requestedGame) {
+        const gameModule = await import(`../../games/${requestedGame}.js`);
+        if (!gameModule.default) {
+          await interaction.editReply({
+            content: i18n.__("economy.work.gameNotFound"),
+            ephemeral: true,
+          });
+          return;
+        }
+        await gameModule.default.execute(interaction);
+        return;
       }
 
       // Get user's game records and ensure user exists with default values
@@ -119,7 +156,7 @@ export default {
         });
 
         // Generate game launcher image
-        const pngBuffer = await generateImage("GameLauncher", {
+        const [pngBuffer, dominantColor] = await generateImage("GameLauncher", {
           interaction: {
             user: {
               id: interaction.user.id,
@@ -146,35 +183,22 @@ export default {
           currentLocale: i18n.getLocale(),
           highlightedGame,
           highlightedCategory: currentCategory,
+          returnDominant: true,
           i18n,
           gameStats: currentGameRecords, // Use fresh game records
         });
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `work_games.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`,
+          name: `work_games.png`,
         });
 
         const embed = new EmbedBuilder()
-          .setColor("#3DAA4E")
+          .setColor(dominantColor?.embedColor)
           .setAuthor({
             name: i18n.__("economy.work.title"),
             iconURL: interaction.user.displayAvatarURL(),
           })
-          .setImage(
-            `attachment://work_games.${
-              pngBuffer[0] === 0x47 &&
-              pngBuffer[1] === 0x49 &&
-              pngBuffer[2] === 0x46
-                ? "gif"
-                : "png"
-            }`
-          )
+          .setImage(`attachment://work_games.png`)
           .setTimestamp();
 
         // Create category select menu
@@ -319,6 +343,20 @@ export default {
       en: "Play games to earn money",
       ru: "Играйте в игры, чтобы заработать деньги",
       uk: "Грайте в ігри, щоб заробити гроші",
+    },
+    options: {
+      game: {
+        name: {
+          en: "game",
+          ru: "игра",
+          uk: "гра",
+        },
+        description: {
+          en: "Choose a specific game to play directly",
+          ru: "Выберите конкретную игру для прямого запуска",
+          uk: "Виберіть конкретну гру для прямого запуску",
+        },
+      },
     },
     title: {
       en: "Game Selection",

@@ -59,7 +59,7 @@ export default {
       );
     }
 
-    const buffer = await generateImage(
+    const [buffer, dominantColor] = await generateImage(
       "Balance",
       {
         interaction: {
@@ -82,6 +82,7 @@ export default {
           },
         },
         locale: interaction.locale,
+        returnDominant: true,
         database: {
           ...userData,
         },
@@ -89,18 +90,26 @@ export default {
       { image: 2, emoji: 1 }
     );
 
-    // Detect if the result is a GIF
-    const isGif =
-      buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+    console.log(buffer);
+
+    if (!buffer) {
+      console.error("Buffer is undefined or null");
+      return interaction.editReply({
+        content: i18n.__("economy.balance.imageError"),
+        ephemeral: true,
+      });
+    }
+
+    console.log(`Buffer type: ${typeof buffer}, size: ${buffer.length}`);
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: `balance.${isGif ? "gif" : "png"}`,
+      name: `balance.png`,
     });
 
     let balance_embed = new EmbedBuilder()
       .setTimestamp()
-      .setColor(process.env.EMBED_COLOR)
-      .setImage(`attachment://balance.${isGif ? "gif" : "png"}`)
+      .setColor(dominantColor?.embedColor ?? 0x0099ff) // Default color if dominantColor is undefined
+      .setImage(`attachment://balance.png`)
       .setAuthor({
         name: i18n.__("economy.balance.title"),
         iconURL: user.avatarURL(),

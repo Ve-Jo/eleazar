@@ -136,7 +136,7 @@ export default {
       );
 
       // Generate the transfer image
-      const pngBuffer = await generateImage("Transfer", {
+      const [pngBuffer, dominantColor] = await generateImage("Transfer", {
         interaction: {
           user: {
             id: interaction.user.id,
@@ -161,30 +161,17 @@ export default {
         database: { ...updatedUser },
         amount: amountInt,
         isDeposit: true,
+        returnDominant: true,
       });
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `deposit.${
-          pngBuffer[0] === 0x47 &&
-          pngBuffer[1] === 0x49 &&
-          pngBuffer[2] === 0x46
-            ? "gif"
-            : "png"
-        }`,
+        name: `deposit.png`,
       });
 
       let deposit_embed = new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
+        .setColor(dominantColor?.embedColor)
         .setTimestamp()
-        .setImage(
-          `attachment://deposit.${
-            pngBuffer[0] === 0x47 &&
-            pngBuffer[1] === 0x49 &&
-            pngBuffer[2] === 0x46
-              ? "gif"
-              : "png"
-          }`
-        )
+        .setImage(`attachment://deposit.png`)
         .setAuthor({
           name: i18n.__("economy.deposit.title"),
           iconURL: interaction.user.displayAvatarURL(),
