@@ -1,5 +1,5 @@
 import express from "express";
-import { generateImage } from "../utils/imageGenerator.js";
+import { generateImage, processImageColors } from "../utils/imageGenerator.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
@@ -138,7 +138,94 @@ function createI18nMock(lang, Component) {
 }
 
 // Function to create mockData with specified language
-function createMockData(lang = "en", Component = null) {
+async function createMockData(lang = "en", Component = null) {
+  // Mock data for Leaderboard component
+  if (Component?.name === "Leaderboard") {
+    const usernames = [
+      "DragonSlayer",
+      "StarLight",
+      "NightOwl",
+      "CyberNinja",
+      "PixelMaster",
+      "ShadowWalker",
+      "MoonKnight",
+      "SunChaser",
+      "StormBringer",
+      "FirePhoenix",
+    ];
+
+    const generateEconomyData = () => {
+      const balance = parseFloat((Math.random() * 500).toFixed(2));
+      const bank = parseFloat((Math.random() * 500).toFixed(2));
+      return {
+        balance,
+        bank,
+        value: balance + bank,
+      };
+    };
+
+    // Generate users with properly processed colors
+    const users = await Promise.all(
+      Array(10)
+        .fill()
+        .map(async (_, index) => {
+          const avatarId = index % 5; // Discord has 5 default avatars (0-4)
+          const avatarURL = `https://cdn.discordapp.com/embed/avatars/${avatarId}.png`;
+          const colorProps = await processImageColors(avatarURL);
+          const economyData = generateEconomyData();
+
+          return {
+            id: (1000000000 + index).toString(),
+            name: `${usernames[index % usernames.length]}${Math.floor(
+              Math.random() * 999
+            )}`,
+            avatarURL,
+            coloring: colorProps,
+            /*bannerUrl: `https://cdn.discordapp.com/embed/avatars/${Math.floor(
+              Math.random() * 5
+            )}.png`,*/
+            value: economyData.value,
+            balance: economyData.balance,
+            bank: economyData.bank,
+            totalBalance: economyData.value,
+            level: Math.floor(Math.random() * 100) + 1,
+            xp: Math.floor(Math.random() * 100000),
+            xpStats: {
+              chat: Math.floor(Math.random() * 50000),
+              voice: Math.floor(Math.random() * 50000),
+            },
+            gameRecords: {
+              2048: { highScore: Math.floor(Math.random() * 8192) },
+              snake: { highScore: Math.floor(Math.random() * 200) },
+            },
+            seasonStats: {
+              rank: index + 1,
+              totalXP: Math.floor(Math.random() * 100000),
+            },
+          };
+        })
+    );
+
+    return {
+      locale: lang,
+      i18n: createI18nMock(lang, Component),
+      users: users.sort((a, b) => b.value - a.value),
+      currentPage: 1,
+      totalPages: 3,
+      highlightedPosition: 2,
+      category: "total",
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      dominantColor: "user",
+    };
+  }
+
   return {
     locale: lang, // Add locale for imageGenerator
     interaction: {
@@ -146,7 +233,8 @@ function createMockData(lang = "en", Component = null) {
         id: "123456789",
         username: "Test User",
         displayName: "Test User",
-        avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        avatarURL:
+          "https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048",
       },
       guild: {
         id: "987654321",
@@ -165,8 +253,9 @@ function createMockData(lang = "en", Component = null) {
           })),
       },
     },
+    dominantColor: "user",
     database: {
-      bannerUrl: null,
+      //bannerUrl: null,
       economy: {
         balance: 1000.5,
         bankBalance: 5000.75,
@@ -229,6 +318,24 @@ function createMockData(lang = "en", Component = null) {
       balance: 1000,
     },
     success: true,
+    // Add level information
+    xp: 15000,
+    level: 25,
+    // Add game records
+    gameRecords: {
+      2048: { highScore: 4096 },
+      snake: { highScore: 150 },
+    },
+    // Add season stats
+    seasonStats: {
+      rank: 5,
+      totalXP: 25000,
+    },
+    // Add XP stats
+    xpStats: {
+      chat: 10000,
+      voice: 5000,
+    },
   };
 }
 
@@ -321,6 +428,19 @@ app.get("/:componentName", async (req, res) => {
           const ws = new WebSocket('ws://' + window.location.host);
           
           let currentLang = localStorage.getItem('previewLang') || 'en';
+          let debugMode = localStorage.getItem('debugMode') === 'true';
+          
+          function toggleDebug() {
+            debugMode = !debugMode;
+            localStorage.setItem('debugMode', debugMode);
+            document.getElementById('debugButton').classList.toggle('active', debugMode);
+            
+            ws.send(JSON.stringify({
+              type: 'debugChange',
+              component: '${componentName}',
+              debug: debugMode
+            }));
+          }
           
           ws.onopen = () => {
             // Tell server which component we're viewing
@@ -333,10 +453,10 @@ app.get("/:componentName", async (req, res) => {
           
           ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.type === 'reload' || data.type === 'langChange') {
+            if (data.type === 'reload' || data.type === 'langChange' || data.type === 'debugChange') {
               // Reload image without full page refresh
               const img = document.querySelector('.preview img');
-              const newUrl = '/${componentName}/image?lang=' + currentLang + '&t=' + Date.now();
+              const newUrl = '/${componentName}/image?lang=' + currentLang + '&debug=' + debugMode + '&t=' + Date.now();
               img.src = newUrl;
             }
           };
@@ -365,6 +485,7 @@ app.get("/:componentName", async (req, res) => {
             document.querySelectorAll('.lang-btn').forEach(btn => {
               btn.classList.toggle('active', btn.dataset.lang === currentLang);
             });
+            document.getElementById('debugButton').classList.toggle('active', debugMode);
           };
         </script>
         <style>
@@ -452,6 +573,9 @@ app.get("/:componentName", async (req, res) => {
             <button class="lang-btn" data-lang="ru" onclick="changeLang('ru')">Russian</button>
             <button class="lang-btn" data-lang="uk" onclick="changeLang('uk')">Ukrainian</button>
           </div>
+          <div class="debug-controls">
+            <button id="debugButton" onclick="toggleDebug()" class="debug-btn">Debug Mode</button>
+          </div>
         </div>
         <div class="preview">
           <img src="/${componentName}/image?lang=en" onload="this.parentElement.setAttribute('style', 'width:' + this.naturalWidth + 'px; height:' + this.naturalHeight + 'px; position:relative;')" />
@@ -499,12 +623,11 @@ app.get("/:componentName/image", async (req, res) => {
 
     console.log(`Rendering ${componentName} with locale: ${lang}`);
     // Generate image with mock props
-    const buffer = await generateImage(
-      Component,
-      createMockData(lang, Component),
-      {},
-      { image: 2, emoji: 2 }
-    );
+    const mockData = await createMockData(lang, Component);
+    const buffer = await generateImage(Component, mockData, {
+      image: 2,
+      emoji: 2,
+    });
 
     if (!buffer || !Buffer.isBuffer(buffer)) {
       throw new Error("Generated image is invalid");
