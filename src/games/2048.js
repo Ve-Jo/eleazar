@@ -310,7 +310,7 @@ export default {
             try {
               // Calculate final values
               const timePlayed = (Date.now() - state.startTime) / 1000;
-              const gameXP = Math.floor(timePlayed * 2 + state.score * 0.5);
+              const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
               // Update high score
               const isNewRecord = await Database.updateGameHighScore(

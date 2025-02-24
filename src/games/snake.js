@@ -370,7 +370,7 @@ export default {
 
             // Calculate XP
             const timePlayed = (Date.now() - state.startTime) / 1000;
-            const gameXP = Math.floor(timePlayed * 2 + state.score * 5);
+            const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
             // Save high score first
             const isNewRecord = await Database.updateGameHighScore(
