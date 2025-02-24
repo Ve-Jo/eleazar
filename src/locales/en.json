@@ -119,12 +119,14 @@
       "error": "An error occurred while processing your leaderboard request",
       "selectCategory": "Select category to view",
       "categories": {
+        "2048": "2048 Game",
         "total": "Total Balance",
         "balance": "Balance",
         "bank": "Bank Balance",
         "level": "Level",
         "games": "Games",
-        "season": "Season XP"
+        "season": "Season XP",
+        "snake": "Snake Game"
       }
     },
     "level": {
@@ -278,7 +280,13 @@
         "eleazar": "Specially for Eleazar"
       },
       "noGamesAvailable": "No games are currently available.",
-      "gameNotFound": "The selected game was not found."
+      "gameNotFound": "The selected game was not found.",
+      "options": {
+        "game": {
+          "name": "game",
+          "description": "Choose a specific game to play directly"
+        }
+      }
     }
   },
   "music": {
