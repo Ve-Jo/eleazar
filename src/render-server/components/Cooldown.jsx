@@ -1,5 +1,12 @@
 const Cooldown = (props) => {
-  const { i18n } = props;
+  const { i18n, coloring } = props;
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring || {};
 
   // Get translations from i18n based on the static translation object
   const translations = Object.entries(Cooldown.localization_strings).reduce(
@@ -42,18 +49,16 @@ const Cooldown = (props) => {
       style={{
         width: "450px",
         height: "200px",
-        backgroundColor: props.database?.banner_url
-          ? "rgba(0, 0, 0, 0.6)"
-          : "#2196f3",
         borderRadius: props.database?.banner_url ? "0px" : "20px",
         padding: "10px 20px",
-        color: "white",
+        color: textColor,
         fontFamily: "Inter600, sans-serif",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         position: "relative",
         overflow: "hidden",
+        background: backgroundGradient,
       }}
     >
       <div
@@ -89,6 +94,7 @@ const Cooldown = (props) => {
                 display: "flex",
                 flexDirection: "column",
                 position: "relative",
+                color: textColor,
               }}
             >
               {formattedTime}
@@ -102,6 +108,7 @@ const Cooldown = (props) => {
                   right: "-5px",
                   top: "-90px",
                   lineHeight: "1",
+                  color: secondaryTextColor,
                 }}
               >
                 <span style={{ filter: "blur(4px)" }}>{nextTwo}</span>
@@ -117,6 +124,7 @@ const Cooldown = (props) => {
                   top: "50%",
                   left: "50%",
                   transform: "translate(-50%, 115%)",
+                  color: secondaryTextColor,
                 }}
               >
                 {translations.remaining}
@@ -131,6 +139,7 @@ const Cooldown = (props) => {
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
+              borderRadius: "25px",
             }}
           >
             {props.emoji || "🎁"}
@@ -146,10 +155,15 @@ const Cooldown = (props) => {
           width: "100%",
         }}
       >
-        <span style={{ fontSize: "14px", opacity: "0.2" }}>
+        <span
+          style={{
+            fontSize: "14px",
+            color: tertiaryTextColor,
+          }}
+        >
           #{props.interaction.user.id || "{id}"}
         </span>
-        <span style={{ fontSize: "16px" }}>
+        <span style={{ fontSize: "16px", color: textColor }}>
           {props.interaction.user.username ||
             props.interaction.user.displayName ||
             "{username}"}
