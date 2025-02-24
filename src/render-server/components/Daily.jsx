@@ -1,31 +1,32 @@
 const Daily = (props) => {
-  const { interaction, amount, database, i18n } = props;
-  const { user, guild } = interaction;
+  console.log("HELLO");
+  const { interaction, amount, database, i18n, coloring } = props;
+  const {
+    textColor,
+    secondaryTextColor,
+    tertiaryTextColor,
+    overlayBackground,
+    backgroundGradient,
+  } = coloring;
 
-  // Get translations from i18n based on the static translation object
-  const translations = Object.entries(Daily.localization_strings).reduce(
-    (acc, [key, translations]) => ({
-      ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
-    }),
-    {}
-  );
+  console.log("AMOUNT");
+  console.log(amount);
 
   return (
     <div
       style={{
         width: "450px",
         height: "200px",
-        backgroundColor: database.bannerUrl ? "rgba(0, 0, 0, 0.6)" : "#2196f3",
         borderRadius: database.bannerUrl ? "0px" : "20px",
         padding: "10px 20px",
-        color: "white",
+        color: textColor,
         fontFamily: "Inter600, sans-serif",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         position: "relative",
         overflow: "hidden",
+        background: backgroundGradient,
       }}
     >
       <div
@@ -49,13 +50,14 @@ const Daily = (props) => {
               marginBottom: "10px",
               maxWidth: "200px",
               wordWrap: "break-word", // Allow text to wrap
+              color: textColor,
             }}
           >
-            🎁 {translations.title}!
+            🎁 {i18n.__("title")}!
           </div>
           <div
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: overlayBackground,
               borderRadius: "10px",
               padding: "5px 10px",
               position: "relative",
@@ -72,22 +74,25 @@ const Daily = (props) => {
                 flexWrap: "wrap", // Allow content to wrap
                 gap: "10px", // Space between wrapped items
                 alignItems: "center",
+                color: textColor,
               }}
             >
-              💵 {database.economy.balance.toFixed(2) || "{balance}"}
+              💵 {database.economy?.balance?.toFixed(2) || "{balance}"}
               <span
                 style={{
-                  backgroundColor: "rgba(115, 220, 133, 1)",
+                  backgroundColor: coloring?.isDarkText
+                    ? "rgba(115, 220, 133, 0.3)"
+                    : "rgba(115, 220, 133, 1)",
+                  color: textColor,
                   borderRadius: "10px",
                   padding: "5px 10px",
                   display: "flex",
                   fontSize: "16px",
-                  color: "#FFFFFF",
                   fontWeight: "bold",
-                  whiteSpace: "nowrap", // Keep the amount on one line
+                  whiteSpace: "nowrap",
                 }}
               >
-                + {amount.toFixed(2) || "{amount}"}
+                + {amount?.toFixed?.(2) || "{amount}"}
               </span>
             </span>
           </div>
@@ -100,10 +105,11 @@ const Daily = (props) => {
           >
             <div
               style={{
-                backgroundColor: "rgba(255, 255, 255, 0.2)",
+                backgroundColor: overlayBackground,
                 padding: "5px 10px",
                 borderRadius: "10px",
                 display: "flex",
+                color: textColor,
               }}
             >
               🕐 24:00:00
@@ -116,7 +122,7 @@ const Daily = (props) => {
             height: "100px",
             borderRadius: "25px",
             overflow: "hidden",
-            backgroundColor: "#1565c0",
+            backgroundColor: overlayBackground,
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -124,7 +130,8 @@ const Daily = (props) => {
         >
           <img
             src={
-              user.avatarURL || "https://cdn.discordapp.com/embed/avatars/0.png"
+              interaction.user.avatarURL ||
+              "https://cdn.discordapp.com/embed/avatars/0.png"
             }
             alt="User"
             width="100"
@@ -142,11 +149,24 @@ const Daily = (props) => {
           marginTop: "8px",
         }}
       >
-        <span style={{ fontSize: "14px", opacity: "0.2" }}>
-          #{user.id || "{id}"}
+        <span
+          style={{
+            fontSize: "14px",
+            color: tertiaryTextColor,
+          }}
+        >
+          #{interaction.user.id || "{id}"}
         </span>
-        <span style={{ fontSize: "16px", fontWeight: "bold" }}>
-          {user.username || user.displayName || "{username}"}
+        <span
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: textColor,
+          }}
+        >
+          {interaction.user.username ||
+            interaction.user.displayName ||
+            "{username}"}
         </span>
       </div>
     </div>
