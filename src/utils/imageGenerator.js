@@ -125,17 +125,36 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
 
     const svgData = await response.text();
     const scaledSize = Math.round(64 * validatedScaling);
-    const scaledSvg = svgData.replace(
-      /width="[^"]+" height="[^"]+"/,
-      `width="${scaledSize}" height="${scaledSize}"`
-    );
+
+    // Fix: Ensure we're correctly replacing both width and height attributes
+    // The previous regex might not match all SVG formats
+    let scaledSvg = svgData;
+
+    // Replace width attribute
+    scaledSvg = scaledSvg.replace(/width="([^"]+)"/, `width="${scaledSize}"`);
+
+    // Replace height attribute
+    scaledSvg = scaledSvg.replace(/height="([^"]+)"/, `height="${scaledSize}"`);
+
+    // Also add viewBox if it doesn't exist to ensure proper scaling
+    if (!scaledSvg.includes("viewBox")) {
+      scaledSvg = scaledSvg.replace(
+        "<svg",
+        `<svg viewBox="0 0 ${scaledSize} ${scaledSize}"`
+      );
+    }
 
     let resvg = null;
     let pngData = null;
     let base64 = null;
 
     try {
-      resvg = new Resvg(scaledSvg);
+      resvg = new Resvg(scaledSvg, {
+        fitTo: {
+          mode: "width",
+          value: scaledSize,
+        },
+      });
       pngData = resvg.render();
       const pngBuffer = pngData.asPng();
 
@@ -453,7 +472,7 @@ function getDefaultColors() {
 export async function generateImage(
   component,
   props = {},
-  scaling = { image: 2, emoji: 1 }
+  scaling = { image: 2, emoji: 1, debug: false }
 ) {
   let resvg = null;
   let renderedImage = null;
@@ -462,6 +481,18 @@ export async function generateImage(
   try {
     await ensureTempDir();
     if (!fonts) await loadFonts();
+
+    // Ensure scaling has all required properties with valid values
+    scaling = {
+      image: typeof scaling.image === "number" ? Math.max(1, scaling.image) : 2,
+      emoji:
+        typeof scaling.emoji === "number"
+          ? Math.max(0.5, Math.min(3, scaling.emoji))
+          : 1,
+      debug: !!scaling.debug,
+    };
+
+    console.log("Using scaling settings:", scaling); // Debug log
 
     let Component;
     if (typeof component === "string") {
@@ -533,6 +564,12 @@ export async function generateImage(
     const formattedProps = formatValue(sanitizedProps);
     console.log("Formatted props:", formattedProps);
 
+    // Add debug flag to formatted props if it exists in scaling
+    if (scaling.debug) {
+      formattedProps.debug = scaling.debug;
+      console.log("Debug mode enabled for component rendering");
+    }
+
     if (Component.localization_strings && formattedProps.locale) {
       formattedProps.i18n = {
         __: (key) => {
@@ -603,6 +640,7 @@ export async function generateImage(
         width: dimensions.width,
         height: dimensions.height,
         fonts,
+        debug: scaling.debug,
         loadAdditionalAsset: async (code, segment) => {
           if (code === "emoji") {
             return await fetchEmojiSvg(segment, scaling.emoji);
@@ -623,6 +661,7 @@ export async function generateImage(
           width: 800,
           height: 400,
           fonts,
+          debug: scaling.debug,
           loadAdditionalAsset: async (code, segment) => {
             if (code === "emoji") {
               return await fetchEmojiSvg(segment, scaling.emoji);
