@@ -33,20 +33,36 @@ export default {
 
     try {
       let currentUpgrade = 0;
+      // Define upgradeInfo outside the generateShopMessage function
+      let upgradeInfo = {};
 
       const generateShopMessage = async () => {
         // Get user data with all relations
         const userData = await Database.getUser(guild.id, user.id);
 
         // Get upgrade info for each type
-        const upgradeInfo = {
-          daily: await Database.getUpgradeInfo(
-            "daily",
-            userData.upgrades.find((u) => u.type === "daily")?.level || 1
+        upgradeInfo = {
+          daily_bonus: await Database.getUpgradeInfo(
+            "daily_bonus",
+            userData.upgrades.find((u) => u.type === "daily_bonus")?.level || 1
+          ),
+          daily_cooldown: await Database.getUpgradeInfo(
+            "daily_cooldown",
+            userData.upgrades.find((u) => u.type === "daily_cooldown")?.level ||
+              1
           ),
           crime: await Database.getUpgradeInfo(
             "crime",
             userData.upgrades.find((u) => u.type === "crime")?.level || 1
+          ),
+          bank_rate: await Database.getUpgradeInfo(
+            "bank_rate",
+            userData.upgrades.find((u) => u.type === "bank_rate")?.level || 1
+          ),
+          games_earning: await Database.getUpgradeInfo(
+            "games_earning",
+            userData.upgrades.find((u) => u.type === "games_earning")?.level ||
+              1
           ),
         };
 
@@ -80,26 +96,66 @@ export default {
             },
             locale: interaction.locale,
             upgrades: Object.entries(upgradeInfo).map(
-              ([key, upgrade], index) => ({
-                emoji: UPGRADES[key].emoji,
-                title: i18n.__(`economy.shop.upgrades.${key}.name`),
-                description: i18n.__(
-                  `economy.shop.upgrades.${key}.description`,
-                  {
-                    effect:
-                      key === "daily" ? upgrade.effect * 100 : upgrade.effect,
-                    price: upgrade.price,
-                  }
-                ),
-                currentLevel:
-                  userData.upgrades.find((u) => u.type === key)?.level || 1,
-                nextLevel:
-                  (userData.upgrades.find((u) => u.type === key)?.level || 1) +
-                  1,
-                price: upgrade.price,
-                progress: 50,
-                id: index,
-              })
+              ([key, upgrade], index) => {
+                const currentLevel =
+                  userData.upgrades.find((u) => u.type === key)?.level || 1;
+
+                // Define effect per level and unit based on upgrade type
+                let effectPerLevel, effectUnit, effectValue;
+
+                if (key === "daily_bonus") {
+                  effectPerLevel = Math.round(
+                    UPGRADES[key].effectMultiplier * 100
+                  );
+                  effectUnit = "%";
+                  effectValue = upgrade.effect * 100;
+                } else if (key === "daily_cooldown" || key === "crime") {
+                  effectPerLevel = Math.floor(
+                    UPGRADES[key].effectValue / (60 * 1000)
+                  );
+                  effectUnit = "m";
+                  effectValue = upgrade.effect;
+                } else if (key === "bank_rate") {
+                  effectPerLevel = Math.round(UPGRADES[key].effectValue * 100);
+                  effectUnit = "%";
+                  effectValue = upgrade.effect * 100;
+                } else if (key === "games_earning") {
+                  effectPerLevel = Math.round(
+                    UPGRADES[key].effectMultiplier * 100
+                  );
+                  effectUnit = "%";
+                  effectValue = upgrade.effect * 100;
+                }
+
+                // Calculate progress percentage based on user's balance and upgrade price
+                const userBalance = Number(userData.economy?.balance || 0);
+                const progressPercentage = Math.min(
+                  Math.floor((userBalance / upgrade.price) * 100),
+                  100
+                );
+
+                return {
+                  emoji: UPGRADES[key].emoji,
+                  title: i18n.__(`economy.shop.upgrades.${key}.name`),
+                  description: i18n.__(
+                    `economy.shop.upgrades.${key}.description`,
+                    {
+                      effect: effectValue,
+                      price: upgrade.price,
+                      increasePerLevel: effectPerLevel,
+                      increasePerLevelMinutes: effectPerLevel,
+                    }
+                  ),
+                  currentLevel: currentLevel,
+                  nextLevel: currentLevel + 1,
+                  price: upgrade.price,
+                  progress: progressPercentage,
+                  id: index,
+                  category: UPGRADES[key].category,
+                  effectPerLevel: effectPerLevel,
+                  effectUnit: effectUnit,
+                };
+              }
             ),
             currentUpgrade,
             balance: Number(userData.economy?.balance || 0),
@@ -119,28 +175,47 @@ export default {
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
           .setPlaceholder(i18n.__("economy.shop.selectUpgrade"))
-          .addOptions([
-            {
-              label: i18n.__("economy.shop.upgrades.daily.name"),
-              description: i18n.__("economy.shop.upgrades.daily.description", {
-                effect: upgradeInfo.daily.effect * 100,
-                price: upgradeInfo.daily.price,
-              }),
-              value: "0",
-              emoji: UPGRADES["daily"].emoji,
-              default: currentUpgrade === 0,
-            },
-            {
-              label: i18n.__("economy.shop.upgrades.crime.name"),
-              description: i18n.__("economy.shop.upgrades.crime.description", {
-                effect: upgradeInfo.crime.effect,
-                price: upgradeInfo.crime.price,
-              }),
-              value: "1",
-              emoji: UPGRADES["crime"].emoji,
-              default: currentUpgrade === 1,
-            },
-          ]);
+          .addOptions(
+            Object.entries(upgradeInfo).map(([key, upgrade], index) => {
+              let effectPerLevel, effectValue;
+
+              if (key === "daily_bonus") {
+                effectPerLevel = Math.round(
+                  UPGRADES[key].effectMultiplier * 100
+                );
+                effectValue = upgrade.effect * 100;
+              } else if (key === "daily_cooldown" || key === "crime") {
+                effectPerLevel = Math.floor(
+                  UPGRADES[key].effectValue / (60 * 1000)
+                );
+                effectValue = upgrade.effect;
+              } else if (key === "bank_rate") {
+                effectPerLevel = Math.round(UPGRADES[key].effectValue * 100);
+                effectValue = upgrade.effect * 100;
+              } else if (key === "games_earning") {
+                effectPerLevel = Math.round(
+                  UPGRADES[key].effectMultiplier * 100
+                );
+                effectValue = upgrade.effect * 100;
+              }
+
+              return {
+                label: i18n.__(`economy.shop.upgrades.${key}.name`),
+                description: i18n.__(
+                  `economy.shop.upgrades.${key}.description`,
+                  {
+                    effect: effectValue,
+                    price: upgrade.price,
+                    increasePerLevel: effectPerLevel,
+                    increasePerLevelMinutes: effectPerLevel,
+                  }
+                ),
+                value: index.toString(),
+                emoji: UPGRADES[key].emoji,
+                default: currentUpgrade === index,
+              };
+            })
+          );
 
         const purchaseButton = new ButtonBuilder()
           .setCustomId("purchase")
@@ -184,7 +259,9 @@ export default {
           currentUpgrade = parseInt(i.values[0]);
           await i.update(await generateShopMessage());
         } else if (i.customId === "purchase") {
-          const type = currentUpgrade === 0 ? "daily" : "crime";
+          // Get the selected upgrade type based on currentUpgrade index
+          const upgradeTypes = Object.keys(upgradeInfo);
+          const type = upgradeTypes[currentUpgrade];
 
           try {
             await Database.purchaseUpgrade(guild.id, user.id, type);
@@ -200,8 +277,6 @@ export default {
               throw error;
             }
           }
-
-          collector.stop();
         }
       });
 
@@ -269,29 +344,75 @@ export default {
       ru: "Произошла ошибка при обработке запроса магазина",
       uk: "Сталася помилка під час обробки запиту магазину",
     },
+    category_economy: {
+      en: "Economy Upgrades",
+      ru: "Улучшения Экономики",
+      uk: "Покращення Економіки",
+    },
+    category_cooldowns: {
+      en: "Cooldown Upgrades",
+      ru: "Улучшения Перезарядки",
+      uk: "Покращення Перезарядки",
+    },
     upgrades: {
-      daily: {
+      daily_bonus: {
         name: {
-          en: "Daily Reward Boost",
-          ru: "Усиление Ежедневной Награды",
-          uk: "Посилення Щоденної Нагороди",
+          en: "Daily Bonus",
+          ru: "Ежедн. Бонус",
+          uk: "Щоденний Бонус",
         },
         description: {
-          en: "{{effect}}% reward ({{price}} coins)",
-          ru: "{{effect}}% к награде ({{price}} монет)",
-          uk: "{{effect}}% до нагороди ({{price}} монет)",
+          en: "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      daily_cooldown: {
+        name: {
+          en: "Daily Cooldown",
+          ru: "Перезарядка Ежедн.",
+          uk: "Перезарядка Щоденного",
+        },
+        description: {
+          en: "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+          ru: "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+          uk: "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
         },
       },
       crime: {
         name: {
-          en: "Crime Cooldown Reduction",
-          ru: "Уменьшение Перезарядки Преступления",
-          uk: "Зменшення Перезарядки Злочину",
+          en: "Crime Cooldown",
+          ru: "Преступления",
+          uk: "Крадіжка",
         },
         description: {
-          en: "-{{effect}} minutes cooldown ({{price}} coins)",
-          ru: "-{{effect}} минут кулдауна ({{price}} монет)",
-          uk: "-{{effect}} хвилин кулдауна ({{price}} монет)",
+          en: "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+          ru: "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+          uk: "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+        },
+      },
+      bank_rate: {
+        name: {
+          en: "Bank Interest",
+          ru: "Банк. Процент",
+          uk: "Банк. Відсоток",
+        },
+        description: {
+          en: "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      games_earning: {
+        name: {
+          en: "Games Earnings",
+          ru: "Доход от Игр",
+          uk: "Дохід від Ігор",
+        },
+        description: {
+          en: "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
         },
       },
     },
