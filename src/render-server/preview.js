@@ -226,6 +226,52 @@ async function createMockData(lang = "en", Component = null) {
     };
   }
 
+  // Mock data for Transfer component with user-to-user transfer support
+  if (Component?.name === "Transfer") {
+    // Create a recipient user for transfer visualization
+    const recipientUser = {
+      id: "987654321",
+      username: "RecipientUser",
+      displayName: "Recipient User",
+      avatarURL: "https://cdn.discordapp.com/embed/avatars/3.png",
+      balance: 750.25,
+    };
+
+    return {
+      locale: lang,
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "SenderUser",
+          displayName: "Sender User",
+          avatarURL:
+            "https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048",
+        },
+        guild: {
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      database: {
+        economy: {
+          balance: 1000.5,
+          bankBalance: 5000.75,
+          bankRate: 25,
+          bankStartTime: 25,
+        },
+      },
+      i18n: createI18nMock(lang, Component),
+      amount: 250.5,
+      // Add these properties to test different modes
+      isDeposit: false,
+      isTransfer: true, // Set to true to test transfer mode
+      recipient: recipientUser, // Include recipient data
+      dominantColor: "user",
+    };
+  }
+
+  // Default mock data for other components
   return {
     locale: lang, // Add locale for imageGenerator
     interaction: {
@@ -336,6 +382,120 @@ async function createMockData(lang = "en", Component = null) {
       chat: 10000,
       voice: 5000,
     },
+    // Add upgrades data for UpgradesDisplay component
+    upgrades:
+      Component?.name === "UpgradesDisplay"
+        ? [
+            {
+              emoji: "🎁",
+              title:
+                lang === "ru"
+                  ? "Ежедневный бонус"
+                  : lang === "uk"
+                  ? "Щоденний бонус"
+                  : "Daily Bonus",
+              description:
+                lang === "ru"
+                  ? "+15% к ежедневной награде"
+                  : lang === "uk"
+                  ? "+15% до щоденної нагороди"
+                  : "+15% daily reward bonus",
+              currentLevel: 1,
+              nextLevel: 2,
+              price: 20,
+              progress: 50,
+              id: 0,
+              category: "economy",
+            },
+            {
+              emoji: "⏳",
+              title:
+                lang === "ru"
+                  ? "Преступление"
+                  : lang === "uk"
+                  ? "Злочин"
+                  : "Crime Cooldown",
+              description:
+                lang === "ru"
+                  ? "-20 мин. перезарядки"
+                  : lang === "uk"
+                  ? "-20 хв. перезарядки"
+                  : "-20 min crime cooldown",
+              currentLevel: 1,
+              nextLevel: 2,
+              price: 50,
+              progress: 50,
+              id: 1,
+              category: "economy",
+            },
+            {
+              emoji: "🏦",
+              title:
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
+              description:
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
+              currentLevel: 1,
+              nextLevel: 2,
+              price: 100,
+              progress: 50,
+              id: 2,
+              category: "economy",
+            },
+            {
+              emoji: "🏦",
+              title:
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
+              description:
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
+              currentLevel: 1,
+              nextLevel: 2,
+              price: 100,
+              progress: 50,
+              id: 2,
+              category: "cooldown",
+            },
+            {
+              emoji: "🏦",
+              title:
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
+              description:
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
+              currentLevel: 1,
+              nextLevel: 2,
+              price: 100,
+              progress: 50,
+              id: 2,
+              category: "cooldown",
+            },
+          ]
+        : undefined,
+    currentUpgrade: 0,
+    balance: 1000.5,
+    // Coloring will be set in the image generation route based on theme
   };
 }
 
@@ -417,6 +577,19 @@ app.get("/:componentName", async (req, res) => {
       return res.status(404).send(`Component ${componentName} not found`);
     }
 
+    // Add special controls for Transfer component
+    let additionalControls = "";
+    if (componentName === "Transfer") {
+      additionalControls = `
+        <div class="mode-controls">
+          <span>Mode: </span>
+          <button class="mode-btn" data-mode="deposit" onclick="changeMode('deposit')">Deposit</button>
+          <button class="mode-btn" data-mode="withdraw" onclick="changeMode('withdraw')">Withdraw</button>
+          <button class="mode-btn active" data-mode="transfer" onclick="changeMode('transfer')">Transfer</button>
+        </div>
+      `;
+    }
+
     // Create preview page
     const html = `
       <!DOCTYPE html>
@@ -424,15 +597,41 @@ app.get("/:componentName", async (req, res) => {
       <head>
         <title>${componentName} Preview</title>
         <script>
+          // Client-side storage helper that works in all environments
+          const storage = {
+            get: (key, defaultValue) => {
+              try {
+                if (typeof localStorage !== 'undefined') {
+                  const value = localStorage.getItem(key);
+                  return value !== null ? value : defaultValue;
+                }
+              } catch (e) {
+                console.warn('localStorage not available:', e);
+              }
+              return defaultValue;
+            },
+            set: (key, value) => {
+              try {
+                if (typeof localStorage !== 'undefined') {
+                  localStorage.setItem(key, value);
+                }
+              } catch (e) {
+                console.warn('localStorage not available:', e);
+              }
+            }
+          };
+          
           // WebSocket connection for live reload
           const ws = new WebSocket('ws://' + window.location.host);
           
-          let currentLang = localStorage.getItem('previewLang') || 'en';
-          let debugMode = localStorage.getItem('debugMode') === 'true';
+          let currentLang = storage.get('previewLang', 'en');
+          let debugMode = storage.get('debugMode', 'false') === 'true';
+          let currentMode = storage.get('transferMode', 'transfer');
+          let darkTheme = storage.get('darkTheme', 'true') === 'true';
           
           function toggleDebug() {
             debugMode = !debugMode;
-            localStorage.setItem('debugMode', debugMode);
+            storage.set('debugMode', debugMode);
             document.getElementById('debugButton').classList.toggle('active', debugMode);
             
             ws.send(JSON.stringify({
@@ -442,28 +641,76 @@ app.get("/:componentName", async (req, res) => {
             }));
           }
           
+          function toggleTheme() {
+            darkTheme = !darkTheme;
+            storage.set('darkTheme', darkTheme);
+            document.getElementById('themeButton').classList.toggle('active', darkTheme);
+            document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
+            
+            ws.send(JSON.stringify({
+              type: 'themeChange',
+              component: '${componentName}',
+              darkTheme: darkTheme
+            }));
+            
+            refreshImage();
+          }
+          
+          function changeMode(mode) {
+            if ('${componentName}' !== 'Transfer') return;
+            
+            currentMode = mode;
+            storage.set('transferMode', mode);
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+              btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            
+            // Notify server about mode change
+            ws.send(JSON.stringify({
+              type: 'modeChange',
+              component: '${componentName}',
+              mode: mode
+            }));
+            
+            refreshImage();
+          }
+          
+          function refreshImage() {
+            const img = document.querySelector('.preview img');
+            let url = '/${componentName}/image?lang=' + currentLang;
+            
+            if ('${componentName}' === 'Transfer') {
+              url += '&mode=' + currentMode;
+            }
+            
+            url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light') + '&t=' + Date.now();
+            img.src = url;
+          }
+          
           ws.onopen = () => {
             // Tell server which component we're viewing
             ws.send(JSON.stringify({ 
               type: 'viewing',
               component: '${componentName}',
-              lang: currentLang
+              lang: currentLang,
+              mode: currentMode,
+              debug: debugMode,
+              darkTheme: darkTheme
             }));
           };
           
           ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            if (data.type === 'reload' || data.type === 'langChange' || data.type === 'debugChange') {
-              // Reload image without full page refresh
-              const img = document.querySelector('.preview img');
-              const newUrl = '/${componentName}/image?lang=' + currentLang + '&debug=' + debugMode + '&t=' + Date.now();
-              img.src = newUrl;
+            if (data.type === 'reload' || data.type === 'langChange' || 
+                data.type === 'debugChange' || data.type === 'modeChange' ||
+                data.type === 'themeChange') {
+              refreshImage();
             }
           };
 
           function changeLang(lang) {
             currentLang = lang;
-            localStorage.setItem('previewLang', lang);
+            storage.set('previewLang', lang);
             document.querySelectorAll('.lang-btn').forEach(btn => {
               btn.classList.toggle('active', btn.dataset.lang === lang);
             });
@@ -475,9 +722,7 @@ app.get("/:componentName", async (req, res) => {
               lang: lang
             }));
 
-            const img = document.querySelector('.preview img');
-            const newUrl = '/${componentName}/image?lang=' + lang + '&t=' + Date.now();
-            img.src = newUrl;
+            refreshImage();
           }
 
           // Initialize on load
@@ -486,6 +731,14 @@ app.get("/:componentName", async (req, res) => {
               btn.classList.toggle('active', btn.dataset.lang === currentLang);
             });
             document.getElementById('debugButton').classList.toggle('active', debugMode);
+            document.getElementById('themeButton').classList.toggle('active', darkTheme);
+            document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
+            
+            if ('${componentName}' === 'Transfer') {
+              document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === currentMode);
+              });
+            }
           };
         </script>
         <style>
@@ -519,6 +772,7 @@ app.get("/:componentName", async (req, res) => {
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
           }
           .back {
             padding: 10px 20px;
@@ -534,21 +788,40 @@ app.get("/:componentName", async (req, res) => {
             text-decoration: none;
             border-radius: 4px;
           }
-          .lang-controls {
+          .lang-controls, .mode-controls {
             display: flex;
             gap: 5px;
-            margin-left: 20px;
+            margin-left: 10px;
+            align-items: center;
           }
-          .lang-btn {
-            padding: 10px 15px;
+          .lang-btn, .mode-btn, .debug-btn {
+            padding: 8px 12px;
             border: none;
             border-radius: 4px;
             background: #e0e0e0;
             cursor: pointer;
             font-weight: 500;
           }
-          .lang-btn.active {
+          .lang-btn.active, .mode-btn.active, .debug-btn.active {
             background: #FFA500;
+            color: white;
+          }
+          .mode-btn.active {
+            background: #9C27B0;
+          }
+          .debug-btn.active {
+            background: #F44336;
+          }
+          .theme-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #e0e0e0;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .theme-btn.active {
+            background: #673AB7;
             color: white;
           }
           .dimensions {
@@ -576,9 +849,15 @@ app.get("/:componentName", async (req, res) => {
           <div class="debug-controls">
             <button id="debugButton" onclick="toggleDebug()" class="debug-btn">Debug Mode</button>
           </div>
+          <div class="theme-controls">
+            <button id="themeButton" onclick="toggleTheme()" class="theme-btn">Dark Theme</button>
+          </div>
+          ${additionalControls}
         </div>
         <div class="preview">
-          <img src="/${componentName}/image?lang=en" onload="this.parentElement.setAttribute('style', 'width:' + this.naturalWidth + 'px; height:' + this.naturalHeight + 'px; position:relative;')" />
+          <img src="/${componentName}/image?lang=en${
+      componentName === "Transfer" ? "&mode=transfer" : ""
+    }" onload="this.parentElement.setAttribute('style', 'width:' + this.naturalWidth + 'px; height:' + this.naturalHeight + 'px; position:relative;')" />
           <div class="dimensions"></div>
         </div>
         <script>
@@ -596,6 +875,7 @@ app.get("/:componentName", async (req, res) => {
 
     res.send(html);
   } catch (error) {
+    console.error("Error details:", error);
     res.status(500).send(`Error rendering component: ${error.message}`);
   }
 });
@@ -605,6 +885,10 @@ app.get("/:componentName/image", async (req, res) => {
   try {
     const { componentName } = req.params;
     const lang = req.query.lang || "en";
+    const mode = req.query.mode || "transfer"; // Get mode from query params
+    const debug = req.query.debug === "true"; // Parse debug parameter
+    const theme = req.query.theme || "dark"; // Get theme from query params
+    const isDarkTheme = theme === "dark";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
     // Import and render component with cache busting
@@ -621,12 +905,57 @@ app.get("/:componentName/image", async (req, res) => {
       throw new Error(`Component not found in ${componentPath}`);
     }
 
-    console.log(`Rendering ${componentName} with locale: ${lang}`);
+    console.log(
+      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, debug: ${debug}, theme: ${theme}`
+    );
     // Generate image with mock props
     const mockData = await createMockData(lang, Component);
+
+    // Apply mode settings for Transfer component
+    if (componentName === "Transfer" && mockData) {
+      if (mode === "deposit") {
+        mockData.isDeposit = true;
+        mockData.isTransfer = false;
+      } else if (mode === "withdraw") {
+        mockData.isDeposit = false;
+        mockData.isTransfer = false;
+      } else if (mode === "transfer") {
+        mockData.isDeposit = false;
+        mockData.isTransfer = true;
+      }
+    }
+
+    // Add debug flag to mockData
+    mockData.debug = debug;
+
+    // Apply theme settings
+    if (componentName === "UpgradesDisplay" && mockData) {
+      // Set coloring based on theme
+      mockData.coloring = isDarkTheme
+        ? {
+            textColor: debug ? "#FF0000" : "#FFFFFF",
+            secondaryTextColor: "rgba(255, 255, 255, 0.8)",
+            tertiaryTextColor: "rgba(255, 255, 255, 0.6)",
+            overlayBackground: "rgba(0, 0, 0, 0.25)",
+            backgroundGradient:
+              "linear-gradient(135deg, #2196f3 0%, #1976d2 100%)",
+            isDarkText: false,
+          }
+        : {
+            textColor: debug ? "#FF0000" : "#000000",
+            secondaryTextColor: "rgba(0, 0, 0, 0.8)",
+            tertiaryTextColor: "rgba(0, 0, 0, 0.6)",
+            overlayBackground: "rgba(255, 255, 255, 0.5)",
+            backgroundGradient:
+              "linear-gradient(135deg, #f9f3e0 0%, #e6d7b0 100%)",
+            isDarkText: true,
+          };
+    }
+
     const buffer = await generateImage(Component, mockData, {
       image: 2,
       emoji: 2,
+      debug: debug, // Pass debug flag to image generator
     });
 
     if (!buffer || !Buffer.isBuffer(buffer)) {
@@ -641,6 +970,7 @@ app.get("/:componentName/image", async (req, res) => {
     res.setHeader("Content-Type", contentType);
     res.send(buffer);
   } catch (error) {
+    console.error("Error details:", error);
     res.status(500).send(`Error rendering component: ${error.message}`);
   }
 });
@@ -660,32 +990,72 @@ wss.on("connection", (ws) => {
   console.log("New WebSocket connection established");
 
   // Initialize client data with defaults
-  clients.set(ws, { component: null, lang: "en" });
+  clients.set(ws, {
+    component: null,
+    lang: "en",
+    mode: "transfer",
+    debug: false,
+    darkTheme: true,
+  });
 
   ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
       console.log("Received message:", data);
 
-      if (data.type === "viewing" || data.type === "langChange") {
-        // Update which component and language this client is viewing
+      if (
+        data.type === "viewing" ||
+        data.type === "langChange" ||
+        data.type === "modeChange" ||
+        data.type === "debugChange" ||
+        data.type === "themeChange"
+      ) {
+        // Update which component, language, and mode this client is viewing
         const clientData = clients.get(ws);
         const oldComponent = clientData.component;
         clientData.component = data.component;
-        clientData.lang = data.lang || "en";
+
+        if (data.lang) {
+          clientData.lang = data.lang;
+        }
+
+        if (data.mode) {
+          clientData.mode = data.mode;
+        }
+
+        if (data.type === "debugChange") {
+          clientData.debug = data.debug;
+          console.log(`Debug mode changed to: ${data.debug}`);
+          ws.send(JSON.stringify({ type: "debugChange" }));
+        }
+
+        if (data.type === "themeChange") {
+          clientData.darkTheme = data.darkTheme;
+          console.log(`Theme changed to: ${data.darkTheme ? "dark" : "light"}`);
+          ws.send(JSON.stringify({ type: "themeChange" }));
+        }
 
         console.log(
-          `Client updated: component=${data.component}, lang=${data.lang}`
+          `Client updated: component=${data.component}, lang=${
+            clientData.lang
+          }, mode=${clientData.mode}, debug=${clientData.debug}, theme=${
+            clientData.darkTheme ? "dark" : "light"
+          }`
         );
 
         if (data.type === "viewing" && oldComponent !== data.component) {
           console.log(`Client now viewing: ${data.component}`);
         }
 
-        // For language changes, notify the client to refresh
+        // For language or mode changes, notify the client to refresh
         if (data.type === "langChange") {
           console.log(`Language changed to: ${data.lang}`);
           ws.send(JSON.stringify({ type: "langChange" }));
+        }
+
+        if (data.type === "modeChange") {
+          console.log(`Mode changed to: ${data.mode}`);
+          ws.send(JSON.stringify({ type: "modeChange" }));
         }
       }
     } catch (e) {
