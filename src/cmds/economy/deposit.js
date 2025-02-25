@@ -89,7 +89,16 @@ export default {
       // Calculate bank rate based on level
       const xp = Number(userData.level?.xp?.toString() || 0);
       const levelInfo = Database.calculateLevel(xp);
-      const bankRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
+      const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
+
+      // Apply bank rate upgrade
+      const bankRateUpgrade = userData.upgrades.find(
+        (u) => u.type === "bank_rate"
+      );
+      const bankRateLevel = bankRateUpgrade?.level || 1;
+      const bankRateBonus = (bankRateLevel - 1) * 5; // 5% increase per level
+
+      const bankRate = baseRate + bankRateBonus;
 
       const userId = interaction.user.id;
       const guildId = interaction.guild.id;

@@ -30,12 +30,25 @@ export default {
     const { guild, user } = interaction;
 
     try {
-      // Check cooldown
-      const cooldownTime = await Database.getCooldown(
+      // Get user data with upgrades to calculate cooldown reduction
+      let userData = await Database.getUser(guild.id, user.id);
+
+      // Apply cooldown reduction from crime upgrade
+      const crimeUpgrade = userData.upgrades.find((u) => u.type === "crime");
+      const crimeLevel = crimeUpgrade?.level || 1;
+
+      // Calculate cooldown reduction (20 minutes per level starting from level 2)
+      const cooldownReduction = (crimeLevel - 1) * (20 * 60 * 1000);
+
+      // Check if cooldown is active (with reduction applied)
+      const baseCooldownTime = await Database.getCooldown(
         guild.id,
         user.id,
         "crime"
       );
+
+      // Apply cooldown reduction, but ensure it doesn't go below 0
+      const cooldownTime = Math.max(0, baseCooldownTime - cooldownReduction);
 
       if (cooldownTime > 0) {
         const timeLeft = Math.ceil(cooldownTime / 1000);

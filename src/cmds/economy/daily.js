@@ -24,12 +24,30 @@ export default {
     await interaction.deferReply();
 
     try {
-      // Check if cooldown is active
-      const cooldownTime = await Database.getCooldown(
+      // Get user data with upgrades to calculate cooldown reduction
+      let userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id
+      );
+
+      // Apply cooldown reduction from daily_cooldown upgrade
+      const dailyCooldownUpgrade = userData.upgrades.find(
+        (u) => u.type === "daily_cooldown"
+      );
+      const dailyCooldownLevel = dailyCooldownUpgrade?.level || 1;
+
+      // Calculate cooldown reduction (30 minutes per level starting from level 2)
+      const cooldownReduction = (dailyCooldownLevel - 1) * (30 * 60 * 1000);
+
+      // Check if cooldown is active (with reduction applied)
+      const baseCooldownTime = await Database.getCooldown(
         interaction.guild.id,
         interaction.user.id,
         "daily"
       );
+
+      // Apply cooldown reduction, but ensure it doesn't go below 0
+      const cooldownTime = Math.max(0, baseCooldownTime - cooldownReduction);
 
       if (cooldownTime > 0) {
         let pngBuffer = await generateImage(
@@ -80,14 +98,18 @@ export default {
         });
       }
 
-      // Get user data with upgrades
-      let userData = await Database.getUser(
+      // Get user data with upgrades for bonus calculation
+      userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id
       );
-      const dailyUpgrade = userData.upgrades.find((u) => u.type === "daily");
-      const dailyLevel = dailyUpgrade?.level || 1;
-      const multiplier = 1 + (dailyLevel - 1) * 0.15; // 15% increase per level
+
+      // Apply bonus from daily_bonus upgrade
+      const dailyBonusUpgrade = userData.upgrades.find(
+        (u) => u.type === "daily_bonus"
+      );
+      const dailyBonusLevel = dailyBonusUpgrade?.level || 1;
+      const multiplier = 1 + (dailyBonusLevel - 1) * 0.15; // 15% increase per level
 
       const baseAmount = Math.floor(Math.random() * 90) + 10;
       const amount = Math.floor(baseAmount * multiplier);
