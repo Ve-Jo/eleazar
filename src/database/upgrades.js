@@ -3,26 +3,39 @@ import { UPGRADES } from "./client.js";
 export default {
   // Helper method for updating upgrades
   async updateUpgrades(guildId, userId, upgrades) {
-    const updatePromises = Object.entries(upgrades).map(([type, data]) =>
-      this.client.upgrade.upsert({
-        where: {
-          userId_guildId_type: {
+    const updatePromises = Object.entries(upgrades).map(([type, data]) => {
+      // Only store upgrades that differ from default level 1
+      if (data.level === 1) {
+        // If level is 1 (default), try to delete the record if it exists
+        return this.client.upgrade.deleteMany({
+          where: {
             userId,
             guildId,
             type,
           },
-        },
-        create: {
-          userId,
-          guildId,
-          type,
-          level: data.level,
-        },
-        update: {
-          level: data.level,
-        },
-      })
-    );
+        });
+      } else {
+        // Otherwise, upsert the upgrade
+        return this.client.upgrade.upsert({
+          where: {
+            userId_guildId_type: {
+              userId,
+              guildId,
+              type,
+            },
+          },
+          create: {
+            userId,
+            guildId,
+            type,
+            level: data.level,
+          },
+          update: {
+            level: data.level,
+          },
+        });
+      }
+    });
 
     return Promise.all(updatePromises);
   },
@@ -37,10 +50,14 @@ export default {
     );
 
     let effect;
-    if (type === "daily") {
+    if (type === "daily_bonus") {
       effect = upgrade.effectMultiplier * (level - 1); // Start from 0% at level 1
-    } else if (type === "crime") {
+    } else if (type === "daily_cooldown" || type === "crime") {
       effect = Math.floor((upgrade.effectValue * (level - 1)) / (60 * 1000)); // Convert ms to minutes
+    } else if (type === "bank_rate") {
+      effect = upgrade.effectValue * (level - 1); // Start from 0% at level 1
+    } else if (type === "games_earning") {
+      effect = upgrade.effectMultiplier * (level - 1); // Start from 0% at level 1
     }
 
     return { price, effect };
@@ -76,20 +93,25 @@ export default {
         throw new Error("Insufficient balance");
       }
 
-      // Update economy and upgrade in transaction
-      const [economy, upgrade] = await Promise.all([
-        tx.economy.update({
-          where: {
-            userId_guildId: {
-              userId,
-              guildId,
-            },
+      // Update economy
+      const economy = await tx.economy.update({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
           },
-          data: {
-            balance: { decrement: price },
-          },
-        }),
-        tx.upgrade.upsert({
+        },
+        data: {
+          balance: { decrement: price },
+        },
+      });
+
+      // Update upgrade - only if level will be greater than 1
+      let upgrade;
+      const newLevel = currentLevel + 1;
+
+      if (newLevel > 1) {
+        upgrade = await tx.upgrade.upsert({
           where: {
             userId_guildId_type: {
               userId,
@@ -101,13 +123,17 @@ export default {
             userId,
             guildId,
             type,
-            level: currentLevel + 1,
+            level: newLevel,
           },
           update: {
-            level: { increment: 1 },
+            level: newLevel,
           },
-        }),
-      ]);
+        });
+      } else {
+        // This case shouldn't normally happen as we start at level 1,
+        // but included for completeness
+        upgrade = { type, level: newLevel };
+      }
 
       // Update user's last activity
       await tx.user.update({

@@ -40,17 +40,40 @@ export const COOLDOWNS = {
 };
 
 export const UPGRADES = {
-  daily: {
+  daily_bonus: {
     emoji: "🎁",
     basePrice: 20,
     priceMultiplier: 1.5,
     effectMultiplier: 0.15, // 15% increase starting from level 2
+    category: "economy",
+  },
+  daily_cooldown: {
+    emoji: "⏱️",
+    basePrice: 50,
+    priceMultiplier: 1.4,
+    effectValue: 30 * 60 * 1000, // 30 minutes reduction per level
+    category: "cooldowns",
   },
   crime: {
     emoji: "🦹",
     basePrice: 50,
     priceMultiplier: 1.2,
     effectValue: 20 * 60 * 1000, // 20 minutes reduction per level
+    category: "cooldowns",
+  },
+  bank_rate: {
+    emoji: "💰",
+    basePrice: 100,
+    priceMultiplier: 1.6,
+    effectValue: 0.05, // 5% increase per level
+    category: "economy",
+  },
+  games_earning: {
+    emoji: "🎮",
+    basePrice: 75,
+    priceMultiplier: 1.3,
+    effectMultiplier: 0.1, // 10% increase per level
+    category: "economy",
   },
 };
 
@@ -74,8 +97,11 @@ export const DEFAULT_VALUES = {
   },
   cooldowns: {},
   upgrades: {
-    daily: { level: 1 },
+    daily_bonus: { level: 1 },
+    daily_cooldown: { level: 1 },
     crime: { level: 1 },
+    bank_rate: { level: 1 },
+    games_earning: { level: 1 },
   },
   ping: {
     music: { players: 0, ping: 0 },
