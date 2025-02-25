@@ -3,39 +3,147 @@ import prettyMilliseconds from "pretty-ms";
 const Balance = (props) => {
   const renderBanknotes = (
     amount,
-    maxRowLength,
     startX,
     baseY,
     style,
     division,
-    xspacing
+    xspacing,
+    containerBounds = null
   ) => {
     const totalBanknotes = Math.ceil(amount / division);
 
-    const fullRows = Math.floor(totalBanknotes / maxRowLength);
-    const remaining = totalBanknotes % maxRowLength;
-    const rowsNeeded = fullRows + (remaining > 0 ? 1 : 0);
+    // If no banknotes to render, return empty array
+    if (totalBanknotes <= 0) {
+      return [];
+    }
 
     const banknotes = [];
     let currentIndex = 0;
 
-    for (let row = 0; row < rowsNeeded; row++) {
-      const banknotesInThisRow = row < fullRows ? maxRowLength : remaining;
+    // Default container bounds if not provided
+    const bounds = containerBounds || {
+      left: 0,
+      top: 0,
+      right: 400, // Component width
+      bottom: 235, // Component height
+      padding: 0,
+    };
 
-      const xSpacing = xspacing || 15;
+    // Calculate effective boundaries with padding
+    const effectiveLeft = bounds.left + (bounds.padding || 0);
+    const effectiveTop = bounds.top + (bounds.padding || 0);
+    const effectiveRight = bounds.right - (bounds.padding || 0);
+    const effectiveBottom = bounds.bottom - (bounds.padding || 0);
+
+    // Calculate maximum available width and height
+    const availableWidth = effectiveRight - effectiveLeft;
+    const availableHeight = effectiveBottom - effectiveTop;
+
+    // Banknote dimensions
+    const banknoteWidth = 15; // Width of a single banknote
+    const banknoteHeight = 5; // Height of a banknote
+
+    // Dynamically calculate spacing based on container width
+    // Ensure minimum spacing of 5px and maximum of provided xspacing
+    const minSpacing = 5;
+    const providedSpacing = xspacing || 15;
+
+    // Calculate optimal spacing based on container width
+    // Try to fit at least 3 banknotes if possible
+    const minBanknotesPerRow = Math.min(3, totalBanknotes);
+    const optimalSpacing = Math.min(
+      providedSpacing,
+      Math.max(minSpacing, availableWidth / Math.max(minBanknotesPerRow, 1))
+    );
+
+    // Use the calculated spacing
+    const xSpacing = Math.min(optimalSpacing, providedSpacing);
+
+    // Calculate how many banknotes can fit in a row with the calculated spacing
+    const maxFittingInRow = Math.floor(availableWidth / xSpacing);
+
+    // We're not limiting by maxRowLength anymore since we're using container bounds
+    const adjustedMaxRowLength = maxFittingInRow;
+
+    // If we can't fit even one banknote, don't render any
+    if (adjustedMaxRowLength <= 0) {
+      return [];
+    }
+
+    // Calculate how many rows we can fit before hitting the top
+    const ySpacing = 5; // Vertical spacing between rows
+
+    // Add a buffer to prevent touching the top (at least 5px from top)
+    const safeTopMargin = 5;
+    const maxRows = Math.max(
+      1,
+      Math.floor((baseY - effectiveTop - safeTopMargin) / ySpacing)
+    );
+
+    // Calculate rows needed for all banknotes
+    const fullRows = Math.floor(totalBanknotes / adjustedMaxRowLength);
+    const remaining = totalBanknotes % adjustedMaxRowLength;
+    const rowsNeeded = fullRows + (remaining > 0 ? 1 : 0);
+
+    // Limit the number of rows to prevent touching the top
+    const limitedRows = Math.min(rowsNeeded, maxRows);
+
+    // Calculate how many banknotes we can display in the limited rows
+    const maxBanknotesToShow = limitedRows * adjustedMaxRowLength;
+    const limitedBanknotes = Math.min(totalBanknotes, maxBanknotesToShow);
+
+    // Recalculate rows with limited banknotes
+    const limitedFullRows = Math.floor(limitedBanknotes / adjustedMaxRowLength);
+    const limitedRemaining = limitedBanknotes % adjustedMaxRowLength;
+
+    // Render banknotes row by row
+    for (let row = 0; row < limitedRows; row++) {
+      const banknotesInThisRow =
+        row < limitedFullRows
+          ? adjustedMaxRowLength
+          : row === limitedFullRows
+          ? limitedRemaining
+          : 0;
+
+      if (banknotesInThisRow <= 0) continue;
+
+      // Calculate the total width of banknotes in this row
       const totalWidth = banknotesInThisRow * xSpacing;
-      const startXPos = startX - totalWidth / 2;
+
+      // Center the banknotes within the available space
+      // If startX is within the container, center around it
+      // Otherwise, center within the container
+      const rowCenterX =
+        startX >= effectiveLeft && startX <= effectiveRight
+          ? startX
+          : effectiveLeft + availableWidth / 2;
+
+      const startXPos = Math.max(
+        effectiveLeft,
+        Math.min(rowCenterX - totalWidth / 2, effectiveRight - totalWidth)
+      );
 
       // Place banknotes in this row
       for (let col = 0; col < banknotesInThisRow; col++) {
-        if (currentIndex >= totalBanknotes) break;
+        if (currentIndex >= limitedBanknotes) break;
 
-        // Add small random offset for natural look
-        const randomOffset = Math.random() * 3 - 1;
-        const ySpacing = 5; // Vertical spacing between rows
+        // Add small random offset for natural look (but constrained)
+        const randomOffset = Math.random() * 2 - 1; // Reduced randomness
 
-        const xPos = startXPos + col * xSpacing + randomOffset;
-        const yPos = baseY - row * ySpacing; // Rows stack upwards
+        // Calculate position with constraints
+        const xPos = Math.max(
+          effectiveLeft,
+          Math.min(
+            startXPos + col * xSpacing + randomOffset,
+            effectiveRight - banknoteWidth
+          )
+        );
+
+        // Ensure banknotes don't touch the top
+        const yPos = Math.max(
+          effectiveTop + safeTopMargin,
+          Math.min(baseY - row * ySpacing, effectiveBottom - banknoteHeight)
+        );
 
         // Apply styling based on the style parameter
         if (style === "banknotes") {
@@ -111,8 +219,13 @@ const Balance = (props) => {
 
   const bankStartTime = database?.economy?.bankStartTime || 0;
   const bankRate = database?.economy?.bankRate || 0;
-  const bankBalance = database?.economy?.bankBalance || 0;
-  const walletBalance = database?.economy?.balance || 0;
+  let bankBalance = database?.economy?.bankBalance || 0;
+  let walletBalance = database?.economy?.balance || 0;
+
+  let visualwallet = walletBalance.toFixed(0).toString().length;
+  let visualbank = bankBalance.toFixed(0).toString().length;
+
+  console.log(`visualwallet: ${visualwallet}, visualbank: ${visualbank}`);
 
   const mainBackground = database?.bannerUrl
     ? "transparent"
@@ -132,7 +245,14 @@ const Balance = (props) => {
         background: mainBackground,
       }}
     >
-      {renderBanknotes(walletBalance, 8, 95, 115, "banknotes", 50, 18)}
+      {/* Define wallet container bounds */}
+      {renderBanknotes(walletBalance, 95, 115, "banknotes", 50, 18, {
+        left: 20,
+        top: 45,
+        right: 180 + (visualwallet - 3) * 20,
+        bottom: 130,
+        padding: 5,
+      })}
 
       {/* Banner Background */}
       {database?.bannerUrl && (
@@ -203,7 +323,14 @@ const Balance = (props) => {
               {i18n.__("title")}!
             </h2>
           </div>
-          {renderBanknotes(bankBalance, 10, 95, 161, "bars", 100, 18)}
+          {/* Define bank container bounds */}
+          {renderBanknotes(bankBalance, 95, 161, "bars", 100, 18, {
+            left: 0,
+            top: 90,
+            right: 190 + (visualbank - 3) * 20,
+            bottom: 180,
+            padding: 5,
+          })}
           <div
             style={{
               display: "flex",
@@ -221,6 +348,8 @@ const Balance = (props) => {
                 alignItems: "center",
                 alignSelf: "flex-start",
                 minWidth: "150px",
+                position: "relative", // Added for proper positioning context
+                overflow: "hidden", // Added to clip overflowing banknotes
               }}
             >
               <div
@@ -274,6 +403,8 @@ const Balance = (props) => {
                 alignSelf: "flex-start",
                 minWidth: "150px",
                 maxWidth: "300px",
+                position: "relative", // Added for proper positioning context
+                overflow: "hidden", // Added to clip overflowing banknotes
               }}
             >
               <div
