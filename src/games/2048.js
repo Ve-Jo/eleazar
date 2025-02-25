@@ -83,15 +83,31 @@ export default {
     );
 
     // Calculate earning based on score and time
-    const calculateEarning = (state) => {
+    const calculateEarning = async (state) => {
+      // Get user data to check for games_earning upgrade
+      const userData = await Database.getUser(
+        interaction.guildId,
+        interaction.user.id
+      );
+
+      // Apply games earning upgrade
+      const gamesEarningUpgrade = userData.upgrades.find(
+        (u) => u.type === "games_earning"
+      );
+      const gamesEarningLevel = gamesEarningUpgrade?.level || 1;
+      const earningMultiplier = 1 + (gamesEarningLevel - 1) * 0.1; // 10% increase per level
+
       const timeInMinutes = (Date.now() - state.startTime) / 60000;
       const moveEfficiency = state.score / (state.moves || 1);
 
-      const earning =
+      const baseEarning =
         state.score *
         0.01 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + (5 - timeInMinutes) / 5); // Time multiplier
+
+      // Apply the games earning multiplier
+      const earning = baseEarning * earningMultiplier;
 
       return earning;
     };
@@ -174,7 +190,9 @@ export default {
         inactivityTimeout = setTimeout(async () => {
           const gameInstance = activeGames.get(gameKey);
           if (!gameInstance?.state.gameOver) {
-            gameInstance.state.earning = calculateEarning(gameInstance.state);
+            gameInstance.state.earning = await calculateEarning(
+              gameInstance.state
+            );
             const finalBoard = await generateImage(
               "2048",
               {
@@ -274,7 +292,7 @@ export default {
 
         if (moved) {
           state.moves++;
-          state.earning = calculateEarning(state);
+          state.earning = await calculateEarning(state);
           addRandomTile(state);
 
           // Generate new game board image after valid move
