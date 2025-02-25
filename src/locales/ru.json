@@ -196,19 +196,37 @@
       "purchaseSuccess": "Успешно улучшено {{type}} до уровня {{level}} за {{cost}} монет",
       "upgrades": {
         "daily": {
-          "name": "Усиление Ежедневной Награды",
-          "description": "{{effect}}% к награде ({{price}} монет)"
+          "name": "Ежедн. Бонус",
+          "description": "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)"
         },
         "crime": {
-          "name": "Уменьшение Перезарядки Преступления",
-          "description": "-{{effect}} минут кулдауна ({{price}} монет)"
+          "name": "Преступления",
+          "description": "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)"
+        },
+        "daily_bonus": {
+          "name": "Ежедн. Бонус",
+          "description": "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "daily_cooldown": {
+          "name": "Перезарядка Ежедн.",
+          "description": "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)"
+        },
+        "bank_rate": {
+          "name": "Банк. Процент",
+          "description": "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "games_earning": {
+          "name": "Доход от Игр",
+          "description": "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)"
         }
       },
       "purchaseButton": "Купить",
-      "error": "Произошла ошибка при обработке запроса магазина"
+      "error": "Произошла ошибка при обработке запроса магазина",
+      "category_economy": "Улучшения Экономики",
+      "category_cooldowns": "Улучшения Перезарядки"
     },
     "transfer": {
-      "name": "перевести",
+      "name": "перевод",
       "description": "Перевести деньги другому пользователю",
       "options": {
         "amount": {
@@ -217,9 +235,15 @@
         },
         "user": {
           "name": "пользователь",
-          "description": "Пользователь для перевода"
+          "description": "Пользователь, которому перевести деньги"
         }
-      }
+      },
+      "cannotTransferToSelf": "Вы не можете перевести деньги самому себе",
+      "insufficientFunds": "Недостаточно средств",
+      "amountGreaterThanZero": "Сумма должна быть больше нуля",
+      "invalidAmount": "Неверная сумма",
+      "error": "Произошла ошибка при обработке перевода",
+      "title": "Перевод"
     },
     "daily": {
       "name": "ежедневное",
@@ -763,7 +787,9 @@
       "level": "Уровень",
       "nextLevel": "Следующий уровень",
       "price": "Цена",
-      "balance": "Баланс"
+      "balance": "Баланс",
+      "category_economy": "Экономика",
+      "category_cooldowns": "Перезарядка"
     },
     "MusicPlayer": {
       "queue": "Очередь",
@@ -773,7 +799,11 @@
     "Transfer": {
       "deposit": "Пополнение",
       "withdraw": "Вывод",
-      "amount": "Сумма"
+      "amount": "Сумма",
+      "wallet": "КОШЕЛЁК",
+      "bank": "БАНК",
+      "transfer": "Перевод",
+      "balance": "БАЛАНС"
     },
     "Level": {
       "title": "Уровень",

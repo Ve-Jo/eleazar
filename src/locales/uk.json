@@ -196,19 +196,37 @@
       "purchaseSuccess": "Успішно покращено {{type}} до рівня {{level}} за {{cost}} монет",
       "upgrades": {
         "daily": {
-          "name": "Посилення Щоденної Нагороди",
-          "description": "{{effect}}% до нагороди ({{price}} монет)"
+          "name": "Щоденний Бонус",
+          "description": "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)"
         },
         "crime": {
-          "name": "Зменшення Перезарядки Злочину",
-          "description": "-{{effect}} хвилин кулдауна ({{price}} монет)"
+          "name": "Крадіжка",
+          "description": "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)"
+        },
+        "daily_bonus": {
+          "name": "Щоденний Бонус",
+          "description": "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "daily_cooldown": {
+          "name": "Перезарядка Щоденного",
+          "description": "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)"
+        },
+        "bank_rate": {
+          "name": "Банк. Відсоток",
+          "description": "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "games_earning": {
+          "name": "Дохід від Ігор",
+          "description": "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)"
         }
       },
       "purchaseButton": "Купити",
-      "error": "Сталася помилка під час обробки запиту магазину"
+      "error": "Сталася помилка під час обробки запиту магазину",
+      "category_economy": "Покращення Економіки",
+      "category_cooldowns": "Покращення Перезарядки"
     },
     "transfer": {
-      "name": "переказати",
+      "name": "переказ",
       "description": "Переказати гроші іншому користувачу",
       "options": {
         "amount": {
@@ -217,9 +235,15 @@
         },
         "user": {
           "name": "користувач",
-          "description": "Користувач для переказу"
+          "description": "Користувач, якому переказати гроші"
         }
-      }
+      },
+      "cannotTransferToSelf": "Ви не можете переказати гроші самому собі",
+      "insufficientFunds": "Недостатньо коштів",
+      "amountGreaterThanZero": "Сума має бути більшою за нуль",
+      "invalidAmount": "Невірна сума",
+      "error": "Сталася помилка під час обробки переказу",
+      "title": "Переказ"
     },
     "daily": {
       "name": "щоденне",
@@ -779,7 +803,9 @@
       "level": "Рівень",
       "nextLevel": "Наступний рівень",
       "price": "Ціна",
-      "balance": "Баланс"
+      "balance": "Баланс",
+      "category_economy": "Економіка",
+      "category_cooldowns": "Перезарядка"
     },
     "MusicPlayer": {
       "queue": "Черга",
@@ -789,7 +815,11 @@
     "Transfer": {
       "deposit": "Поповнення",
       "withdraw": "Вивід",
-      "amount": "Сума"
+      "amount": "Сума",
+      "wallet": "ГАМАНЕЦЬ",
+      "bank": "БАНК",
+      "transfer": "Переказ",
+      "balance": "БАЛАНС"
     },
     "Level": {
       "title": "Рівень",

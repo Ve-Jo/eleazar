@@ -196,16 +196,34 @@
       "purchaseSuccess": "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
       "upgrades": {
         "daily": {
-          "name": "Daily Reward Boost",
-          "description": "{{effect}}% reward ({{price}} coins)"
+          "name": "Daily Bonus",
+          "description": "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)"
         },
         "crime": {
-          "name": "Crime Cooldown Reduction",
-          "description": "-{{effect}} minutes cooldown ({{price}} coins)"
+          "name": "Crime Cooldown",
+          "description": "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+        },
+        "daily_bonus": {
+          "name": "Daily Bonus",
+          "description": "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "daily_cooldown": {
+          "name": "Daily Cooldown",
+          "description": "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+        },
+        "bank_rate": {
+          "name": "Bank Interest",
+          "description": "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "games_earning": {
+          "name": "Games Earnings",
+          "description": "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)"
         }
       },
       "purchaseButton": "Purchase",
-      "error": "An error occurred while processing your shop request"
+      "error": "An error occurred while processing your shop request",
+      "category_economy": "Economy Upgrades",
+      "category_cooldowns": "Cooldown Upgrades"
     },
     "transfer": {
       "name": "transfer",
@@ -217,9 +235,15 @@
         },
         "user": {
           "name": "user",
-          "description": "User to transfer to"
+          "description": "User to transfer money to"
         }
-      }
+      },
+      "cannotTransferToSelf": "You cannot transfer money to yourself",
+      "insufficientFunds": "Insufficient funds",
+      "amountGreaterThanZero": "Amount must be greater than zero",
+      "invalidAmount": "Invalid amount",
+      "error": "An error occurred while processing your transfer",
+      "title": "Transfer"
     },
     "daily": {
       "name": "daily",
@@ -777,7 +801,9 @@
       "level": "Level",
       "nextLevel": "Next Level",
       "price": "Price",
-      "balance": "Balance"
+      "balance": "Balance",
+      "category_economy": "Economy",
+      "category_cooldowns": "Cooldowns"
     },
     "MusicPlayer": {
       "queue": "Queue",
@@ -787,7 +813,11 @@
     "Transfer": {
       "deposit": "Deposit",
       "withdraw": "Withdraw",
-      "amount": "Amount"
+      "amount": "Amount",
+      "wallet": "WALLET",
+      "bank": "BANK",
+      "transfer": "Transfer",
+      "balance": "BALANCE"
     },
     "Level": {
       "title": "Level",
