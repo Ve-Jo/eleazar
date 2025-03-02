@@ -2,7 +2,6 @@ import { Events } from "discord.js";
 import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
 import Database from "../database/client.js";
-import { startResourceMonitor } from "../runners/resourseMonitor.js";
 // import PingService from "../services/PingService.js";
 
 export default {
@@ -19,8 +18,6 @@ export default {
     }
 
     await SlashCommandsHandler(client, client.commands);
-
-    startResourceMonitor(200, client);
 
     // Start ping service
     //PingService.start(client);

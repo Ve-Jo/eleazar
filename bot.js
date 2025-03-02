@@ -7,6 +7,7 @@ import Groq from "groq-sdk";
 import Database from "./src/database/client.js";
 import Replicate from "replicate";
 import dotenv from "dotenv";
+import { startResourceMonitor } from "./src/runners/resourseMonitor.js";
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +18,7 @@ const previewApp =
     ? (await import("./src/render-server/preview.js")).default
     : null;
 
+startResourceMonitor(100);
 console.log("Starting bot...");
 
 const client = new Client({
