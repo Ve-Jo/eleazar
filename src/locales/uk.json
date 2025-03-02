@@ -223,7 +223,12 @@
       "purchaseButton": "Купити",
       "error": "Сталася помилка під час обробки запиту магазину",
       "category_economy": "Покращення Економіки",
-      "category_cooldowns": "Покращення Перезарядки"
+      "category_cooldowns": "Покращення Перезарядки",
+      "revertButton": "Відмінити",
+      "revertButtonWithRefund": "Відмінити (-1 рів., +{{refund}} монет)",
+      "revertSuccess": "Успішно відмінено покращення {{type}} до рівня {{level}} і отримано {{refund}} монет (85% повернення)",
+      "revertCooldown": "Перезарядка активна. Ви можете відмінити інше покращення через {{minutes}} хвилин",
+      "cannotRevert": "Неможливо відмінити покращення рівня 1"
     },
     "transfer": {
       "name": "переказ",
@@ -310,6 +315,41 @@
           "name": "гра",
           "description": "Виберіть конкретну гру для прямого запуску"
         }
+      }
+    },
+    "crates": {
+      "name": "скрині",
+      "description": "Відкривайте скрині, щоб отримати монети, досвід та інші нагороди!",
+      "title": "Скрині",
+      "selectCrate": "Виберіть скриню для відкриття",
+      "openButton": "Відкрити скриню",
+      "backButton": "Назад до скринь",
+      "cooldownActive": "Вам потрібно почекати {{time}} щоб відкрити цю скриню",
+      "noCratesAvailable": "У вас немає таких скринь",
+      "error": "Сталася помилка під час обробки вашого запиту",
+      "rewardIntro": "Ви відкрили скриню {{crate}} і отримали:\n",
+      "rewardCoins": "• {{amount}} монет\n",
+      "rewardXp": "• {{amount}} досвіду\n",
+      "rewardDiscount": "• {{amount}}% знижки на покращення {{type}}\n",
+      "rewardCooldown": "• Зменшення перезарядки {{type}} на {{time}}\n",
+      "types": {
+        "daily": {
+          "name": "Щоденна скриня",
+          "description": "Скриня, яку можна відкрити раз на 24 години"
+        },
+        "weekly": {
+          "name": "Щотижнева скриня",
+          "description": "Скриня, яку можна відкрити раз на 7 днів"
+        },
+        "special": {
+          "description": "Особлива скриня з унікальними нагородами"
+        }
+      },
+      "cooldownTypes": {
+        "daily": "Щоденна скриня",
+        "work": "Команда роботи",
+        "crime": "Команда злочину",
+        "message": "Нагороди за повідомлення"
       }
     }
   },
@@ -805,7 +845,8 @@
       "price": "Ціна",
       "balance": "Баланс",
       "category_economy": "Економіка",
-      "category_cooldowns": "Перезарядка"
+      "category_cooldowns": "Перезарядка",
+      "discount": "Знижка"
     },
     "MusicPlayer": {
       "queue": "Черга",
@@ -888,6 +929,41 @@
       "season": "Сезон",
       "games": "Ігри",
       "chat": "Чат"
+    },
+    "CratesDisplay": {
+      "cratesTitle": "Скрині",
+      "userAvatarAlt": "Аватар користувача",
+      "cooldown": "Перезарядка",
+      "cooldownMessage": "Ця скриня на перезарядці",
+      "readyToOpen": "Готова до відкриття",
+      "quantityAvailable": "Доступно",
+      "availableCrates": "Доступні скрині",
+      "seasonXP": "Сезонний досвід",
+      "timeToOpen": "Годин до відкриття"
+    },
+    "CrateRewards": {
+      "rewardsTitle": "Нагороди",
+      "fromCrate": "З {crateName}",
+      "userAvatarAlt": "Аватар користувача",
+      "rewardsReceived": "Отримані нагороди",
+      "coins": "Монети",
+      "xp": "Очки досвіду",
+      "discount": "Знижка",
+      "cooldownReduction": "Скорочення перезарядки",
+      "minutes": "хвилин",
+      "on": "на",
+      "for": "для",
+      "noRewards": "Нагороди не отримані",
+      "dailyBonus": "Щоденний бонус",
+      "dailyCooldown": "Перезарядка щоденного",
+      "crime": "Злочин",
+      "bankRate": "Банківський відсоток",
+      "gamesEarning": "Дохід від ігор",
+      "dailyCrate": "Щоденна скриня",
+      "workCommand": "Команда роботи",
+      "crimeCommand": "Команда злочину",
+      "messageRewards": "Нагороди за повідомлення",
+      "onAllUpgrades": "на всіх улучшеннях"
     }
   },
   "games": {

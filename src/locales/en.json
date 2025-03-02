@@ -223,7 +223,12 @@
       "purchaseButton": "Purchase",
       "error": "An error occurred while processing your shop request",
       "category_economy": "Economy Upgrades",
-      "category_cooldowns": "Cooldown Upgrades"
+      "category_cooldowns": "Cooldown Upgrades",
+      "revertButton": "Revert",
+      "revertButtonWithRefund": "Revert (-1 lvl, +{{refund}} coins)",
+      "revertSuccess": "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
+      "revertCooldown": "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
+      "cannotRevert": "Cannot revert a level 1 upgrade"
     },
     "transfer": {
       "name": "transfer",
@@ -310,6 +315,41 @@
           "name": "game",
           "description": "Choose a specific game to play directly"
         }
+      }
+    },
+    "crates": {
+      "name": "crates",
+      "description": "Open crates to get coins, XP, and other rewards!",
+      "title": "Crates",
+      "selectCrate": "Select a crate to open",
+      "openButton": "Open Crate",
+      "backButton": "Back to Crates",
+      "cooldownActive": "You have to wait {{time}} to open this crate",
+      "noCratesAvailable": "You don't have any of these crates",
+      "error": "An error occurred while processing your request",
+      "rewardIntro": "You opened a {{crate}} crate and received:\n",
+      "rewardCoins": "• {{amount}} coins\n",
+      "rewardXp": "• {{amount}} XP\n",
+      "rewardDiscount": "• {{amount}}% discount on {{type}} upgrade\n",
+      "rewardCooldown": "• {{time}} cooldown reduction for {{type}}\n",
+      "types": {
+        "daily": {
+          "name": "Daily Crate",
+          "description": "A crate you can open once every 24 hours"
+        },
+        "weekly": {
+          "name": "Weekly Crate",
+          "description": "A crate you can open once every 7 days"
+        },
+        "special": {
+          "description": "A special crate with unique rewards"
+        }
+      },
+      "cooldownTypes": {
+        "daily": "Daily Crate",
+        "work": "Work Command",
+        "crime": "Crime Command",
+        "message": "Message Rewards"
       }
     }
   },
@@ -803,7 +843,8 @@
       "price": "Price",
       "balance": "Balance",
       "category_economy": "Economy",
-      "category_cooldowns": "Cooldowns"
+      "category_cooldowns": "Cooldowns",
+      "discount": "Discount"
     },
     "MusicPlayer": {
       "queue": "Queue",
@@ -886,6 +927,41 @@
       "season": "Season",
       "games": "Games",
       "chat": "Chat"
+    },
+    "CratesDisplay": {
+      "cratesTitle": "Crates",
+      "userAvatarAlt": "User Avatar",
+      "cooldown": "On Cooldown",
+      "cooldownMessage": "This crate is on cooldown",
+      "readyToOpen": "Ready to open",
+      "quantityAvailable": "Available",
+      "availableCrates": "Available Crates",
+      "seasonXP": "Season XP",
+      "timeToOpen": "Hours to open"
+    },
+    "CrateRewards": {
+      "rewardsTitle": "Rewards",
+      "fromCrate": "From {crateName}",
+      "userAvatarAlt": "User Avatar",
+      "rewardsReceived": "Rewards Received",
+      "coins": "Coins",
+      "xp": "Experience Points",
+      "discount": "Discount",
+      "cooldownReduction": "Cooldown Reduction",
+      "minutes": "minutes",
+      "on": "on",
+      "for": "for",
+      "noRewards": "No rewards received",
+      "dailyBonus": "Daily Bonus",
+      "dailyCooldown": "Daily Cooldown",
+      "crime": "Crime",
+      "bankRate": "Bank Interest",
+      "gamesEarning": "Games Earnings",
+      "dailyCrate": "Daily Crate",
+      "workCommand": "Work Command",
+      "crimeCommand": "Crime Command",
+      "messageRewards": "Message Rewards",
+      "onAllUpgrades": "on all upgrades"
     }
   },
   "games": {

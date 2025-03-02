@@ -223,7 +223,12 @@
       "purchaseButton": "Купить",
       "error": "Произошла ошибка при обработке запроса магазина",
       "category_economy": "Улучшения Экономики",
-      "category_cooldowns": "Улучшения Перезарядки"
+      "category_cooldowns": "Улучшения Перезарядки",
+      "revertButton": "Отменить",
+      "revertButtonWithRefund": "Отменить (-1 ур., +{{refund}} монет)",
+      "revertSuccess": "Успешно отменено улучшение {{type}} до уровня {{level}} и получено {{refund}} монет (85% возврат)",
+      "revertCooldown": "Перезарядка активна. Вы можете отменить другое улучшение через {{minutes}} минут",
+      "cannotRevert": "Невозможно отменить улучшение уровня 1"
     },
     "transfer": {
       "name": "перевод",
@@ -303,6 +308,41 @@
           "name": "игра",
           "description": "Выберите конкретную игру для прямого запуска"
         }
+      }
+    },
+    "crates": {
+      "name": "ящики",
+      "description": "Открывайте ящики, чтобы получить монеты, опыт и другие награды!",
+      "title": "Ящики",
+      "selectCrate": "Выберите ящик для открытия",
+      "openButton": "Открыть ящик",
+      "backButton": "Назад к ящикам",
+      "cooldownActive": "Вам нужно подождать {{time}} чтобы открыть этот ящик",
+      "noCratesAvailable": "У вас нет таких ящиков",
+      "error": "Произошла ошибка при обработке вашего запроса",
+      "rewardIntro": "Вы открыли ящик {{crate}} и получили:\n",
+      "rewardCoins": "• {{amount}} монет\n",
+      "rewardXp": "• {{amount}} опыта\n",
+      "rewardDiscount": "• {{amount}}% скидки на улучшение {{type}}\n",
+      "rewardCooldown": "• Уменьшение перезарядки {{type}} на {{time}}\n",
+      "types": {
+        "daily": {
+          "name": "Ежедневный ящик",
+          "description": "Ящик, который можно открыть раз в 24 часа"
+        },
+        "weekly": {
+          "name": "Еженедельный ящик",
+          "description": "Ящик, который можно открыть раз в 7 дней"
+        },
+        "special": {
+          "description": "Особый ящик с уникальными наградами"
+        }
+      },
+      "cooldownTypes": {
+        "daily": "Ежедневный ящик",
+        "work": "Команда работы",
+        "crime": "Команда преступления",
+        "message": "Награды за сообщения"
       }
     }
   },
@@ -789,7 +829,8 @@
       "price": "Цена",
       "balance": "Баланс",
       "category_economy": "Экономика",
-      "category_cooldowns": "Перезарядка"
+      "category_cooldowns": "Перезарядка",
+      "discount": "Скидка"
     },
     "MusicPlayer": {
       "queue": "Очередь",
@@ -879,6 +920,41 @@
       "season": "Сезон",
       "games": "Игры",
       "chat": "Чат"
+    },
+    "CratesDisplay": {
+      "cratesTitle": "Ящики",
+      "userAvatarAlt": "Аватар пользователя",
+      "cooldown": "Перезарядка",
+      "cooldownMessage": "Этот ящик на перезарядке",
+      "readyToOpen": "Готов к открытию",
+      "quantityAvailable": "Доступно",
+      "availableCrates": "Доступные ящики",
+      "seasonXP": "Сезонный опыт",
+      "timeToOpen": "Часов до открытия"
+    },
+    "CrateRewards": {
+      "rewardsTitle": "Награды",
+      "fromCrate": "Из {crateName}",
+      "userAvatarAlt": "Аватар пользователя",
+      "rewardsReceived": "Полученные награды",
+      "coins": "Монеты",
+      "xp": "Очки опыта",
+      "discount": "Скидка",
+      "cooldownReduction": "Сокращение перезарядки",
+      "minutes": "минут",
+      "on": "на",
+      "for": "для",
+      "noRewards": "Награды не получены",
+      "dailyBonus": "Ежедневный бонус",
+      "dailyCooldown": "Перезарядка ежедневного",
+      "crime": "Преступление",
+      "bankRate": "Банковский процент",
+      "gamesEarning": "Доход от игр",
+      "dailyCrate": "Ежедневный ящик",
+      "workCommand": "Команда работы",
+      "crimeCommand": "Команда преступления",
+      "messageRewards": "Награды за сообщения",
+      "onAllUpgrades": "на всех улучшениях"
     }
   },
   "games": {
