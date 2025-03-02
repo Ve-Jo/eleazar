@@ -77,24 +77,13 @@ export default {
         return;
       }
 
-      // Get user's game records and ensure user exists with default values
-      const userData = await Database.getUser(
+      // Get user and game records in a single operation
+      const gameRecords = await Database.getGameRecords(
         interaction.guild.id,
         interaction.user.id
       );
-      if (!userData.economy) {
-        await Database.createUser(interaction.guild.id, interaction.user.id, {
-          economy: DEFAULT_VALUES.economy,
-          stats: DEFAULT_VALUES.stats,
-        });
-      }
 
-      const gameRecords = userData?.stats?.gameRecords || {
-        2048: { highScore: 0 },
-        snake: { highScore: 0 },
-      };
-
-      // Create games object with categories
+      // Create games object with categories and include high scores
       const games = {
         [`${i18n.__("components.GameLauncher.specialForCategory")}`]: {
           avatar: interaction.client.user.displayAvatarURL({
@@ -112,48 +101,23 @@ export default {
       let highlightedGame = 0;
       let currentCategory = 0;
 
+      // Store current game records to avoid fetching again
+      let currentGameRecords = gameRecords;
+
+      // Get user data once for initial rendering
+      let userData = await Database.getUser(
+        interaction.guild.id,
+        interaction.user.id
+      );
+
       const generateGameMessage = async (locale) => {
         // Ensure locale is set before any i18n operations
         await i18n.setLocale(locale);
-
-        // Get fresh user data with defaults if needed
-        let userData = await Database.getUser(
-          interaction.guild.id,
-          interaction.user.id
-        );
-        if (!userData.economy) {
-          userData = await Database.createUser(
-            interaction.guild.id,
-            interaction.user.id,
-            {
-              economy: DEFAULT_VALUES.economy,
-              stats: DEFAULT_VALUES.stats,
-            }
-          );
-        }
-
-        // Get fresh game records to ensure we have the latest data
-        const currentGameRecords = await Database.getGameRecords(
-          interaction.guild.id,
-          interaction.user.id
-        );
 
         const categoryNames = Object.keys(games);
         const currentCategoryGames =
           games[categoryNames[currentCategory]].games_list;
         const currentGame = currentCategoryGames[highlightedGame];
-
-        console.log(
-          "Current game records for image generation:",
-          currentGameRecords
-        );
-        console.log("Current category games:", currentCategoryGames);
-
-        // Log the data being sent to the image generator
-        console.log("Sending to image generator:", {
-          games,
-          gameStats: currentGameRecords,
-        });
 
         // Generate game launcher image
         const [pngBuffer, dominantColor] = await generateImage("GameLauncher", {
@@ -185,7 +149,7 @@ export default {
           highlightedCategory: currentCategory,
           returnDominant: true,
           i18n,
-          gameStats: currentGameRecords, // Use fresh game records
+          gameStats: currentGameRecords, // Use existing game records
         });
 
         const attachment = new AttachmentBuilder(pngBuffer, {

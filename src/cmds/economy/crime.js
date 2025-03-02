@@ -76,7 +76,7 @@ export default {
                 }),
               },
             },
-            database: await Database.getUser(guild.id, user.id),
+            database: userData,
             locale: interaction.locale,
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
@@ -100,19 +100,19 @@ export default {
       }
 
       // Get all users in the guild with their data
-      const allUsers = await Database.client.user.findMany({
+      // Only fetch users with a positive balance to avoid unnecessary processing
+      const validTargets = await Database.client.user.findMany({
         where: {
           guildId: guild.id,
           id: { not: user.id },
+          economy: {
+            balance: { gt: 0 }, // Only users with balance > 0
+          },
         },
         include: {
           economy: true,
         },
       });
-
-      const validTargets = allUsers.filter(
-        (userData) => userData.economy?.balance > 0
-      );
 
       if (validTargets.length === 0) {
         return interaction.editReply({
@@ -165,9 +165,11 @@ export default {
         const targetId = collection.values[0];
         const target = await guild.members.fetch(targetId);
 
-        // Get user and target data
-        const userData = await Database.getUser(guild.id, user.id);
-        const targetData = await Database.getUser(guild.id, targetId);
+        // Get user and target data in parallel to reduce wait time
+        const [userData, targetData] = await Promise.all([
+          Database.getUser(guild.id, user.id),
+          Database.getUser(guild.id, targetId),
+        ]);
 
         // Calculate success chance and potential rewards based on crime level
         const crimeUpgrade = userData.upgrades.find((u) => u.type === "crime");
@@ -199,68 +201,79 @@ export default {
           amount = Math.max(10, Math.floor(Math.random() * maxFine));
         }
 
-        // Update balances in a transaction
-        await Database.client.$transaction(async (tx) => {
-          if (success) {
-            // Deduct amount from target
-            await tx.economy.update({
-              where: {
-                userId_guildId: {
-                  userId: targetId,
-                  guildId: guild.id,
+        // Only perform database operations if the amount is non-zero
+        if (amount > 0) {
+          // Update balances in a transaction
+          await Database.client.$transaction(async (tx) => {
+            if (success) {
+              // Deduct amount from target
+              await tx.economy.update({
+                where: {
+                  userId_guildId: {
+                    userId: targetId,
+                    guildId: guild.id,
+                  },
                 },
-              },
-              data: {
-                balance: { decrement: amount },
-              },
-            });
+                data: {
+                  balance: { decrement: amount },
+                },
+              });
 
-            // Add amount to user and update stats
-            await tx.economy.update({
-              where: {
-                userId_guildId: {
-                  userId: user.id,
-                  guildId: guild.id,
+              // Add amount to user and update stats
+              await tx.economy.update({
+                where: {
+                  userId_guildId: {
+                    userId: user.id,
+                    guildId: guild.id,
+                  },
                 },
-              },
-              data: {
-                balance: { increment: amount },
-              },
-            });
+                data: {
+                  balance: { increment: amount },
+                },
+              });
 
-            await tx.statistics.update({
-              where: {
-                userId_guildId: {
-                  userId: user.id,
-                  guildId: guild.id,
+              await tx.statistics.update({
+                where: {
+                  userId_guildId: {
+                    userId: user.id,
+                    guildId: guild.id,
+                  },
                 },
-              },
-              data: {
-                totalEarned: { increment: amount },
-              },
-            });
-          } else {
-            // Deduct fine from user
-            await tx.economy.update({
-              where: {
-                userId_guildId: {
-                  userId: user.id,
-                  guildId: guild.id,
+                data: {
+                  totalEarned: { increment: amount },
                 },
-              },
-              data: {
-                balance: { decrement: amount },
-              },
-            });
-          }
+              });
+            } else {
+              // Deduct fine from user
+              await tx.economy.update({
+                where: {
+                  userId_guildId: {
+                    userId: user.id,
+                    guildId: guild.id,
+                  },
+                },
+                data: {
+                  balance: { decrement: amount },
+                },
+              });
+            }
 
-          // Update crime cooldown
+            // Update crime cooldown
+            await Database.updateCooldown(guild.id, user.id, "crime");
+          });
+        } else {
+          // Just update the cooldown if no money is involved
           await Database.updateCooldown(guild.id, user.id, "crime");
-        });
+        }
 
-        // Get updated data
-        const updatedUserData = await Database.getUser(guild.id, user.id);
-        const updatedTargetData = await Database.getUser(guild.id, targetId);
+        // Get updated data (reuse the data if amount is zero to avoid unnecessary database queries)
+        const [updatedUserData, updatedTargetData] =
+          amount > 0
+            ? await Promise.all([
+                Database.getUser(guild.id, user.id),
+                Database.getUser(guild.id, targetId),
+              ])
+            : [userData, targetData];
 
         // Generate crime result image
         const pngBuffer = await generateImage("Crime", {

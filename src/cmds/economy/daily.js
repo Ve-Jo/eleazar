@@ -72,11 +72,7 @@ export default {
                 }),
               },
             },
-            database: await Database.getUser(
-              interaction.guild.id,
-              interaction.user.id,
-              true
-            ),
+            database: userData, // Reuse existing userData instead of fetching again
             locale: interaction.locale,
             nextDaily: cooldownTime,
             emoji: "🎁",
@@ -98,12 +94,7 @@ export default {
         });
       }
 
-      // Get user data with upgrades for bonus calculation
-      userData = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id
-      );
-
+      // We already have userData from the check above, no need to fetch again
       // Apply bonus from daily_bonus upgrade
       const dailyBonusUpgrade = userData.upgrades.find(
         (u) => u.type === "daily_bonus"
@@ -114,23 +105,107 @@ export default {
       const baseAmount = Math.floor(Math.random() * 90) + 10;
       const amount = Math.floor(baseAmount * multiplier);
 
-      // Start transaction for updating cooldown and balance
+      // Start transaction for updating cooldown and balance in a single transaction
       await Database.client.$transaction(async (tx) => {
-        // Update cooldown
-        await Database.updateCooldown(
-          interaction.guild.id,
-          interaction.user.id,
-          "daily"
-        );
+        // Check if tx.cooldowns exists before attempting to use it
+        if (!tx.cooldowns) {
+          console.error("Cooldowns model is not available in transaction");
+          // Use fallback method
+          await Database.updateCooldown(
+            interaction.guild.id,
+            interaction.user.id,
+            "daily",
+            Date.now()
+          );
+        } else {
+          // Update cooldown using transaction
+          await tx.cooldowns.upsert({
+            where: {
+              userId_guildId: {
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+              },
+            },
+            create: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+              data: JSON.stringify({
+                daily: Date.now(),
+              }),
+            },
+            update: {
+              data: {
+                updateMode: "merge",
+                value: { daily: Date.now() },
+              },
+            },
+          });
+        }
 
-        // Add balance
-        await Database.addBalance(
-          interaction.guild.id,
-          interaction.user.id,
-          amount
-        );
+        // Add balance if amount is greater than zero
+        if (amount > 0) {
+          await tx.economy.upsert({
+            where: {
+              userId_guildId: {
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+              },
+            },
+            create: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+              balance: amount.toString(),
+              bankBalance: "0.00000",
+              bankRate: "0.00000",
+              bankStartTime: 0,
+            },
+            update: {
+              balance: {
+                increment: amount,
+              },
+            },
+          });
+
+          // Update statistics
+          await tx.statistics.upsert({
+            where: {
+              userId_guildId: {
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+              },
+            },
+            create: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+              totalEarned: amount.toString(),
+              messageCount: 0,
+              commandCount: 0,
+              lastUpdated: Date.now(),
+            },
+            update: {
+              totalEarned: {
+                increment: amount,
+              },
+              lastUpdated: Date.now(),
+            },
+          });
+        }
+
+        // Update user activity
+        await tx.user.update({
+          where: {
+            guildId_id: {
+              id: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            lastActivity: Date.now(),
+          },
+        });
       });
 
+      // Get updated user data for the image generation
       userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
@@ -162,13 +237,14 @@ export default {
           database: {
             ...userData,
           },
+          returnDominant: false,
           locale: interaction.locale,
           amount: amount,
         },
-        { image: 1, emoji: 2 }
+        { image: 2, emoji: 2 }
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer.buffer, {
+      const attachment = new AttachmentBuilder(pngBuffer, {
         name: `daily_claimed.png`,
       });
 
