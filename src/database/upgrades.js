@@ -40,61 +40,96 @@ export default {
     return Promise.all(updatePromises);
   },
 
-  // Upgrade System
+  // Get info about an upgrade based on type and level
   async getUpgradeInfo(type, level) {
-    const upgrade = UPGRADES[type];
-    if (!upgrade) throw new Error("Invalid upgrade type");
-
-    const price = Math.floor(
-      upgrade.basePrice * Math.pow(upgrade.priceMultiplier, level - 1)
-    );
-
-    let effect;
-    if (type === "daily_bonus") {
-      effect = upgrade.effectMultiplier * (level - 1); // Start from 0% at level 1
-    } else if (type === "daily_cooldown" || type === "crime") {
-      effect = Math.floor((upgrade.effectValue * (level - 1)) / (60 * 1000)); // Convert ms to minutes
-    } else if (type === "bank_rate") {
-      effect = upgrade.effectValue * (level - 1); // Start from 0% at level 1
-    } else if (type === "games_earning") {
-      effect = upgrade.effectMultiplier * (level - 1); // Start from 0% at level 1
+    if (!UPGRADES[type]) {
+      throw new Error(`Invalid upgrade type: ${type}`);
     }
 
-    return { price, effect };
+    // Calculate the price for this level
+    const basePrice = UPGRADES[type].basePrice;
+    const priceMultiplier = UPGRADES[type].priceMultiplier;
+
+    // Price increases exponentially with level
+    // Level 1 is the base level, levels start at 2
+    const price = Math.floor(basePrice * Math.pow(priceMultiplier, level - 1));
+
+    // Calculate effect for this level
+    let effect;
+    if (UPGRADES[type].effectMultiplier) {
+      // For percentage-based effects
+      effect = 1 + (level - 1) * UPGRADES[type].effectMultiplier;
+    } else if (UPGRADES[type].effectValue) {
+      // For absolute value effects
+      effect = (level - 1) * UPGRADES[type].effectValue;
+    } else {
+      // Default
+      effect = level;
+    }
+
+    return {
+      type,
+      level,
+      price,
+      effect,
+      basePrice: UPGRADES[type].basePrice,
+      priceMultiplier: UPGRADES[type].priceMultiplier,
+    };
   },
 
+  // Purchase an upgrade
   async purchaseUpgrade(guildId, userId, type) {
+    // Get current upgrade level
+    const upgrade = await this.client.upgrade.findUnique({
+      where: {
+        userId_guildId_type: {
+          userId,
+          guildId,
+          type,
+        },
+      },
+    });
+
+    const currentLevel = upgrade?.level || 1;
+
+    // Get upgrade info to calculate price
+    const upgradeInfo = await this.getUpgradeInfo(type, currentLevel);
+
+    // Get user's economy data
+    const economy = await this.client.economy.findUnique({
+      where: {
+        userId_guildId: {
+          userId,
+          guildId,
+        },
+      },
+    });
+
+    if (!economy) {
+      throw new Error("User economy data not found");
+    }
+
+    // Get user's discount if any
+    const discountPercent = Number(economy.upgradeDiscount || 0);
+
+    // Apply discount to the price if applicable
+    let finalPrice = upgradeInfo.price;
+    if (discountPercent > 0) {
+      finalPrice = Math.max(
+        1,
+        Math.floor(finalPrice * (1 - discountPercent / 100))
+      );
+    }
+
+    // Check if user has enough balance
+    if (Number(economy.balance) < finalPrice) {
+      throw new Error("Insufficient balance");
+    }
+
+    // Start transaction
     return this.client.$transaction(async (tx) => {
-      // Get user with economy and upgrades
-      const user = await tx.user.findUnique({
-        where: {
-          guildId_id: {
-            guildId,
-            id: userId,
-          },
-        },
-        include: {
-          economy: true,
-          upgrades: true,
-        },
-      });
-
-      if (!user) throw new Error("User not found");
-
-      // Get current upgrade level
-      const currentUpgrade = user.upgrades.find((u) => u.type === type);
-      const currentLevel = currentUpgrade?.level || 1;
-
-      // Calculate price for next level
-      const { price } = await this.getUpgradeInfo(type, currentLevel);
-
-      // Check if user can afford the upgrade
-      if (!user.economy || user.economy.balance < price) {
-        throw new Error("Insufficient balance");
-      }
-
-      // Update economy
-      const economy = await tx.economy.update({
+      // Deduct the price from user's balance
+      await tx.economy.update({
         where: {
           userId_guildId: {
             userId,
@@ -102,16 +137,116 @@ export default {
           },
         },
         data: {
-          balance: { decrement: price },
+          balance: {
+            decrement: finalPrice,
+          },
         },
       });
 
-      // Update upgrade - only if level will be greater than 1
-      let upgrade;
-      const newLevel = currentLevel + 1;
+      // Reset discount if used
+      if (discountPercent > 0) {
+        await tx.economy.update({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+          data: {
+            upgradeDiscount: 0,
+          },
+        });
+      }
 
-      if (newLevel > 1) {
-        upgrade = await tx.upgrade.upsert({
+      // Update or create the upgrade
+      return tx.upgrade.upsert({
+        where: {
+          userId_guildId_type: {
+            userId,
+            guildId,
+            type,
+          },
+        },
+        create: {
+          userId,
+          guildId,
+          type,
+          level: 2, // First purchase means level 2 (since level 1 is default)
+        },
+        update: {
+          level: {
+            increment: 1,
+          },
+        },
+      });
+    });
+  },
+
+  // Get all upgrades for a user
+  async getUserUpgrades(guildId, userId) {
+    return this.client.upgrade.findMany({
+      where: {
+        userId,
+        guildId,
+      },
+    });
+  },
+
+  // Revert an upgrade (decrease level by 1 and refund 85% of the price)
+  async revertUpgrade(guildId, userId, type) {
+    // Check if there's a cooldown for upgrade reverts
+    const revertCooldown = await this.getCooldown(
+      guildId,
+      userId,
+      "upgraderevert"
+    );
+    if (revertCooldown > 0) {
+      throw new Error(`Cooldown active: ${revertCooldown}`);
+    }
+
+    // Get current upgrade level
+    const upgrade = await this.client.upgrade.findUnique({
+      where: {
+        userId_guildId_type: {
+          userId,
+          guildId,
+          type,
+        },
+      },
+    });
+
+    const currentLevel = upgrade?.level || 1;
+
+    // Cannot revert level 1 upgrades (they are the default)
+    if (currentLevel <= 1) {
+      throw new Error("Cannot revert a level 1 upgrade");
+    }
+
+    // Get upgrade info to calculate refund amount
+    const upgradeInfo = await this.getUpgradeInfo(type, currentLevel);
+    const refundAmount = Math.floor(upgradeInfo.price * 0.85); // 85% refund
+
+    // Start transaction
+    return this.client.$transaction(async (tx) => {
+      // Add the refund to user's balance
+      await tx.economy.update({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
+          },
+        },
+        data: {
+          balance: {
+            increment: refundAmount,
+          },
+        },
+      });
+
+      // Decrease the upgrade level or delete if going back to level 1
+      if (currentLevel === 2) {
+        // If reverting to level 1, delete the upgrade record
+        await tx.upgrade.delete({
           where: {
             userId_guildId_type: {
               userId,
@@ -119,36 +254,33 @@ export default {
               type,
             },
           },
-          create: {
-            userId,
-            guildId,
-            type,
-            level: newLevel,
-          },
-          update: {
-            level: newLevel,
-          },
         });
       } else {
-        // This case shouldn't normally happen as we start at level 1,
-        // but included for completeness
-        upgrade = { type, level: newLevel };
+        // Otherwise, decrease the level
+        await tx.upgrade.update({
+          where: {
+            userId_guildId_type: {
+              userId,
+              guildId,
+              type,
+            },
+          },
+          data: {
+            level: {
+              decrement: 1,
+            },
+          },
+        });
       }
 
-      // Update user's last activity
-      await tx.user.update({
-        where: {
-          guildId_id: {
-            guildId,
-            id: userId,
-          },
-        },
-        data: {
-          lastActivity: Date.now(),
-        },
-      });
+      // Set cooldown for upgrade reverts
+      await this.updateCooldown(guildId, userId, "upgraderevert");
 
-      return { economy, upgrade };
+      return {
+        previousLevel: currentLevel,
+        newLevel: currentLevel - 1,
+        refundAmount,
+      };
     });
   },
 };

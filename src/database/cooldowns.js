@@ -36,6 +36,34 @@ export default {
     const cooldowns = JSON.parse(cooldown?.data || "{}");
     cooldowns[type] = Date.now();
 
+    // Check if we need to store this cooldown
+    // If we're storing a cooldown that's already expired, don't bother
+    const baseTime = COOLDOWNS[type];
+    const now = Date.now();
+    const isExpired = now >= cooldowns[type] + baseTime;
+
+    if (isExpired) {
+      delete cooldowns[type]; // Remove expired cooldown
+    }
+
+    // If there are no meaningful cooldowns, delete the record instead of storing empty data
+    if (Object.keys(cooldowns).length === 0) {
+      if (cooldown) {
+        // Delete existing record if it exists but would be empty
+        return this.client.cooldown.delete({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+        });
+      }
+      // Return a mock record representing empty cooldowns
+      return { userId, guildId, data: "{}" };
+    }
+
+    // Otherwise update/create with the non-empty cooldown data
     return this.client.cooldown.upsert({
       where: {
         userId_guildId: {

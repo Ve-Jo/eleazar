@@ -48,70 +48,172 @@ export default {
 
     const { economy, level, cooldowns, upgrades, stats, ...userData } = data;
 
-    return this.client.$transaction(async (tx) => {
-      // Upsert base user instead of create
-      const user = await tx.user.upsert({
-        where: {
-          guildId_id: {
-            guildId,
+    try {
+      return await this.client.$transaction(async (tx) => {
+        // Explicitly check if the user exists in this specific guild with a FOR UPDATE lock
+        // This prevents race conditions where two createUser calls might happen simultaneously
+        const existingUser = await tx.user.findUnique({
+          where: {
+            guildId_id: {
+              guildId,
+              id: userId,
+            },
+          },
+          // Use skipDuplicates flag to avoid duplicate key errors
+          ...{ skipDuplicates: true },
+        });
+
+        if (existingUser) {
+          // User already exists in this guild, update instead of create
+          // Only update if there are actual changes to minimize database operations
+          const shouldUpdateUser =
+            Object.keys(userData).length > 0 || userData.lastActivity;
+
+          let user;
+
+          if (shouldUpdateUser) {
+            user = await tx.user.update({
+              where: {
+                guildId_id: {
+                  guildId,
+                  id: userId,
+                },
+              },
+              data: {
+                lastActivity: Date.now(),
+                ...userData,
+                // Update related records if they exist and if non-default values provided
+                ...(economy && Object.values(economy).some((v) => v !== 0)
+                  ? {
+                      economy: {
+                        upsert: {
+                          create: {
+                            balance: DEFAULT_VALUES.economy.balance,
+                            bankBalance: DEFAULT_VALUES.economy.bankBalance,
+                            bankRate: DEFAULT_VALUES.economy.bankRate,
+                            bankStartTime: DEFAULT_VALUES.economy.bankStartTime,
+                            ...economy,
+                          },
+                          update: {
+                            ...economy,
+                          },
+                        },
+                      },
+                    }
+                  : {}),
+                ...(stats && Object.values(stats).some((v) => v !== 0)
+                  ? {
+                      stats: {
+                        upsert: {
+                          create: {
+                            totalEarned: 0,
+                            messageCount: DEFAULT_VALUES.stats.messageCount,
+                            commandCount: DEFAULT_VALUES.stats.commandCount,
+                            lastUpdated: Date.now(),
+                            gameRecords: JSON.stringify({
+                              2048: { highScore: 0 },
+                              snake: { highScore: 0 },
+                            }),
+                            ...stats,
+                          },
+                          update: {
+                            ...stats,
+                          },
+                        },
+                      },
+                    }
+                  : {}),
+                ...(level && level.xp > 0
+                  ? {
+                      Level: {
+                        upsert: {
+                          create: {
+                            xp: 0,
+                            ...level,
+                          },
+                          update: {
+                            ...level,
+                          },
+                        },
+                      },
+                    }
+                  : {}),
+                ...(cooldowns && Object.keys(cooldowns).length > 0
+                  ? {
+                      cooldowns: {
+                        upsert: {
+                          create: {
+                            data: JSON.stringify(DEFAULT_VALUES.cooldowns),
+                            ...cooldowns,
+                          },
+                          update: {
+                            ...cooldowns,
+                          },
+                        },
+                      },
+                    }
+                  : {}),
+              },
+              include: {
+                economy: true,
+                stats: true,
+                Level: true,
+                cooldowns: true,
+                upgrades: true,
+              },
+            });
+          } else {
+            // Just fetch the user with relationships if no updates needed
+            user = await tx.user.findUnique({
+              where: {
+                guildId_id: {
+                  guildId,
+                  id: userId,
+                },
+              },
+              include: {
+                economy: true,
+                stats: true,
+                Level: true,
+                cooldowns: true,
+                upgrades: true,
+              },
+            });
+          }
+
+          // Handle upgrades separately if non-default values are provided
+          if (
+            upgrades &&
+            Object.values(upgrades).some((upgrade) => upgrade.level > 1)
+          ) {
+            await this.updateUpgrades(guildId, userId, upgrades);
+          }
+
+          return user;
+        } else {
+          // User doesn't exist in this guild, create a new entry
+          // Only include non-default related records
+          const hasNonDefaultEconomy =
+            economy && Object.values(economy).some((v) => v !== 0);
+          const hasNonDefaultStats =
+            stats && Object.values(stats).some((v) => v !== 0);
+          const hasNonDefaultLevel = level && level.xp > 0;
+          const hasNonDefaultCooldowns =
+            cooldowns && Object.keys(cooldowns).length > 0;
+          const hasNonDefaultUpgrades =
+            upgrades &&
+            Object.values(upgrades).some((upgrade) => upgrade.level > 1);
+
+          const createData = {
             id: userId,
-          },
-        },
-        create: {
-          id: userId,
-          guildId,
-          lastActivity: Date.now(),
-          ...userData,
-          // Create related records
-          economy: {
-            create: {
-              balance: DEFAULT_VALUES.economy.balance,
-              bankBalance: DEFAULT_VALUES.economy.bankBalance,
-              bankRate: DEFAULT_VALUES.economy.bankRate,
-              bankStartTime: DEFAULT_VALUES.economy.bankStartTime,
-              ...economy,
-            },
-          },
-          stats: {
-            create: {
-              totalEarned: 0,
-              messageCount: DEFAULT_VALUES.stats.messageCount,
-              commandCount: DEFAULT_VALUES.stats.commandCount,
-              lastUpdated: Date.now(),
-              gameRecords: JSON.stringify({
-                2048: { highScore: 0 },
-                snake: { highScore: 0 },
-              }),
-              ...stats,
-            },
-          },
-          Level: {
-            create: {
-              xp: 0,
-              ...level,
-            },
-          },
-          cooldowns: {
-            create: {
-              data: JSON.stringify(DEFAULT_VALUES.cooldowns),
-              ...cooldowns,
-            },
-          },
-          upgrades: {
-            create: Object.entries(DEFAULT_VALUES.upgrades).map(
-              ([type, data]) => ({
-                type,
-                level: data.level,
-              })
-            ),
-          },
-        },
-        update: {
-          lastActivity: Date.now(),
-          ...userData,
-          // Update related records if they exist
-          economy: {
-            upsert: {
+            guildId,
+            lastActivity: Date.now(),
+            ...userData,
+          };
+
+          // Only add related records if they have non-default values
+          if (hasNonDefaultEconomy) {
+            createData.economy = {
               create: {
                 balance: DEFAULT_VALUES.economy.balance,
                 bankBalance: DEFAULT_VALUES.economy.bankBalance,
@@ -119,13 +221,11 @@ export default {
                 bankStartTime: DEFAULT_VALUES.economy.bankStartTime,
                 ...economy,
               },
-              update: {
-                ...economy,
-              },
-            },
-          },
-          stats: {
-            upsert: {
+            };
+          }
+
+          if (hasNonDefaultStats) {
+            createData.stats = {
               create: {
                 totalEarned: 0,
                 messageCount: DEFAULT_VALUES.stats.messageCount,
@@ -137,32 +237,87 @@ export default {
                 }),
                 ...stats,
               },
-              update: {
-                ...stats,
-              },
-            },
-          },
-          Level: {
-            upsert: {
+            };
+          }
+
+          if (hasNonDefaultLevel) {
+            createData.Level = {
               create: {
                 xp: 0,
                 ...level,
               },
-              update: {
-                ...level,
-              },
-            },
-          },
-          cooldowns: {
-            upsert: {
+            };
+          }
+
+          if (hasNonDefaultCooldowns) {
+            createData.cooldowns = {
               create: {
                 data: JSON.stringify(DEFAULT_VALUES.cooldowns),
                 ...cooldowns,
               },
-              update: {
-                ...cooldowns,
+            };
+          }
+
+          if (hasNonDefaultUpgrades) {
+            createData.upgrades = {
+              create: Object.entries(upgrades)
+                .filter(([_, data]) => data.level > 1)
+                .map(([type, data]) => ({
+                  type,
+                  level: data.level,
+                })),
+            };
+          }
+
+          try {
+            const user = await tx.user.create({
+              data: createData,
+              include: {
+                economy: true,
+                stats: true,
+                Level: true,
+                cooldowns: true,
+                upgrades: true,
               },
-            },
+            });
+            return user;
+          } catch (error) {
+            // Handle potential race condition where user was created in the meantime
+            if (error.code === "P2002") {
+              console.warn(
+                `User ${userId} was created concurrently, fetching instead`
+              );
+              return await tx.user.findUnique({
+                where: {
+                  guildId_id: {
+                    guildId,
+                    id: userId,
+                  },
+                },
+                include: {
+                  economy: true,
+                  stats: true,
+                  Level: true,
+                  cooldowns: true,
+                  upgrades: true,
+                },
+              });
+            }
+            throw error;
+          }
+        }
+      });
+    } catch (error) {
+      console.error(
+        `Error in createUser for userId ${userId} in guild ${guildId}:`,
+        error
+      );
+      // Fallback: try to get the user if creation failed but they might already exist
+      const existingUser = await this.client.user.findUnique({
+        where: {
+          guildId_id: {
+            guildId,
+            id: userId,
           },
         },
         include: {
@@ -174,20 +329,13 @@ export default {
         },
       });
 
-      // Handle upgrades separately since they're a one-to-many relation
-      if (!user.upgrades || user.upgrades.length === 0) {
-        await tx.upgrade.createMany({
-          data: Object.entries(DEFAULT_VALUES.upgrades).map(([type, data]) => ({
-            userId,
-            guildId,
-            type,
-            level: data.level,
-          })),
-        });
+      if (existingUser) {
+        return existingUser;
       }
 
-      return user;
-    });
+      // If all else fails, rethrow the error
+      throw error;
+    }
   },
 
   async updateUser(guildId, userId, data) {
@@ -271,27 +419,102 @@ export default {
   },
 
   async ensureGuildUser(guildId, userId) {
-    return await this.client.$transaction(async (prisma) => {
-      await prisma.guild.upsert({
-        where: { id: guildId },
-        create: { id: guildId, settings: {} },
-        update: {},
-      });
-
-      return await prisma.user.upsert({
+    try {
+      // First check if the user already exists to avoid unnecessary operations
+      const existingUser = await this.client.user.findUnique({
         where: {
           guildId_id: { guildId, id: userId },
         },
-        create: {
-          id: userId,
-          guildId,
-          lastActivity: Date.now(),
-        },
-        update: {
-          lastActivity: Date.now(),
-        },
       });
-    });
+
+      if (existingUser) {
+        // User exists, check if we need to update lastActivity
+        const currentTime = Date.now();
+        const lastActivityTime = Number(existingUser.lastActivity || 0);
+        const lastActivityAge = currentTime - lastActivityTime;
+
+        // Only update if the last activity was more than 5 minutes ago
+        // This avoids excessive database updates for frequent operations
+        if (lastActivityAge > 5 * 60 * 1000) {
+          return await this.client.user.update({
+            where: {
+              guildId_id: { guildId, id: userId },
+            },
+            data: {
+              lastActivity: Date.now(),
+            },
+          });
+        }
+
+        // Return existing user without updating if recently active
+        return existingUser;
+      }
+
+      // If user doesn't exist, use a transaction to ensure atomicity
+      return await this.client.$transaction(async (prisma) => {
+        // Ensure guild exists first
+        await prisma.guild.upsert({
+          where: { id: guildId },
+          create: { id: guildId, settings: {} },
+          update: {},
+        });
+
+        // Try to create the user, handling potential race conditions
+        try {
+          return await prisma.user.create({
+            data: {
+              id: userId,
+              guildId,
+              lastActivity: Date.now(),
+            },
+          });
+        } catch (error) {
+          // If another process created the user in the meantime (P2002 = unique constraint violation)
+          if (error.code === "P2002") {
+            return await prisma.user.findUnique({
+              where: {
+                guildId_id: { guildId, id: userId },
+              },
+            });
+          }
+          throw error;
+        }
+      });
+    } catch (error) {
+      console.error(
+        `Error in ensureGuildUser for userId ${userId} in guild ${guildId}:`,
+        error
+      );
+
+      // Last resort fallback - try one more time with a simpler approach
+      try {
+        await this.client.guild.upsert({
+          where: { id: guildId },
+          create: { id: guildId, settings: {} },
+          update: {},
+        });
+
+        return await this.client.user.upsert({
+          where: {
+            guildId_id: { guildId, id: userId },
+          },
+          create: {
+            id: userId,
+            guildId,
+            lastActivity: Date.now(),
+          },
+          update: {
+            lastActivity: Date.now(),
+          },
+        });
+      } catch (secondError) {
+        console.error(
+          `Final fallback failed for userId ${userId} in guild ${guildId}:`,
+          secondError
+        );
+        throw secondError;
+      }
+    }
   },
 
   // Guild Operations

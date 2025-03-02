@@ -5,6 +5,23 @@ export default {
     try {
       await this.ensureGuildUser(guildId, userId);
 
+      // First check if the statistics record exists
+      const existingStats = await this.client.statistics.findUnique({
+        where: {
+          userId_guildId: { userId, guildId },
+        },
+        select: { gameRecords: true },
+      });
+
+      // If no record exists, return default values without creating a record
+      if (!existingStats) {
+        return {
+          2048: { highScore: 0 },
+          snake: { highScore: 0 },
+        };
+      }
+
+      // If record exists, proceed with normal processing
       const stats = await this.client.statistics.upsert({
         where: {
           userId_guildId: { userId, guildId },
@@ -65,8 +82,25 @@ export default {
 
   async updateGameHighScore(guildId, userId, gameType, score) {
     try {
-      await this.ensureGuildUser(guildId, userId);
+      // First check if the user exists in this guild
+      const existingUser = await this.client.user.findUnique({
+        where: {
+          guildId_id: { guildId, id: userId },
+        },
+      });
 
+      if (!existingUser) {
+        // Create the user first to prevent duplicate records
+        await this.client.user.create({
+          data: {
+            id: userId,
+            guildId,
+            lastActivity: Date.now(),
+          },
+        });
+      }
+
+      // Check if statistics record exists
       const stats = await this.client.statistics.findUnique({
         where: { userId_guildId: { userId, guildId } },
         select: { gameRecords: true },
@@ -94,18 +128,65 @@ export default {
       const currentHighScore = cleanRecords[gameType]?.highScore || 0;
       const isNewRecord = score > currentHighScore;
 
+      // Only update database if there's a new record
       if (isNewRecord) {
         cleanRecords[gameType].highScore = score;
-        await this.client.statistics.update({
-          where: { userId_guildId: { userId, guildId } },
-          data: { gameRecords: cleanRecords },
+
+        // Execute the update in a transaction to prevent race conditions
+        await this.client.$transaction(async (tx) => {
+          // Double-check if user still exists to prevent issues with concurrent deletions
+          const userExists = await tx.user.findUnique({
+            where: {
+              guildId_id: { guildId, id: userId },
+            },
+          });
+
+          if (!userExists) {
+            // Create the user if it somehow disappeared
+            await tx.user.create({
+              data: {
+                id: userId,
+                guildId,
+                lastActivity: Date.now(),
+              },
+            });
+          } else {
+            // Update user activity
+            await tx.user.update({
+              where: {
+                guildId_id: { guildId, id: userId },
+              },
+              data: {
+                lastActivity: Date.now(),
+              },
+            });
+          }
+
+          // Now safely update or create the statistics record
+          await tx.statistics.upsert({
+            where: { userId_guildId: { userId, guildId } },
+            create: {
+              userId,
+              guildId,
+              gameRecords: cleanRecords,
+              lastUpdated: Date.now(),
+            },
+            update: {
+              gameRecords: cleanRecords,
+              lastUpdated: Date.now(),
+            },
+          });
         });
       }
 
-      return isNewRecord;
+      return {
+        newHighScore: isNewRecord ? score : null,
+        previousHighScore: currentHighScore,
+        isNewRecord,
+      };
     } catch (error) {
       console.error("Error updating game high score:", error);
-      return false;
+      return { isNewRecord: false, error: error.message };
     }
   },
 

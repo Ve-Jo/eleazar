@@ -34,9 +34,43 @@ export function deserializeWithBigInt(jsonString) {
 
 export const COOLDOWNS = {
   daily: 24 * 60 * 60 * 1000, // 24 hours
-  work: 4 * 60 * 60 * 1000, // 4 hours
-  crime: 8 * 60 * 60 * 1000, // 8 hours
+  weekly: 7 * 24 * 60 * 60 * 1000, // 1 week
+  work: 3 * 60 * 60 * 1000, // 3 hours
+  crime: 2 * 60 * 60 * 1000, // 2 hours
   message: 60 * 1000, // 1 minute
+  upgraderevert: 10 * 60 * 1000, // 10 minutes
+};
+
+export const CRATE_TYPES = {
+  daily: {
+    cooldown: 24 * 60 * 60 * 1000, // 24 hours (same as daily cooldown)
+    emoji: "🎁",
+    rewards: {
+      min_coins: 10,
+      max_coins: 100,
+      xp_chance: 0.5,
+      xp_amount: 50,
+      discount_chance: 0.3,
+      discount_amount: 5, // 5% discount
+      cooldown_reducer_chance: 0.2,
+      cooldown_reducer_amount: 10 * 60 * 1000, // 10 minutes
+    },
+  },
+  weekly: {
+    cooldown: 7 * 24 * 60 * 60 * 1000, // 7 days
+    emoji: "📦",
+    rewards: {
+      min_coins: 100,
+      max_coins: 500,
+      xp_chance: 0.7,
+      xp_amount: 200,
+      discount_chance: 0.5,
+      discount_amount: 10, // 10% discount
+      cooldown_reducer_chance: 0.4,
+      cooldown_reducer_amount: 30 * 60 * 1000, // 30 minutes
+    },
+  },
+  // Add more crate types as needed
 };
 
 export const UPGRADES = {

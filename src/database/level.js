@@ -1,8 +1,35 @@
 export default {
   async addXP(guildId, userId, amount, type = "chat") {
+    // Don't create a record if adding 0 XP
+    if (amount <= 0) {
+      return {
+        level: {
+          userId,
+          guildId,
+          xp: 0n,
+          seasonXp: 0n,
+        },
+        stats: {
+          userId,
+          guildId,
+          xpStats: { [type]: 0 },
+        },
+      };
+    }
+
     return await this.client.$transaction(async (prisma) => {
       // Check and update season if needed
       await this.checkAndUpdateSeason();
+
+      // Check if level record exists
+      const existingLevel = await prisma.level.findUnique({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
+          },
+        },
+      });
 
       // Update XP and season XP for the user
       const updatedLevel = await prisma.level.upsert({
@@ -24,40 +51,88 @@ export default {
         },
       });
 
-      // Update detailed XP stats
-      const stats = await prisma.statistics.upsert({
+      // Check if stats record exists
+      const existingStats = await prisma.statistics.findUnique({
         where: {
           userId_guildId: {
             userId,
             guildId,
           },
         },
-        create: {
-          userId,
-          guildId,
-          xpStats: { [type]: amount },
-        },
-        update: {
-          xpStats: {
-            updateMode: "merge",
-            value: {
-              [type]: {
-                increment: amount,
+      });
+
+      // Update detailed XP stats only if needed
+      let stats;
+      if (existingStats) {
+        stats = await prisma.statistics.update({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+          data: {
+            xpStats: {
+              updateMode: "merge",
+              value: {
+                [type]: {
+                  increment: amount,
+                },
               },
             },
           },
-        },
-      });
+        });
+      } else {
+        stats = await prisma.statistics.create({
+          data: {
+            userId,
+            guildId,
+            xpStats: { [type]: amount },
+            user: {
+              connect: {
+                guildId_id: { guildId, id: userId },
+              },
+            },
+          },
+        });
+      }
 
       return { level: updatedLevel, stats };
     });
   },
 
   async addGameXP(guildId, userId, amount, gameType) {
+    // Don't create a record if adding 0 XP
+    if (amount <= 0) {
+      return {
+        level: {
+          userId,
+          guildId,
+          gameXp: 0n,
+          seasonXp: 0n,
+        },
+        stats: {
+          userId,
+          guildId,
+          gameXpStats: { [gameType]: 0 },
+        },
+      };
+    }
+
     // Start a transaction to update both Level and Statistics
     return await this.client.$transaction(async (prisma) => {
       // Check and update season if needed
       await this.checkAndUpdateSeason();
+
+      // Check if level record exists
+      const existingLevel = await prisma.level.findUnique({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
+          },
+        },
+      });
 
       // Update total game XP and season XP in Level model
       const level = await prisma.level.upsert({
@@ -79,30 +154,51 @@ export default {
         },
       });
 
-      // Update detailed game XP stats
-      const stats = await prisma.statistics.upsert({
+      // Check if stats record exists
+      const existingStats = await prisma.statistics.findUnique({
         where: {
           userId_guildId: {
             userId,
             guildId,
           },
         },
-        create: {
-          userId,
-          guildId,
-          gameXpStats: { [gameType]: amount },
-        },
-        update: {
-          gameXpStats: {
-            updateMode: "merge",
-            value: {
-              [gameType]: {
-                increment: amount,
+      });
+
+      // Update detailed game XP stats only if needed
+      let stats;
+      if (existingStats) {
+        stats = await prisma.statistics.update({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+          data: {
+            gameXpStats: {
+              updateMode: "merge",
+              value: {
+                [gameType]: {
+                  increment: amount,
+                },
               },
             },
           },
-        },
-      });
+        });
+      } else {
+        stats = await prisma.statistics.create({
+          data: {
+            userId,
+            guildId,
+            gameXpStats: { [gameType]: amount },
+            user: {
+              connect: {
+                guildId_id: { guildId, id: userId },
+              },
+            },
+          },
+        });
+      }
 
       return { level, stats };
     });

@@ -10,6 +10,31 @@ export default {
     const formattedAmount = parseFloat(amount).toFixed(5);
 
     return this.client.$transaction(async (tx) => {
+      // Check if we're creating a default record with 0 balance
+      if (parseFloat(formattedAmount) === 0) {
+        // Check if an economy record exists
+        const existingEconomy = await tx.economy.findUnique({
+          where: {
+            userId_guildId: {
+              userId,
+              guildId,
+            },
+          },
+        });
+
+        // If there's no existing record, no need to create one with all zeros
+        if (!existingEconomy) {
+          return {
+            userId,
+            guildId,
+            balance: "0.00000",
+            bankBalance: "0.00000",
+            bankRate: "0.00000",
+            bankStartTime: 0,
+          };
+        }
+      }
+
       const economy = await tx.economy.upsert({
         where: {
           userId_guildId: {
@@ -32,6 +57,7 @@ export default {
         },
       });
 
+      // Only update statistics if amount is positive
       if (parseFloat(amount) > 0) {
         await tx.statistics.upsert({
           where: {
