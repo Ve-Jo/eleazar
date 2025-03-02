@@ -226,6 +226,102 @@ async function createMockData(lang = "en", Component = null) {
     };
   }
 
+  // Mock data for CratesDisplay component
+  if (Component?.name === "CratesDisplay") {
+    return {
+      locale: lang,
+      i18n: createI18nMock(lang, Component),
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+        guild: {
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      database: {
+        balance: 1500.75,
+        seasonXp: 2450,
+      },
+      crates: [
+        {
+          type: "daily",
+          name: "Daily Crate",
+          emoji: "🎁",
+          description: "Open once every 24 hours for daily rewards",
+          available: true,
+          count: 0,
+          cooldown: 0,
+        },
+        {
+          type: "weekly",
+          name: "Weekly Crate",
+          emoji: "📦",
+          description: "Contains better rewards than daily crates",
+          available: false,
+          count: 0,
+          cooldown: 120000, // 2 minutes for testing
+        },
+        {
+          type: "rare",
+          name: "Rare Crate",
+          emoji: "🧰",
+          description:
+            "Contains rare items and higher chances for good rewards",
+          available: true,
+          count: 2,
+          cooldown: 0,
+        },
+        {
+          type: "seasonal",
+          name: "Seasonal Crate",
+          emoji: "🎄",
+          description: "Special limited-time rewards for the current season",
+          available: false,
+          count: 0,
+          cooldown: 360000, // 6 minutes for testing
+        },
+      ],
+      selectedCrate: 0,
+      dominantColor: "user",
+    };
+  }
+
+  // Mock data for CrateRewards component
+  if (Component?.name === "CrateRewards") {
+    return {
+      locale: lang,
+      i18n: createI18nMock(lang, Component),
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      crateType: "daily",
+      crateEmoji: "🎁",
+      crateName: "Daily Crate",
+      rewards: {
+        coins: 75,
+        xp: 50,
+        seasonXp: 50,
+        discount: 10,
+        cooldownReductions: {
+          daily: 600000, // 10 minutes
+          work: 1800000, // 30 minutes
+        },
+      },
+      dominantColor: "user",
+    };
+  }
+
   // Mock data for Transfer component with user-to-user transfer support
   if (Component?.name === "Transfer") {
     // Create a recipient user for transfer visualization
