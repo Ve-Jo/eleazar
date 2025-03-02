@@ -201,27 +201,33 @@ export default {
 
             try {
               // Save high score first
-              const isNewRecord = await Database.updateGameHighScore(
+              const highScoreResult = await Database.updateGameHighScore(
                 interaction.guildId,
                 interaction.user.id,
                 "snake",
                 initialState.state.score
               );
 
-              // Add XP
-              await Database.addGameXP(
-                interaction.guildId,
-                interaction.user.id,
-                gameXP,
-                "snake"
-              );
+              const isNewRecord = highScoreResult.isNewRecord;
 
-              // Add earnings
-              await Database.addBalance(
-                interaction.guildId,
-                interaction.user.id,
-                initialState.state.earning
-              );
+              // Only add XP if there's something to add
+              if (gameXP > 0) {
+                await Database.addGameXP(
+                  interaction.guildId,
+                  interaction.user.id,
+                  gameXP,
+                  "snake"
+                );
+              }
+
+              // Only add earnings if there's something to add
+              if (initialState.state.earning > 0) {
+                await Database.addBalance(
+                  interaction.guildId,
+                  interaction.user.id,
+                  initialState.state.earning
+                );
+              }
 
               await message.edit({
                 content: `${i18n.__("games.snake.timesOut", {
@@ -373,27 +379,33 @@ export default {
             const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
             // Save high score first
-            const isNewRecord = await Database.updateGameHighScore(
+            const highScoreResult = await Database.updateGameHighScore(
               interaction.guildId,
               interaction.user.id,
               "snake",
               state.score
             );
 
-            // Add XP
-            await Database.addGameXP(
-              interaction.guildId,
-              interaction.user.id,
-              gameXP,
-              "snake"
-            );
+            const isNewRecord = highScoreResult.isNewRecord;
 
-            // Add earnings
-            await Database.addBalance(
-              interaction.guildId,
-              interaction.user.id,
-              state.earning
-            );
+            // Only add XP if there's something to add
+            if (gameXP > 0) {
+              await Database.addGameXP(
+                interaction.guildId,
+                interaction.user.id,
+                gameXP,
+                "snake"
+              );
+            }
+
+            // Only add earnings if there's something to add
+            if (state.earning > 0) {
+              await Database.addBalance(
+                interaction.guildId,
+                interaction.user.id,
+                state.earning
+              );
+            }
 
             await message.edit({
               content: `${i18n.__("games.snake.gameOver", {

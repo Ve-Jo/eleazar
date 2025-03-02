@@ -331,26 +331,33 @@ export default {
               const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
               // Update high score
-              const isNewRecord = await Database.updateGameHighScore(
+              const highScoreResult = await Database.updateGameHighScore(
                 interaction.guildId,
                 interaction.user.id,
                 "2048",
                 state.score
               );
 
-              // Add XP and earnings
-              await Database.addGameXP(
-                interaction.guildId,
-                interaction.user.id,
-                gameXP,
-                "2048"
-              );
+              const isNewRecord = highScoreResult.isNewRecord;
 
-              await Database.addBalance(
-                interaction.guildId,
-                interaction.user.id,
-                state.earning
-              );
+              // Only add XP if there's something to add
+              if (gameXP > 0) {
+                await Database.addGameXP(
+                  interaction.guildId,
+                  interaction.user.id,
+                  gameXP,
+                  "2048"
+                );
+              }
+
+              // Only add balance if there's something to add
+              if (state.earning > 0) {
+                await Database.addBalance(
+                  interaction.guildId,
+                  interaction.user.id,
+                  state.earning
+                );
+              }
 
               // Generate final game board
               const finalBoard = await generateImage(
