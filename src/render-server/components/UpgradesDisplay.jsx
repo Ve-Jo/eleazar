@@ -180,6 +180,10 @@ const UpgradesDisplay = (props) => {
     return 30 + upgradeCardHeight + 10; // title height + card height + padding
   };
 
+  // Extract discount value from the first upgrade that has a discount
+  const activeDiscount =
+    upgrades?.find((u) => u.discountPercent)?.discountPercent || 0;
+
   // Render an upgrade card
   const renderUpgradeCard = (upgrade, index) => {
     const isSelected = currentUpgrade === index;
@@ -386,6 +390,26 @@ const UpgradesDisplay = (props) => {
               backgroundColor: overlayBackground,
             }}
           />
+          {/* Discount display - only show if there's an active discount */}
+          {
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                backgroundColor: "rgba(76, 175, 80, 0.3)",
+                borderRadius: "8px",
+                padding: "4px 8px",
+                fontSize: "16px",
+                color: textColor,
+                marginRight: "10px",
+              }}
+            >
+              <span style={{ marginRight: "5px", display: "flex" }}>🛒</span>
+              <span style={{ display: "flex" }}>
+                {translations.discount}: {activeDiscount}%
+              </span>
+            </div>
+          }
           <div
             style={{
               display: "flex",
@@ -595,6 +619,11 @@ UpgradesDisplay.localization_strings = {
     en: "Balance",
     ru: "Баланс",
     uk: "Баланс",
+  },
+  discount: {
+    en: "Discount",
+    ru: "Скидка",
+    uk: "Знижка",
   },
   category_economy: {
     en: "Economy",

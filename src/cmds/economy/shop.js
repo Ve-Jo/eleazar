@@ -40,6 +40,12 @@ export default {
         // Get user data with all relations
         const userData = await Database.getUser(guild.id, user.id);
 
+        // Get the user's upgrade discount
+        const upgradeDiscount = await Database.getUpgradeDiscount(
+          guild.id,
+          user.id
+        );
+
         // Get upgrade info for each type
         upgradeInfo = {
           daily_bonus: await Database.getUpgradeInfo(
@@ -66,6 +72,20 @@ export default {
           ),
         };
 
+        // Apply discount to all upgrade prices if discount exists
+        if (upgradeDiscount > 0) {
+          Object.keys(upgradeInfo).forEach((key) => {
+            const discountAmount =
+              (upgradeInfo[key].price * upgradeDiscount) / 100;
+            upgradeInfo[key].originalPrice = upgradeInfo[key].price;
+            upgradeInfo[key].price = Math.max(
+              1,
+              Math.floor(upgradeInfo[key].price - discountAmount)
+            );
+            upgradeInfo[key].discountPercent = Math.round(upgradeDiscount);
+          });
+        }
+
         const [pngBuffer, dominantColor] = await generateImage(
           "UpgradesDisplay",
           {
@@ -89,10 +109,11 @@ export default {
               },
             },
             database: {
-              balance: Number(userData.economy?.balance || 0),
-              bankBalance: Number(userData.bank?.balance || 0),
+              balance: Math.round(Number(userData.economy?.balance || 0)),
+              bankBalance: Math.round(Number(userData.bank?.balance || 0)),
               bankRate: userData.bank?.rate || 0,
-              totalEarned: Number(userData.stats?.totalEarned || 0),
+              totalEarned: Math.round(Number(userData.stats?.totalEarned || 0)),
+              upgradeDiscount: upgradeDiscount,
             },
             locale: interaction.locale,
             upgrades: Object.entries(upgradeInfo).map(
@@ -128,37 +149,48 @@ export default {
                 }
 
                 // Calculate progress percentage based on user's balance and upgrade price
-                const userBalance = Number(userData.economy?.balance || 0);
+                const userBalance = Math.round(
+                  Number(userData.economy?.balance || 0)
+                );
                 const progressPercentage = Math.min(
-                  Math.floor((userBalance / upgrade.price) * 100),
+                  Math.round((userBalance / upgrade.price) * 100),
                   100
                 );
 
-                return {
+                // Create upgrade object with discount information if applicable
+                const upgradeObj = {
                   emoji: UPGRADES[key].emoji,
                   title: i18n.__(`economy.shop.upgrades.${key}.name`),
                   description: i18n.__(
                     `economy.shop.upgrades.${key}.description`,
                     {
-                      effect: effectValue,
-                      price: upgrade.price,
-                      increasePerLevel: effectPerLevel,
-                      increasePerLevelMinutes: effectPerLevel,
+                      effect: Math.round(effectValue),
+                      price: Math.round(upgrade.price),
+                      increasePerLevel: Math.round(effectPerLevel),
+                      increasePerLevelMinutes: Math.round(effectPerLevel),
                     }
                   ),
                   currentLevel: currentLevel,
                   nextLevel: currentLevel + 1,
-                  price: upgrade.price,
+                  price: Math.round(upgrade.price),
                   progress: progressPercentage,
                   id: index,
                   category: UPGRADES[key].category,
                   effectPerLevel: effectPerLevel,
                   effectUnit: effectUnit,
                 };
+
+                // Add discount information if applicable
+                if (upgrade.discountPercent) {
+                  upgradeObj.originalPrice = upgrade.originalPrice;
+                  upgradeObj.discountPercent = upgrade.discountPercent;
+                }
+
+                return upgradeObj;
               }
             ),
             currentUpgrade,
-            balance: Number(userData.economy?.balance || 0),
+            balance: Math.round(Number(userData.economy?.balance || 0)),
             dominantColor: "user",
             returnDominant: true,
           },
@@ -199,31 +231,79 @@ export default {
                 effectValue = upgrade.effect * 100;
               }
 
-              return {
+              // Create option object
+              const option = {
                 label: i18n.__(`economy.shop.upgrades.${key}.name`),
                 description: i18n.__(
                   `economy.shop.upgrades.${key}.description`,
                   {
-                    effect: effectValue,
-                    price: upgrade.price,
-                    increasePerLevel: effectPerLevel,
-                    increasePerLevelMinutes: effectPerLevel,
+                    effect: Math.round(effectValue),
+                    price: Math.round(upgrade.price),
+                    increasePerLevel: Math.round(effectPerLevel),
+                    increasePerLevelMinutes: Math.round(effectPerLevel),
                   }
                 ),
                 value: index.toString(),
                 emoji: UPGRADES[key].emoji,
                 default: currentUpgrade === index,
               };
+
+              // Add label suffix if the upgrade has a discount
+              if (upgrade.discountPercent) {
+                option.label = `${option.label} (${upgrade.discountPercent}% off)`;
+              }
+
+              return option;
             })
           );
 
-        const purchaseButton = new ButtonBuilder()
+        const openButton = new ButtonBuilder()
           .setCustomId("purchase")
           .setLabel(i18n.__("economy.shop.purchaseButton"))
           .setStyle(ButtonStyle.Success);
 
+        // Add revert button
+        const revertButton = new ButtonBuilder()
+          .setCustomId("revert")
+          .setStyle(ButtonStyle.Danger);
+
+        // Get the current upgrade type
+        const currentUpgradeType = Object.keys(upgradeInfo)[currentUpgrade];
+        // Get current upgrade level
+        const currentLevel =
+          userData.upgrades.find((u) => u.type === currentUpgradeType)?.level ||
+          1;
+
+        if (currentLevel <= 1) {
+          // Disable the button for level 1 upgrades
+          revertButton
+            .setLabel(i18n.__("economy.shop.revertButton"))
+            .setDisabled(true);
+        } else {
+          // Calculate refund amount for display (85% of current level price)
+          const currentUpgradeInfo = await Database.getUpgradeInfo(
+            currentUpgradeType,
+            currentLevel
+          );
+          const refundAmount = currentUpgradeInfo
+            ? Math.floor(currentUpgradeInfo.price * 0.85)
+            : 0;
+
+          // Set the button label with refund amount
+          revertButton
+            .setLabel(
+              i18n.__("economy.shop.revertButtonWithRefund", {
+                refund: refundAmount || 0,
+              }) || i18n.__("economy.shop.revertButton") // Fallback to simple "Revert" text
+            )
+            .setDisabled(false);
+        }
+
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-        const buttonRow = new ActionRowBuilder().addComponents(purchaseButton);
+        const buttonRow = new ActionRowBuilder().addComponents(
+          openButton,
+          revertButton
+        );
 
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
@@ -233,7 +313,7 @@ export default {
           })
           .setDescription(
             i18n.__("economy.shop.description", {
-              balance: Number(userData.economy?.balance || 0),
+              balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
           .setImage(`attachment://shop.png`)
@@ -264,13 +344,63 @@ export default {
           const type = upgradeTypes[currentUpgrade];
 
           try {
+            // We'll modify the purchaseUpgrade method in the database to handle discounts
             await Database.purchaseUpgrade(guild.id, user.id, type);
+
+            // After successful purchase, reset the discount for this upgrade type
+            await Database.resetUpgradeDiscount(guild.id, user.id, type);
+
             // Show updated shop with new upgrade level
             await i.update(await generateShopMessage());
           } catch (error) {
             if (error.message === "Insufficient balance") {
               await i.reply({
                 content: i18n.__("economy.shop.insufficientFunds"),
+                ephemeral: true,
+              });
+            } else {
+              throw error;
+            }
+          }
+        } else if (i.customId === "revert") {
+          // Get the selected upgrade type based on currentUpgrade index
+          const upgradeTypes = Object.keys(upgradeInfo);
+          const type = upgradeTypes[currentUpgrade];
+
+          try {
+            // Revert the upgrade and get the result
+            const revertResult = await Database.revertUpgrade(
+              guild.id,
+              user.id,
+              type
+            );
+
+            // Show success message
+            await i.followUp({
+              content: i18n.__("economy.shop.revertSuccess", {
+                type: i18n.__(`economy.shop.upgrades.${type}.name`),
+                level: revertResult.newLevel,
+                refund: revertResult.refundAmount,
+              }),
+              ephemeral: true,
+            });
+
+            // Show updated shop with new upgrade level
+            await i.update(await generateShopMessage());
+          } catch (error) {
+            if (error.message.startsWith("Cooldown active:")) {
+              const cooldownTime = parseInt(error.message.split(":")[1].trim());
+              const minutesLeft = Math.ceil(cooldownTime / (1000 * 60));
+
+              await i.reply({
+                content: i18n.__("economy.shop.revertCooldown", {
+                  minutes: minutesLeft,
+                }),
+                ephemeral: true,
+              });
+            } else if (error.message === "Cannot revert a level 1 upgrade") {
+              await i.reply({
+                content: i18n.__("economy.shop.cannotRevert"),
                 ephemeral: true,
               });
             } else {
@@ -415,6 +545,31 @@ export default {
           uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
         },
       },
+    },
+    revertButton: {
+      en: "Revert",
+      ru: "Отменить",
+      uk: "Відмінити",
+    },
+    revertButtonWithRefund: {
+      en: "Revert (-1 lvl, +{{refund}} coins)",
+      ru: "Отменить (-1 ур., +{{refund}} монет)",
+      uk: "Відмінити (-1 рів., +{{refund}} монет)",
+    },
+    revertSuccess: {
+      en: "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
+      ru: "Успешно отменено улучшение {{type}} до уровня {{level}} и получено {{refund}} монет (85% возврат)",
+      uk: "Успішно відмінено покращення {{type}} до рівня {{level}} і отримано {{refund}} монет (85% повернення)",
+    },
+    revertCooldown: {
+      en: "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
+      ru: "Перезарядка активна. Вы можете отменить другое улучшение через {{minutes}} минут",
+      uk: "Перезарядка активна. Ви можете відмінити інше покращення через {{minutes}} хвилин",
+    },
+    cannotRevert: {
+      en: "Cannot revert a level 1 upgrade",
+      ru: "Невозможно отменить улучшение уровня 1",
+      uk: "Неможливо відмінити покращення рівня 1",
     },
   },
 };
