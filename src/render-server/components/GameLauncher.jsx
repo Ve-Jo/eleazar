@@ -383,16 +383,6 @@ GameLauncher.dimensions = {
 
 // Static translations object
 GameLauncher.localization_strings = {
-  specialForCategory: {
-    en: "Specially for Eleazar",
-    ru: "Специально для Eleazar",
-    uk: "Спеціально для Eleazar",
-  },
-  oldGamesCategory: {
-    en: "Our old games",
-    ru: "Наши старые игры",
-    uk: "Наші старі ігри",
-  },
   gameSelection: {
     en: "Game Selection",
     ru: "Выбор игры",

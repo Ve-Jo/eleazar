@@ -421,6 +421,62 @@ CratesDisplay.localization_strings = {
     ru: "Часов до открытия",
     uk: "Годин до відкриття",
   },
+  // Case types moved from cases.js
+  types: {
+    daily: {
+      name: {
+        en: "Daily Crate",
+        ru: "Ежедневный ящик",
+        uk: "Щоденна скриня",
+      },
+      description: {
+        en: "A crate you can open once every 24 hours",
+        ru: "Ящик, который можно открыть раз в 24 часа",
+        uk: "Скриня, яку можна відкрити раз на 24 години",
+      },
+    },
+    weekly: {
+      name: {
+        en: "Weekly Crate",
+        ru: "Еженедельный ящик",
+        uk: "Щотижнева скриня",
+      },
+      description: {
+        en: "A crate you can open once every 7 days",
+        ru: "Ящик, который можно открыть раз в 7 дней",
+        uk: "Скриня, яку можна відкрити раз на 7 днів",
+      },
+    },
+    special: {
+      description: {
+        en: "A special crate with unique rewards",
+        ru: "Особый ящик с уникальными наградами",
+        uk: "Особлива скриня з унікальними нагородами",
+      },
+    },
+  },
+  cooldownTypes: {
+    daily: {
+      en: "Daily Crate",
+      ru: "Ежедневный ящик",
+      uk: "Щоденна скриня",
+    },
+    work: {
+      en: "Work Command",
+      ru: "Команда работы",
+      uk: "Команда роботи",
+    },
+    crime: {
+      en: "Crime Command",
+      ru: "Команда преступления",
+      uk: "Команда злочину",
+    },
+    message: {
+      en: "Message Rewards",
+      ru: "Награды за сообщения",
+      uk: "Нагороди за повідомлення",
+    },
+  },
 };
 
 export default CratesDisplay;

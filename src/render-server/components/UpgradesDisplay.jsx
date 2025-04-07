@@ -635,6 +635,69 @@ UpgradesDisplay.localization_strings = {
     ru: "Перезарядка",
     uk: "Перезарядка",
   },
+  // Upgrade types moved from shop.js
+  upgrades: {
+    daily_bonus: {
+      name: {
+        en: "Daily Bonus",
+        ru: "Ежедн. Бонус",
+        uk: "Щоденний Бонус",
+      },
+      description: {
+        en: "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)",
+        ru: "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)",
+        uk: "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)",
+      },
+    },
+    daily_cooldown: {
+      name: {
+        en: "Daily Cooldown",
+        ru: "Перезарядка Ежедн.",
+        uk: "Перезарядка Щоденного",
+      },
+      description: {
+        en: "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+        ru: "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+        uk: "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+      },
+    },
+    crime: {
+      name: {
+        en: "Crime Cooldown",
+        ru: "Преступления",
+        uk: "Крадіжка",
+      },
+      description: {
+        en: "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+        ru: "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+        uk: "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+      },
+    },
+    bank_rate: {
+      name: {
+        en: "Bank Interest",
+        ru: "Банк. Процент",
+        uk: "Банк. Відсоток",
+      },
+      description: {
+        en: "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)",
+        ru: "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)",
+        uk: "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)",
+      },
+    },
+    games_earning: {
+      name: {
+        en: "Games Earnings",
+        ru: "Доход от Игр",
+        uk: "Дохід від Ігор",
+      },
+      description: {
+        en: "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)",
+        ru: "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)",
+        uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
+      },
+    },
+  },
 };
 
 export default UpgradesDisplay;
