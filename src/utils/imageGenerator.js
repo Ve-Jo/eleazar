@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
+import i18n from "./newI18n.js";
 
 // Configure Bun's garbage collector if available
 if (typeof Bun !== "undefined" && Bun.gc) {
@@ -532,6 +533,21 @@ export async function generateImage(
       colorProps = getDefaultColors();
     }
 
+    // Register component localization strings if the component has them
+    if (Component.localization_strings) {
+      console.log(
+        `[generateImage] Registering ${component} localization strings with i18n`
+      );
+
+      // Use the new i18n.registerLocalizations function
+      i18n.registerLocalizations(
+        "components",
+        component,
+        Component.localization_strings,
+        false
+      );
+    }
+
     // Create a new props object with properly structured coloring
     props = {
       ...props,
@@ -570,35 +586,29 @@ export async function generateImage(
       console.log("Debug mode enabled for component rendering");
     }
 
-    if (Component.localization_strings && formattedProps.locale) {
-      formattedProps.i18n = {
-        __: (key) => {
-          try {
-            if (Component.localization_strings[key]) {
-              return (
-                Component.localization_strings[key][formattedProps.locale] ||
-                Component.localization_strings[key].en ||
-                key
-              );
-            }
-            const [category, stringKey] = key.split(".");
-            if (Component.localization_strings[stringKey]) {
-              return (
-                Component.localization_strings[stringKey][
-                  formattedProps.locale
-                ] ||
-                Component.localization_strings[stringKey].en ||
-                key
-              );
-            }
-            return key;
-          } catch (e) {
-            console.error("Translation error:", e);
-            return key;
-          }
-        },
-        getLocale: () => formattedProps.locale,
-      };
+    // Create a translator for the component
+    if (formattedProps.locale) {
+      const locale = formattedProps.locale;
+
+      // Use the existing enhanced i18n instance if provided
+      if (props.i18n && typeof props.i18n.__ === "function") {
+        console.log("Using provided enhanced i18n translator");
+        formattedProps.i18n = props.i18n;
+      }
+      // Otherwise create a new context-specific i18n for the component
+      else {
+        console.log("Creating new context i18n translator for component");
+
+        // Create context-specific i18n for the component
+        formattedProps.i18n = i18n.createContextI18n(
+          "components",
+          component,
+          locale
+        );
+        console.log(
+          `Created context i18n translator for component: ${component} with locale: ${locale}`
+        );
+      }
     }
 
     // Helper function to load image assets
