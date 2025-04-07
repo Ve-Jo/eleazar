@@ -17,12 +17,19 @@ const LAVALINK_SERVERS = [
     authorization: "youshallnotpass",
     secure: false,
   },
-  {
+  /*{
     id: "Catfein DE",
     authorization: "catfein",
     host: "lavalink.alfari.id",
     port: 443,
     secure: true,
+  },*/
+  {
+    id: "Embotic",
+    host: "46.202.82.164",
+    port: 1027,
+    authorization: "jmlitelavalink",
+    secure: false,
   },
   {
     id: "ChalresNaig Node",
