@@ -1,5 +1,5 @@
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import i18n from "./i18n.js";
+import i18n from "./newI18n.js";
 import { generateImage } from "./imageGenerator.js";
 
 let lastGeneratedImage = null;

@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import i18n from "./i18n.js";
+import i18n from "./newI18n.js";
 
 export function createMusicButtons(player) {
   const locale = player.queue.current?.userData?.requester?.locale || "en";
