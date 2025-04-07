@@ -1,5 +1,5 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
-import i18n from "../utils/i18n.js";
+import i18n from "../utils/newI18n.js";
 import { generateImage } from "../utils/imageGenerator.js";
 import Database from "../database/client.js";
 
@@ -60,6 +60,14 @@ export default {
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
 
+    // Access enhanced i18n either from this.i18n or create a local reference
+    // The enhanced i18n is injected by loadGames.js in getGameModule
+    const gameI18n = this.i18n || i18n;
+
+    // Set locale based on interaction
+    const locale = interaction.locale || interaction.guildLocale || "en";
+    console.log(`[2048] Using locale: ${locale}`);
+
     // Add safety check for interaction state
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply();
@@ -70,7 +78,7 @@ export default {
 
     if (hasRunningGame) {
       return interaction.followUp({
-        content: i18n.__("games.2048.alreadyRunning"),
+        content: gameI18n.__("alreadyRunning"),
         ephemeral: true,
       });
     }
@@ -164,8 +172,7 @@ export default {
       // Send initial game board
       const message = await interaction.followUp({
         content:
-          i18n.__("games.2048.startMessage") +
-          `\nHigh Score: ${currentHighScore}`,
+          gameI18n.__("startMessage") + `\nHigh Score: ${currentHighScore}`,
         files: [{ attachment: buffer, name: "2048.png" }],
         components: [row],
         fetchReply: true,
@@ -235,7 +242,7 @@ export default {
             );
 
             await message.edit({
-              content: `${i18n.__("games.2048.timesOut", {
+              content: `${gameI18n.__("timesOut", {
                 score: gameInstance.state.score,
               })} (+${gameInstance.state.earning.toFixed(
                 1
@@ -257,7 +264,7 @@ export default {
         // Validate game exists and user has permission
         if (!gameInstance || i.user.id !== gameInstance.userId) {
           await i.reply({
-            content: i18n.__("games.2048.notYourGame"),
+            content: gameI18n.__("notYourGame"),
             ephemeral: true,
           });
           return;
@@ -317,7 +324,7 @@ export default {
 
           // Update the message with new game state
           await message.edit({
-            content: `${i18n.__("games.2048.score", { score: state.score })}`,
+            content: gameI18n.__("score", { score: state.score }),
             files: [{ attachment: buffer, name: "2048.png" }],
             components: [row],
           });
@@ -380,7 +387,7 @@ export default {
               );
 
               await message.edit({
-                content: `${i18n.__("games.2048.gameOver", {
+                content: `${gameI18n.__("gameOver", {
                   score: state.score,
                 })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
                   isNewRecord ? " 🏆 New High Score!" : ""
@@ -395,7 +402,7 @@ export default {
               console.error("Error executing game 2048:", error);
               if (!interaction.replied) {
                 await interaction.reply({
-                  content: i18n.__("games.2048.error"),
+                  content: gameI18n.__("error"),
                   ephemeral: true,
                 });
               }
@@ -404,7 +411,7 @@ export default {
         } else {
           // For invalid moves, just update the message content
           await message.edit({
-            content: `${i18n.__("games.2048.invalidMove")}`,
+            content: gameI18n.__("invalidMove"),
             components: [row],
           });
         }
@@ -417,7 +424,7 @@ export default {
       console.error("Error executing game 2048:", error);
       if (!interaction.replied) {
         await interaction.reply({
-          content: i18n.__("games.2048.error"),
+          content: gameI18n.__("error"),
           ephemeral: true,
         });
       }
