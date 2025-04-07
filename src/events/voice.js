@@ -3,7 +3,6 @@ import Database from "../database/client.js";
 
 export default {
   name: Events.VoiceStateUpdate,
-  essential: true,
   async execute(oldState, newState) {
     try {
       const { guild, member } = oldState;

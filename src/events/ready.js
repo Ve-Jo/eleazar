@@ -7,7 +7,6 @@ import Database from "../database/client.js";
 export default {
   name: Events.ClientReady,
   once: true,
-  essential: true,
   async execute(client) {
     console.log(`Ready! Logged in as ${client.user.tag}`);
 

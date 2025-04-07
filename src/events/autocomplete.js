@@ -2,13 +2,10 @@ import { Events } from "discord.js";
 
 export default {
   name: Events.InteractionCreate,
-  essential: true,
   async execute(interaction) {
     if (!interaction.isAutocomplete()) return;
 
-    const { client } = interaction;
-
-    const command = client.commands.get(interaction.commandName);
+    const command = interaction.client.commands.get(interaction.commandName);
 
     if (!command) {
       console.error(

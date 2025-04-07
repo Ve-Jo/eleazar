@@ -1,10 +1,9 @@
 import { Events } from "discord.js";
-import i18n from "../utils/i18n.js";
+import i18n from "../utils/newI18n.js";
 import { createMusicButtons } from "../utils/musicButtons.js";
 
 export default {
   name: Events.InteractionCreate,
-  essential: true,
   async execute(interaction) {
     if (!interaction.isButton()) return;
 

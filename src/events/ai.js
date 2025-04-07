@@ -486,7 +486,6 @@ async function sendResponse(message, processingMessage, content) {
 
 export default {
   name: Events.MessageCreate,
-  essential: true,
   async execute(message) {
     if (message.author.bot) return;
 

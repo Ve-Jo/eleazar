@@ -4,7 +4,6 @@ import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 
 export default {
   name: Events.MessageCreate,
-  essential: true,
   async execute(message) {
     if (message.author.bot) return;
 
@@ -194,12 +193,12 @@ export default {
                   guild: {
                     connectOrCreate: {
                       where: { id: guild.id },
-                      create: { id: guild.id }
-                    }
+                      create: { id: guild.id },
+                    },
                   },
-                  lastActivity: BigInt(Date.now())
-                }
-              }
+                  lastActivity: BigInt(Date.now()),
+                },
+              },
             },
             xpStats,
             messageCount: 1,
