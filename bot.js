@@ -66,11 +66,22 @@ setInterval(() => {
   console.log("Manual message sweep completed");
 }, 60 * 1000);
 
-client.commands = new Map();
-client.events = new Map();
-
+console.log("Loading commands...");
 await loadCommands(client);
+console.log("Commands loaded successfully");
+
+const commandCount = client.commands.size;
+console.log(`Loaded ${commandCount} commands:`);
+client.commands.forEach((cmd, name) => {
+  const subcommandCount = cmd.subcommands
+    ? Object.keys(cmd.subcommands).length
+    : 0;
+  console.log(`- ${name} (${subcommandCount} subcommands)`);
+});
+
+console.log("Loading events...");
 await loadEvents(client);
+console.log("Events loaded successfully");
 
 client.memer = new Memer();
 
@@ -217,3 +228,24 @@ if (previewApp) {
 }
 
 setInterval(clearCaches, 30000);*/
+
+// Handle process errors
+process.on("unhandledRejection", (error) => {
+  console.error("Unhandled promise rejection:", error);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+});
+
+process.on("SIGINT", async () => {
+  console.log("Shutting down...");
+  try {
+    await Database.disconnect();
+    console.log("Database disconnected");
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+    process.exit(1);
+  }
+});
