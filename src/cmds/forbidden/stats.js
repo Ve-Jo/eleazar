@@ -1,24 +1,43 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+  EmbedBuilder,
+  AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import Database from "../../database/client.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("help", "stats");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("stats")
+      .setDescription("Get the bot statistics");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        ru: "статистика",
+        uk: "статистика",
+      },
+      description: {
+        ru: "Получить статистику бота",
+        uk: "Отримати статистику бота",
+      },
+    },
+    title: {
+      en: "Bot Statistics",
+      ru: "Статистика бота",
+      uk: "Статистика бота",
+    },
+    description: {
+      en: "View bot statistics and performance metrics",
+      ru: "Посмотреть статистику и производительность бота",
+      uk: "Переглянути статистику та продуктивність бота",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
 
@@ -109,22 +128,5 @@ export default {
       embeds: [stats_embed],
       files: [attachment],
     });
-  },
-  localization_strings: {
-    name: {
-      en: "stats",
-      ru: "статистика",
-      uk: "статистика",
-    },
-    title: {
-      en: "Bot Statistics",
-      ru: "Статистика бота",
-      uk: "Статистика бота",
-    },
-    description: {
-      en: "View bot statistics and performance metrics",
-      ru: "Посмотреть статистику и производительность бота",
-      uk: "Переглянути статистику та продуктивність бота",
-    },
   },
 };
