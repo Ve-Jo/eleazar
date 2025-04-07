@@ -1,8 +1,4 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -10,24 +6,99 @@ import {
   ButtonStyle,
   ComponentType,
   AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { CRATE_TYPES } from "../../database/client.js";
 import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.js";
+// Import the CratesDisplay component to access its localizations
+import CratesDisplay from "../../render-server/components/CratesDisplay.jsx";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "crates");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("cases")
+      .setDescription("Open cases and get rewards");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
+  },
+  localization_strings: {
+    command: {
+      name: {
+        ru: "кейсы",
+        uk: "кейси",
+      },
+      description: {
+        ru: "Открыть кейсы и получить награды",
+        uk: "Відкрити кейси та отримати нагороди",
+      },
+    },
+    title: {
+      en: "Cases",
+      ru: "Кейсы",
+      uk: "Кейси",
+    },
+    selectCrate: {
+      en: "Select a case to open",
+      ru: "Выберите кейс для открытия",
+      uk: "Виберіть кейс для відкриття",
+    },
+    openButton: {
+      en: "Open Case",
+      ru: "Открыть кейс",
+      uk: "Відкрити кейс",
+    },
+    cooldownActive: {
+      en: "This case is on cooldown for {{time}}",
+      ru: "Этот кейс на перезарядке {{time}}",
+      uk: "Цей кейс на перезарядці {{time}}",
+    },
+    balance: {
+      en: "Your balance: {{balance}} coins",
+      ru: "Ваш баланс: {{balance}} монет",
+      uk: "Ваш баланс: {{balance}} монет",
+    },
+    backButton: {
+      en: "Back to Crates",
+      ru: "Назад к ящикам",
+      uk: "Назад до скринь",
+    },
+    noCratesAvailable: {
+      en: "You don't have any of these crates",
+      ru: "У вас нет таких ящиков",
+      uk: "У вас немає таких скринь",
+    },
+    error: {
+      en: "An error occurred while processing your request",
+      ru: "Произошла ошибка при обработке вашего запроса",
+      uk: "Сталася помилка під час обробки вашого запиту",
+    },
+    rewardIntro: {
+      en: "You opened a {{crate}} crate and received:\n",
+      ru: "Вы открыли ящик {{crate}} и получили:\n",
+      uk: "Ви відкрили скриню {{crate}} і отримали:\n",
+    },
+    rewardCoins: {
+      en: "• {{amount}} coins\n",
+      ru: "• {{amount}} монет\n",
+      uk: "• {{amount}} монет\n",
+    },
+    rewardXp: {
+      en: "• {{amount}} XP\n",
+      ru: "• {{amount}} опыта\n",
+      uk: "• {{amount}} досвіду\n",
+    },
+    rewardDiscount: {
+      en: "• {{amount}}% discount on {{type}} upgrade\n",
+      ru: "• {{amount}}% скидки на улучшение {{type}}\n",
+      uk: "• {{amount}}% знижки на покращення {{type}}\n",
+    },
+    rewardCooldown: {
+      en: "• {{time}} cooldown reduction for {{type}}\n",
+      ru: "• Уменьшение перезарядки {{type}} на {{time}}\n",
+      uk: "• Зменшення перезарядки {{type}} на {{time}}\n",
+    },
   },
   async execute(interaction, i18n) {
     await interaction.deferReply();
@@ -58,12 +129,31 @@ export default {
         "weekly"
       );
 
+      // Get user locale for translations
+      const userLocale = i18n.getUserLocale
+        ? i18n.getUserLocale()
+        : interaction.locale.split("-")[0].toLowerCase();
+
+      // Get CratesDisplay translations based on locale
+      const getCrateTranslation = (path, defaultValue) => {
+        const pathParts = path.split(".");
+        let result = CratesDisplay.localization_strings;
+        for (const part of pathParts) {
+          if (!result[part]) return defaultValue;
+          result = result[part];
+        }
+        return result[userLocale] || result.en || defaultValue;
+      };
+
       // Prepare crates for display
       const cratesList = [
         {
           id: "daily",
-          name: i18n.__("economy.crates.types.daily.name"),
-          description: i18n.__("economy.crates.types.daily.description"),
+          name: getCrateTranslation("types.daily.name", "Daily Crate"),
+          description: getCrateTranslation(
+            "types.daily.description",
+            "A crate you can open once every 24 hours"
+          ),
           emoji: CRATE_TYPES.daily.emoji,
           available: dailyCooldown <= 0,
           cooldown: dailyCooldown > 0 ? dailyCooldown : 0,
@@ -71,8 +161,11 @@ export default {
         },
         {
           id: "weekly",
-          name: i18n.__("economy.crates.types.weekly.name"),
-          description: i18n.__("economy.crates.types.weekly.description"),
+          name: getCrateTranslation("types.weekly.name", "Weekly Crate"),
+          description: getCrateTranslation(
+            "types.weekly.description",
+            "A crate you can open once every 7 days"
+          ),
           emoji: CRATE_TYPES.weekly.emoji,
           available: weeklyCooldown <= 0,
           cooldown: weeklyCooldown > 0 ? weeklyCooldown : 0,
@@ -84,14 +177,17 @@ export default {
       for (const crate of crates) {
         if (crate.count > 0 && !["daily", "weekly"].includes(crate.type)) {
           const crateType = crate.type;
-          // For custom crate types, we'd need to have translations and configurations
+          // Use CratesDisplay translations if available, otherwise use special description
           cratesList.push({
             id: crateType,
-            name:
-              i18n.__(`economy.crates.types.${crateType}.name`) || crateType,
-            description:
-              i18n.__(`economy.crates.types.${crateType}.description`) ||
-              i18n.__("economy.crates.types.special.description"),
+            name: getCrateTranslation(`types.${crateType}.name`, crateType),
+            description: getCrateTranslation(
+              `types.${crateType}.description`,
+              getCrateTranslation(
+                "types.special.description",
+                "A special crate with unique rewards"
+              )
+            ),
             emoji: "🎁", // Default emoji for special crates
             available: true,
             cooldown: 0,
@@ -146,7 +242,7 @@ export default {
         // Create selection menu for crates
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_crate")
-          .setPlaceholder(i18n.__("economy.crates.selectCrate"))
+          .setPlaceholder(i18n.__("selectCrate"))
           .addOptions(
             cratesList.map((crate, index) => {
               const labelPrefix = crate.count > 0 ? `(${crate.count}) ` : "";
@@ -168,7 +264,7 @@ export default {
         // Create open button
         const openButton = new ButtonBuilder()
           .setCustomId("open_crate")
-          .setLabel(i18n.__("economy.crates.openButton"))
+          .setLabel(i18n.__("openButton"))
           .setStyle(ButtonStyle.Success)
           .setDisabled(!cratesList[selectedCrate].available);
 
@@ -178,11 +274,11 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor ?? 0x0099ff)
           .setAuthor({
-            name: i18n.__("economy.crates.title"),
+            name: i18n.__("title"),
             iconURL: interaction.user.displayAvatarURL(),
           })
           .setDescription(
-            i18n.__("economy.crates.description", {
+            i18n.__("balance", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
@@ -215,7 +311,7 @@ export default {
 
           if (!selectedCrateInfo.available) {
             await i.reply({
-              content: i18n.__("economy.crates.cooldownActive", {
+              content: i18n.__("cooldownActive", {
                 time: prettyMs(selectedCrateInfo.cooldown, { verbose: true }),
               }),
               ephemeral: true,
@@ -288,30 +384,30 @@ export default {
             // Create a button to go back to crates
             const backButton = new ButtonBuilder()
               .setCustomId("back_to_crates")
-              .setLabel(i18n.__("economy.crates.backButton"))
+              .setLabel(i18n.__("backButton"))
               .setStyle(ButtonStyle.Secondary);
 
             const backRow = new ActionRowBuilder().addComponents(backButton);
 
             // Generate reward message text
-            let rewardText = i18n.__("economy.crates.rewardIntro", {
+            let rewardText = i18n.__("rewardIntro", {
               crate: selectedCrateInfo.name,
             });
 
             if (rewards.coins > 0) {
-              rewardText += i18n.__("economy.crates.rewardCoins", {
+              rewardText += i18n.__("rewardCoins", {
                 amount: rewards.coins,
               });
             }
 
             if (rewards.xp > 0) {
-              rewardText += i18n.__("economy.crates.rewardXp", {
+              rewardText += i18n.__("rewardXp", {
                 amount: rewards.xp,
               });
             }
 
             if (rewards.discount > 0) {
-              rewardText += i18n.__("economy.crates.rewardDiscount", {
+              rewardText += i18n.__("rewardDiscount", {
                 amount: rewards.discount,
               });
             }
@@ -320,8 +416,13 @@ export default {
               for (const [cooldownType, reduction] of Object.entries(
                 rewards.cooldownReductions
               )) {
-                rewardText += i18n.__("economy.crates.rewardCooldown", {
-                  type: i18n.__(`economy.crates.cooldownTypes.${cooldownType}`),
+                // Use CratesDisplay translations for cooldown types
+                const cooldownTypeName = getCrateTranslation(
+                  `cooldownTypes.${cooldownType}`,
+                  cooldownType
+                );
+                rewardText += i18n.__("economy.cases.rewardCooldown", {
+                  type: cooldownTypeName,
                   time: prettyMs(reduction, { verbose: true }),
                 });
               }
@@ -389,7 +490,7 @@ export default {
           } catch (error) {
             if (error.message.startsWith("Cooldown active:")) {
               await i.reply({
-                content: i18n.__("economy.crates.cooldownActive", {
+                content: i18n.__("cooldownActive", {
                   time: prettyMs(parseInt(error.message.split(":")[1].trim()), {
                     verbose: true,
                   }),
@@ -398,13 +499,13 @@ export default {
               });
             } else if (error.message === "No crates available") {
               await i.reply({
-                content: i18n.__("economy.crates.noCratesAvailable"),
+                content: i18n.__("noCratesAvailable"),
                 ephemeral: true,
               });
             } else {
               console.error("Error opening crate:", error);
               await i.reply({
-                content: i18n.__("economy.crates.error"),
+                content: i18n.__("error"),
                 ephemeral: true,
               });
             }
@@ -420,141 +521,9 @@ export default {
     } catch (error) {
       console.error("Error in crates command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.crates.error"),
+        content: i18n.__("economy.cases.error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "crates",
-      ru: "ящики",
-      uk: "скрині",
-    },
-    description: {
-      en: "Open crates to get rewards",
-      ru: "Открывайте ящики, чтобы получить награды",
-      uk: "Відкривайте скрині, щоб отримати нагороди",
-    },
-    title: {
-      en: "Crates",
-      ru: "Ящики",
-      uk: "Скрині",
-    },
-    description: {
-      en: "Open crates to get coins, XP, and other rewards!",
-      ru: "Открывайте ящики, чтобы получить монеты, опыт и другие награды!",
-      uk: "Відкривайте скрині, щоб отримати монети, досвід та інші нагороди!",
-    },
-    selectCrate: {
-      en: "Select a crate to open",
-      ru: "Выберите ящик для открытия",
-      uk: "Виберіть скриню для відкриття",
-    },
-    openButton: {
-      en: "Open Crate",
-      ru: "Открыть ящик",
-      uk: "Відкрити скриню",
-    },
-    backButton: {
-      en: "Back to Crates",
-      ru: "Назад к ящикам",
-      uk: "Назад до скринь",
-    },
-    cooldownActive: {
-      en: "You have to wait {{time}} to open this crate",
-      ru: "Вам нужно подождать {{time}} чтобы открыть этот ящик",
-      uk: "Вам потрібно почекати {{time}} щоб відкрити цю скриню",
-    },
-    noCratesAvailable: {
-      en: "You don't have any of these crates",
-      ru: "У вас нет таких ящиков",
-      uk: "У вас немає таких скринь",
-    },
-    error: {
-      en: "An error occurred while processing your request",
-      ru: "Произошла ошибка при обработке вашего запроса",
-      uk: "Сталася помилка під час обробки вашого запиту",
-    },
-    rewardIntro: {
-      en: "You opened a {{crate}} crate and received:\n",
-      ru: "Вы открыли ящик {{crate}} и получили:\n",
-      uk: "Ви відкрили скриню {{crate}} і отримали:\n",
-    },
-    rewardCoins: {
-      en: "• {{amount}} coins\n",
-      ru: "• {{amount}} монет\n",
-      uk: "• {{amount}} монет\n",
-    },
-    rewardXp: {
-      en: "• {{amount}} XP\n",
-      ru: "• {{amount}} опыта\n",
-      uk: "• {{amount}} досвіду\n",
-    },
-    rewardDiscount: {
-      en: "• {{amount}}% discount on {{type}} upgrade\n",
-      ru: "• {{amount}}% скидки на улучшение {{type}}\n",
-      uk: "• {{amount}}% знижки на покращення {{type}}\n",
-    },
-    rewardCooldown: {
-      en: "• {{time}} cooldown reduction for {{type}}\n",
-      ru: "• Уменьшение перезарядки {{type}} на {{time}}\n",
-      uk: "• Зменшення перезарядки {{type}} на {{time}}\n",
-    },
-    types: {
-      daily: {
-        name: {
-          en: "Daily Crate",
-          ru: "Ежедневный ящик",
-          uk: "Щоденна скриня",
-        },
-        description: {
-          en: "A crate you can open once every 24 hours",
-          ru: "Ящик, который можно открыть раз в 24 часа",
-          uk: "Скриня, яку можна відкрити раз на 24 години",
-        },
-      },
-      weekly: {
-        name: {
-          en: "Weekly Crate",
-          ru: "Еженедельный ящик",
-          uk: "Щотижнева скриня",
-        },
-        description: {
-          en: "A crate you can open once every 7 days",
-          ru: "Ящик, который можно открыть раз в 7 дней",
-          uk: "Скриня, яку можна відкрити раз на 7 днів",
-        },
-      },
-      special: {
-        description: {
-          en: "A special crate with unique rewards",
-          ru: "Особый ящик с уникальными наградами",
-          uk: "Особлива скриня з унікальними нагородами",
-        },
-      },
-    },
-    cooldownTypes: {
-      daily: {
-        en: "Daily Crate",
-        ru: "Ежедневный ящик",
-        uk: "Щоденна скриня",
-      },
-      work: {
-        en: "Work Command",
-        ru: "Команда работы",
-        uk: "Команда роботи",
-      },
-      crime: {
-        en: "Crime Command",
-        ru: "Команда преступления",
-        uk: "Команда злочину",
-      },
-      message: {
-        en: "Message Rewards",
-        ru: "Награды за сообщения",
-        uk: "Нагороди за повідомлення",
-      },
-    },
   },
 };
