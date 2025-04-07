@@ -1,12 +1,14 @@
-import { I18nCommandBuilder } from "../../utils/builders/index.js";
+import { SlashCommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("help");
-    const command = i18nBuilder.createCommand();
-    return command;
+    const builder = new SlashCommandBuilder()
+      .setName("help")
+      .setDescription("Get help with the bot");
+
+    return builder;
   },
-  server: true,
+
   localization_strings: {
     name: {
       en: "help",
@@ -19,4 +21,6 @@ export default {
       uk: "Отримати допомогу з ботом",
     },
   },
+
+  server: true,
 };

@@ -1,10 +1,4 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { AttachmentBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import fs from "fs";
 import { pipeline } from "stream/promises";
@@ -80,117 +74,57 @@ export async function transcribeAudio(client, audioUrl, language = "auto") {
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("ai", "transcribe_audio");
-
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add audio option
-    const audioOption = new SlashCommandOption({
-      type: OptionType.ATTACHMENT,
-      name: "audio",
-      description: i18nBuilder.translateOption("audio", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("audio", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "audio",
-        "description"
-      ),
-    });
-
-    // Add language option
-    const languageOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "language",
-      description: i18nBuilder.translateOption("language", "description"),
-      required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "language",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "language",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(audioOption);
-    subcommand.addOption(languageOption);
-
-    return subcommand;
-  },
-  async execute(interaction, i18n) {
-    await interaction.deferReply();
-
-    const audioAttachment = interaction.options.getAttachment("audio");
-    const language = interaction.options.getString("language") || "auto";
-
-    if (!audioAttachment.contentType.startsWith("audio/")) {
-      return interaction.editReply(i18n.__("ai.transcribe_audio.invalid_file"));
-    }
-
-    try {
-      const transcription = await transcribeAudio(
-        interaction.client,
-        audioAttachment.url,
-        language
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("transcribe_audio")
+      .setDescription("Transcribe audio to text")
+      .addAttachmentOption((option) =>
+        option
+          .setName("audio")
+          .setDescription("The audio file to transcribe")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("language")
+          .setDescription("The language of the audio (default: auto)")
+          .setRequired(false)
       );
 
-      if (transcription.length > 2000) {
-        const attachment = new AttachmentBuilder(
-          Buffer.from(transcription, "utf-8"),
-          { name: "transcription.txt" }
-        );
-        await interaction.editReply({
-          content: i18n.__("ai.transcribe_audio.too_long"),
-          files: [attachment],
-        });
-      } else {
-        await interaction.editReply(
-          i18n.__("ai.transcribe_audio.generated", { transcription })
-        );
-      }
-    } catch (error) {
-      console.error("Error transcribing audio:", error);
-      await interaction.editReply(i18n.__("ai.transcribe_audio.error"));
-    }
+    return builder;
   },
+
+  // Define localization strings directly in the command
   localization_strings: {
-    name: {
-      en: "transcribe",
-      ru: "транскрипция",
-      uk: "транскрипція",
-    },
-    description: {
-      en: "Transcribe audio to text",
-      ru: "Преобразовать аудио в текст",
-      uk: "Перетворити аудіо в текст",
+    command: {
+      name: {
+        en: "transcribe",
+        ru: "транскрипция",
+        uk: "транскрипція",
+      },
+      description: {
+        en: "Transcribe audio to text",
+        ru: "Преобразовать аудио в текст",
+        uk: "Перетворити аудіо в текст",
+      },
     },
     options: {
       audio: {
         name: {
-          en: "audio",
           ru: "аудио",
           uk: "аудіо",
         },
         description: {
-          en: "The audio file to transcribe",
           ru: "Аудиофайл для транскрибации",
           uk: "Аудіофайл для транскрибації",
         },
       },
       language: {
         name: {
-          en: "language",
           ru: "язык",
           uk: "мова",
         },
         description: {
-          en: "The language of the audio (default: auto)",
           ru: "Язык аудио (по умолчанию: auto)",
           uk: "Мова аудіо (за замовчуванням: auto)",
         },
@@ -221,5 +155,127 @@ export default {
       ru: "Транскрипция слишком длинная для отображения. Вот текстовый файл с результатом:",
       uk: "Транскрипція занадто довга для відображення. Ось текстовий файл з результатом:",
     },
+    no_attachment: {
+      en: "Please provide an audio file to transcribe.",
+      ru: "Пожалуйста, предоставьте аудиофайл для транскрибации.",
+      uk: "Будь ласка, надайте аудіофайл для транскрибації.",
+    },
+    invalid_attachment_type: {
+      en: "The provided file is not a supported audio format. Supported formats: {{accepted_types}}. Received: {{received_type}}",
+      ru: "Предоставленный файл имеет неподдерживаемый формат. Поддерживаемые форматы: {{accepted_types}}. Получено: {{received_type}}",
+      uk: "Наданий файл має непідтримуваний формат. Підтримувані формати: {{accepted_types}}. Отримано: {{received_type}}",
+    },
+    file_too_large: {
+      en: "The audio file is too large (max 25MB).",
+      ru: "Аудиофайл слишком большой (максимум 25МБ).",
+      uk: "Аудіофайл занадто великий (максимум 25МБ).",
+    },
+    downloading: {
+      en: "Downloading audio file...",
+      ru: "Загрузка аудиофайла...",
+      uk: "Завантаження аудіофайлу...",
+    },
+    transcribing: {
+      en: "Transcribing audio...",
+      ru: "Транскрибирование аудио...",
+      uk: "Транскрибування аудіо...",
+    },
+    result: {
+      en: "Transcription:\n\n{{transcription}}",
+      ru: "Транскрипция:\n\n{{transcription}}",
+      uk: "Транскрипція:\n\n{{transcription}}",
+    },
+  },
+
+  async execute(interaction, i18n) {
+    await interaction.deferReply();
+
+    // Get the file attachment
+    const attachment = interaction.options.getAttachment("audio");
+    if (!attachment) {
+      return interaction.editReply(i18n.__("no_attachment"));
+    }
+
+    // Check file type
+    const acceptedTypes = [
+      "audio/mpeg",
+      "audio/mp3",
+      "audio/wav",
+      "audio/ogg",
+      "video/mp4",
+      "audio/mp4",
+      "audio/mpeg3",
+      "audio/x-mpeg-3",
+      "audio/webm",
+    ];
+    if (!acceptedTypes.includes(attachment.contentType)) {
+      return interaction.editReply(
+        i18n.__(
+          "invalid_attachment_type",
+          {
+            accepted_types: acceptedTypes.join(", "),
+            received_type: attachment.contentType || "unknown",
+          },
+          userLocale
+        )
+      );
+    }
+
+    // Check file size
+    if (attachment.size > 25 * 1024 * 1024) {
+      // 25 MB
+      return interaction.editReply(i18n.__("file_too_large"));
+    }
+
+    try {
+      // Download the file
+      await interaction.editReply(i18n.__("downloading"));
+
+      const response = await fetch(attachment.url);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to download file: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const audioData = await response.arrayBuffer();
+
+      // Transcribe the audio
+      await interaction.editReply(i18n.__("transcribing"));
+
+      const formData = new FormData();
+      formData.append("file", new Blob([audioData]), attachment.name);
+      formData.append("model", "whisper-1");
+
+      const transcriptionResponse = await fetch(
+        "https://api.openai.com/v1/audio/transcriptions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text();
+        throw new Error(
+          `OpenAI API error: ${transcriptionResponse.status} ${transcriptionResponse.statusText}\n${errorText}`
+        );
+      }
+
+      const transcriptionData = await transcriptionResponse.json();
+
+      // Respond with the transcription
+      return interaction.editReply({
+        content: i18n.__("result", {
+          transcription: transcriptionData.text,
+        }),
+      });
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      return interaction.editReply(i18n.__("error"));
+    }
   },
 };

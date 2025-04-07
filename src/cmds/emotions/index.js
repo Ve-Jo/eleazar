@@ -1,12 +1,14 @@
-import { I18nCommandBuilder } from "../../utils/builders/index.js";
+import { SlashCommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("emotions");
-    const command = i18nBuilder.createCommand();
-    return command;
+    const builder = new SlashCommandBuilder()
+      .setName("emotions")
+      .setDescription("Commands for emotions");
+
+    return builder;
   },
-  server: true,
+
   localization_strings: {
     name: {
       en: "emotions",
@@ -14,9 +16,11 @@ export default {
       uk: "емоції",
     },
     description: {
-      en: "Select an emotion type and emotion",
-      ru: "Выберите тип эмоции и саму эмоцию",
-      uk: "Виберіть тип емоції та саму емоцію",
+      en: "Commands for emotions",
+      ru: "Команды для эмоций",
+      uk: "Команди для емоцій",
     },
   },
+
+  server: true,
 };

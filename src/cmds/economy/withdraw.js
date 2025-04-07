@@ -1,41 +1,80 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+  EmbedBuilder,
+  AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "withdraw");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("withdraw")
+      .setDescription("Withdraw money from bank")
+      .addStringOption((option) =>
+        option
+          .setName("amount")
+          .setDescription("Amount to withdraw (or 'all', 'half')")
+          .setRequired(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add amount option
-    const amountOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "amount",
-      description: i18nBuilder.translateOption("amount", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "amount",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(amountOption);
-
-    return subcommand;
+    return builder;
   },
+  localization_strings: {
+    command: {
+      name: {
+        ru: "снять",
+        uk: "зняти",
+      },
+      description: {
+        ru: "Снять деньги со счета",
+        uk: "Зняти гроші з рахунку",
+      },
+    },
+    options: {
+      amount: {
+        name: {
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          ru: "Сумма для снятия (или 'all', 'half')",
+          uk: "Сума для зняття (або 'all', 'half')",
+        },
+      },
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
+    },
+    amountGreaterThanZero: {
+      en: "Amount must be greater than zero",
+      ru: "Сумма должна быть больше нуля",
+      uk: "Сума має бути більшою за нуль",
+    },
+    invalidAmount: {
+      en: "Invalid amount",
+      ru: "Неверная сумма",
+      uk: "Невірна сума",
+    },
+    noBankAccount: {
+      en: "You don't have a bank account",
+      ru: "У вас нет банковского счета",
+      uk: "У вас немає банківського рахунку",
+    },
+    error: {
+      en: "An error occurred while processing your withdrawal",
+      ru: "Произошла ошибка при обработке снятия",
+      uk: "Сталася помилка під час обробки зняття",
+    },
+    title: {
+      en: "Withdraw",
+      ru: "Снять",
+      uk: "Зняти",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
@@ -49,7 +88,7 @@ export default {
 
       if (!userData?.economy?.bankBalance) {
         return interaction.editReply({
-          content: i18n.__("economy.withdraw.noBankAccount"),
+          content: i18n.__("noBankAccount"),
           ephemeral: true,
         });
       }
@@ -69,7 +108,7 @@ export default {
         amountInt = parseFloat(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
-            content: i18n.__("economy.withdraw.invalidAmount"),
+            content: i18n.__("invalidAmount"),
             ephemeral: true,
           });
         }
@@ -81,13 +120,13 @@ export default {
       // Validate amount
       if (preciseCurrentBalance < amountInt) {
         return interaction.editReply({
-          content: i18n.__("economy.withdraw.insufficientFunds"),
+          content: i18n.__("insufficientFunds"),
           ephemeral: true,
         });
       }
       if (amountInt <= 0) {
         return interaction.editReply({
-          content: i18n.__("economy.withdraw.amountGreaterThanZero"),
+          content: i18n.__("amountGreaterThanZero"),
           ephemeral: true,
         });
       }
@@ -176,7 +215,7 @@ export default {
         .setTimestamp()
         .setImage(`attachment://withdraw.png`)
         .setAuthor({
-          name: i18n.__("economy.withdraw.title"),
+          name: i18n.__("title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
@@ -187,65 +226,9 @@ export default {
     } catch (error) {
       console.error("Error in withdraw command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.withdraw.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "withdraw",
-      ru: "снять",
-      uk: "зняти",
-    },
-    description: {
-      en: "Withdraw money from bank",
-      ru: "Снять деньги со счета",
-      uk: "Зняти гроші з рахунку",
-    },
-    options: {
-      amount: {
-        name: {
-          en: "amount",
-          ru: "сумма",
-          uk: "сума",
-        },
-        description: {
-          en: "Amount to withdraw (or 'all', 'half')",
-          ru: "Сумма для снятия (или 'all', 'half')",
-          uk: "Сума для зняття (або 'all', 'half')",
-        },
-      },
-    },
-    insufficientFunds: {
-      en: "Insufficient funds",
-      ru: "Недостаточно средств",
-      uk: "Недостатньо коштів",
-    },
-    amountGreaterThanZero: {
-      en: "Amount must be greater than zero",
-      ru: "Сумма должна быть больше нуля",
-      uk: "Сума має бути більшою за нуль",
-    },
-    invalidAmount: {
-      en: "Invalid amount",
-      ru: "Неверная сумма",
-      uk: "Невірна сума",
-    },
-    noBankAccount: {
-      en: "You don't have a bank account",
-      ru: "У вас нет банковского счета",
-      uk: "У вас немає банківського рахунку",
-    },
-    error: {
-      en: "An error occurred while processing your withdrawal",
-      ru: "Произошла ошибка при обработке снятия",
-      uk: "Сталася помилка під час обробки зняття",
-    },
-    title: {
-      en: "Withdraw",
-      ru: "Снять",
-      uk: "Зняти",
-    },
   },
 };

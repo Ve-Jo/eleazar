@@ -1,15 +1,11 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-  SlashCommandOption,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import {
@@ -19,33 +15,97 @@ import {
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "leaderboard");
-
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-      options: [
-        new SlashCommandOption({
-          name: "category",
-          description: "Category to display",
-          type: 3, // String
-          required: false,
-          choices: [
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("leaderboard")
+      .setDescription("View the leaderboard")
+      .addStringOption((option) =>
+        option
+          .setName("category")
+          .setDescription("Category to display")
+          .setRequired(false)
+          .addChoices(
             { name: "Total Balance", value: "total" },
             { name: "Balance", value: "balance" },
             { name: "Bank Balance", value: "bank" },
-            { name: "Level", value: "level" },
-            { name: "Games", value: "games" },
-            { name: "Season", value: "season" },
-          ],
-        }),
-      ],
-    });
+            { name: "Level", value: "level" }
+            /*{ name: "Games", value: "games" },
+            { name: "Season XP", value: "season" }*/
+          )
+      );
 
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        ru: "лидерборд",
+        uk: "лідерборд",
+      },
+      description: {
+        ru: "Посмотреть таблицу лидеров",
+        uk: "Переглянути таблицю лідерів",
+      },
+    },
+    title: {
+      en: "Server Leaderboard",
+      ru: "Таблица лидеров сервера",
+      uk: "Таблиця лідерів сервера",
+    },
+    selectUser: {
+      en: "Select a user to view details",
+      ru: "Выберите пользователя для просмотра деталей",
+      uk: "Виберіть користувача для перегляду деталей",
+    },
+    selectCategory: {
+      en: "Select category to view",
+      ru: "Выберите категорию для просмотра",
+      uk: "Виберіть категорію для перегляду",
+    },
+    categories: {
+      total: {
+        en: "Total Balance",
+        ru: "Общий баланс",
+        uk: "Загальний баланс",
+      },
+      balance: {
+        en: "Balance",
+        ru: "Баланс",
+        uk: "Баланс",
+      },
+      bank: {
+        en: "Bank Balance",
+        ru: "Банковский баланс",
+        uk: "Банківський баланс",
+      },
+      level: {
+        en: "Level",
+        ru: "Уровень",
+        uk: "Рівень",
+      },
+      /*games: {
+        en: "Games",
+        ru: "Игры",
+        uk: "Ігри",
+      },
+      season: {
+        en: "Season XP",
+        ru: "Сезонный опыт",
+        uk: "Сезонний досвід",
+      },*/
+    },
+    selectedUser: {
+      en: "Selected user at position {{position}}",
+      ru: "Выбран пользователь на позиции {{position}}",
+      uk: "Обрано користувача на позиції {{position}}",
+    },
+    error: {
+      en: "An error occurred while processing your leaderboard request",
+      ru: "Произошла ошибка при обработке запроса таблицы лидеров",
+      uk: "Сталася помилка під час обробки запиту таблиці лідерів",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const { guild } = interaction;
@@ -245,9 +305,8 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(process.env.EMBED_COLOR)
           .setAuthor({
-            name: `${i18n.__("economy.leaderboard.title")} - ${
-              i18n.__("economy.leaderboard.categories." + category) ||
-              "Total Balance"
+            name: `${i18n.__("title")} - ${
+              i18n.__(`categories[${category}]`) || "Total Balance"
             }`,
             iconURL: interaction.user.displayAvatarURL(),
           })
@@ -282,32 +341,32 @@ export default {
         let components = [buttonRow];
 
         if (validUsers.length > 0) {
-          // Create category selector
+          // Create category selector without using getGroup
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
-            .setPlaceholder("Select Category")
+            .setPlaceholder(i18n.__("selectCategory"))
             .addOptions([
               {
-                label: i18n.__("economy.leaderboard.categories.total"),
+                label: i18n.__("categories[total]"),
                 value: "total",
                 default: category === "total",
               },
               {
-                label: i18n.__("economy.leaderboard.categories.balance"),
+                label: i18n.__("categories[balance]"),
                 value: "balance",
                 default: category === "balance",
               },
               {
-                label: i18n.__("economy.leaderboard.categories.bank"),
+                label: i18n.__("categories[bank]"),
                 value: "bank",
                 default: category === "bank",
               },
               {
-                label: i18n.__("economy.leaderboard.categories.level"),
+                label: i18n.__("categories[level]"),
                 value: "level",
                 default: category === "level",
               },
-              {
+              /*{
                 label: i18n.__("economy.leaderboard.categories.games"),
                 value: "games",
                 default: category === "games",
@@ -316,7 +375,7 @@ export default {
                 label: i18n.__("economy.leaderboard.categories.season"),
                 value: "season",
                 default: category === "season",
-              },
+              },*/
             ]);
 
           const categoryRow = new ActionRowBuilder().addComponents(
@@ -328,10 +387,9 @@ export default {
           const selectOptions = validUsers.map((user, index) => ({
             label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
             value: (startIndex + index + 1).toString(),
-            description: `${
-              i18n.__("economy.leaderboard.categories." + category) ||
-              "Total Balance"
-            }: ${user.sortValue}`.slice(0, 50),
+            description: `${i18n.__(`categories.${category}`)}: ${
+              user.sortValue
+            }`.slice(0, 50),
           }));
 
           const selectMenu = new StringSelectMenuBuilder()
@@ -422,78 +480,9 @@ export default {
     } catch (error) {
       console.error("Error in leaderboard command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.leaderboard.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "leaderboard",
-      ru: "лидерборд",
-      uk: "лідерборд",
-    },
-    description: {
-      en: "View server leaderboard",
-      ru: "Посмотреть таблицу лидеров сервера",
-      uk: "Переглянути таблицю лідерів сервера",
-    },
-    title: {
-      en: "Server Leaderboard",
-      ru: "Таблица лидеров сервера",
-      uk: "Таблиця лідерів сервера",
-    },
-    selectUser: {
-      en: "Select a user to view details",
-      ru: "Выберите пользователя для просмотра деталей",
-      uk: "Виберіть користувача для перегляду деталей",
-    },
-    selectCategory: {
-      en: "Select category to view",
-      ru: "Выберите категорию для просмотра",
-      uk: "Виберіть категорію для перегляду",
-    },
-    categories: {
-      total: {
-        en: "Total Balance",
-        ru: "Общий баланс",
-        uk: "Загальний баланс",
-      },
-      balance: {
-        en: "Balance",
-        ru: "Баланс",
-        uk: "Баланс",
-      },
-      bank: {
-        en: "Bank Balance",
-        ru: "Банковский баланс",
-        uk: "Банківський баланс",
-      },
-      level: {
-        en: "Level",
-        ru: "Уровень",
-        uk: "Рівень",
-      },
-      games: {
-        en: "Games",
-        ru: "Игры",
-        uk: "Ігри",
-      },
-      season: {
-        en: "Season XP",
-        ru: "Сезонный опыт",
-        uk: "Сезонний досвід",
-      },
-    },
-    selectedUser: {
-      en: "Selected user at position {{position}}",
-      ru: "Выбран пользователь на позиции {{position}}",
-      uk: "Обрано користувача на позиції {{position}}",
-    },
-    error: {
-      en: "An error occurred while processing your leaderboard request",
-      ru: "Произошла ошибка при обработке запроса таблицы лидеров",
-      uk: "Сталася помилка під час обробки запиту таблиці лідерів",
-    },
   },
 };

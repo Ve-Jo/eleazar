@@ -1,41 +1,85 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+  EmbedBuilder,
+  AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "deposit");
-
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add amount option
-    const amountOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "amount",
-      description: i18nBuilder.translateOption("amount", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "amount",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(amountOption);
-
-    return subcommand;
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("deposit")
+      .setDescription("Deposit money")
+      .addStringOption((option) =>
+        option
+          .setName("amount")
+          .setDescription("Amount to deposit (or 'all', 'half')")
+          .setRequired(true)
+      );
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        ru: "внести",
+        uk: "внести",
+      },
+      description: {
+        ru: "Внести деньги на счет",
+        uk: "Внести гроші на рахунок",
+      },
+    },
+    options: {
+      amount: {
+        name: {
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          ru: "Сумма для внесения (или 'all', 'half')",
+          uk: "Сума для внесення (або 'all', 'half')",
+        },
+      },
+    },
+    title: {
+      en: "Deposit",
+      ru: "Внести",
+      uk: "Внести",
+    },
+    success: {
+      en: "Successfully deposited {{amount}} coins",
+      ru: "Успешно внесено {{amount}} монет",
+      uk: "Успішно внесено {{amount}} монет",
+    },
+    amountGreaterThanZero: {
+      en: "Amount must be greater than 0",
+      ru: "Сумма должна быть больше 0",
+      uk: "Сума повинна бути більшою за 0",
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
+    },
+    invalidAmount: {
+      en: "Invalid amount",
+      ru: "Неверная сумма",
+      uk: "Невірна сума",
+    },
+    noBankAccount: {
+      en: "You don't have a bank account",
+      ru: "У вас нет банковского счета",
+      uk: "У вас немає банківського рахунку",
+    },
+    error: {
+      en: "An error occurred while processing your deposit",
+      ru: "Произошла ошибка при обработке депозита",
+      uk: "Сталася помилка під час обробки депозиту",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
@@ -58,7 +102,7 @@ export default {
         amountInt = parseInt(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
-            content: i18n.__("economy.deposit.invalidAmount"),
+            content: i18n.__("invalidAmount"),
             ephemeral: true,
           });
         }
@@ -75,13 +119,13 @@ export default {
       // Validate amount
       if (!userData.economy || userData.economy.balance < amountInt) {
         return interaction.editReply({
-          content: i18n.__("economy.deposit.insufficientFunds"),
+          content: i18n.__("insufficientFunds"),
           ephemeral: true,
         });
       }
       if (amountInt <= 0) {
         return interaction.editReply({
-          content: i18n.__("economy.deposit.amountGreaterThanZero"),
+          content: i18n.__("amountGreaterThanZero"),
           ephemeral: true,
         });
       }
@@ -182,7 +226,7 @@ export default {
         .setTimestamp()
         .setImage(`attachment://deposit.png`)
         .setAuthor({
-          name: i18n.__("economy.deposit.title"),
+          name: i18n.__("title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
@@ -193,70 +237,9 @@ export default {
     } catch (error) {
       console.error("Error in deposit command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.deposit.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "deposit",
-      ru: "внести",
-      uk: "внести",
-    },
-    title: {
-      en: "Deposit",
-      ru: "Внести",
-      uk: "Внести",
-    },
-    description: {
-      en: "Deposit money",
-      ru: "Положить деньги на счет",
-      uk: "Покласти гроші на рахунок",
-    },
-    options: {
-      amount: {
-        name: {
-          en: "amount",
-          ru: "сумма",
-          uk: "сума",
-        },
-        description: {
-          en: "Amount to deposit (or 'all', 'half')",
-          ru: "Сумма для внесения (или 'all', 'half')",
-          uk: "Сума для внесення (або 'all', 'half')",
-        },
-      },
-    },
-    success: {
-      en: "Successfully deposited {{amount}} coins",
-      ru: "Успешно внесено {{amount}} монет",
-      uk: "Успішно внесено {{amount}} монет",
-    },
-    amountGreaterThanZero: {
-      en: "Amount must be greater than 0",
-      ru: "Сумма должна быть больше 0",
-      uk: "Сума повинна бути більшою за 0",
-    },
-    insufficientFunds: {
-      en: "Insufficient funds",
-      ru: "Недостаточно средств",
-      uk: "Недостатньо коштів",
-    },
-    invalidAmount: {
-      en: "Invalid amount",
-      ru: "Неверная сумма",
-      uk: "Невірна сума",
-    },
-    noBankAccount: {
-      en: "You don't have a bank account",
-      ru: "У вас нет банковского счета",
-      uk: "У вас немає банківського рахунку",
-    },
-    error: {
-      en: "An error occurred while processing your deposit",
-      ru: "Произошла ошибка при обработке депозита",
-      uk: "Сталася помилка під час обробки депозиту",
-    },
   },
 };

@@ -1,132 +1,155 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
+  LocalizedSubcommand,
+  LocalizedOption,
   OptionType,
-  I18nCommandBuilder,
 } from "../../utils/builders/index.js";
 import Database from "../../database/client.js";
 import { PermissionsBitField } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("counting", "setup");
-
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
+    // Create a localized subcommand with category and name
+    const subcommand = new LocalizedSubcommand({
+      category: "counting",
+      name: "setup",
+      localizationStrings: {
+        name: {
+          en: "setup",
+          ru: "установить",
+          uk: "встановити",
+        },
+        description: {
+          en: "Setup counting channel",
+          ru: "Установка канала для счета",
+          uk: "Налаштування каналу для счета",
+        },
+        no_perms: {
+          en: "You don't have permissions to manage channels",
+          ru: "У вас нет прав на управление каналами",
+          uk: "У вас немає прав на керування каналами",
+        },
+        success: {
+          en: "Counting channel setup successfully",
+          ru: "Канал для счета настроен успешно",
+          uk: "Канал для рахунку налаштовано успішно",
+        },
+      },
     });
 
     // Channel option
-    const channelOption = new SlashCommandOption({
-      type: OptionType.CHANNEL,
+    const channelOption = new LocalizedOption({
       name: "channel",
-      description: i18nBuilder.translateOption("channel", "description"),
+      description: "Select channel",
+      type: OptionType.CHANNEL,
       required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("channel", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "channel",
-        "description"
-      ),
+      name_localizations: {
+        ru: "канал",
+        uk: "канал",
+      },
+      description_localizations: {
+        ru: "Выберите канал",
+        uk: "Виберіть канал",
+      },
     });
 
     // Start number option
-    const startNumberOption = new SlashCommandOption({
-      type: OptionType.NUMBER,
+    const startNumberOption = new LocalizedOption({
       name: "start_number",
-      description: i18nBuilder.translateOption("start_number", "description"),
+      description: "Start number from what number counting will start",
+      type: OptionType.NUMBER,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "start_number",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "start_number",
-        "description"
-      ),
+      name_localizations: {
+        ru: "начальное_число",
+        uk: "початкове_число",
+      },
+      description_localizations: {
+        ru: "Начальное число, с которого будет начинаться счет",
+        uk: "Початкове число, з якого почнеться рахунок",
+      },
     });
 
     // Pin on each option
-    const pinOnEachOption = new SlashCommandOption({
-      type: OptionType.NUMBER,
+    const pinOnEachOption = new LocalizedOption({
       name: "pin_on_each",
-      description: i18nBuilder.translateOption("pin_on_each", "description"),
+      description: "Pin message every n number",
+      type: OptionType.NUMBER,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "pin_on_each",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "pin_on_each",
-        "description"
-      ),
+      name_localizations: {
+        ru: "закреплять_на_каждом",
+        uk: "закріплювати_на_кожному",
+      },
+      description_localizations: {
+        ru: "Закреплять сообщение на каждое ? число",
+        uk: "Закріплювати повідомлення на кожне ? число",
+      },
     });
 
     // Pinned role option
-    const pinnedRoleOption = new SlashCommandOption({
-      type: OptionType.ROLE,
+    const pinnedRoleOption = new LocalizedOption({
       name: "pinned_role",
-      description: i18nBuilder.translateOption("pinned_role", "description"),
+      description: "Set role to give for a user when her message is pinned",
+      type: OptionType.ROLE,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "pinned_role",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "pinned_role",
-        "description"
-      ),
+      name_localizations: {
+        ru: "закрепленная_роль",
+        uk: "закріплена_роль",
+      },
+      description_localizations: {
+        ru: "Выдача роли пользователю когда его сообщение закреплено",
+        uk: "Роль яку потрібно дати користувачу, коли його повідомлення закріплено",
+      },
     });
 
     // No unique role option
-    const noUniqueRoleOption = new SlashCommandOption({
-      type: OptionType.BOOLEAN,
+    const noUniqueRoleOption = new LocalizedOption({
       name: "no_unique_role",
-      description: i18nBuilder.translateOption("no_unique_role", "description"),
+      description: "Previous users with this role will not lose it",
+      type: OptionType.BOOLEAN,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "no_unique_role",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "no_unique_role",
-        "description"
-      ),
+      name_localizations: {
+        ru: "не_уникальная_роль",
+        uk: "не_унікальна_роль",
+      },
+      description_localizations: {
+        ru: "Прошлые пользователи не будут терять эту роль",
+        uk: "Прошлі користувачі не будуть втрачати цю роль",
+      },
     });
 
     // Only numbers option
-    const onlyNumbersOption = new SlashCommandOption({
-      type: OptionType.BOOLEAN,
+    const onlyNumbersOption = new LocalizedOption({
       name: "only_numbers",
-      description: i18nBuilder.translateOption("only_numbers", "description"),
+      description:
+        "Only numbers are allowed in this channel (no other text after number)",
+      type: OptionType.BOOLEAN,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "only_numbers",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "only_numbers",
-        "description"
-      ),
+      name_localizations: {
+        ru: "только_числа",
+        uk: "тільки_числа",
+      },
+      description_localizations: {
+        ru: "Только числа в этом канале (нет других текстов после числа)",
+        uk: "Тільки числа в цьому каналі (немає інших текстів після числа)",
+      },
     });
 
     // No same user option
-    const noSameUserOption = new SlashCommandOption({
-      type: OptionType.BOOLEAN,
+    const noSameUserOption = new LocalizedOption({
       name: "no_same_user",
-      description: i18nBuilder.translateOption("no_same_user", "description"),
+      description: "One person cant count twice or more in a row",
+      type: OptionType.BOOLEAN,
       required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "no_same_user",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "no_same_user",
-        "description"
-      ),
+      name_localizations: {
+        ru: "без_повторений",
+        uk: "без_повторень",
+      },
+      description_localizations: {
+        ru: "Один пользователь не может считать два и больше раз подряд",
+        uk: "Один користувач не може рахувати два і більше разів підряд",
+      },
     });
 
+    // Add options to the subcommand
     subcommand.addOption(channelOption);
     subcommand.addOption(startNumberOption);
     subcommand.addOption(pinOnEachOption);
@@ -218,113 +241,5 @@ export default {
       }),
       ephemeral: true,
     });
-  },
-  localization_strings: {
-    name: {
-      en: "setup",
-      ru: "установить",
-      uk: "встановити",
-    },
-    description: {
-      en: "Setup counting channel",
-      ru: "Установка канала для счета",
-      uk: "Налаштування каналу для счета",
-    },
-    options: {
-      channel: {
-        name: {
-          en: "channel",
-          ru: "канал",
-          uk: "канал",
-        },
-        description: {
-          en: "Select channel",
-          ru: "Выберите канал",
-          uk: "Виберіть канал",
-        },
-      },
-      start_number: {
-        name: {
-          en: "start_number",
-          ru: "начальное_число",
-          uk: "початкове_число",
-        },
-        description: {
-          en: "Start number from what number counting will start",
-          ru: "Начальное число, с которого будет начинаться счет",
-          uk: "Початкове число, з якого почнеться рахунок",
-        },
-      },
-      pin_on_each: {
-        name: {
-          en: "pin_on_each",
-          ru: "закреплять_на_каждом",
-          uk: "закріплювати_на_кожному",
-        },
-        description: {
-          en: "Pin message every n number",
-          ru: "Закреплять сообщение на каждое ? число",
-          uk: "Закріплювати повідомлення на кожне ? число",
-        },
-      },
-      pinned_role: {
-        name: {
-          en: "pinned_role",
-          ru: "закрепленная_роль",
-          uk: "закріплена_роль",
-        },
-        description: {
-          en: "Set role to give for a user when her message is pinned",
-          ru: "Выдача роли пользователю когда его сообщение закреплено",
-          uk: "Роль яку потрібно дати користувачу, коли його повідомлення закріплено",
-        },
-      },
-      no_unique_role: {
-        name: {
-          en: "no_unique_role",
-          ru: "не_уникальная_роль",
-          uk: "не_унікальна_роль",
-        },
-        description: {
-          en: "Previous users with this role will not lose it",
-          ru: "Прошлые пользователи не будут терять эту роль",
-          uk: "Прошлі користувачі не будуть втрачати цю роль",
-        },
-      },
-      only_numbers: {
-        name: {
-          en: "only_numbers",
-          ru: "только_числа",
-          uk: "тільки_числа",
-        },
-        description: {
-          en: "Only numbers are allowed in this channel (no other text after number)",
-          ru: "Только числа в этом канале (нет других текстов после числа)",
-          uk: "Тільки числа в цьому каналі (немає інших текстів після числа)",
-        },
-      },
-      no_same_user: {
-        name: {
-          en: "no_same_user",
-          ru: "без_повторений",
-          uk: "без_повторень",
-        },
-        description: {
-          en: "One person cant count twice or more in a row",
-          ru: "Один пользователь не может считать два и больше раз подряд",
-          uk: "Один користувач не може рахувати два і більше разів підряд",
-        },
-      },
-    },
-    no_perms: {
-      en: "You don't have permissions to manage channels",
-      ru: "У вас нет прав на управление каналами",
-      uk: "У вас немає прав на керування каналами",
-    },
-    success: {
-      en: "Counting channel setup successfully",
-      ru: "Канал для счета настроен успешно",
-      uk: "Канал для рахунку налаштовано успішно",
-    },
   },
 };

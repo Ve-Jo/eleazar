@@ -1,9 +1,4 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -31,36 +26,57 @@ const sfwImages = [
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("images", "sfw");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("sfw")
+      .setDescription("Choose a SFW image")
+      .addStringOption((option) =>
+        option
+          .setName("image")
+          .setDescription("Choose an image")
+          .setRequired(true)
+          .addChoices(
+            ...sfwImages.map((key) => ({
+              name: key,
+              value: key,
+            }))
+          )
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add image option
-    const imageOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "image",
-      description: i18nBuilder.translateOption("image", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "image",
-        "description"
-      ),
-      choices: sfwImages.map((key) => ({
-        name: key,
-        value: key,
-      })),
-    });
-
-    subcommand.addOption(imageOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        ru: "sfw",
+        uk: "sfw",
+      },
+      description: {
+        ru: "Выберите безопасное изображение",
+        uk: "Виберіть безпечне зображення",
+      },
+    },
+    options: {
+      image: {
+        name: {
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          ru: "Выберите изображение",
+          uk: "Виберіть зображення",
+        },
+      },
+    },
+    notFound: {
+      en: "Image not found",
+      ru: "Изображение не найдено",
+      uk: "Зображення не знайдено",
+    },
+  },
+
   async execute(interaction, i18n) {
     const image = interaction.options.getString("image");
 
@@ -99,11 +115,9 @@ export default {
         return null;
       }
 
-      const title = i18n.__(`images.sfw.name`);
-
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(typeof title === "string" ? title : `SFW - ${image}`)
+        .setTitle(`SFW - ${image}`)
         .setImage(imageUrl)
         .setFooter({
           text: interaction.user.displayName,
@@ -115,7 +129,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("images.sfw.notFound"),
+        content: i18n.__("notFound"),
         ephemeral: true,
       });
     }
@@ -145,7 +159,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("images.sfw.notFound"),
+            content: i18n.__("notFound"),
             ephemeral: true,
           });
         }
@@ -156,36 +170,5 @@ export default {
       row.components[0].setDisabled(true);
       interaction.editReply({ components: [row] }).catch(console.error);
     });
-  },
-  localization_strings: {
-    name: {
-      en: "sfw",
-      ru: "sfw",
-      uk: "sfw",
-    },
-    description: {
-      en: "Choose a SFW image",
-      ru: "Выберите безопасное изображение",
-      uk: "Виберіть безпечне зображення",
-    },
-    options: {
-      image: {
-        name: {
-          en: "image",
-          ru: "изображение",
-          uk: "зображення",
-        },
-        description: {
-          en: "Choose an image",
-          ru: "Выберите изображение",
-          uk: "Виберіть зображення",
-        },
-      },
-    },
-    notFound: {
-      en: "Image not found",
-      ru: "Изображение не найдено",
-      uk: "Зображення не знайдено",
-    },
   },
 };

@@ -1,8 +1,4 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -10,23 +6,112 @@ import {
   ButtonStyle,
   ComponentType,
   AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import Database, { UPGRADES } from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
+// Import the UpgradesDisplay component to access its localizations
+import UpgradesDisplay from "../../render-server/components/UpgradesDisplay.jsx";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "shop");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("shop")
+      .setDescription("View and purchase upgrades");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        en: "shop",
+        ru: "магазин",
+        uk: "магазин",
+      },
+      description: {
+        en: "View and purchase upgrades",
+        ru: "Просмотреть и купить улучшения",
+        uk: "Переглянути та купити покращення",
+      },
+    },
+    title: {
+      en: "Shop",
+      ru: "Магазин",
+      uk: "Магазин",
+    },
+    selectUpgrade: {
+      en: "Select an upgrade to view",
+      ru: "Выберите улучшение для просмотра",
+      uk: "Виберіть покращення для перегляду",
+    },
+    purchaseButton: {
+      en: "Purchase",
+      ru: "Купить",
+      uk: "Купити",
+    },
+    insufficientFunds: {
+      en: "You don't have enough coins for this upgrade",
+      ru: "У вас недостаточно монет для этого улучшения",
+      uk: "У вас недостатньо монет для цього покращення",
+    },
+    noSelection: {
+      en: "No upgrade selected",
+      ru: "Улучшение не выбрано",
+      uk: "Покращення не вибрано",
+    },
+    purchaseTitle: {
+      en: "Purchase Successful",
+      ru: "Покупка Успешна",
+      uk: "Покупка Успішна",
+    },
+    purchaseSuccess: {
+      en: "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
+      ru: "Успешно улучшено {{type}} до уровня {{level}} за {{cost}} монет",
+      uk: "Успішно покращено {{type}} до рівня {{level}} за {{cost}} монет",
+    },
+    error: {
+      en: "An error occurred while processing your shop request",
+      ru: "Произошла ошибка при обработке запроса магазина",
+      uk: "Сталася помилка під час обробки запиту магазину",
+    },
+    category_economy: {
+      en: "Economy Upgrades",
+      ru: "Улучшения Экономики",
+      uk: "Покращення Економіки",
+    },
+    category_cooldowns: {
+      en: "Cooldown Upgrades",
+      ru: "Улучшения Перезарядки",
+      uk: "Покращення Перезарядки",
+    },
+    revertButton: {
+      en: "Revert",
+      ru: "Отменить",
+      uk: "Відмінити",
+    },
+    revertButtonWithRefund: {
+      en: "Revert (-1 lvl, +{{refund}} coins)",
+      ru: "Отменить (-1 ур., +{{refund}} монет)",
+      uk: "Відмінити (-1 рів., +{{refund}} монет)",
+    },
+    revertSuccess: {
+      en: "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
+      ru: "Успешно отменено улучшение {{type}} до уровня {{level}} и получено {{refund}} монет (85% возврат)",
+      uk: "Успішно відмінено покращення {{type}} до рівня {{level}} і отримано {{refund}} монет (85% повернення)",
+    },
+    revertCooldown: {
+      en: "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
+      ru: "Перезарядка активна. Вы можете отменить другое улучшение через {{minutes}} минут",
+      uk: "Перезарядка активна. Ви можете відмінити інше покращення через {{minutes}} хвилин",
+    },
+    cannotRevert: {
+      en: "Cannot revert a level 1 upgrade",
+      ru: "Невозможно отменить улучшение уровня 1",
+      uk: "Неможливо відмінити покращення рівня 1",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const { guild, user } = interaction;
@@ -35,6 +120,22 @@ export default {
       let currentUpgrade = 0;
       // Define upgradeInfo outside the generateShopMessage function
       let upgradeInfo = {};
+
+      // Get user locale for translations
+      const userLocale = i18n.getUserLocale
+        ? i18n.getUserLocale()
+        : interaction.locale.split("-")[0].toLowerCase();
+
+      // Helper function to get translations from UpgradesDisplay
+      const getUpgradeTranslation = (path, defaultValue) => {
+        const pathParts = path.split(".");
+        let result = UpgradesDisplay.localization_strings;
+        for (const part of pathParts) {
+          if (!result[part]) return defaultValue;
+          result = result[part];
+        }
+        return result[userLocale] || result.en || defaultValue;
+      };
 
       const generateShopMessage = async () => {
         // Get user data with all relations
@@ -157,19 +258,34 @@ export default {
                   100
                 );
 
+                // Get upgrade name and description from UpgradesDisplay
+                const upgradeName = getUpgradeTranslation(
+                  `upgrades.${key}.name`,
+                  key
+                );
+                const upgradeDescription = getUpgradeTranslation(
+                  `upgrades.${key}.description`,
+                  ""
+                );
+
+                // Format description with variables if needed
+                const formattedDescription = upgradeDescription
+                  .replace(/\{\{effect\}\}/g, Math.round(effectValue))
+                  .replace(
+                    /\{\{increasePerLevel\}\}/g,
+                    Math.round(effectPerLevel)
+                  )
+                  .replace(
+                    /\{\{increasePerLevelMinutes\}\}/g,
+                    Math.round(effectPerLevel)
+                  )
+                  .replace(/\{\{price\}\}/g, Math.round(upgrade.price));
+
                 // Create upgrade object with discount information if applicable
                 const upgradeObj = {
                   emoji: UPGRADES[key].emoji,
-                  title: i18n.__(`economy.shop.upgrades.${key}.name`),
-                  description: i18n.__(
-                    `economy.shop.upgrades.${key}.description`,
-                    {
-                      effect: Math.round(effectValue),
-                      price: Math.round(upgrade.price),
-                      increasePerLevel: Math.round(effectPerLevel),
-                      increasePerLevelMinutes: Math.round(effectPerLevel),
-                    }
-                  ),
+                  title: upgradeName,
+                  description: formattedDescription,
                   currentLevel: currentLevel,
                   nextLevel: currentLevel + 1,
                   price: Math.round(upgrade.price),
@@ -206,7 +322,7 @@ export default {
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
-          .setPlaceholder(i18n.__("economy.shop.selectUpgrade"))
+          .setPlaceholder(i18n.__("selectUpgrade"))
           .addOptions(
             Object.entries(upgradeInfo).map(([key, upgrade], index) => {
               let effectPerLevel, effectValue;
@@ -231,18 +347,33 @@ export default {
                 effectValue = upgrade.effect * 100;
               }
 
+              // Get upgrade name and description from UpgradesDisplay
+              const upgradeName = getUpgradeTranslation(
+                `upgrades.${key}.name`,
+                key
+              );
+              const upgradeDescription = getUpgradeTranslation(
+                `upgrades.${key}.description`,
+                ""
+              );
+
+              // Format description with variables if needed
+              const formattedDescription = upgradeDescription
+                .replace(/\{\{effect\}\}/g, Math.round(effectValue))
+                .replace(
+                  /\{\{increasePerLevel\}\}/g,
+                  Math.round(effectPerLevel)
+                )
+                .replace(
+                  /\{\{increasePerLevelMinutes\}\}/g,
+                  Math.round(effectPerLevel)
+                )
+                .replace(/\{\{price\}\}/g, Math.round(upgrade.price));
+
               // Create option object
               const option = {
-                label: i18n.__(`economy.shop.upgrades.${key}.name`),
-                description: i18n.__(
-                  `economy.shop.upgrades.${key}.description`,
-                  {
-                    effect: Math.round(effectValue),
-                    price: Math.round(upgrade.price),
-                    increasePerLevel: Math.round(effectPerLevel),
-                    increasePerLevelMinutes: Math.round(effectPerLevel),
-                  }
-                ),
+                label: upgradeName,
+                description: formattedDescription,
                 value: index.toString(),
                 emoji: UPGRADES[key].emoji,
                 default: currentUpgrade === index,
@@ -259,7 +390,7 @@ export default {
 
         const openButton = new ButtonBuilder()
           .setCustomId("purchase")
-          .setLabel(i18n.__("economy.shop.purchaseButton"))
+          .setLabel(i18n.__("purchaseButton"))
           .setStyle(ButtonStyle.Success);
 
         // Add revert button
@@ -276,9 +407,7 @@ export default {
 
         if (currentLevel <= 1) {
           // Disable the button for level 1 upgrades
-          revertButton
-            .setLabel(i18n.__("economy.shop.revertButton"))
-            .setDisabled(true);
+          revertButton.setLabel(i18n.__("revertButton")).setDisabled(true);
         } else {
           // Calculate refund amount for display (85% of current level price)
           const currentUpgradeInfo = await Database.getUpgradeInfo(
@@ -292,9 +421,9 @@ export default {
           // Set the button label with refund amount
           revertButton
             .setLabel(
-              i18n.__("economy.shop.revertButtonWithRefund", {
+              i18n.__("revertButtonWithRefund", {
                 refund: refundAmount || 0,
-              }) || i18n.__("economy.shop.revertButton") // Fallback to simple "Revert" text
+              }) || i18n.__("revertButton") // Fallback to simple "Revert" text
             )
             .setDisabled(false);
         }
@@ -308,11 +437,11 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
           .setAuthor({
-            name: i18n.__("economy.shop.title"),
+            name: i18n.__("title"),
             iconURL: user.displayAvatarURL(),
           })
           .setDescription(
-            i18n.__("economy.shop.description", {
+            i18n.__("description", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
@@ -355,7 +484,7 @@ export default {
           } catch (error) {
             if (error.message === "Insufficient balance") {
               await i.reply({
-                content: i18n.__("economy.shop.insufficientFunds"),
+                content: i18n.__("insufficientFunds"),
                 ephemeral: true,
               });
             } else {
@@ -375,10 +504,16 @@ export default {
               type
             );
 
+            // Get the upgrade name from UpgradesDisplay for the success message
+            const upgradeName = getUpgradeTranslation(
+              `upgrades.${type}.name`,
+              type
+            );
+
             // Show success message
             await i.followUp({
-              content: i18n.__("economy.shop.revertSuccess", {
-                type: i18n.__(`economy.shop.upgrades.${type}.name`),
+              content: i18n.__("revertSuccess", {
+                type: upgradeName,
                 level: revertResult.newLevel,
                 refund: revertResult.refundAmount,
               }),
@@ -393,14 +528,14 @@ export default {
               const minutesLeft = Math.ceil(cooldownTime / (1000 * 60));
 
               await i.reply({
-                content: i18n.__("economy.shop.revertCooldown", {
+                content: i18n.__("revertCooldown", {
                   minutes: minutesLeft,
                 }),
                 ephemeral: true,
               });
             } else if (error.message === "Cannot revert a level 1 upgrade") {
               await i.reply({
-                content: i18n.__("economy.shop.cannotRevert"),
+                content: i18n.__("cannotRevert"),
                 ephemeral: true,
               });
             } else {
@@ -418,158 +553,9 @@ export default {
     } catch (error) {
       console.error("Error in shop command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.shop.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "shop",
-      ru: "магазин",
-      uk: "магазин",
-    },
-    description: {
-      en: "View and purchase upgrades",
-      ru: "Просмотреть и купить улучшения",
-      uk: "Переглянути та купити покращення",
-    },
-    title: {
-      en: "Shop",
-      ru: "Магазин",
-      uk: "Магазин",
-    },
-    selectUpgrade: {
-      en: "Select an upgrade to view",
-      ru: "Выберите улучшение для просмотра",
-      uk: "Виберіть покращення для перегляду",
-    },
-    purchaseButton: {
-      en: "Purchase",
-      ru: "Купить",
-      uk: "Купити",
-    },
-    insufficientFunds: {
-      en: "You don't have enough coins for this upgrade",
-      ru: "У вас недостаточно монет для этого улучшения",
-      uk: "У вас недостатньо монет для цього покращення",
-    },
-    noSelection: {
-      en: "No upgrade selected",
-      ru: "Улучшение не выбрано",
-      uk: "Покращення не вибрано",
-    },
-    purchaseTitle: {
-      en: "Purchase Successful",
-      ru: "Покупка Успешна",
-      uk: "Покупка Успішна",
-    },
-    purchaseSuccess: {
-      en: "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
-      ru: "Успешно улучшено {{type}} до уровня {{level}} за {{cost}} монет",
-      uk: "Успішно покращено {{type}} до рівня {{level}} за {{cost}} монет",
-    },
-    error: {
-      en: "An error occurred while processing your shop request",
-      ru: "Произошла ошибка при обработке запроса магазина",
-      uk: "Сталася помилка під час обробки запиту магазину",
-    },
-    category_economy: {
-      en: "Economy Upgrades",
-      ru: "Улучшения Экономики",
-      uk: "Покращення Економіки",
-    },
-    category_cooldowns: {
-      en: "Cooldown Upgrades",
-      ru: "Улучшения Перезарядки",
-      uk: "Покращення Перезарядки",
-    },
-    upgrades: {
-      daily_bonus: {
-        name: {
-          en: "Daily Bonus",
-          ru: "Ежедн. Бонус",
-          uk: "Щоденний Бонус",
-        },
-        description: {
-          en: "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)",
-        },
-      },
-      daily_cooldown: {
-        name: {
-          en: "Daily Cooldown",
-          ru: "Перезарядка Ежедн.",
-          uk: "Перезарядка Щоденного",
-        },
-        description: {
-          en: "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
-          ru: "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
-          uk: "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
-        },
-      },
-      crime: {
-        name: {
-          en: "Crime Cooldown",
-          ru: "Преступления",
-          uk: "Крадіжка",
-        },
-        description: {
-          en: "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
-          ru: "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
-          uk: "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
-        },
-      },
-      bank_rate: {
-        name: {
-          en: "Bank Interest",
-          ru: "Банк. Процент",
-          uk: "Банк. Відсоток",
-        },
-        description: {
-          en: "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)",
-        },
-      },
-      games_earning: {
-        name: {
-          en: "Games Earnings",
-          ru: "Доход от Игр",
-          uk: "Дохід від Ігор",
-        },
-        description: {
-          en: "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
-        },
-      },
-    },
-    revertButton: {
-      en: "Revert",
-      ru: "Отменить",
-      uk: "Відмінити",
-    },
-    revertButtonWithRefund: {
-      en: "Revert (-1 lvl, +{{refund}} coins)",
-      ru: "Отменить (-1 ур., +{{refund}} монет)",
-      uk: "Відмінити (-1 рів., +{{refund}} монет)",
-    },
-    revertSuccess: {
-      en: "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
-      ru: "Успешно отменено улучшение {{type}} до уровня {{level}} и получено {{refund}} монет (85% возврат)",
-      uk: "Успішно відмінено покращення {{type}} до рівня {{level}} і отримано {{refund}} монет (85% повернення)",
-    },
-    revertCooldown: {
-      en: "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
-      ru: "Перезарядка активна. Вы можете отменить другое улучшение через {{minutes}} минут",
-      uk: "Перезарядка активна. Ви можете відмінити інше покращення через {{minutes}} хвилин",
-    },
-    cannotRevert: {
-      en: "Cannot revert a level 1 upgrade",
-      ru: "Невозможно отменить улучшение уровня 1",
-      uk: "Неможливо відмінити покращення рівня 1",
-    },
   },
 };

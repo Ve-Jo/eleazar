@@ -1,41 +1,65 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "balance");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("balance")
+      .setDescription("Check balance")
+      .addUserOption((option) =>
+        option
+          .setName("user")
+          .setDescription("User to check")
+          .setRequired(false)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add user option
-    const userOption = new SlashCommandOption({
-      type: OptionType.USER,
-      name: "user",
-      description: i18nBuilder.translateOption("user", "description"),
-      required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "user",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(userOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        ru: "баланс",
+        uk: "рахунок",
+      },
+      description: {
+        ru: "Посмотреть баланс",
+        uk: "Переглянути баланс",
+      },
+    },
+    options: {
+      user: {
+        name: {
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          ru: "Пользователь для проверки",
+          uk: "Користувач для перевірки",
+        },
+      },
+    },
+    title: {
+      en: "Balance",
+      ru: "Баланс",
+      uk: "Баланс",
+    },
+    userNotFound: {
+      en: "User not found",
+      ru: "Пользователь не найден",
+      uk: "Користувач не знайдений",
+    },
+    imageError: {
+      en: "Error generating balance image",
+      ru: "Ошибка при создании изображения баланса",
+      uk: "Помилка при створенні зображення балансу",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.member;
@@ -48,7 +72,7 @@ export default {
 
     if (!userData) {
       return interaction.editReply({
-        content: i18n.__("economy.balance.userNotFound"),
+        content: i18n.__("userNotFound"),
         ephemeral: true,
       });
     }
@@ -90,17 +114,13 @@ export default {
       { image: 2, emoji: 1 }
     );
 
-    console.log(buffer);
-
     if (!buffer) {
       console.error("Buffer is undefined or null");
       return interaction.editReply({
-        content: i18n.__("economy.balance.imageError"),
+        content: i18n.__("imageError"),
         ephemeral: true,
       });
     }
-
-    console.log(`Buffer type: ${typeof buffer}, size: ${buffer.length}`);
 
     const attachment = new AttachmentBuilder(buffer, {
       name: `balance.png`,
@@ -111,7 +131,7 @@ export default {
       .setColor(dominantColor?.embedColor ?? 0x0099ff) // Default color if dominantColor is undefined
       .setImage(`attachment://balance.png`)
       .setAuthor({
-        name: i18n.__("economy.balance.title"),
+        name: i18n.__("title"),
         iconURL: user.avatarURL(),
       });
 
@@ -119,41 +139,5 @@ export default {
       embeds: [balance_embed],
       files: [attachment],
     });
-  },
-  localization_strings: {
-    name: {
-      en: "balance",
-      ru: "баланс",
-      uk: "рахунок",
-    },
-    title: {
-      en: "Balance",
-      ru: "Баланс",
-      uk: "Баланс",
-    },
-    description: {
-      en: "Check balance",
-      ru: "Посмотреть баланс",
-      uk: "Переглянути баланс",
-    },
-    userNotFound: {
-      en: "User not found",
-      ru: "Пользователь не найден",
-      uk: "Користувач не знайдений",
-    },
-    options: {
-      user: {
-        name: {
-          en: "user",
-          ru: "пользователь",
-          uk: "користувач",
-        },
-        description: {
-          en: "User to check",
-          ru: "Пользователь для проверки",
-          uk: "Користувач для перевірки",
-        },
-      },
-    },
   },
 };

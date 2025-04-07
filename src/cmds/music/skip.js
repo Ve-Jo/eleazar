@@ -1,21 +1,51 @@
-import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "skip");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("skip")
+      .setDescription("Skip the current song");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "skip",
+        ru: "пропустить",
+        uk: "пропустити",
+      },
+      description: {
+        en: "Skip the current song",
+        ru: "Пропустить текущую песню",
+        uk: "Пропустити поточну пісню",
+      },
+    },
+    skippedSong: {
+      en: "Skipped the current song",
+      ru: "Пропущена текущая песня",
+      uk: "Пропущена поточна пісня",
+    },
+    skippingSongError: {
+      en: "Failed to skip the current song",
+      ru: "Не удалось пропустить текущую песню",
+      uk: "Не вдалося пропустити поточну пісню",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
@@ -24,13 +54,13 @@ export default {
 
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("music.noMusicPlaying"),
+        content: i18n.__("noMusicPlaying"),
         ephemeral: true,
       });
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: i18n.__("notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -43,40 +73,18 @@ export default {
       if (autoplay) {
         await player.seek(player.queue.current.info.duration);
         return interaction.editReply({
-          content: i18n.__("music.skip.skippedSong"),
+          content: i18n.__("skippedSong"),
           ephemeral: true,
         });
       }
       return interaction.editReply({
-        content: i18n.__("music.skip.skippingSongError"),
+        content: i18n.__("skippingSongError"),
         ephemeral: true,
       });
     }
     await interaction.editReply({
-      content: i18n.__("music.skip.skippedSong"),
+      content: i18n.__("skippedSong"),
       ephemeral: true,
     });
-  },
-  localization_strings: {
-    name: {
-      en: "skip",
-      ru: "пропустить",
-      uk: "пропустити",
-    },
-    description: {
-      en: "Skip the current song",
-      ru: "Пропустить текущую песню",
-      uk: "Пропустити поточну пісню",
-    },
-    skippedSong: {
-      en: "Skipped the current song",
-      ru: "Пропущена текущая песня",
-      uk: "Пропущена поточна пісня",
-    },
-    skippingSongError: {
-      en: "Failed to skip the current song",
-      ru: "Не удалось пропустить текущую песню",
-      uk: "Не вдалося пропустити поточну пісню",
-    },
   },
 };

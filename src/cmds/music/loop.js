@@ -1,44 +1,69 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import i18n from "../../utils/i18n.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "loop");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("loop")
+      .setDescription("Loop the current song/queue")
+      .addStringOption((option) =>
+        option
+          .setName("type")
+          .setDescription("The type of loop to set")
+          .setRequired(true)
+          .addChoices(
+            { name: "Track", value: "track" },
+            { name: "Queue", value: "queue" },
+            { name: "Off", value: "off" }
+          )
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add type option
-    const typeOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "type",
-      description: i18nBuilder.translateOption("type", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("type", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "type",
-        "description"
-      ),
-      choices: [
-        { name: "Track", value: "track" },
-        { name: "Queue", value: "queue" },
-        { name: "Off", value: "off" },
-      ],
-    });
-
-    subcommand.addOption(typeOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "loop",
+        ru: "повтор",
+        uk: "повтор",
+      },
+      description: {
+        en: "Loop the current song/queue",
+        ru: "Повторить текущую песню/очередь",
+        uk: "Зациклити пісню/чергу",
+      },
+    },
+    options: {
+      type: {
+        name: {
+          ru: "тип",
+          uk: "тип",
+        },
+        description: {
+          ru: "Тип повтора",
+          uk: "Тип повтору",
+        },
+      },
+    },
+    loopApplied: {
+      en: "Loop type has been set to {{type}}",
+      ru: "Тип повтора был установлен на {{type}}",
+      uk: "Тип повтору був встановлений на {{type}}",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
   async execute(interaction) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
@@ -46,11 +71,11 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("music.noMusicPlaying"));
+      return interaction.editReply(i18n.__("noMusicPlaying"));
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: i18n.__("notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -58,39 +83,6 @@ export default {
 
     const loopType = interaction.options.getString("type");
     await player.setRepeatMode(loopType);
-    await interaction.editReply(
-      i18n.__("music.loop.loopApplied", { type: loopType })
-    );
-  },
-  localization_strings: {
-    name: {
-      en: "loop",
-      ru: "повтор",
-      uk: "повтор",
-    },
-    description: {
-      en: "Loop the current song/queue",
-      ru: "Повторить текущую песню/очередь",
-      uk: "Зациклити пісню/чергу",
-    },
-    loopApplied: {
-      en: "Loop type has been set to {{type}}",
-      ru: "Тип повтора был установлен на {{type}}",
-      uk: "Тип повтору був встановлений на {{type}}",
-    },
-    options: {
-      type: {
-        name: {
-          en: "type",
-          ru: "тип",
-          uk: "тип",
-        },
-        description: {
-          en: "The type of loop to set",
-          ru: "Тип повтора",
-          uk: "Тип повтору",
-        },
-      },
-    },
+    await interaction.editReply(i18n.__("loopApplied", { type: loopType }));
   },
 };

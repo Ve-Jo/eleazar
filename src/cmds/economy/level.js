@@ -1,42 +1,71 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   AttachmentBuilder,
-  ApplicationCommandOptionType,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "level");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("level")
+      .setDescription("Check your or another user's level")
+      .addUserOption((option) =>
+        option
+          .setName("user")
+          .setDescription("User to check level for")
+          .setRequired(false)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-      options: [
-        {
-          type: ApplicationCommandOptionType.User,
-          name: i18nBuilder.getSimpleName(
-            i18nBuilder.translate("options.user.name")
-          ),
-          description: i18nBuilder.translate("options.user.description"),
-          name_localizations: i18nBuilder.getLocalizations("options.user.name"),
-          description_localizations: i18nBuilder.getLocalizations(
-            "options.user.description"
-          ),
-          required: false,
-        },
-      ],
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        ru: "уровень",
+        uk: "рівень",
+      },
+      description: {
+        ru: "Проверить свой уровень или уровень другого пользователя",
+        uk: "Перевірити свій рівень або рівень іншого користувача",
+      },
+    },
+    options: {
+      user: {
+        name: {
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          ru: "Пользователь, чей уровень нужно проверить",
+          uk: "Користувач, чий рівень потрібно перевірити",
+        },
+      },
+    },
+    userNotFound: {
+      en: "User not found",
+      ru: "Пользователь не найден",
+      uk: "Користувач не знайдений",
+    },
+    error: {
+      en: "An error occurred while processing your level request",
+      ru: "Произошла ошибка при обработке запроса уровня",
+      uk: "Сталася помилка під час обробки запиту рівня",
+    },
+    voiceTime: {
+      en: "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
+      ru: "Сейчас в голосовом: {{hours}}ч {{minutes}}м | Заработано: {{xp}} XP ({{rate}} XP/мин)",
+      uk: "Зараз в голосовому: {{hours}}г {{minutes}}х | Зароблено: {{xp}} XP ({{rate}} XP/хв)",
+    },
+    title: {
+      en: "Level",
+      ru: "Уровень",
+      uk: "Рівень",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
 
@@ -69,7 +98,7 @@ export default {
 
       if (!levelData) {
         return interaction.editReply({
-          content: i18n.__("economy.level.userNotFound"),
+          content: i18n.__("userNotFound"),
           ephemeral: true,
         });
       }
@@ -85,7 +114,7 @@ export default {
 
         const hours = Math.floor(minutes / 60);
         const remainingMinutes = Math.floor(minutes % 60);
-        voiceTimeString = i18n.__("economy.level.voiceTime", {
+        voiceTimeString = i18n.__("voiceTime", {
           hours,
           minutes: remainingMinutes,
           xp: currentVoiceXP,
@@ -155,7 +184,7 @@ export default {
       const embed = new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
         .setAuthor({
-          name: i18n.__("economy.level.title"),
+          name: i18n.__("title"),
           iconURL: targetUser.displayAvatarURL(),
         })
         .setImage(
@@ -180,51 +209,10 @@ export default {
     } catch (error) {
       console.error("Error in level command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.level.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "level",
-      ru: "уровень",
-      uk: "рівень",
-    },
-    description: {
-      en: "Check your or another user's level",
-      ru: "Проверить свой уровень или уровень другого пользователя",
-      uk: "Перевірити свій рівень або рівень іншого користувача",
-    },
-    options: {
-      user: {
-        name: {
-          en: "user",
-          ru: "пользователь",
-          uk: "користувач",
-        },
-        description: {
-          en: "User to check level for",
-          ru: "Пользователь, чей уровень нужно проверить",
-          uk: "Користувач, чий рівень потрібно перевірити",
-        },
-      },
-    },
-    userNotFound: {
-      en: "User not found",
-      ru: "Пользователь не найден",
-      uk: "Користувач не знайдений",
-    },
-    error: {
-      en: "An error occurred while processing your level request",
-      ru: "Произошла ошибка при обработке запроса уровня",
-      uk: "Сталася помилка під час обробки запиту рівня",
-    },
-    voiceTime: {
-      en: "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
-      ru: "Сейчас в голосовом: {{hours}}ч {{minutes}}м | Заработано: {{xp}} XP ({{rate}} XP/мин)",
-      uk: "Зараз в голосовому: {{hours}}г {{minutes}}х | Зароблено: {{xp}} XP ({{rate}} XP/хв)",
-    },
   },
 };
 

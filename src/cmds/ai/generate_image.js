@@ -1,118 +1,155 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { AttachmentBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { Client } from "@gradio/client";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("ai", "generate_image");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("generate_image")
+      .setDescription("Generate beautiful image by prompt")
+      .addStringOption((option) =>
+        option
+          .setName("prompt")
+          .setDescription("Enter your prompt")
+          .setRequired(true)
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("width")
+          .setDescription("Choose width")
+          .setRequired(true)
+          .setMinValue(256)
+          .setMaxValue(2048)
+          .addChoices(
+            { name: "256", value: 256 },
+            { name: "512", value: 512 },
+            { name: "768", value: 768 },
+            { name: "1024", value: 1024 }
+          )
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("height")
+          .setDescription("Choose height")
+          .setRequired(true)
+          .setMinValue(256)
+          .setMaxValue(2048)
+          .addChoices(
+            { name: "256", value: 256 },
+            { name: "512", value: 512 },
+            { name: "768", value: 768 },
+            { name: "1024", value: 1024 }
+          )
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("interference_steps")
+          .setDescription(
+            "Number of inference steps (higher = better quality but slower)"
+          )
+          .setRequired(false)
+          .setMinValue(2)
+          .setMaxValue(5)
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("seed")
+          .setDescription("Random seed for generation (0 for random)")
+          .setRequired(false)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add prompt option
-    const promptOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "prompt",
-      description: i18nBuilder.translateOption("prompt", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("prompt", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "prompt",
-        "description"
-      ),
-    });
-
-    // Add width option
-    const widthOption = new SlashCommandOption({
-      type: OptionType.INTEGER,
-      name: "width",
-      description: i18nBuilder.translateOption("width", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("width", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "width",
-        "description"
-      ),
-      min_value: 256,
-      max_value: 2048,
-      choices: [
-        { name: "256", value: 256 },
-        { name: "512", value: 512 },
-        { name: "768", value: 768 },
-        { name: "1024", value: 1024 },
-      ],
-    });
-
-    // Add height option
-    const heightOption = new SlashCommandOption({
-      type: OptionType.INTEGER,
-      name: "height",
-      description: i18nBuilder.translateOption("height", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("height", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "height",
-        "description"
-      ),
-      min_value: 256,
-      max_value: 2048,
-      choices: [
-        { name: "256", value: 256 },
-        { name: "512", value: 512 },
-        { name: "768", value: 768 },
-        { name: "1024", value: 1024 },
-      ],
-    });
-
-    const interferenceSteps = new SlashCommandOption({
-      type: OptionType.INTEGER,
-      name: "interference_steps",
-      description: i18nBuilder.translateOption(
-        "interference_steps",
-        "description"
-      ),
-      required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "interference_steps",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "interference_steps",
-        "description"
-      ),
-      min_value: 2,
-      max_value: 5,
-    });
-
-    const seedOption = new SlashCommandOption({
-      type: OptionType.INTEGER,
-      name: "seed",
-      description: i18nBuilder.translateOption("seed", "description"),
-      required: false,
-      name_localizations: i18nBuilder.getOptionLocalizations("seed", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "seed",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(promptOption);
-    subcommand.addOption(widthOption);
-    subcommand.addOption(heightOption);
-    subcommand.addOption(interferenceSteps);
-    subcommand.addOption(seedOption);
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "generate",
+        ru: "генерировать",
+        uk: "генерувати",
+      },
+      description: {
+        en: "Generate beautiful image by prompt",
+        ru: "Генерация красивого изображения по запросу",
+        uk: "Генерація красивого зображення за запитом",
+      },
+    },
+    options: {
+      prompt: {
+        name: {
+          ru: "промпт",
+          uk: "запит",
+        },
+        description: {
+          ru: "Введите ваш запрос",
+          uk: "Введіть ваш запит",
+        },
+      },
+      width: {
+        name: {
+          ru: "ширина",
+          uk: "ширина",
+        },
+        description: {
+          ru: "Выберите ширину",
+          uk: "Виберіть ширину",
+        },
+      },
+      height: {
+        name: {
+          ru: "высота",
+          uk: "висота",
+        },
+        description: {
+          ru: "Выберите высоту",
+          uk: "Виберіть висоту",
+        },
+      },
+      interference_steps: {
+        name: {
+          ru: "шаги_вывода",
+          uk: "кроки_виводу",
+        },
+        description: {
+          ru: "Количество шагов вывода (больше = лучше качество, но медленнее)",
+          uk: "Кількість кроків виводу (більше = краща якість, але повільніше)",
+        },
+      },
+      seed: {
+        name: {
+          ru: "сид",
+          uk: "сід",
+        },
+        description: {
+          ru: "Сид для генерации (0 для случайного)",
+          uk: "Сід для генерації (0 для випадкового)",
+        },
+      },
+    },
+    generated: {
+      en: "Generated image with prompt: {{prompt}}\nSeed: {{seed}}\nSteps: {{steps}}",
+      ru: "Сгенерированное изображение с запросом: {{prompt}}\nСид: {{seed}}\nШагов: {{steps}}",
+      uk: "Згенероване зображення із запитом: {{prompt}}\nСід: {{seed}}\nКроків: {{steps}}",
+    },
+    failed: {
+      en: "Failed to generate the image. Please try again.",
+      ru: "Не удалось сгенерировать изображение. Пожалуйста, попробуйте еще раз.",
+      uk: "Не вдалося згенерувати зображення. Будь ласка, спробуйте ще раз.",
+    },
+    error: {
+      en: "An error occurred while generating the image. Please try again later.",
+      ru: "Произошла ошибка при генерации изображения. Пожалуйста, попробуйте еще раз позже.",
+      uk: "Виникла помилка при генерації зображення. Будь ласка, спробуйте ще раз пізніше.",
+    },
+    gradio_error: {
+      en: "There was an error with the image generation service. Please try again later.",
+      ru: "Произошла ошибка с сервисом генерации изображений. Пожалуйста, попробуйте позже.",
+      uk: "Виникла помилка з сервісом генерації зображень. Будь ласка, спробуйте пізніше.",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
 
@@ -151,7 +188,7 @@ export default {
           ).setName("generated_image.png");
 
           await interaction.editReply({
-            content: i18n.__("ai.generate_image.generated", {
+            content: i18n.__("generated", {
               prompt,
               seed: output.data[1] || "random", // Use the seed from output data
               steps: interferenceSteps,
@@ -163,137 +200,15 @@ export default {
         throw new Error("No image in response");
       } catch (gradioError) {
         console.error("Gradio client error:", gradioError);
-        // Fallback to DeepInfra
-        const output = await interaction.client.deepinfra.flux_schnell.generate(
-          {
-            prompt,
-            width,
-            height,
-            num_inference_steps: interferenceSteps,
-            seed,
-          }
-        );
-
-        console.log("DeepInfra output:");
-
-        if (output && output.images && output.images.length > 0) {
-          const imageUrl = output.images[0];
-
-          const response = await fetch(imageUrl);
-          if (!response.ok)
-            throw new Error(`Failed to fetch image: ${response.statusText}`);
-          const imageBuffer = await response.arrayBuffer();
-
-          const attachment = new AttachmentBuilder(
-            Buffer.from(imageBuffer)
-          ).setName("generated_image.png");
-
-          await interaction.editReply({
-            content: i18n.__("ai.generate_image.generated", {
-              prompt,
-              seed: seed || "random",
-              steps: interferenceSteps,
-            }),
-            files: [attachment],
-          });
-        } else {
-          await interaction.editReply(i18n.__("ai.generate_image.failed"));
-        }
+        return interaction.editReply({
+          content: i18n.__("gradio_error"),
+        });
       }
     } catch (error) {
       console.error("Error generating image:", error);
       await interaction.editReply({
-        content: i18n.__("ai.generate_image.error"),
+        content: i18n.__("error"),
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "generate",
-      ru: "генерировать",
-      uk: "генерувати",
-    },
-    description: {
-      en: "Generate beautiful image by prompt",
-      ru: "Генерация красивого изображения по запросу",
-      uk: "Генерація красивого зображення за запитом",
-    },
-    options: {
-      prompt: {
-        name: {
-          en: "prompt",
-          ru: "промпт",
-          uk: "запит",
-        },
-        description: {
-          en: "Enter your prompt",
-          ru: "Введите ваш запрос",
-          uk: "Введіть ваш запит",
-        },
-      },
-      width: {
-        name: {
-          en: "width",
-          ru: "ширина",
-          uk: "ширина",
-        },
-        description: {
-          en: "Choose width",
-          ru: "Выберите ширину",
-          uk: "Виберіть ширину",
-        },
-      },
-      height: {
-        name: {
-          en: "height",
-          ru: "высота",
-          uk: "висота",
-        },
-        description: {
-          en: "Choose height",
-          ru: "Выберите высоту",
-          uk: "Виберіть висоту",
-        },
-      },
-      interference_steps: {
-        name: {
-          en: "interference_steps",
-          ru: "шаги_генерации",
-          uk: "кроки_генерації",
-        },
-        description: {
-          en: "Choose number of steps for generation",
-          ru: "Выберите количество шагов для генерации",
-          uk: "Виберіть кількість кроків для генерації",
-        },
-      },
-      seed: {
-        name: {
-          en: "seed",
-          ru: "сид",
-          uk: "сид",
-        },
-        description: {
-          en: "Choose seed",
-          ru: "Выберите сид",
-          uk: "Виберіть сид",
-        },
-      },
-    },
-    generated: {
-      en: 'Generated image for prompt: "{{prompt}}"\nSeed: {{seed}} | Steps: {{steps}}',
-      ru: 'Сгенерировано изображение для запроса: "{{prompt}}"\nСид: {{seed}} | Шаги: {{steps}}',
-      uk: 'Згенеровано зображення для запиту: "{{prompt}}"\nСид: {{seed}} | Кроків: {{steps}}',
-    },
-    failed: {
-      en: "Failed to generate the image. Please try again.",
-      ru: "Не удалось сгенерировать изображение. Пожалуйста, попробуйте еще раз.",
-      uk: "Не вдалося згенерувати зображення. Будь ласка, спробуйте ще раз.",
-    },
-    error: {
-      en: "An error occurred while generating the image. Please try again later.",
-      ru: "Произошла ошибка при генерации изображения. Пожалуйста, попробуйте еще раз позже.",
-      uk: "Виникла помилка при генерації зображення. Будь ласка, спробуйте ще раз пізніше.",
-    },
   },
 };

@@ -1,21 +1,46 @@
-import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "stop");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("stop")
+      .setDescription("Stop the music");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "stop",
+        ru: "остановить",
+        uk: "зупинити",
+      },
+      description: {
+        en: "Stop the music",
+        ru: "Остановить музыку",
+        uk: "Зупинити музику",
+      },
+    },
+    musicStopped: {
+      en: "Music stopped",
+      ru: "Музыка остановлена",
+      uk: "Музика зупинена",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
@@ -23,11 +48,11 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("music.noMusicPlaying"));
+      return interaction.editReply(i18n.__("noMusicPlaying"));
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: i18n.__("notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -35,24 +60,7 @@ export default {
 
     await player.destroy(`${interaction.user.username} stopped the music`);
     await interaction.editReply({
-      content: i18n.__("music.stop.musicStopped"),
+      content: i18n.__("musicStopped"),
     });
-  },
-  localization_strings: {
-    name: {
-      en: "stop",
-      ru: "остановить",
-      uk: "зупинити",
-    },
-    description: {
-      en: "Stop the music",
-      ru: "Остановить музыку",
-      uk: "Зупинити музику",
-    },
-    musicStopped: {
-      en: "Music stopped",
-      ru: "Музыка остановлена",
-      uk: "Музика зупинена",
-    },
   },
 };

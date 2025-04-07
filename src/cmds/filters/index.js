@@ -1,22 +1,24 @@
-import { I18nCommandBuilder } from "../../utils/builders/index.js";
+import { SlashCommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("filters");
-    const command = i18nBuilder.createCommand();
+    const command = new SlashCommandBuilder()
+      .setName("filters")
+      .setDescription("Apply a filter to the image");
+
     return command;
   },
-  server: true,
+
   localization_strings: {
     name: {
-      en: "filters",
       ru: "фильтры",
       uk: "фільтри",
     },
     description: {
-      en: "Apply a filter to the image",
       ru: "Примените фильтр к изображению",
       uk: "Застосуйте фільтр до зображення",
     },
   },
+
+  server: true,
 };

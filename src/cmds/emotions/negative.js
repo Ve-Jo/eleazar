@@ -1,10 +1,5 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
+  SlashCommandSubcommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -13,211 +8,62 @@ import {
 } from "discord.js";
 import HMFull from "hmfull";
 
+const negativeEmotions = Object.fromEntries(
+  [
+    "bonk",
+    "punch",
+    "poke",
+    "bully",
+    "kick",
+    "slap",
+    "throw",
+    "bite",
+    "kill",
+    "threaten",
+    "tickle",
+  ].map((key) => [key, key])
+);
+
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("emotions", "negative");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("negative")
+      .setDescription("Choose a negative emotion with a user")
+      .addStringOption((option) =>
+        option
+          .setName("emotion")
+          .setDescription("Choose an emotion")
+          .setRequired(true)
+          .addChoices(
+            { name: "bonk", value: "bonk" },
+            { name: "punch", value: "punch" },
+            { name: "poke", value: "poke" },
+            { name: "bully", value: "bully" },
+            { name: "kick", value: "kick" },
+            { name: "slap", value: "slap" },
+            { name: "throw", value: "throw" },
+            { name: "bite", value: "bite" },
+            { name: "kill", value: "kill" },
+            { name: "threaten", value: "threaten" },
+            { name: "tickle", value: "tickle" }
+          )
+      )
+      .addUserOption((option) =>
+        option.setName("user").setDescription("Choose a user").setRequired(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add emotion option
-    const emotionOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "emotion",
-      description: i18nBuilder.translateOption("emotion", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("emotion", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "emotion",
-        "description"
-      ),
-      choices: [
-        { name: "bonk", value: "bonk" },
-        { name: "punch", value: "punch" },
-        { name: "poke", value: "poke" },
-        { name: "bully", value: "bully" },
-        { name: "kick", value: "kick" },
-        { name: "slap", value: "slap" },
-        { name: "throw", value: "throw" },
-        { name: "bite", value: "bite" },
-        { name: "kill", value: "kill" },
-        { name: "threaten", value: "threaten" },
-        { name: "tickle", value: "tickle" },
-      ],
-    });
-
-    // Add user option
-    const userOption = new SlashCommandOption({
-      type: OptionType.USER,
-      name: "user",
-      description: i18nBuilder.translateOption("user", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "user",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(emotionOption);
-    subcommand.addOption(userOption);
-
-    return subcommand;
+    return builder;
   },
-  async execute(interaction, i18n) {
-    const emotion = interaction.options.getString("emotion");
-    const targetUser = interaction.options.getUser("user");
 
-    if (targetUser.id === interaction.user.id) {
-      return interaction.reply({
-        content: i18n.__("emotions.negative.cannotSelectSelf"),
-        ephemeral: true,
-      });
-    }
-
-    if (targetUser.bot) {
-      return interaction.reply({
-        content: i18n.__("emotions.negative.cannotSelectBot"),
-        ephemeral: true,
-      });
-    }
-
-    async function getValidImageUrl() {
-      const sources = [
-        HMFull.HMtai.sfw,
-        HMFull.Nekos.sfw,
-        HMFull.NekoBot.sfw,
-        HMFull.NekoLove.sfw,
-      ];
-
-      for (let attempts = 0; attempts < 3; attempts++) {
-        for (const source of sources) {
-          if (Object.keys(source).includes(emotion)) {
-            let imageUrl = await source[emotion]();
-            if (typeof imageUrl === "object" && imageUrl.url) {
-              imageUrl = imageUrl.url;
-            }
-            if (
-              imageUrl &&
-              typeof imageUrl === "string" &&
-              imageUrl.startsWith("http")
-            ) {
-              return imageUrl;
-            }
-          }
-        }
-      }
-      return null;
-    }
-
-    async function createEmbed() {
-      const imageUrl = await getValidImageUrl();
-
-      if (!imageUrl) {
-        return null;
-      }
-
-      return new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`emotions.negative.${emotion}.title`))
-        .setDescription(
-          i18n.__(`emotions.negative.${emotion}.description`, {
-            user: interaction.user.id,
-            targetUser: targetUser.id,
-          })
-        )
-        .setImage(imageUrl)
-        .setFooter({
-          text: interaction.user.displayName,
-          iconURL: interaction.user.displayAvatarURL(),
-        });
-    }
-
-    const initialEmbed = await createEmbed();
-
-    if (!initialEmbed) {
-      return interaction.reply({
-        content: i18n.__("imageNotFound"),
-        ephemeral: true,
-      });
-    }
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("retry")
-        .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    const response = await interaction.reply({
-      embeds: [initialEmbed],
-      components: [row],
-    });
-
-    const collector = response.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
-      componentType: ComponentType.Button,
-      idle: 60000,
-    });
-
-    collector.on("collect", async (i) => {
-      if (i.customId === "retry") {
-        const newEmbed = await createEmbed();
-        if (newEmbed) {
-          await i.update({ embeds: [newEmbed], components: [row] });
-        } else {
-          await i.reply({
-            content: i18n.__("emotions.negative.imageNotFound"),
-            ephemeral: true,
-          });
-        }
-      }
-    });
-
-    collector.on("end", () => {
-      row.components[0].setDisabled(true);
-      interaction.editReply({ components: [row] }).catch(console.error);
-    });
-  },
   localization_strings: {
-    name: {
-      en: "negative",
-      ru: "негативные",
-      uk: "негативні",
-    },
-    description: {
-      en: "Choose a negative emotion with a user",
-      ru: "Выберите негативную эмоцию с пользователем",
-      uk: "Виберіть негативну емоцію з користувачем",
-    },
-    options: {
-      emotion: {
-        name: {
-          en: "emotion",
-          ru: "эмоция",
-          uk: "емоція",
-        },
-        description: {
-          en: "Choose an emotion",
-          ru: "Выберите эмоцию",
-          uk: "Виберіть емоцію",
-        },
+    command: {
+      name: {
+        ru: "негативные",
+        uk: "негативні",
       },
-      user: {
-        name: {
-          en: "user",
-          ru: "пользователь",
-          uk: "користувач",
-        },
-        description: {
-          en: "Choose a user",
-          ru: "Выберите пользователя",
-          uk: "Виберіть користувача",
-        },
+      description: {
+        ru: "Выберите негативную эмоцию с пользователем",
+        uk: "Виберіть негативну емоцію з користувачем",
       },
     },
     bonk: {
@@ -367,5 +213,121 @@ export default {
       ru: "Вы не можете выбрать бота",
       uk: "Ви не можете вибрати бота",
     },
+  },
+
+  async execute(interaction, i18n) {
+    const emotion = interaction.options.getString("emotion");
+    const targetUser = interaction.options.getUser("user");
+
+    if (targetUser.id === interaction.user.id) {
+      return interaction.reply({
+        content: i18n.__("cannotSelectSelf"),
+        ephemeral: true,
+      });
+    }
+
+    if (targetUser.bot) {
+      return interaction.reply({
+        content: i18n.__("cannotSelectBot"),
+        ephemeral: true,
+      });
+    }
+
+    async function getValidImageUrl() {
+      const sources = [
+        HMFull.HMtai.sfw,
+        HMFull.Nekos.sfw,
+        HMFull.NekoBot.sfw,
+        HMFull.NekoLove.sfw,
+      ];
+
+      for (let attempts = 0; attempts < 3; attempts++) {
+        for (const source of sources) {
+          if (Object.keys(source).includes(emotion)) {
+            let imageUrl = await source[emotion]();
+            if (typeof imageUrl === "object" && imageUrl.url) {
+              imageUrl = imageUrl.url;
+            }
+            if (
+              imageUrl &&
+              typeof imageUrl === "string" &&
+              imageUrl.startsWith("http")
+            ) {
+              return imageUrl;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    async function createEmbed() {
+      const imageUrl = await getValidImageUrl();
+
+      if (!imageUrl) {
+        return null;
+      }
+
+      return new EmbedBuilder()
+        .setColor(process.env.EMBED_COLOR)
+        .setTitle(i18n.__(`${emotion}[title]`))
+        .setDescription(
+          i18n.__(`${emotion}[description]`, {
+            user: interaction.user.id,
+            targetUser: targetUser.id,
+          })
+        )
+        .setImage(imageUrl)
+        .setFooter({
+          text: interaction.user.displayName,
+          iconURL: interaction.user.displayAvatarURL(),
+        });
+    }
+
+    const initialEmbed = await createEmbed();
+
+    if (!initialEmbed) {
+      return interaction.reply({
+        content: i18n.__("imageNotFound"),
+        ephemeral: true,
+      });
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("retry")
+        .setEmoji("🔄")
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    const response = await interaction.reply({
+      embeds: [initialEmbed],
+      components: [row],
+    });
+
+    const collector = response.createMessageComponentCollector({
+      filter: (i) => i.user.id === interaction.user.id,
+      componentType: ComponentType.Button,
+      idle: 60000,
+    });
+
+    collector.on("collect", async (i) => {
+      if (i.customId === "retry") {
+        const newEmbed = await createEmbed();
+        if (newEmbed) {
+          await i.update({ embeds: [newEmbed], components: [row] });
+        } else {
+          await i.reply({
+            content: i18n.__("imageNotFound"),
+            ephemeral: true,
+          });
+        }
+      }
+    });
+
+    collector.on("end", () => {
+      row.components[0].setDisabled(true);
+      interaction.editReply({ components: [row] }).catch(console.error);
+    });
   },
 };

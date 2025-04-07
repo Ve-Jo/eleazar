@@ -1,61 +1,28 @@
-import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "queue");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("queue")
+      .setDescription("Show the music queue");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
-  async execute(interaction, i18n) {
-    await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
-    );
 
-    if (!player) {
-      return interaction.editReply(i18n.__("music.noMusicPlaying"));
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
-    }
-
-    const current = player.queue.current;
-    const nextTrack = player.queue.tracks;
-
-    const queueString = `${i18n.__("music.queue.currentPlaying", {
-      title: current.info.title,
-    })}\n${i18n.__("music.queue.nextInQueue", {
-      tracks: nextTrack.map((t) => t.info.title).join(", "),
-    })}`;
-
-    await interaction.editReply(
-      `${i18n.__("music.queue.currentQueue")}\n${queueString}`
-    );
-  },
+  // Define localization strings directly in the command
   localization_strings: {
-    name: {
-      en: "queue",
-      ru: "очередь",
-      uk: "черга",
-    },
-    description: {
-      en: "Show the music queue",
-      ru: "Показать очередь музыки",
-      uk: "Показати чергу музики",
+    command: {
+      name: {
+        en: "queue",
+        ru: "очередь",
+        uk: "черга",
+      },
+      description: {
+        en: "Show the music queue",
+        ru: "Показать очередь музыки",
+        uk: "Показати чергу музики",
+      },
     },
     currentPlaying: {
       en: "Currently playing: {{title}}",
@@ -72,5 +39,44 @@ export default {
       ru: "Текущая очередь",
       uk: "Поточна черга",
     },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
+  async execute(interaction, i18n) {
+    await interaction.deferReply();
+    const player = await interaction.client.lavalink.getPlayer(
+      interaction.guild.id
+    );
+
+    if (!player) {
+      return interaction.editReply(i18n.__("noMusicPlaying"));
+    } else {
+      if (interaction.member.voice.channelId !== player.voiceChannelId) {
+        return interaction.editReply({
+          content: i18n.__("notInVoiceChannel"),
+          ephemeral: true,
+        });
+      }
+    }
+
+    const current = player.queue.current;
+    const nextTrack = player.queue.tracks;
+
+    const queueString = `${i18n.__("currentPlaying", {
+      title: current.info.title,
+    })}\n${i18n.__("nextInQueue", {
+      tracks: nextTrack.map((t) => t.info.title).join(", "),
+    })}`;
+
+    await interaction.editReply(`${i18n.__("currentQueue")}\n${queueString}`);
   },
 };

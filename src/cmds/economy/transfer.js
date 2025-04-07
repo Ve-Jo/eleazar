@@ -1,55 +1,101 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+  EmbedBuilder,
+  AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "transfer");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("transfer")
+      .setDescription("Transfer money to another user")
+      .addUserOption((option) =>
+        option
+          .setName("user")
+          .setDescription("User to transfer money to")
+          .setRequired(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("amount")
+          .setDescription("Amount to transfer (or 'all', 'half')")
+          .setRequired(true)
+          .addChoices(
+            { name: "All", value: "all" },
+            { name: "Half", value: "half" }
+          )
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add user option
-    const userOption = new SlashCommandOption({
-      type: OptionType.USER,
-      name: "user",
-      description: i18nBuilder.translateOption("user", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("user", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "user",
-        "description"
-      ),
-    });
-
-    // Add amount option
-    const amountOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "amount",
-      description: i18nBuilder.translateOption("amount", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("amount", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "amount",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(userOption);
-    subcommand.addOption(amountOption);
-
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        ru: "перевод",
+        uk: "переказ",
+      },
+      description: {
+        ru: "Перевести деньги другому пользователю",
+        uk: "Переказати гроші іншому користувачу",
+      },
+    },
+    options: {
+      user: {
+        name: {
+          ru: "пользователь",
+          uk: "користувач",
+        },
+        description: {
+          ru: "Пользователь, которому перевести деньги",
+          uk: "Користувач, якому переказати гроші",
+        },
+      },
+      amount: {
+        name: {
+          ru: "сумма",
+          uk: "сума",
+        },
+        description: {
+          ru: "Сумма для перевода (или 'all', 'half')",
+          uk: "Сума для переказу (або 'all', 'half')",
+        },
+      },
+    },
+    cannotTransferToSelf: {
+      en: "You cannot transfer money to yourself",
+      ru: "Вы не можете перевести деньги самому себе",
+      uk: "Ви не можете переказати гроші самому собі",
+    },
+    insufficientFunds: {
+      en: "Insufficient funds",
+      ru: "Недостаточно средств",
+      uk: "Недостатньо коштів",
+    },
+    amountGreaterThanZero: {
+      en: "Amount must be greater than zero",
+      ru: "Сумма должна быть больше нуля",
+      uk: "Сума має бути більшою за нуль",
+    },
+    invalidAmount: {
+      en: "Invalid amount",
+      ru: "Неверная сумма",
+      uk: "Невірна сума",
+    },
+    error: {
+      en: "An error occurred while processing your transfer",
+      ru: "Произошла ошибка при обработке перевода",
+      uk: "Сталася помилка під час обробки переказу",
+    },
+    title: {
+      en: "Transfer",
+      ru: "Перевод",
+      uk: "Переказ",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const targetUser = interaction.options.getUser("user");
@@ -58,7 +104,7 @@ export default {
     // Prevent self-transfers
     if (targetUser.id === interaction.user.id) {
       return interaction.editReply({
-        content: i18n.__("economy.transfer.cannotTransferToSelf"),
+        content: i18n.__("cannotTransferToSelf"),
         ephemeral: true,
       });
     }
@@ -88,7 +134,7 @@ export default {
         amountInt = parseFloat(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
-            content: i18n.__("economy.transfer.invalidAmount"),
+            content: i18n.__("invalidAmount"),
             ephemeral: true,
           });
         }
@@ -97,13 +143,13 @@ export default {
       // Validate amount
       if (!senderData.economy || senderData.economy.balance < amountInt) {
         return interaction.editReply({
-          content: i18n.__("economy.transfer.insufficientFunds"),
+          content: i18n.__("insufficientFunds"),
           ephemeral: true,
         });
       }
       if (amountInt <= 0) {
         return interaction.editReply({
-          content: i18n.__("economy.transfer.amountGreaterThanZero"),
+          content: i18n.__("amountGreaterThanZero"),
           ephemeral: true,
         });
       }
@@ -226,7 +272,7 @@ export default {
         .setTimestamp()
         .setImage(`attachment://transfer.png`)
         .setAuthor({
-          name: i18n.__("economy.transfer.title"),
+          name: i18n.__("title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
@@ -237,77 +283,9 @@ export default {
     } catch (error) {
       console.error("Error in transfer command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.transfer.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "transfer",
-      ru: "перевод",
-      uk: "переказ",
-    },
-    description: {
-      en: "Transfer money to another user",
-      ru: "Перевести деньги другому пользователю",
-      uk: "Переказати гроші іншому користувачу",
-    },
-    options: {
-      user: {
-        name: {
-          en: "user",
-          ru: "пользователь",
-          uk: "користувач",
-        },
-        description: {
-          en: "User to transfer money to",
-          ru: "Пользователь, которому перевести деньги",
-          uk: "Користувач, якому переказати гроші",
-        },
-      },
-      amount: {
-        name: {
-          en: "amount",
-          ru: "сумма",
-          uk: "сума",
-        },
-        description: {
-          en: "Amount to transfer (or 'all', 'half')",
-          ru: "Сумма для перевода (или 'all', 'half')",
-          uk: "Сума для переказу (або 'all', 'half')",
-        },
-      },
-    },
-    cannotTransferToSelf: {
-      en: "You cannot transfer money to yourself",
-      ru: "Вы не можете перевести деньги самому себе",
-      uk: "Ви не можете переказати гроші самому собі",
-    },
-    insufficientFunds: {
-      en: "Insufficient funds",
-      ru: "Недостаточно средств",
-      uk: "Недостатньо коштів",
-    },
-    amountGreaterThanZero: {
-      en: "Amount must be greater than zero",
-      ru: "Сумма должна быть больше нуля",
-      uk: "Сума має бути більшою за нуль",
-    },
-    invalidAmount: {
-      en: "Invalid amount",
-      ru: "Неверная сумма",
-      uk: "Невірна сума",
-    },
-    error: {
-      en: "An error occurred while processing your transfer",
-      ru: "Произошла ошибка при обработке перевода",
-      uk: "Сталася помилка під час обробки переказу",
-    },
-    title: {
-      en: "Transfer",
-      ru: "Перевод",
-      uk: "Переказ",
-    },
   },
 };

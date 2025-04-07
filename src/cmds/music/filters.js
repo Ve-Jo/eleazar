@@ -1,71 +1,103 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "filters");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("filters")
+      .setDescription("Set the music filters")
+      .addStringOption((option) =>
+        option
+          .setName("filter")
+          .setDescription("The filter to set")
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption((option) =>
+        option
+          .setName("property")
+          .setDescription("The property of the filter to set")
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addNumberOption((option) =>
+        option
+          .setName("value")
+          .setDescription("The value to set for the filter property")
+          .setRequired(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add filter option
-    const filterOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "filter",
-      description: i18nBuilder.translateOption("filter", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("filter", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "filter",
-        "description"
-      ),
-      autocomplete: true,
-    });
-
-    // Add property option
-    const propertyOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "property",
-      description: i18nBuilder.translateOption("property", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations(
-        "property",
-        "name"
-      ),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "property",
-        "description"
-      ),
-      autocomplete: true,
-    });
-
-    // Add value option
-    const valueOption = new SlashCommandOption({
-      type: OptionType.NUMBER,
-      name: "value",
-      description: i18nBuilder.translateOption("value", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("value", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "value",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(filterOption);
-    subcommand.addOption(propertyOption);
-    subcommand.addOption(valueOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "filters",
+        ru: "фильтры",
+        uk: "фільтри",
+      },
+      description: {
+        en: "Set the music filters",
+        ru: "Установить фильтры музыки",
+        uk: "Встановити фільтри музики",
+      },
+    },
+    options: {
+      filter: {
+        name: {
+          ru: "фильтр",
+          uk: "фільтр",
+        },
+        description: {
+          ru: "Фильтр для установки",
+          uk: "Фільтр для встановлення",
+        },
+      },
+      property: {
+        name: {
+          ru: "свойство",
+          uk: "властивість",
+        },
+        description: {
+          ru: "Свойство фильтра для установки",
+          uk: "Властивість фільтра для встановлення",
+        },
+      },
+      value: {
+        name: {
+          ru: "значение",
+          uk: "значення",
+        },
+        description: {
+          ru: "Значение для установки свойства фильтра",
+          uk: "Значення для встановлення властивості фільтра",
+        },
+      },
+    },
+    filterApplied: {
+      en: "Filter {{filter}} has been applied",
+      ru: "Фильтр {{filter}} был применен",
+      uk: "Фільтр {{filter}} був застосований",
+    },
+    invalidFilterProperty: {
+      en: "Invalid filter property",
+      ru: "Неверное свойство фильтра",
+      uk: "Неправильна властивість фільтра",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const filterName = interaction.options.getString("filter");
@@ -76,11 +108,11 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("music.noMusicPlaying"));
+      return interaction.editReply(i18n.__("noMusicPlaying"));
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: i18n.__("notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -101,16 +133,15 @@ export default {
       await player.filterManager.applyPlayerFilters();
 
       await interaction.editReply(
-        i18n.__("music.filters.filterApplied", {
+        i18n.__("filterApplied", {
           filter: `${filterName} ${filterProperty} ${value}`,
         })
       );
     } else {
-      return interaction.editReply(
-        i18n.__("music.filters.invalidFilterProperty")
-      );
+      return interaction.editReply(i18n.__("invalidFilterProperty"));
     }
   },
+
   async autocomplete(interaction) {
     const player = await interaction.client.lavalink.getPlayer(
       interaction.guild.id
@@ -119,7 +150,7 @@ export default {
     if (!player) {
       await interaction.respond([
         {
-          name: i18n.__("music.noMusicPlaying"),
+          name: i18n.__("noMusicPlaying"),
           value: "no music playing",
         },
       ]);
@@ -127,7 +158,7 @@ export default {
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: i18n.__("notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -165,65 +196,5 @@ export default {
     );
 
     await interaction.respond(filteredOptions.slice(0, 25));
-  },
-  localization_strings: {
-    name: {
-      en: "filters",
-      ru: "фильтры",
-      uk: "фільтри",
-    },
-    description: {
-      en: "Set the music filters",
-      ru: "Установить фильтры музыки",
-      uk: "Встановити фільтри музики",
-    },
-    options: {
-      filter: {
-        name: {
-          en: "filter",
-          ru: "фильтр",
-          uk: "фільтр",
-        },
-        description: {
-          en: "The filter to set",
-          ru: "Фильтр для установки",
-          uk: "Фільтр для встановлення",
-        },
-      },
-      property: {
-        name: {
-          en: "property",
-          ru: "свойство",
-          uk: "властивість",
-        },
-        description: {
-          en: "The property of the filter to set",
-          ru: "Свойство фильтра для установки",
-          uk: "Властивість фільтра для встановлення",
-        },
-      },
-      value: {
-        name: {
-          en: "value",
-          ru: "значение",
-          uk: "значення",
-        },
-        description: {
-          en: "The value to set for the filter property",
-          ru: "Значение для установки свойства фильтра",
-          uk: "Значення для встановлення властивості фільтра",
-        },
-      },
-    },
-    filterApplied: {
-      en: "Filter {{filter}} has been applied",
-      ru: "Фильтр {{filter}} был применен",
-      uk: "Фільтр {{filter}} був застосований",
-    },
-    invalidFilterProperty: {
-      en: "Invalid filter property",
-      ru: "Неверное свойство фильтра",
-      uk: "Неправильна властивість фільтра",
-    },
   },
 };

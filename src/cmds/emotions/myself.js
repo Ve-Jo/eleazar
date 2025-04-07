@@ -1,185 +1,54 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import HMFull from "hmfull";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("emotions", "myself");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("myself")
+      .setDescription("Choose your own emotion or action")
+      .addStringOption((option) =>
+        option
+          .setName("emotion")
+          .setDescription("Choose an emotion or action")
+          .setRequired(true)
+          .addChoices(
+            { name: "blush", value: "blush" },
+            { name: "smug", value: "smug" },
+            { name: "happy", value: "happy" },
+            { name: "smile", value: "smile" },
+            { name: "dance", value: "dance" },
+            { name: "like", value: "like" },
+            { name: "cry", value: "cry" },
+            { name: "nosebleed", value: "nosebleed" },
+            { name: "depression", value: "depression" },
+            { name: "tea", value: "tea" },
+            { name: "nom", value: "nom" },
+            { name: "lick", value: "lick" },
+            { name: "sleep", value: "sleep" },
+            { name: "coffee", value: "coffee" },
+            { name: "gah", value: "gah" }
+          )
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add emotion option
-    const emotionOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "emotion",
-      description: i18nBuilder.translateOption("emotion", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("emotion", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "emotion",
-        "description"
-      ),
-      choices: [
-        { name: "blush", value: "blush" },
-        { name: "smug", value: "smug" },
-        { name: "happy", value: "happy" },
-        { name: "smile", value: "smile" },
-        { name: "dance", value: "dance" },
-        { name: "like", value: "like" },
-        { name: "cry", value: "cry" },
-        { name: "nosebleed", value: "nosebleed" },
-        { name: "depression", value: "depression" },
-        { name: "tea", value: "tea" },
-        { name: "nom", value: "nom" },
-        { name: "lick", value: "lick" },
-        { name: "sleep", value: "sleep" },
-        { name: "coffee", value: "coffee" },
-        { name: "gah", value: "gah" },
-      ],
-    });
-
-    subcommand.addOption(emotionOption);
-
-    return subcommand;
+    return builder;
   },
-  async execute(interaction, i18n) {
-    const emotion = interaction.options.getString("emotion");
 
-    async function getValidImageUrl() {
-      const sources = [
-        HMFull.HMtai.sfw,
-        HMFull.Nekos.sfw,
-        HMFull.NekoBot.sfw,
-        HMFull.NekoLove.sfw,
-      ];
-
-      for (let attempts = 0; attempts < 3; attempts++) {
-        for (const source of sources) {
-          if (Object.keys(source).includes(emotion)) {
-            let imageUrl = await source[emotion]();
-            if (typeof imageUrl === "object" && imageUrl.url) {
-              imageUrl = imageUrl.url;
-            }
-            if (
-              imageUrl &&
-              typeof imageUrl === "string" &&
-              imageUrl.startsWith("http")
-            ) {
-              return imageUrl;
-            }
-          }
-        }
-      }
-      return null;
-    }
-
-    async function createEmbed() {
-      const imageUrl = await getValidImageUrl();
-
-      if (!imageUrl) {
-        return null;
-      }
-
-      return new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`emotions.myself.${emotion}.title`))
-        .setDescription(
-          i18n.__(`emotions.myself.${emotion}.description`, {
-            user: interaction.user.id,
-          })
-        )
-        .setImage(imageUrl)
-        .setFooter({
-          text: interaction.user.displayName,
-          iconURL: interaction.user.displayAvatarURL(),
-        });
-    }
-
-    const initialEmbed = await createEmbed();
-
-    if (!initialEmbed) {
-      return interaction.reply({
-        content: i18n.__("imageNotFound"),
-        ephemeral: true,
-      });
-    }
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("retry")
-        .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    const response = await interaction.reply({
-      embeds: [initialEmbed],
-      components: [row],
-    });
-
-    const collector = response.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
-      componentType: ComponentType.Button,
-      idle: 60000,
-    });
-
-    collector.on("collect", async (i) => {
-      if (i.customId === "retry") {
-        const newEmbed = await createEmbed();
-        if (newEmbed) {
-          await i.update({ embeds: [newEmbed], components: [row] });
-        } else {
-          await i.reply({
-            content: i18n.__("imageNotFound"),
-            ephemeral: true,
-          });
-        }
-      }
-    });
-
-    collector.on("end", () => {
-      row.components[0].setDisabled(true);
-      interaction.editReply({ components: [row] }).catch(console.error);
-    });
-  },
   localization_strings: {
-    name: {
-      en: "myself",
-      ru: "я",
-      uk: "я",
-    },
-    description: {
-      en: "Choose your own emotion or action",
-      ru: "Выберите вашу эмоцию или действие",
-      uk: "Виберіть вашу емоцію або дію",
-    },
-    options: {
-      emotion: {
-        name: {
-          en: "emotion",
-          ru: "эмоция",
-          uk: "емоція",
-        },
-        description: {
-          en: "Choose an emotion or action",
-          ru: "Выберите эмоцию или действие",
-          uk: "Виберіть емоцію або дію",
-        },
+    command: {
+      name: {
+        ru: "я",
+        uk: "я",
+      },
+      description: {
+        ru: "Выберите вашу эмоцию или действие",
+        uk: "Виберіть вашу емоцію або дію",
       },
     },
     blush: {
@@ -362,5 +231,110 @@ export default {
         uk: "<@{{user}}> здивований!",
       },
     },
+    imageNotFound: {
+      en: "Image not found",
+      ru: "Изображение не найдено",
+      uk: "Зображення не знайдено",
+    },
+  },
+
+  async execute(interaction, i18n) {
+    const emotion = interaction.options.getString("emotion");
+
+    async function getValidImageUrl() {
+      const sources = [
+        HMFull.HMtai.sfw,
+        HMFull.Nekos.sfw,
+        HMFull.NekoBot.sfw,
+        HMFull.NekoLove.sfw,
+      ];
+
+      for (let attempts = 0; attempts < 3; attempts++) {
+        for (const source of sources) {
+          if (Object.keys(source).includes(emotion)) {
+            let imageUrl = await source[emotion]();
+            if (typeof imageUrl === "object" && imageUrl.url) {
+              imageUrl = imageUrl.url;
+            }
+            if (
+              imageUrl &&
+              typeof imageUrl === "string" &&
+              imageUrl.startsWith("http")
+            ) {
+              return imageUrl;
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    async function createEmbed() {
+      const imageUrl = await getValidImageUrl();
+
+      if (!imageUrl) {
+        return null;
+      }
+
+      return new EmbedBuilder()
+        .setColor(process.env.EMBED_COLOR)
+        .setTitle(i18n.__(`${emotion}[title]`))
+        .setDescription(
+          i18n.__(`${emotion}[description]`, {
+            user: interaction.user.id,
+          })
+        )
+        .setImage(imageUrl)
+        .setFooter({
+          text: interaction.user.displayName,
+          iconURL: interaction.user.displayAvatarURL(),
+        });
+    }
+
+    const initialEmbed = await createEmbed();
+
+    if (!initialEmbed) {
+      return interaction.reply({
+        content: i18n.__("imageNotFound"),
+        ephemeral: true,
+      });
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("retry")
+        .setEmoji("🔄")
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    const response = await interaction.reply({
+      embeds: [initialEmbed],
+      components: [row],
+    });
+
+    const collector = response.createMessageComponentCollector({
+      filter: (i) => i.user.id === interaction.user.id,
+      componentType: ComponentType.Button,
+      idle: 60000,
+    });
+
+    collector.on("collect", async (i) => {
+      if (i.customId === "retry") {
+        const newEmbed = await createEmbed();
+        if (newEmbed) {
+          await i.update({ embeds: [newEmbed], components: [row] });
+        } else {
+          await i.reply({
+            content: i18n.__("imageNotFound"),
+            ephemeral: true,
+          });
+        }
+      }
+    });
+
+    collector.on("end", () => {
+      row.components[0].setDisabled(true);
+      interaction.editReply({ components: [row] }).catch(console.error);
+    });
   },
 };

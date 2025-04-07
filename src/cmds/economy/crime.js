@@ -1,30 +1,78 @@
 import {
-  SlashCommandSubcommand,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ComponentType,
   AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("economy", "crime");
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("crime")
+      .setDescription("Attempt to steal money from another user");
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    return subcommand;
+    return builder;
   },
+
+  localization_strings: {
+    command: {
+      name: {
+        en: "crime",
+        ru: "преступление",
+        uk: "злочин",
+      },
+      description: {
+        en: "Attempt to steal money from another user",
+        ru: "Попытаться украсть деньги у другого пользователя",
+        uk: "Спробувати вкрасти гроші у іншого користувача",
+      },
+    },
+    cooldown: {
+      en: "You need to wait {{time}} seconds before committing another crime",
+      ru: "Вам нужно подождать {{time}} секунд, прежде чем совершить новое преступление",
+      uk: "Вам потрібно зачекати {{time}} секунд, перш ніж вчинити новий злочин",
+    },
+    selectTarget: {
+      en: "Select a user to steal from",
+      ru: "Выберите пользователя, у которого хотите украсть",
+      uk: "Виберіть користувача, у якого хочете вкрасти",
+    },
+    noValidTargets: {
+      en: "No valid targets found (users must have coins to steal)",
+      ru: "Не найдено подходящих целей (у пользователей должны быть монеты)",
+      uk: "Не знайдено підходящих цілей (у користувачів повинні бути монети)",
+    },
+    noSelection: {
+      en: "No target selected",
+      ru: "Цель не выбрана",
+      uk: "Ціль не вибрана",
+    },
+    title: {
+      en: "Crime",
+      ru: "Преступление",
+      uk: "Злочин",
+    },
+    successTarget: {
+      en: "You successfully stole {{amount}} coins from {{target}}!",
+      ru: "Вы успешно украли {{amount}} монет у {{target}}!",
+      uk: "Ви успішно вкрали {{amount}} монет у {{target}}!",
+    },
+    failTarget: {
+      en: "You were caught and had to pay a fine of {{amount}} coins!",
+      ru: "Вас поймали и вам пришлось заплатить штраф в размере {{amount}} монет!",
+      uk: "Вас спіймали і вам довелося заплатити штраф у розмірі {{amount}} монет!",
+    },
+    error: {
+      en: "An error occurred while processing your crime attempt",
+      ru: "Произошла ошибка при обработке попытки преступления",
+      uk: "Сталася помилка під час обробки спроби злочину",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const { guild, user } = interaction;
@@ -116,7 +164,7 @@ export default {
 
       if (validTargets.length === 0) {
         return interaction.editReply({
-          content: i18n.__("economy.crime.noValidTargets"),
+          content: i18n.__("noValidTargets"),
           ephemeral: true,
         });
       }
@@ -124,7 +172,7 @@ export default {
       // Create selection menu with potential targets
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId("select_crime_target")
-        .setPlaceholder(i18n.__("economy.crime.selectTarget"))
+        .setPlaceholder(i18n.__("selectTarget"))
         .addOptions(
           await Promise.all(
             validTargets.map(async (userData) => {
@@ -151,7 +199,7 @@ export default {
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
       const response = await interaction.editReply({
-        content: i18n.__("economy.crime.selectTarget"),
+        content: i18n.__("selectTarget"),
         components: [row],
       });
 
@@ -329,16 +377,16 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(success ? process.env.EMBED_COLOR : "#ff0000")
           .setAuthor({
-            name: i18n.__("economy.crime.title"),
+            name: i18n.__("title"),
             iconURL: user.displayAvatarURL(),
           })
           .setDescription(
             success
-              ? i18n.__("economy.crime.successTarget", {
+              ? i18n.__("successTarget", {
                   amount,
                   target: target.displayName,
                 })
-              : i18n.__("economy.crime.failTarget", { amount })
+              : i18n.__("failTarget", { amount })
           )
           .setImage(`attachment://crime.png`)
           .setTimestamp();
@@ -351,7 +399,7 @@ export default {
       } catch (error) {
         if (error.code === "INTERACTION_COLLECTOR_ERROR") {
           return interaction.editReply({
-            content: i18n.__("economy.crime.noSelection"),
+            content: i18n.__("noSelection"),
             components: [],
           });
         }
@@ -360,61 +408,9 @@ export default {
     } catch (error) {
       console.error("Error in crime command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.crime.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "crime",
-      ru: "преступление",
-      uk: "злочин",
-    },
-    description: {
-      en: "Attempt to steal money from another user",
-      ru: "Попытаться украсть деньги у другого пользователя",
-      uk: "Спробувати вкрасти гроші у іншого користувача",
-    },
-    cooldown: {
-      en: "You need to wait {{time}} seconds before committing another crime",
-      ru: "Вам нужно подождать {{time}} секунд, прежде чем совершить новое преступление",
-      uk: "Вам потрібно зачекати {{time}} секунд, перш ніж вчинити новий злочин",
-    },
-    selectTarget: {
-      en: "Select a user to steal from",
-      ru: "Выберите пользователя, у которого хотите украсть",
-      uk: "Виберіть користувача, у якого хочете вкрасти",
-    },
-    noValidTargets: {
-      en: "No valid targets found (users must have coins to steal)",
-      ru: "Не найдено подходящих целей (у пользователей должны быть монеты)",
-      uk: "Не знайдено підходящих цілей (у користувачів повинні бути монети)",
-    },
-    noSelection: {
-      en: "No target selected",
-      ru: "Цель не выбрана",
-      uk: "Ціль не вибрана",
-    },
-    title: {
-      en: "Crime",
-      ru: "Преступление",
-      uk: "Злочин",
-    },
-    successTarget: {
-      en: "You successfully stole {{amount}} coins from {{target}}!",
-      ru: "Вы успешно украли {{amount}} монет у {{target}}!",
-      uk: "Ви успішно вкрали {{amount}} монет у {{target}}!",
-    },
-    failTarget: {
-      en: "You were caught and had to pay a fine of {{amount}} coins!",
-      ru: "Вас поймали и вам пришлось заплатить штраф в размере {{amount}} монет!",
-      uk: "Вас спіймали і вам довелося заплатити штраф у розмірі {{amount}} монет!",
-    },
-    error: {
-      en: "An error occurred while processing your crime attempt",
-      ru: "Произошла ошибка при обработке попытки преступления",
-      uk: "Сталася помилка під час обробки спроби злочину",
-    },
   },
 };

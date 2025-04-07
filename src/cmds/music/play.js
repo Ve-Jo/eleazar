@@ -1,38 +1,94 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "play");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("play")
+      .setDescription("Play a song")
+      .addStringOption((option) =>
+        option
+          .setName("song")
+          .setDescription("The song to play (URL or search term)")
+          .setRequired(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add song option
-    const songOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "song",
-      description: i18nBuilder.translateOption("song", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("song", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "song",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(songOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "play",
+        ru: "играть",
+        uk: "грати",
+      },
+      description: {
+        en: "Play a song",
+        ru: "Воспроизвести песню",
+        uk: "Відтворити пісню",
+      },
+    },
+    options: {
+      song: {
+        name: {
+          ru: "песня",
+          uk: "пісня",
+        },
+        description: {
+          ru: "Песня для воспроизведения (URL или поисковый запрос)",
+          uk: "Пісня для відтворення (URL або пошуковий запит)",
+        },
+      },
+    },
+    noMatchesFound: {
+      en: "No matches found",
+      ru: "Ничего не найдено",
+      uk: "Нічого не знайдено",
+    },
+    addedToQueue: {
+      en: "Added to queue: {{title}}",
+      ru: "Добавлена в очередь: {{title}}",
+      uk: "Додано в чергу: {{title}}",
+    },
+    addedPlaylist: {
+      en: "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
+      ru: "Добавлена плейлист: {{name}} ({{count}} из {{total}}, max: {{max}})",
+      uk: "Додано плейлист: {{name}} ({{count}} з {{total}}, max: {{max}})",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+    loopApplied: {
+      en: "Loop type has been set to {{type}}",
+      ru: "Тип повтора был установлен на {{type}}",
+      uk: "Тип повтору був встановлений на {{type}}",
+    },
+    noLavalinkNode: {
+      en: "No Lavalink node available",
+      ru: "Нет доступного узла Lavalink",
+      uk: "Немає доступного вузла Lavalink",
+    },
+    connectionTimeout: {
+      en: "Connection timed out",
+      ru: "Время соединения истекло",
+      uk: "Час з'єднання вичерпано",
+    },
+    noAvailableNode: {
+      en: "No available Node was found",
+      ru: "Не найдено доступных узлов",
+      uk: "Не знайдено доступних вузлів",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     let query = interaction.options.getString("song");
@@ -41,7 +97,7 @@ export default {
       !interaction.client.lavalink ||
       !interaction.client.lavalink.nodeManager.nodes.size
     ) {
-      return interaction.editReply(i18n.__("music.noLavalinkNode"));
+      return interaction.editReply(i18n.__("noLavalinkNode"));
     }
 
     try {
@@ -64,14 +120,14 @@ export default {
 
       if (res.loadType === "error") {
         return interaction.editReply(
-          i18n.__("music.errorLoadingTrack", {
+          i18n.__("errorLoadingTrack", {
             message: res.exception?.message,
           })
         );
       }
 
       if (res.loadType === "empty") {
-        return interaction.editReply(i18n.__("music.play.noMatchesFound"));
+        return interaction.editReply(i18n.__("noMatchesFound"));
       }
 
       if (res.loadType === "playlist") {
@@ -79,7 +135,7 @@ export default {
         const tracksToAdd = res.tracks.slice(0, maxPlaylistSize);
         player.queue.add(tracksToAdd);
         await interaction.editReply({
-          content: i18n.__("music.play.addedPlaylist", {
+          content: i18n.__("addedPlaylist", {
             name: res.playlist.name,
             count: tracksToAdd.length,
             total: res.tracks.length,
@@ -90,7 +146,7 @@ export default {
         const track = res.tracks[0];
         player.queue.add(track);
         await interaction.editReply({
-          content: i18n.__("music.play.addedToQueue", {
+          content: i18n.__("addedToQueue", {
             title: track.info.title,
           }),
         });
@@ -123,57 +179,16 @@ export default {
         error.message.includes("timed out") ||
         error.message === "Search timeout"
       ) {
-        return interaction.editReply(i18n.__("music.connectionTimeout"));
+        return interaction.editReply(i18n.__("connectionTimeout"));
       } else if (error.message.includes("No available Node was found")) {
-        return interaction.editReply(i18n.__("music.noAvailableNode"));
+        return interaction.editReply(i18n.__("noAvailableNode"));
       } else if (error.message === "No Lavalink Node was provided") {
-        return interaction.editReply(i18n.__("music.noLavalinkNode"));
+        return interaction.editReply(i18n.__("noLavalinkNode"));
       } else {
         return interaction.editReply(
-          i18n.__("music.errorOccurred", { error: error.message })
+          i18n.__("errorOccurred", { error: error.message })
         );
       }
     }
-  },
-  localization_strings: {
-    name: {
-      en: "play",
-      ru: "играть",
-      uk: "грати",
-    },
-    description: {
-      en: "Play a song",
-      ru: "Воспроизвести песню",
-      uk: "Відтворити пісню",
-    },
-    options: {
-      song: {
-        name: {
-          en: "song",
-          ru: "песня",
-          uk: "пісня",
-        },
-        description: {
-          en: "The song to play (URL or search term)",
-          ru: "Песня для воспроизведения (URL или поисковый запрос)",
-          uk: "Пісня для відтворення (URL або пошуковий запит)",
-        },
-      },
-    },
-    noMatchesFound: {
-      en: "No matches found",
-      ru: "Ничего не найдено",
-      uk: "Нічого не знайдено",
-    },
-    addedToQueue: {
-      en: "Added to queue: {{title}}",
-      ru: "Добавлена в очередь: {{title}}",
-      uk: "Додано в чергу: {{title}}",
-    },
-    addedPlaylist: {
-      en: "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
-      ru: "Добавлена плейлист: {{name}} ({{count}} из {{total}}, max: {{max}})",
-      uk: "Додано плейлист: {{name}} ({{count}} з {{total}}, max: {{max}})",
-    },
   },
 };

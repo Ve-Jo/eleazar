@@ -1,37 +1,26 @@
-import { I18nCommandBuilder } from "../../utils/builders/index.js";
+import { SlashCommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music");
-    const command = i18nBuilder.createCommand();
+    const command = new SlashCommandBuilder()
+      .setName("music")
+      .setDescription("Music control command");
+
     return command;
   },
-  server: true,
-  async preExecute(interaction, i18n) {
-    /*return interaction.reply({
-      content: "Музыкальный плеер пока-что неисправен",
-      ephemeral: true,
-    });*/
-    if (!interaction.member.voice.channel) {
-      return interaction.reply({
-        content: i18n.__("music.notInVoiceChannel"),
-        ephemeral: true,
-      });
-    }
-  },
-  async autocomplete(interaction) {
-    await filters.autocomplete(interaction);
-  },
+
   localization_strings: {
-    name: {
-      en: "music",
-      ru: "музыка",
-      uk: "музика",
-    },
-    description: {
-      en: "Music control command",
-      ru: "Команда управления музыкой",
-      uk: "Команда керування музикою",
+    command: {
+      name: {
+        en: "music",
+        ru: "музыка",
+        uk: "музика",
+      },
+      description: {
+        en: "Music control command",
+        ru: "Команда управления музыкой",
+        uk: "Команда керування музикою",
+      },
     },
     noMusicPlaying: {
       en: "No music is currently playing",
@@ -77,5 +66,21 @@ export default {
         uk: "Стан автопрогравання було встановлено на {{enabled}}",
       },
     },
+  },
+  server: true,
+  async preExecute(interaction, i18n) {
+    /*return interaction.reply({
+      content: "Музыкальный плеер пока-что неисправен",
+      ephemeral: true,
+    });*/
+    if (!interaction.member.voice.channel) {
+      return interaction.reply({
+        content: i18n.__("notInVoiceChannel"),
+        ephemeral: true,
+      });
+    }
+  },
+  async autocomplete(interaction) {
+    await filters.autocomplete(interaction);
   },
 };

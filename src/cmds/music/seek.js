@@ -1,39 +1,75 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("music", "seek");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("seek")
+      .setDescription("Seek to a specific time in the current track")
+      .addStringOption((option) =>
+        option
+          .setName("time")
+          .setDescription("Time to seek to (format: m:ss or ss)")
+          .setRequired(true)
+          .setAutocomplete(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add time option
-    const timeOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "time",
-      description: i18nBuilder.translateOption("time", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("time", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "time",
-        "description"
-      ),
-      autocomplete: true,
-    });
-
-    subcommand.addOption(timeOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        en: "seek",
+        ru: "перемотать",
+        uk: "перемотати",
+      },
+      description: {
+        en: "Seek to a specific time in the current track",
+        ru: "Перейти к определенному времени в текущем треке",
+        uk: "Перейти до певного часу в поточному треку",
+      },
+    },
+    options: {
+      time: {
+        name: {
+          ru: "время",
+          uk: "час",
+        },
+        description: {
+          ru: "Время для перемотки (формат: m:ss или ss)",
+          uk: "Час для перемотки (формат: m:ss або ss)",
+        },
+      },
+    },
+    invalidTimeFormat: {
+      en: "Invalid time format. Use m:ss or ss",
+      ru: "Неверный формат времени. Используйте m:ss или ss",
+      uk: "Невірний формат часу. Використовуйте m:ss або ss",
+    },
+    seekBeyondDuration: {
+      en: "You can't seek beyond the duration of the current track",
+      ru: "Вы не можете перемотать за пределы длительности текущего трека",
+      uk: "Ви не можете перемотати за межі тривалості поточного треку",
+    },
+    seekedTo: {
+      en: "Seeked to {{time}}",
+      ru: "Перемотано к {{time}}",
+      uk: "Перемотано до {{time}}",
+    },
+    noMusicPlaying: {
+      en: "No music is currently playing",
+      ru: "Музыка сейчас не играет",
+      uk: "Музика зараз не грає",
+    },
+    notInVoiceChannel: {
+      en: "You are not in a voice channel (or the player is not in the same voice channel)",
+      ru: "Вы не в голосовом канале (или плеер не в том же голосовом канале)",
+      uk: "Ви не в голосовому каналі (або плеєр не в тому ж голосовому каналі)",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
@@ -41,14 +77,14 @@ export default {
     );
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("music.noMusicPlaying"),
+        content: i18n.__("noMusicPlaying"),
         ephemeral: true,
       });
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
       return interaction.editReply({
-        content: i18n.__("music.notInVoiceChannel"),
+        content: i18n.__("notInVoiceChannel"),
         ephemeral: true,
       });
     }
@@ -58,24 +94,25 @@ export default {
 
     if (timeInMs === null) {
       return interaction.editReply({
-        content: i18n.__("music.seek.invalidTimeFormat"),
+        content: i18n.__("invalidTimeFormat"),
         ephemeral: true,
       });
     }
 
     if (timeInMs > player.queue.current.info.duration) {
       return interaction.editReply({
-        content: i18n.__("music.seek.seekBeyondDuration"),
+        content: i18n.__("seekBeyondDuration"),
         ephemeral: true,
       });
     }
 
     await player.seek(timeInMs);
     return interaction.editReply({
-      content: i18n.__("music.seek.seekedTo", { time: timeString }),
+      content: i18n.__("seekedTo", { time: timeString }),
       ephemeral: true,
     });
   },
+
   async autocomplete(interaction) {
     await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
@@ -98,47 +135,6 @@ export default {
         { name: "Invalid format. Use m:ss or ss", value: "0:00" },
       ]);
     }
-  },
-  localization_strings: {
-    name: {
-      en: "seek",
-      ru: "перемотать",
-      uk: "перемотати",
-    },
-    description: {
-      en: "Seek to a specific time in the current track",
-      ru: "Перейти к определенному времени в текущем треке",
-      uk: "Перейти до певного часу в поточному треку",
-    },
-    invalidTimeFormat: {
-      en: "Invalid time format. Use m:ss or ss",
-      ru: "Неверный формат времени. Используйте m:ss или ss",
-      uk: "Невірний формат часу. Використовуйте m:ss або ss",
-    },
-    seekBeyondDuration: {
-      en: "You can't seek beyond the duration of the current track",
-      ru: "Вы не можете перемотать за пределы длительности текущего трека",
-      uk: "Ви не можете перемотати за межі тривалості поточного треку",
-    },
-    seekedTo: {
-      en: "Seeked to {{time}}",
-      ru: "Перемотано к {{time}}",
-      uk: "Перемотано до {{time}}",
-    },
-    options: {
-      time: {
-        name: {
-          en: "time",
-          ru: "время",
-          uk: "час",
-        },
-        description: {
-          en: "Time to seek to (format: m:ss or ss)",
-          ru: "Время для перемотки (формат: m:ss или ss)",
-          uk: "Час для перемотки (формат: m:ss або ss)",
-        },
-      },
-    },
   },
 };
 

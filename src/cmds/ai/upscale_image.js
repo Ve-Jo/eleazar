@@ -1,155 +1,62 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { AttachmentBuilder } from "discord.js";
+import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import sharp from "sharp";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("ai", "upscale_image");
-
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add image option
-    const imageOption = new SlashCommandOption({
-      type: OptionType.ATTACHMENT,
-      name: "image",
-      description: i18nBuilder.translateOption("image", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "image",
-        "description"
-      ),
-    });
-
-    // Add scale option
-    const scaleOption = new SlashCommandOption({
-      type: OptionType.INTEGER,
-      name: "scale",
-      description: i18nBuilder.translateOption("scale", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("scale", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "scale",
-        "description"
-      ),
-      min_value: 2,
-      max_value: 4,
-    });
-
-    subcommand.addOption(imageOption);
-    subcommand.addOption(scaleOption);
-
-    return subcommand;
-  },
-  async execute(interaction, i18n) {
-    await interaction.deferReply();
-
-    const attachment = interaction.options.getAttachment("image");
-    const scale = interaction.options.getInteger("scale");
-
-    if (!attachment.contentType.startsWith("image/")) {
-      return interaction.editReply(i18n.__("ai.upscale_image.invalid_file"));
-    }
-
-    try {
-      // Download the image
-      const response = await fetch(attachment.url);
-      if (!response.ok)
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
-      const imageBuffer = await response.arrayBuffer();
-
-      // Check image dimensions
-      const metadata = await sharp(Buffer.from(imageBuffer)).metadata();
-      if (metadata.width > 1024 || metadata.height > 1024) {
-        return interaction.editReply(
-          i18n.__("ai.upscale_image.invalid_dimensions", {
-            width: metadata.width,
-            height: metadata.height,
-          })
-        );
-      }
-
-      // Run the upscaling model
-      const output = await interaction.client.replicate.run(
-        "nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
-        {
-          input: {
-            image: attachment.url,
-            scale: scale,
-            face_enhance: false,
-          },
-        }
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("upscale_image")
+      .setDescription("Upscale an image to improve its quality")
+      .addAttachmentOption((option) =>
+        option
+          .setName("image")
+          .setDescription("The image to upscale")
+          .setRequired(true)
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName("scale")
+          .setDescription("Scale factor (2-4)")
+          .setRequired(true)
+          .setMinValue(2)
+          .setMaxValue(4)
       );
 
-      if (output) {
-        // Fetch the upscaled image
-        const upscaledResponse = await fetch(output);
-        if (!upscaledResponse.ok)
-          throw new Error(
-            `Failed to fetch upscaled image: ${upscaledResponse.statusText}`
-          );
-        const upscaledImageBuffer = await upscaledResponse.arrayBuffer();
-
-        // Create an attachment
-        const upscaledAttachment = new AttachmentBuilder(
-          Buffer.from(upscaledImageBuffer)
-        ).setName("upscaled_image.png");
-
-        await interaction.editReply({
-          content: i18n.__("ai.upscale_image.upscaled", { scale }),
-          files: [upscaledAttachment],
-        });
-      } else {
-        await interaction.editReply(i18n.__("ai.upscale_image.failed"));
-      }
-    } catch (error) {
-      console.error("Error upscaling image:", error);
-      await interaction.editReply(i18n.__("ai.upscale_image.error"));
-    }
+    return builder;
   },
+
+  // Define localization strings directly in the command
   localization_strings: {
-    name: {
-      en: "upscale",
-      ru: "увеличить",
-      uk: "збільшити",
-    },
-    description: {
-      en: "Upscale an image to improve its quality",
-      ru: "Увеличить изображение для улучшения его качества",
-      uk: "Збільшити зображення для покращення його якості",
+    command: {
+      name: {
+        en: "upscale",
+        ru: "увеличить",
+        uk: "збільшити",
+      },
+      description: {
+        en: "Upscale an image to improve its quality",
+        ru: "Увеличить изображение для улучшения его качества",
+        uk: "Збільшити зображення для покращення його якості",
+      },
     },
     options: {
       image: {
         name: {
-          en: "image",
           ru: "изображение",
           uk: "зображення",
         },
         description: {
-          en: "The image to upscale",
           ru: "Изображение для увеличения",
           uk: "Зображення для збільшення",
         },
       },
       scale: {
         name: {
-          en: "scale",
           ru: "масштаб",
           uk: "масштаб",
         },
         description: {
-          en: "Scale factor (2-4)",
           ru: "Коэффициент масштабирования (2-4)",
           uk: "Коефіцієнт масштабування (2-4)",
         },
@@ -180,5 +87,150 @@ export default {
       ru: "Изображение увеличено с коэффициентом масштабирования {{scale}}x",
       uk: "Зображення збільшено з коефіцієнтом масштабування {{scale}}x",
     },
+    no_attachment: {
+      en: "Please provide an image to upscale.",
+      ru: "Пожалуйста, предоставьте изображение для увеличения.",
+      uk: "Будь ласка, надайте зображення для збільшення.",
+    },
+    not_an_image: {
+      en: "The provided file is not an image. Content type: {{content_type}}",
+      ru: "Предоставленный файл не является изображением. Тип содержимого: {{content_type}}",
+      uk: "Наданий файл не є зображенням. Тип вмісту: {{content_type}}",
+    },
+    file_too_large: {
+      en: "The image file is too large (max 10MB).",
+      ru: "Файл изображения слишком большой (максимум 10МБ).",
+      uk: "Файл зображення занадто великий (максимум 10МБ).",
+    },
+    download_failed: {
+      en: "Failed to download the image.",
+      ru: "Не удалось загрузить изображение.",
+      uk: "Не вдалося завантажити зображення.",
+    },
+    processing: {
+      en: "Processing your image...",
+      ru: "Обработка вашего изображения...",
+      uk: "Обробка вашого зображення...",
+    },
+    api_error: {
+      en: "Error connecting to the upscale API.",
+      ru: "Ошибка при подключении к API увеличения.",
+      uk: "Помилка при підключенні до API збільшення.",
+    },
+    processing_failed: {
+      en: "Failed to process the image.",
+      ru: "Не удалось обработать изображение.",
+      uk: "Не вдалося обробити зображення.",
+    },
+    no_output: {
+      en: "The upscaling service did not return any output.",
+      ru: "Сервис увеличения не вернул результат.",
+      uk: "Сервіс збільшення не повернув результат.",
+    },
+    result_download_failed: {
+      en: "Failed to download the upscaled image.",
+      ru: "Не удалось загрузить увеличенное изображение.",
+      uk: "Не вдалося завантажити збільшене зображення.",
+    },
+    success: {
+      en: "Here is your upscaled image!",
+      ru: "Вот ваше увеличенное изображение!",
+      uk: "Ось ваше збільшене зображення!",
+    },
+  },
+
+  async execute(interaction, i18n) {
+    await interaction.deferReply();
+
+    const attachment = interaction.options.getAttachment("image");
+
+    if (!attachment) {
+      return interaction.editReply(i18n.__("no_attachment"));
+    }
+
+    // Check if file is an image
+    if (!attachment.contentType?.startsWith("image/")) {
+      return interaction.editReply(
+        i18n.__("not_an_image", {
+          content_type: attachment.contentType || "unknown",
+        })
+      );
+    }
+
+    // Check file size (10MB limit)
+    if (attachment.size > 10 * 1024 * 1024) {
+      return interaction.editReply(i18n.__("file_too_large"));
+    }
+
+    try {
+      // Download the image
+      const response = await fetch(attachment.url);
+      if (!response.ok) {
+        throw new Error(i18n.__("download_failed"));
+      }
+
+      const imageBuffer = await response.arrayBuffer();
+
+      await interaction.editReply(i18n.__("processing"));
+
+      // Call the upscale API using Replicate
+      const prediction = await interaction.client.replicate.predictions.create({
+        version:
+          "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b",
+        input: {
+          image: Buffer.from(imageBuffer).toString("base64"),
+        },
+      });
+
+      if (!prediction) {
+        throw new Error(i18n.__("api_error"));
+      }
+
+      // Wait for the prediction to complete
+      let finalPrediction = prediction;
+      while (
+        finalPrediction.status !== "succeeded" &&
+        finalPrediction.status !== "failed"
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        finalPrediction = await interaction.client.replicate.predictions.get(
+          prediction.id
+        );
+      }
+
+      if (finalPrediction.status === "failed") {
+        throw new Error(i18n.__("processing_failed"));
+      }
+
+      // Get the result image
+      const output = finalPrediction.output;
+
+      if (!output || !output[0]) {
+        throw new Error(i18n.__("no_output"));
+      }
+
+      // Download the result image
+      const upscaledImageUrl = output[0];
+      const upscaledImageResponse = await fetch(upscaledImageUrl);
+
+      if (!upscaledImageResponse.ok) {
+        throw new Error(i18n.__("result_download_failed"));
+      }
+
+      const upscaledImageBuffer = await upscaledImageResponse.arrayBuffer();
+
+      // Send the result
+      const resultAttachment = new AttachmentBuilder(
+        Buffer.from(upscaledImageBuffer)
+      ).setName("upscaled_image.png");
+
+      await interaction.editReply({
+        content: i18n.__("success"),
+        files: [resultAttachment],
+      });
+    } catch (error) {
+      console.error("Error upscaling image:", error);
+      await interaction.editReply(i18n.__("error"));
+    }
   },
 };

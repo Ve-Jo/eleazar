@@ -1,10 +1,8 @@
 import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
-import { AttachmentBuilder, EmbedBuilder } from "discord.js";
+  SlashCommandSubcommandBuilder,
+  AttachmentBuilder,
+  EmbedBuilder,
+} from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import axios from "axios";
@@ -136,32 +134,76 @@ export async function handleRemoveBanner(interaction) {
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("images", "setbanner");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("setbanner")
+      .setDescription("Set a banner for your profile")
+      .addAttachmentOption((option) =>
+        option
+          .setName("image")
+          .setDescription("The image to use as your banner")
+          .setRequired(true)
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add image attachment option
-    const imageOption = new SlashCommandOption({
-      type: OptionType.ATTACHMENT,
-      name: "image",
-      description: i18nBuilder.translateOption("image", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "image",
-        "description"
-      ),
-    });
-
-    subcommand.addOption(imageOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        ru: "установитьбаннер",
+        uk: "встановитибанер",
+      },
+      description: {
+        ru: "Установить баннер для вашего профиля",
+        uk: "Встановити банер для вашого профілю",
+      },
+    },
+    options: {
+      image: {
+        name: {
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          ru: "Изображение для использования в качестве баннера",
+          uk: "Зображення для використання в якості банера",
+        },
+      },
+    },
+    title: {
+      en: "Banner Set",
+      ru: "Баннер установлен",
+      uk: "Банер встановлено",
+    },
+    success: {
+      en: "Your banner has been set successfully!",
+      ru: "Ваш баннер успешно установлен!",
+      uk: "Ваш банер успішно встановлено!",
+    },
+    error: {
+      en: "An error occurred while setting the banner",
+      ru: "Произошла ошибка при установке баннера",
+      uk: "Виникла помилка під час встановлення банера",
+    },
+    invalidImage: {
+      en: "Please provide a valid image file",
+      ru: "Пожалуйста, предоставьте действительный файл изображения",
+      uk: "Будь ласка, надайте дійсний файл зображення",
+    },
+    imageTooLarge: {
+      en: "The image file is too large (max 8MB)",
+      ru: "Файл изображения слишком большой (максимум 8МБ)",
+      uk: "Файл зображення занадто великий (максимум 8МБ)",
+    },
+    bannerPreview: {
+      en: "Banner Preview",
+      ru: "Предпросмотр баннера",
+      uk: "Попередній перегляд банера",
+    },
+  },
+
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const attachment = interaction.options.getAttachment("image");
@@ -170,7 +212,7 @@ export default {
       // Validate attachment
       if (!attachment.contentType?.startsWith("image/")) {
         return interaction.editReply({
-          content: i18n.__("images.setbanner.invalidImage"),
+          content: i18n.__("invalidImage"),
           ephemeral: true,
         });
       }
@@ -178,7 +220,7 @@ export default {
       const MAX_SIZE = 8 * 1024 * 1024;
       if (attachment.size > MAX_SIZE) {
         return interaction.editReply({
-          content: i18n.__("images.setbanner.imageTooLarge"),
+          content: i18n.__("imageTooLarge"),
           ephemeral: true,
         });
       }
@@ -188,25 +230,25 @@ export default {
         const response = await axios.head(attachment.url);
         if (!response.headers["content-type"]?.startsWith("image/")) {
           return interaction.editReply({
-            content: i18n.__("images.setbanner.invalidImage"),
+            content: i18n.__("invalidImage"),
             ephemeral: true,
           });
         }
       } catch (error) {
         console.error("Error validating image URL:", error);
         return interaction.editReply({
-          content: i18n.__("images.setbanner.invalidImage"),
+          content: i18n.__("invalidImage"),
           ephemeral: true,
         });
       }
 
-      // Convert ephemeral attachment to permanent before saving
+      // Upload the image to our storage
       const permanentUrl = await makePermanentAttachment(
         interaction,
         attachment
       );
 
-      // Save the permanent URL
+      // Store the banner URL in the database
       await Database.client.user.upsert({
         where: {
           guildId_id: {
@@ -214,33 +256,24 @@ export default {
             id: interaction.user.id,
           },
         },
-        create: {
-          id: interaction.user.id,
-          guildId: interaction.guild.id,
-          bannerUrl: permanentUrl,
-          lastActivity: Date.now(),
-        },
         update: {
           bannerUrl: permanentUrl,
-          lastActivity: Date.now(),
+        },
+        create: {
+          guildId: interaction.guild.id,
+          id: interaction.user.id,
+          bannerUrl: permanentUrl,
         },
       });
 
-      // Get updated user data
       const userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
 
-      await interaction.editReply({
-        content: i18n.__("images.setbanner.processing"),
-      });
-
-      // Clear any cached data for this user
-      if (typeof Bun !== "undefined") Bun.gc();
-
-      let imageResponse = await generateImage(
+      // Create a preview of the banner using the image generator
+      const [previewBuffer, dominantColor] = await generateImage(
         "Balance",
         {
           interaction: {
@@ -262,103 +295,44 @@ export default {
               }),
             },
           },
+          bannerUrl: permanentUrl,
           locale: interaction.locale,
-          targetUser: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
+          returnDominant: true,
+          database: {
+            ...userData,
           },
-          database: { ...userData },
         },
         { image: 2, emoji: 1 }
       );
 
-      const final_attachment = new AttachmentBuilder(imageResponse, {
-        name: `balance.png`,
+      if (!previewBuffer) {
+        throw new Error("Failed to generate banner preview");
+      }
+
+      const previewAttachment = new AttachmentBuilder(previewBuffer, {
+        name: "banner_preview.png",
       });
 
+      const embed = new EmbedBuilder()
+        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+        .setTimestamp()
+        .setImage("attachment://banner_preview.png")
+        .setAuthor({
+          name: i18n.__("title"),
+          iconURL: interaction.user.displayAvatarURL(),
+        });
+
       await interaction.editReply({
-        content: i18n.__(`images.setbanner.success.png`),
-        files: [final_attachment],
+        content: i18n.__("success"),
+        embeds: [embed],
+        files: [previewAttachment],
       });
     } catch (error) {
       console.error("Error setting banner:", error);
       await interaction.editReply({
-        content: i18n.__("images.setbanner.error"),
+        content: i18n.__("error"),
         ephemeral: true,
       });
     }
-  },
-  localization_strings: {
-    name: {
-      en: "setbanner",
-      ru: "баннер",
-      uk: "банер",
-    },
-    description: {
-      en: "Set your profile banner image",
-      ru: "Установить изображение баннера профиля",
-      uk: "Встановити зображення банера профілю",
-    },
-    title: {
-      en: "Banner Preview",
-      ru: "Предпросмотр баннера",
-      uk: "Попередній перегляд банера",
-    },
-    options: {
-      image: {
-        name: {
-          en: "image",
-          ru: "изображение",
-          uk: "зображення",
-        },
-        description: {
-          en: "Upload your banner image (PNG, JPG, GIF, or WEBP)",
-          ru: "Загрузите изображение баннера (PNG, JPG, GIF, или WEBP)",
-          uk: "Завантажте зображення банера (PNG, JPG, GIF, або WEBP)",
-        },
-      },
-    },
-    invalidImage: {
-      en: "The provided URL does not contain a valid image",
-      ru: "Предоставленный URL не содержит действительного изображения",
-      uk: "Наданий URL не містить дійсного зображення",
-    },
-    processing: {
-      en: "Processing banner... This may take a moment (especially if it's a GIF).",
-      ru: "Обработка баннера... Это может занять некоторое время (особенно если это гифка).",
-      uk: "Обробка банера... Це може зайняти деякий час (особливо якщо це анімація).",
-    },
-    success: {
-      static: {
-        en: "Banner has been set successfully!",
-        ru: "Ваше изображение баннера успешно установлено!",
-        uk: "Ваше зображення банера успішно встановлено!",
-      },
-      gif: {
-        en: "Your GIF has been set successfully as a banner!\n\nNote: To maintain fast rendering of each of your commands, the number of frames on the entire animation will be limited to 30 frames. Try to choose short animations to get smooth display.",
-        ru: "Ваша гифка была успешно установлена в качестве баннера!\n\nОбратите внимание, чтобы поддерживать быстрый рендер каждой вашей команды, количество кадров на всю анимацию будет ограничено 30 кадрами. Старайтесь подбирать короткие анимации дабы получить плавное отображение.",
-        uk: "Ваша анімація банера успішно встановлена як баннер!\n\nЗверніть увагу, щоб підтримувати швидкий рендер кожної вашої команди, кількість кадрів на всю анімацію буде обмежено 30 кадрами. Намагайтесь вибирати короткі анімації дабы отримати плавне відображення.",
-      },
-    },
-    error: {
-      en: "An error occurred while setting the banner",
-      ru: "Произошла ошибка при установке баннера",
-      uk: "Виникла помилка під час встановлення банера",
-    },
-    imageTooLarge: {
-      en: "Image file is too large (maximum 8MB)",
-      ru: "Файл изображения слишком большой (максимум 8МБ)",
-      uk: "Файл зображення занадто великий (максимум 8МБ)",
-    },
-    processingGif: {
-      en: "Processing GIF banner... This may take a moment.",
-      ru: "Обработка GIF баннера... Это может занять некоторое время.",
-      uk: "Обробка GIF банера... Це може зайняти деякий час.",
-    },
   },
 };

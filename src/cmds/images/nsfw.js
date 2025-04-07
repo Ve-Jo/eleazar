@@ -1,9 +1,4 @@
-import {
-  SlashCommandSubcommand,
-  SlashCommandOption,
-  OptionType,
-  I18nCommandBuilder,
-} from "../../utils/builders/index.js";
+import { SlashCommandSubcommandBuilder } from "discord.js";
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -15,62 +10,86 @@ import HMFull from "hmfull";
 
 export default {
   data: () => {
-    const i18nBuilder = new I18nCommandBuilder("images", "nsfw");
+    // Create a standard subcommand with Discord.js builders
+    const builder = new SlashCommandSubcommandBuilder()
+      .setName("nsfw")
+      .setDescription("Choose a NSFW image")
+      .addStringOption((option) =>
+        option
+          .setName("image")
+          .setDescription("Choose an image")
+          .setRequired(true)
+          .addChoices(
+            { name: "Anal", value: "anal" },
+            { name: "Ass", value: "ass" },
+            { name: "BDSM", value: "bdsm" },
+            { name: "Cum", value: "cum" },
+            { name: "Creampie", value: "creampie" },
+            { name: "Manga", value: "manga" },
+            { name: "Femdom", value: "femdom" },
+            { name: "Hentai", value: "hentai" },
+            { name: "Masturbation", value: "masturbation" },
+            { name: "Public", value: "public" },
+            { name: "Orgy", value: "orgy" },
+            { name: "Yuri", value: "yuri" },
+            { name: "Pantsu", value: "pantsu" },
+            { name: "Glasses", value: "glasses" },
+            { name: "Blowjob", value: "blowjob" },
+            { name: "Boobjob", value: "boobjob" },
+            { name: "Footjob", value: "footjob" },
+            { name: "Handjob", value: "handjob" },
+            { name: "Boobs", value: "boobs" },
+            { name: "Thighs", value: "thighs" },
+            { name: "Pussy", value: "pussy" },
+            { name: "Ahegao", value: "ahegao" },
+            { name: "Uniform", value: "uniform" },
+            { name: "GIF", value: "gif" }
+          )
+      );
 
-    const subcommand = new SlashCommandSubcommand({
-      name: i18nBuilder.getSimpleName(i18nBuilder.translate("name")),
-      description: i18nBuilder.translate("description"),
-      name_localizations: i18nBuilder.getLocalizations("name"),
-      description_localizations: i18nBuilder.getLocalizations("description"),
-    });
-
-    // Add image option
-    const imageOption = new SlashCommandOption({
-      type: OptionType.STRING,
-      name: "image",
-      description: i18nBuilder.translateOption("image", "description"),
-      required: true,
-      name_localizations: i18nBuilder.getOptionLocalizations("image", "name"),
-      description_localizations: i18nBuilder.getOptionLocalizations(
-        "image",
-        "description"
-      ),
-      choices: [
-        { name: "Anal", value: "anal" },
-        { name: "Ass", value: "ass" },
-        { name: "BDSM", value: "bdsm" },
-        { name: "Cum", value: "cum" },
-        { name: "Creampie", value: "creampie" },
-        { name: "Manga", value: "manga" },
-        { name: "Femdom", value: "femdom" },
-        { name: "Hentai", value: "hentai" },
-        { name: "Masturbation", value: "masturbation" },
-        { name: "Public", value: "public" },
-        { name: "Orgy", value: "orgy" },
-        { name: "Yuri", value: "yuri" },
-        { name: "Pantsu", value: "pantsu" },
-        { name: "Glasses", value: "glasses" },
-        { name: "Blowjob", value: "blowjob" },
-        { name: "Boobjob", value: "boobjob" },
-        { name: "Footjob", value: "footjob" },
-        { name: "Handjob", value: "handjob" },
-        { name: "Boobs", value: "boobs" },
-        { name: "Thighs", value: "thighs" },
-        { name: "Pussy", value: "pussy" },
-        { name: "Ahegao", value: "ahegao" },
-        { name: "Uniform", value: "uniform" },
-        { name: "GIF", value: "gif" },
-      ],
-    });
-
-    subcommand.addOption(imageOption);
-
-    return subcommand;
+    return builder;
   },
+
+  // Define localization strings directly in the command
+  localization_strings: {
+    command: {
+      name: {
+        ru: "nsfw",
+        uk: "nsfw",
+      },
+      description: {
+        ru: "Выберите NSFW изображение",
+        uk: "Виберіть NSFW зображення",
+      },
+    },
+    options: {
+      image: {
+        name: {
+          ru: "изображение",
+          uk: "зображення",
+        },
+        description: {
+          ru: "Выберите изображение",
+          uk: "Виберіть зображення",
+        },
+      },
+    },
+    notFound: {
+      en: "Image not found",
+      ru: "Изображение не найдено",
+      uk: "Зображення не знайдено",
+    },
+    nsfwChannelOnly: {
+      en: "This command can only be used in NSFW channels",
+      ru: "Эта команда может быть использована только в NSFW каналах",
+      uk: "Ця команда може бути використана тільки в NSFW каналах",
+    },
+  },
+
   async execute(interaction, i18n) {
     if (!interaction.channel.nsfw) {
       return interaction.reply({
-        content: i18n.__("nsfwChannelOnly"),
+        content: i18n.__("images.nsfw.nsfwChannelOnly"),
         ephemeral: true,
       });
     }
@@ -112,11 +131,9 @@ export default {
         return null;
       }
 
-      const title = i18n.__(`images.nsfw.name`);
-
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(typeof title === "string" ? title : `NSFW - ${image}`)
+        .setTitle(`NSFW - ${image}`)
         .setImage(imageUrl)
         .setFooter({
           text: interaction.user.displayName,
@@ -128,7 +145,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("images.nsfw.notFound"),
+        content: i18n.__("notFound"),
         ephemeral: true,
       });
     }
@@ -158,7 +175,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("images.nsfw.notFound"),
+            content: i18n.__("notFound"),
             ephemeral: true,
           });
         }
@@ -169,36 +186,5 @@ export default {
       row.components[0].setDisabled(true);
       interaction.editReply({ components: [row] }).catch(console.error);
     });
-  },
-  localization_strings: {
-    name: {
-      en: "nsfw",
-      ru: "nsfw",
-      uk: "nsfw",
-    },
-    description: {
-      en: "Choose a NSFW image",
-      ru: "Выберите NSFW изображение",
-      uk: "Виберіть NSFW зображення",
-    },
-    options: {
-      image: {
-        name: {
-          en: "image",
-          ru: "изображение",
-          uk: "зображення",
-        },
-        description: {
-          en: "Choose an image",
-          ru: "Выберите изображение",
-          uk: "Виберіть зображення",
-        },
-      },
-    },
-    notFound: {
-      en: "Image not found",
-      ru: "Изображение не найдено",
-      uk: "Зображення не знайдено",
-    },
   },
 };
