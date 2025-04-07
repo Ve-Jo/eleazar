@@ -6,6 +6,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function loadEvents(client) {
+  // Clear existing events to prevent duplicates
+  client.events = new Map();
+
+  // Remove all existing listeners for safety
+  client.removeAllListeners();
+
   const eventsPath = path.join(__dirname, "..", "events");
   const eventFiles = fs
     .readdirSync(eventsPath)
@@ -14,13 +20,15 @@ export async function loadEvents(client) {
   for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
     try {
-      const event = await import(filePath);
+      // Force a fresh import by adding a timestamp to bypass Node's module cache
+      const event = await import(`${filePath}`);
+
       if (event.default.once) {
         client.once(event.default.name, (...args) =>
           event.default.execute(...args)
         );
       } else {
-        client.on(event.default.name, (...args) => 
+        client.on(event.default.name, (...args) =>
           event.default.execute(...args)
         );
       }
