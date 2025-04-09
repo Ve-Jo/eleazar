@@ -1,63 +1,70 @@
 import { Events } from "discord.js";
 import { translate } from "bing-translate-api";
+import i18n from "../utils/newI18n.js";
 
-let models = {
-  text: [
-    "deepseek-r1-distill-llama-70b",
-    "llama-3.3-70b-versatile",
-    "llama-3.1-70b-versatile",
-    "llama3-groq-70b-8192-tool-use-preview",
-  ],
-  vision: ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"],
+// Configuration
+const CONFIG = {
+  models: {
+    text: [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-70b-versatile",
+      "llama3-groq-70b-8192-tool-use-preview",
+    ],
+    vision: ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"],
+  },
+  maxContextLength: 4,
+  initialContext: {
+    role: "system",
+    content: `You are a AI assistant for discord bot named "Eleazar" and created by "@vejoy_". You answer all questions. You have tons of tools (commands) that you can execute for the user. But if user just want to talk with you, try to talk as natural and simplier to him as possible (and not with tons of text).`,
+  },
 };
 
-let modelCooldowns = {
-  text: {},
-  vision: {},
+// State management
+const state = {
+  modelCooldowns: { text: {}, vision: {} },
+  userContexts: {},
 };
 
-const MAX_CONTEXT_LENGTH = 4;
-const INITIAL_CONTEXT = {
-  role: "system",
-  content: `You are a AI assistant for discord bot named "Eleazar" and created by "@vejoy_". You answer all questions. You have tons of tools (commands) that you can execute for the user. But if user just want to talk with you, try to talk as natural and simplier to him as possible (and not with tons of text).`,
-};
+// Helper functions
+function getAvailableModel(modelType) {
+  const now = Date.now();
+  for (const model of CONFIG.models[modelType]) {
+    if (
+      !state.modelCooldowns[modelType][model] ||
+      state.modelCooldowns[modelType][model] <= now
+    ) {
+      return model;
+    }
+  }
+  return null;
+}
 
-let context = {};
+function updateModelCooldown(modelType, modelName, retryAfter) {
+  state.modelCooldowns[modelType][modelName] = Date.now() + retryAfter * 1000;
+}
+
+async function handleRateLimit(error, modelType, currentModel) {
+  if (
+    error.status === 429 ||
+    error.error?.error?.code === "rate_limit_exceeded"
+  ) {
+    const retryAfter = error.headers?.["retry-after"] || 60;
+    updateModelCooldown(modelType, currentModel, retryAfter);
+    return true;
+  }
+  return false;
+}
 
 function generateToolsFromCommands(client) {
   return Array.from(client.commands.values())
     .filter((command) => command.data && command.data.ai !== false)
     .flatMap((command) => {
       const commandData = command.data;
+      const tools = [];
 
-      // If command has subcommands
-      if (
-        commandData.options &&
-        commandData.options.some((opt) => opt.type === 1)
-      ) {
-        return commandData.options
-          .filter((subcommand) => subcommand.type === 1)
-          .map((subcommand) => ({
-            type: "function",
-            function: {
-              name: `${commandData.name}_${subcommand.name}`,
-              description: subcommand.description,
-              parameters: {
-                type: "object",
-                properties: generateParametersFromOptions(
-                  subcommand.options || []
-                ),
-                required: (subcommand.options || [])
-                  .filter((opt) => opt.required)
-                  .map((opt) => opt.name),
-              },
-            },
-          }));
-      }
-
-      // If command doesn't have subcommands
-      return [
-        {
+      // Add the main command as a tool if it has an execute function
+      if (command.execute) {
+        tools.push({
           type: "function",
           function: {
             name: commandData.name,
@@ -72,113 +79,171 @@ function generateToolsFromCommands(client) {
                 .map((opt) => opt.name),
             },
           },
-        },
-      ];
+        });
+      }
+
+      // Add subcommands as tools
+      if (command.subcommands) {
+        Object.entries(command.subcommands).forEach(
+          ([subcommandName, subcommand]) => {
+            if (subcommand.data && subcommand.execute) {
+              tools.push({
+                type: "function",
+                function: {
+                  name: `${commandData.name}_${subcommandName}`,
+                  description: subcommand.data.description,
+                  parameters: {
+                    type: "object",
+                    properties: generateParametersFromOptions(
+                      subcommand.data.options || []
+                    ),
+                    required: (subcommand.data.options || [])
+                      .filter((opt) => opt.required)
+                      .map((opt) => opt.name),
+                  },
+                },
+              });
+            }
+          }
+        );
+      }
+
+      return tools;
     });
 }
 
 function generateParametersFromOptions(options) {
-  const parameters = {};
-
-  options.forEach((option) => {
-    parameters[option.name] = {
+  return options.reduce((params, option) => {
+    params[option.name] = {
       type: getParameterType(option.type),
       description: option.description,
+      ...(option.choices && {
+        enum: option.choices.map((choice) => choice.value),
+      }),
     };
-
-    if (option.choices) {
-      parameters[option.name].enum = option.choices.map(
-        (choice) => choice.value
-      );
-    }
-  });
-
-  return parameters;
+    return params;
+  }, {});
 }
 
 function getParameterType(optionType) {
-  // Discord.js ApplicationCommandOptionType mapping
-  switch (optionType) {
-    case 3: // STRING
-      return "string";
-    case 4: // INTEGER
-      return "integer";
-    case 5: // BOOLEAN
-      return "boolean";
-    case 6: // USER
-      return "string"; // For user mentions/IDs
-    case 7: // CHANNEL
-      return "string"; // For channel mentions/IDs
-    case 8: // ROLE
-      return "string"; // For role mentions/IDs
-    case 10: // NUMBER
-      return "number";
-    default:
-      return "string";
-  }
+  const typeMap = {
+    3: "string", // STRING
+    4: "integer", // INTEGER
+    5: "boolean", // BOOLEAN
+    6: "string", // USER
+    7: "string", // CHANNEL
+    8: "string", // ROLE
+    10: "number", // NUMBER
+  };
+  return typeMap[optionType] || "string";
 }
 
-async function translateText(text, targetLang) {
-  try {
-    // Sanitize mentions before translation
-    text = text.replace(/<@[!&]?\d+>/g, " ");
-    text = text.replace(/@everyone/gi, " ");
-    text = text.replace(/@here/gi, " ");
-
-    // Preserve code blocks
-    const codeBlocks = [];
-    text = text.replace(/```[\s\S]*?```/g, (match) => {
-      codeBlocks.push(match);
-      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
-    });
-
-    // Preserve quoted text
-    const quotedTexts = [];
-    text = text.replace(/"([^"]*)"/g, (match, group) => {
-      quotedTexts.push(group);
-      return `__QUOTED_TEXT_${quotedTexts.length - 1}__`;
-    });
-
-    // Translate the modified text
-    const result = await translate(text, null, targetLang);
-    let translatedText = result.translation;
-
-    // Restore quoted texts
-    quotedTexts.forEach((quote, index) => {
-      translatedText = translatedText.replace(
-        `__QUOTED_TEXT_${index}__`,
-        `"${quote}"`
-      );
-    });
-
-    // Restore code blocks
-    codeBlocks.forEach((block, index) => {
-      translatedText = translatedText.replace(`__CODE_BLOCK_${index}__`, block);
-    });
-
-    return translatedText;
-  } catch (error) {
-    console.error("Translation error:", error);
-    return text;
-  }
-}
-
-async function executeToolCall(
-  toolCall,
+async function createFakeInteraction(
   message,
   processingMessage,
-  detectedLanguage
+  commandName,
+  subcommandName,
+  args,
+  locale
 ) {
+  const parsedArgs = args ? JSON.parse(args) : {};
+
+  return {
+    commandName,
+    user: message.author,
+    guild: message.guild,
+    member: message.member,
+    channel: message.channel,
+    client: message.client,
+    reply: async (content) => processingMessage.edit(content),
+    editReply: async (content) => processingMessage.edit(content),
+    deferReply: async () => processingMessage.edit("Processing..."),
+    followUp: async (content) => message.channel.send(content),
+    options: {
+      getSubcommand: () => subcommandName,
+      getString: (name) => parsedArgs[name]?.toString() || null,
+      getInteger: (name) =>
+        parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
+      getBoolean: (name) =>
+        parsedArgs[name] === true || parsedArgs[name] === "true",
+      getMember: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return message.member;
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          const userId = value.replace(/[<@!>]/g, "");
+          return message.guild.members.cache.get(userId) || message.member;
+        }
+        return message.member;
+      },
+      getUser: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          return message.client.users.cache.get(value.replace(/[<@!>]/g, ""));
+        }
+        return message.client.users.cache.find(
+          (u) =>
+            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
+        );
+      },
+      getChannel: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<#") && value.endsWith(">")) {
+          return message.guild.channels.cache.get(value.replace(/[<#>]/g, ""));
+        }
+        return message.guild.channels.cache.find(
+          (c) => c.name.toLowerCase() === value.toLowerCase()
+        );
+      },
+      getRole: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<@&") && value.endsWith(">")) {
+          return message.guild.roles.cache.get(value.replace(/[<@&>]/g, ""));
+        }
+        return message.guild.roles.cache.find(
+          (r) => r.name.toLowerCase() === value.toLowerCase()
+        );
+      },
+      getNumber: (name) =>
+        parsedArgs[name] ? parseFloat(parsedArgs[name]) : null,
+      getAttachment: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        return message.attachments.find((a) => a.id === value);
+      },
+      getMentionable: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          const id = value.replace(/[<@!>]/g, "");
+          return (
+            message.guild.members.cache.get(id) ||
+            message.guild.roles.cache.get(id) ||
+            message.client.users.cache.get(id)
+          );
+        }
+        return null;
+      },
+    },
+    locale,
+    isChatInputCommand: () => true,
+    isCommand: () => true,
+    deferred: false,
+    replied: false,
+    ephemeral: false,
+  };
+}
+
+async function executeToolCall(toolCall, message, processingMessage, locale) {
   const { name, arguments: args } = toolCall.function;
   const [commandName, ...subcommandParts] = name.split("_");
   const subcommandName = subcommandParts.join("_");
 
   const command = message.client.commands.get(commandName);
   if (!command) {
-    return {
-      success: false,
-      response: `Command "${commandName}" not found.`,
-    };
+    return { success: false, response: `Command "${commandName}" not found.` };
   }
 
   try {
@@ -188,21 +253,85 @@ async function executeToolCall(
       commandName,
       subcommandName,
       args,
-      detectedLanguage
+      locale
     );
 
-    // Execute preExecute if it exists
-    if (command.preExecute) {
-      await command.preExecute(fakeInteraction);
+    // Set locale based on user or guild preferences
+    let effectiveLocale = locale || message.guild?.preferredLocale || "en";
+
+    // Normalize locale (replacing hyphens, ensuring it's a supported locale)
+    if (effectiveLocale.includes("-")) {
+      effectiveLocale = effectiveLocale.split("-")[0].toLowerCase();
     }
 
-    let response;
-    if (subcommandName && command.subcommands?.[subcommandName]) {
-      response = await command.subcommands[subcommandName].execute(
-        fakeInteraction
+    // If locale is not supported, fall back to en
+    if (!["en", "ru", "uk"].includes(effectiveLocale)) {
+      console.log(
+        `Locale ${effectiveLocale} not supported, falling back to en`
       );
-    } else if (command.execute) {
-      response = await command.execute(fakeInteraction);
+      effectiveLocale = "en";
+    }
+
+    console.log(
+      `Setting locale to ${effectiveLocale} for user ${message.author.tag}`
+    );
+    i18n.setLocale(effectiveLocale);
+
+    // Create context-specific i18n for this command
+    let commandI18n;
+    let response;
+
+    // If this is a subcommand
+    if (subcommandName && command.subcommands?.[subcommandName]) {
+      // Get category from command or use command name as category
+      const category = command.data?.category || commandName;
+
+      // Create context-aware i18n for the subcommand
+      console.log(`Creating context for ${category}.${subcommandName}`);
+      commandI18n = i18n.createContextI18n(
+        "commands",
+        `${category}`,
+        effectiveLocale
+      );
+
+      // Register any localizations if present
+      if (command.subcommands[subcommandName].localization_strings) {
+        i18n.registerLocalizations(
+          "commands",
+          `${category}`,
+          command.subcommands[subcommandName].localization_strings
+        );
+      }
+
+      // Execute the subcommand
+      response = await command.subcommands[subcommandName].execute(
+        fakeInteraction,
+        commandI18n
+      );
+    }
+    // Regular command without subcommands
+    else if (command.execute) {
+      // Get category from command or use command name as category
+      const category = command.data?.category || commandName;
+
+      // Create context-aware i18n for the command
+      commandI18n = i18n.createContextI18n(
+        "commands",
+        category,
+        effectiveLocale
+      );
+
+      // Register any localizations if present
+      if (command.localization_strings) {
+        i18n.registerLocalizations(
+          "commands",
+          category,
+          command.localization_strings
+        );
+      }
+
+      // Execute the command
+      response = await command.execute(fakeInteraction, commandI18n);
     } else {
       return {
         success: false,
@@ -223,203 +352,6 @@ async function executeToolCall(
   }
 }
 
-async function createFakeInteraction(
-  message,
-  processingMessage,
-  commandName,
-  subcommandName,
-  args,
-  detectedLanguage
-) {
-  const fakeOptions = createFakeOptions(subcommandName, args, message);
-
-  let freshMember;
-  try {
-    freshMember = await message.guild.members.fetch(message.author.id);
-  } catch (error) {
-    console.error(`Failed to fetch member data:`, error);
-    freshMember = message.member;
-  }
-
-  let userLocale = ["en", "ru", "uk"].includes(detectedLanguage)
-    ? detectedLanguage
-    : "en";
-
-  return {
-    commandName: commandName,
-    user: message.author,
-    guild: message.guild,
-    member: freshMember,
-    channel: message.channel,
-    client: message.client,
-    reply: async (content) => processingMessage.edit(content),
-    editReply: async (content) => processingMessage.edit(content),
-    deferReply: async () => processingMessage.edit("Processing..."),
-    followUp: async (content) => message.channel.send(content),
-    options: {
-      ...fakeOptions,
-      getSubcommand: () => subcommandName,
-      getString: (name) => {
-        const value = JSON.parse(args)[name];
-        return value ? String(value) : null;
-      },
-      getUser: (name) => {
-        const value = JSON.parse(args)[name];
-        if (!value) return null;
-        // Handle both mention format and plain username
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          const userId = value.replace(/[<@!>]/g, "");
-          return message.client.users.cache.get(userId);
-        }
-        // Try to find user by username
-        return message.client.users.cache.find(
-          (u) =>
-            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
-        );
-      },
-    },
-    locale: userLocale,
-    isChatInputCommand: () => true,
-    isCommand: () => true,
-    deferred: false,
-    replied: false,
-    ephemeral: false,
-  };
-}
-
-function createFakeOptions(subcommandName, args, message) {
-  const parsedArgs = args ? JSON.parse(args) : {};
-
-  return {
-    getSubcommand: () => subcommandName,
-    getString: (name) => parsedArgs[name] || null,
-    getInteger: (name) =>
-      parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
-    getBoolean: (name) =>
-      parsedArgs[name] === true || parsedArgs[name] === "true",
-    getUser: (name) => {
-      if (!parsedArgs[name]) return null;
-      const value = parsedArgs[name];
-      if (value.startsWith("<@") && value.endsWith(">")) {
-        const userId = value.replace(/[<@!>]/g, "");
-        return message.client.users.cache.get(userId);
-      }
-      return message.client.users.cache.find(
-        (u) => u.username.toLowerCase() === value.toLowerCase().replace("@", "")
-      );
-    },
-    getMember: (name) => {
-      const user = parsedArgs[name]
-        ? message.guild.members.cache.get(
-            parsedArgs[name].replace(/[<@!>]/g, "")
-          )
-        : null;
-      return user || message.member;
-    },
-  };
-}
-
-function parseXmlToolCall(xmlString) {
-  // Match both complete and incomplete function calls
-  const functionMatch = xmlString.match(
-    /<function(?:=|\s+name=")([^">]+)"?>({[^<]+})?(?:<\/function>)?/
-  );
-  if (!functionMatch) return null;
-
-  const name = functionMatch[1];
-  let args = {};
-
-  if (functionMatch[2]) {
-    try {
-      // Try to parse the JSON, even if it's incomplete
-      const jsonStr = functionMatch[2].replace(/&/g, "&amp;");
-      args = JSON.parse(jsonStr);
-    } catch (error) {
-      console.error("Error parsing function arguments:", error);
-      // If JSON parsing fails, try to extract key-value pairs
-      const argPairs = functionMatch[2].match(/("?\w+"?\s*:\s*"[^"]*")/g);
-      if (argPairs) {
-        argPairs.forEach((pair) => {
-          const [key, value] = pair
-            .split(":")
-            .map((s) => s.trim().replace(/"/g, ""));
-          args[key] = value;
-        });
-      }
-    }
-  }
-
-  return {
-    type: "function",
-    function: { name, arguments: JSON.stringify(args) },
-  };
-}
-
-function updateModelCooldown(modelType, modelName, retryAfter) {
-  const cooldownUntil = Date.now() + retryAfter * 1000;
-  modelCooldowns[modelType][modelName] = cooldownUntil;
-}
-
-function getAvailableModel(modelType) {
-  const now = Date.now();
-  for (const model of models[modelType]) {
-    if (
-      !modelCooldowns[modelType][model] ||
-      modelCooldowns[modelType][model] <= now
-    ) {
-      return model;
-    }
-  }
-  return null;
-}
-
-async function handleRateLimit(error, modelType, currentModel) {
-  console.log("Checking for rate limit error:", JSON.stringify(error, null, 2));
-
-  if (
-    error.status === 429 ||
-    (error.error &&
-      error.error.error &&
-      error.error.error.code === "rate_limit_exceeded")
-  ) {
-    console.log(`Rate limited for model ${currentModel}. Swapping model.`);
-
-    let retryAfter = 60;
-    let headers = error.headers || {};
-
-    if (headers["retry-after"]) {
-      retryAfter = parseInt(headers["retry-after"]);
-    } else if (error.error && error.error.error && error.error.error.message) {
-      const match = error.error.error.message.match(
-        /Please try again in (\d+m)?(\d+(?:\.\d+)?s)/
-      );
-      if (match) {
-        const minutes = match[1] ? parseInt(match[1]) : 0;
-        const seconds = parseFloat(match[2]);
-        retryAfter = minutes * 60 + Math.ceil(seconds);
-      }
-    }
-
-    updateModelCooldown(modelType, currentModel, retryAfter);
-
-    // Log rate limit information
-    console.log(`Rate limit info:
-      Retry-After: ${retryAfter} seconds
-      Requests Per Day (RPD) Limit: ${headers["x-ratelimit-limit-requests"]}
-      Tokens Per Minute (TPM) Limit: ${headers["x-ratelimit-limit-tokens"]}
-      Remaining RPD: ${headers["x-ratelimit-remaining-requests"]}
-      Remaining TPM: ${headers["x-ratelimit-remaining-tokens"]}
-      RPD Reset: ${headers["x-ratelimit-reset-requests"]}
-      TPM Reset: ${headers["x-ratelimit-reset-tokens"]}
-      Error Message: ${error.error?.error?.message || "N/A"}
-    `);
-
-    return true;
-  }
-  return false;
-}
-
-// Add this function near the top of the file, after the import statements
 function splitMessage(message, maxLength = 2000) {
   const chunks = [];
   let currentChunk = "";
@@ -459,7 +391,6 @@ function splitMessage(message, maxLength = 2000) {
     chunks.push(currentChunk.trim());
   }
 
-  // Ensure the last chunk closes any open code block
   if (inCodeBlock && !chunks[chunks.length - 1].endsWith("```")) {
     chunks[chunks.length - 1] += "\n```";
   }
@@ -467,33 +398,31 @@ function splitMessage(message, maxLength = 2000) {
   return chunks;
 }
 
-// Replace the existing processingMessage.edit calls with this new function
 async function sendResponse(message, processingMessage, content) {
-  // Sanitize mentions in the response
-  content = content.replace(/<@[!&]?\d+>/g, "no_mention");
-  content = content.replace(/@everyone/gi, "no_mention");
-  content = content.replace(/@here/gi, "no_mention");
+  const sanitizedContent = content
+    .replace(/<@[!&]?\d+>/g, "no_mention")
+    .replace(/@everyone/gi, "no_mention")
+    .replace(/@here/gi, "no_mention");
 
-  const chunks = splitMessage(content);
-
+  const chunks = splitMessage(sanitizedContent);
   await processingMessage.edit(chunks[0]);
 
   for (let i = 1; i < chunks.length; i++) {
-    let chunk = chunks[i];
-    await message.channel.send(chunk);
+    await message.channel.send(chunks[i]);
   }
 }
 
+// Main event handler
 export default {
   name: Events.MessageCreate,
   async execute(message) {
     if (message.author.bot) return;
-
     if (!message.mentions.users.has(message.client.user.id)) return;
 
-    let messageContent = message.content
+    const messageContent = message.content
       .replace(`<@${message.client.user.id}>`, "")
       .trim();
+
     message.channel.sendTyping();
     const processingMessage = await message.channel.send(
       "Processing your request..."
@@ -508,74 +437,59 @@ export default {
       const isVisionRequest = message.attachments.size > 0;
       const modelType = isVisionRequest ? "vision" : "text";
 
-      let tools = [];
-      let messages = [];
-
-      // Initialize context for the user if it doesn't exist
-      if (!context[message.author.id]) {
-        context[message.author.id] = [INITIAL_CONTEXT];
+      // Initialize or update user context
+      if (!state.userContexts[message.author.id]) {
+        state.userContexts[message.author.id] = [CONFIG.initialContext];
       }
 
-      if (isVisionRequest) {
-        const attachment = message.attachments.first();
-        messages.push({
-          role: "user",
-          content: [
-            { type: "text", text: translatedMessage },
-            { type: "image_url", image_url: { url: attachment.url } },
-          ],
-        });
-      } else {
-        context[message.author.id].push({
-          role: "user",
-          content: translatedMessage,
-        });
-        context[message.author.id] = [
-          INITIAL_CONTEXT,
-          ...context[message.author.id].slice(-MAX_CONTEXT_LENGTH),
-        ];
-        messages = [...context[message.author.id]];
-        tools = generateToolsFromCommands(message.client);
-      }
+      const messages = isVisionRequest
+        ? [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: translatedMessage },
+                {
+                  type: "image_url",
+                  image_url: { url: message.attachments.first().url },
+                },
+              ],
+            },
+          ]
+        : [
+            ...state.userContexts[message.author.id],
+            { role: "user", content: translatedMessage },
+          ].slice(-CONFIG.maxContextLength - 1);
+
+      const tools = isVisionRequest
+        ? []
+        : generateToolsFromCommands(message.client);
 
       let response;
       let retries = 0;
-      const maxRetries = models[modelType].length * 2; // Increase max retries
+      const maxRetries = CONFIG.models[modelType].length * 2;
       let currentModel;
 
       while (retries < maxRetries) {
         currentModel = getAvailableModel(modelType);
         if (!currentModel) {
-          console.log(
-            "All models are on cooldown. Waiting for the next available model..."
-          );
-          await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds before checking again
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           continue;
         }
-
-        console.log(`Attempting to use model: ${currentModel}`);
 
         try {
           response = await message.client.groq.chat.completions.create({
             model: currentModel,
-            messages: messages,
-            //tools: isVisionRequest ? [] : tools,
+            messages,
+            tools,
             tool_choice: isVisionRequest ? "none" : "auto",
           });
-          console.log(JSON.stringify(tools, null, 2));
-          console.log(`Successfully got response from model: ${currentModel}`);
           break;
         } catch (error) {
-          console.error(`Error with model ${currentModel}:`, error);
           if (await handleRateLimit(error, modelType, currentModel)) {
             retries++;
-            console.log(
-              `Retrying after rate limit (Attempt ${retries}/${maxRetries})`
-            );
             continue;
-          } else {
-            throw error;
           }
+          throw error;
         }
       }
 
@@ -585,42 +499,15 @@ export default {
         );
       }
 
-      let { content: aiContent = "", tool_calls: initialToolCalls = [] } =
+      const { content: aiContent = "", tool_calls = [] } =
         response.choices[0].message;
-      let toolCalls = [...initialToolCalls];
-
-      const toolCallRegex =
-        /(<tool_call>\s*([\s\S]*?)\s*<\/tool_call>)|(<function(?:=|\s+name=")([^">]+)"?>(?:{[^<]+})?(?:<\/function>)?)/g;
-      let match;
-      while ((match = toolCallRegex.exec(aiContent)) !== null) {
-        try {
-          let toolCall = match[1]
-            ? JSON.parse(
-                match[2]
-                  .trim()
-                  .replace(/'/g, '"')
-                  .replace(/(\w+):/g, '"$1":')
-                  .replace(/,\s*([\]}])/g, "$1")
-              )
-            : parseXmlToolCall(match[0]);
-          if (toolCall) {
-            toolCalls.push(toolCall);
-            aiContent = aiContent.replace(match[0], "");
-          }
-        } catch (error) {
-          console.error("Error parsing tool call from text:", error);
-        }
-      }
-
       let commandExecuted = false;
       let toolCallResponse = "";
 
-      // Only process the last tool call
-      if (toolCalls.length > 0) {
-        const lastToolCall = toolCalls[toolCalls.length - 1];
-
+      // Process all tool calls, not just the last one
+      for (const toolCall of tool_calls) {
         const { success, response } = await executeToolCall(
-          lastToolCall,
+          toolCall,
           message,
           processingMessage,
           originalLanguage
@@ -628,6 +515,7 @@ export default {
         if (success) {
           commandExecuted = true;
           toolCallResponse = response;
+          break; // Stop after first successful command execution
         }
       }
 
@@ -638,32 +526,46 @@ export default {
             (finalResponse ? "\n\n" : "") +
             `Tool response: ${toolCallResponse}`;
         }
-        const translatedResponse = await translateText(
+
+        const translatedResponse = await translate(
           finalResponse,
+          "en",
           originalLanguage
         );
-        await sendResponse(message, processingMessage, translatedResponse);
-        context[message.author.id].push({
-          role: "assistant",
-          content: finalResponse,
-        });
-        if (context[message.author.id].length > MAX_CONTEXT_LENGTH + 1) {
-          context[message.author.id] = [
-            INITIAL_CONTEXT,
-            ...context[message.author.id].slice(-MAX_CONTEXT_LENGTH),
-          ];
+        await sendResponse(
+          message,
+          processingMessage,
+          translatedResponse.translation
+        );
+
+        if (!isVisionRequest) {
+          state.userContexts[message.author.id].push({
+            role: "assistant",
+            content: finalResponse,
+          });
+          if (
+            state.userContexts[message.author.id].length >
+            CONFIG.maxContextLength + 1
+          ) {
+            state.userContexts[message.author.id] = [
+              CONFIG.initialContext,
+              ...state.userContexts[message.author.id].slice(
+                -CONFIG.maxContextLength
+              ),
+            ];
+          }
         }
       } else if (commandExecuted) {
         await sendResponse(
           message,
           processingMessage,
-          `Command executed successfully.`
+          "Command executed successfully."
         );
       } else {
         await sendResponse(
           message,
           processingMessage,
-          `No valid commands were executed.`
+          "No valid commands were executed."
         );
       }
     } catch (error) {
@@ -671,8 +573,7 @@ export default {
       await sendResponse(
         message,
         processingMessage,
-        `An error occurred while processing your request.`,
-        `\n\n[Debug: Error - ${error.message}]`
+        `An error occurred while processing your request.\n\n[Debug: Error - ${error.message}]`
       );
     }
   },
