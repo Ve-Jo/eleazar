@@ -79,20 +79,27 @@ const musicDB = {
     });
 
     try {
-      // First try to delete any existing record to avoid conflicts
-      try {
-        await this.client.musicPlayer.delete({
-          where: { id: player.guildId },
-        });
-      } catch (error) {
-        // Ignore deletion errors
-        console.log(`No existing record found for ${player.guildId}`);
-      }
-
-      // Then create a new record
-      return await this.client.musicPlayer.create({
-        data: {
+      // Use upsert to handle both new and existing records
+      return await this.client.musicPlayer.upsert({
+        where: { id: player.guildId },
+        create: {
           id: player.guildId,
+          voiceChannelId: player.voiceChannelId || "",
+          textChannelId: player.textChannelId || "",
+          queue: queue,
+          currentTrack: currentTrack
+            ? {
+                encoded: currentTrack.encoded,
+                info: currentTrack.info,
+              }
+            : null,
+          position: player.position || 0,
+          volume: player.volume,
+          repeatMode: player.repeatMode || "off",
+          autoplay: player.get("autoplay") || false,
+          filters: player.filters || {},
+        },
+        update: {
           voiceChannelId: player.voiceChannelId || "",
           textChannelId: player.textChannelId || "",
           queue: queue,

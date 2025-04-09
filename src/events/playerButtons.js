@@ -95,8 +95,8 @@ export default {
             const newState = !player.get("autoplay_enabled");
             // Set the state
             player.set("autoplay_enabled", newState);
-            // Force a player update event to save the state
-            player.emit("playerUpdate", {
+            // Trigger player update through Lavalink client
+            interaction.client.lavalink.emit("playerUpdate", {
               guildId: player.guildId,
               state: player.state,
             });

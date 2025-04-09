@@ -49,6 +49,15 @@ export async function createOrUpdateMusicPlayerEmbed(
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
     lastGeneratedImage = await generateImage("MusicPlayer", {
+      interaction: {
+        user: {
+          id: track.requester?.id || "unknown",
+          username: track.requester?.username || "Unknown User",
+          displayName: track.requester?.displayName || "Unknown User",
+          avatarURL: getAvatarUrl(track.requester),
+          locale: track.requester?.locale || "en",
+        },
+      },
       currentSong: {
         title: track.info.title,
         artist: track.info.author,
