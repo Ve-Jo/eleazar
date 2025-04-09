@@ -281,6 +281,21 @@ export default {
                 subcommand.data.description ||
                 "No description";
             }
+            // Check in localization_strings
+            else if (subcommand.localization_strings) {
+              console.log(`[help.commands] Found localization_strings`);
+              if (subcommand.localization_strings.command?.description) {
+                subDescription =
+                  subcommand.localization_strings.command.description[locale] ||
+                  subcommand.localization_strings.command.description.en ||
+                  "No description";
+              } else if (subcommand.localization_strings.description) {
+                subDescription =
+                  subcommand.localization_strings.description[locale] ||
+                  subcommand.localization_strings.description.en ||
+                  "No description";
+              }
+            }
 
             // For subcommands, construct usage string
             const usage = `/${commandName} ${subName}`;
@@ -418,8 +433,9 @@ export default {
         else {
           // Get localized description from either builder or direct localizations
           const commandDescription =
-            command.localizationStrings?.description?.[locale] ||
-            command.description_localizations?.[locale] ||
+            command.localization_strings?.description?.[locale] ||
+            command.localization_strings?.command?.description?.[locale] ||
+            command.data?.description ||
             command.description ||
             "No description available";
 
