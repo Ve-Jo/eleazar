@@ -22,6 +22,7 @@ export async function loadCommands(
     "images",
     "ai",
     "music",
+    "counting",
   ]
 ) {
   console.log(
@@ -95,16 +96,16 @@ export async function loadCommands(
       }
 
       // Extract localizations from the command
-      if (commandData.localizationStrings) {
+      if (command.localization_strings) {
         console.log(
           `Registering localizations for ${category}.${commandData.name}`
         );
 
-        // Register command localizations with new i18n system - Remove duplicate category
+        // Register command localizations with new i18n system
         i18n.registerLocalizations(
           "commands",
           category,
-          commandData.localization_strings
+          command.localization_strings
         );
       }
 
