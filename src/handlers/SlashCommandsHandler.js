@@ -170,10 +170,11 @@ class CommandManager {
 
   async removeOldCommands(existingCommands, newCommands, isServer) {
     for (const existingCommand of existingCommands) {
-      const shouldKeep =
-        newCommands.some((cmd) => cmd.name === existingCommand.name) &&
+      const shouldKeep = newCommands.some(
+        (cmd) => cmd.name === existingCommand.name
+      ); /*&&
         (existingCommand.name !== "economy" ||
-          !this.hasEconomyCommand(newCommands));
+          !this.hasEconomyCommand(newCommands));*/
 
       if (!shouldKeep) {
         const route = isServer
