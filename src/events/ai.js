@@ -5,17 +5,15 @@ import i18n from "../utils/newI18n.js";
 // Configuration
 const CONFIG = {
   models: {
-    text: [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-70b-versatile",
-      "llama3-groq-70b-8192-tool-use-preview",
-    ],
+    text: ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile"],
     vision: ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"],
   },
   maxContextLength: 4,
   initialContext: {
     role: "system",
-    content: `You are a AI assistant for discord bot named "Eleazar" and created by "@vejoy_". You answer all questions. You have tons of tools (commands) that you can execute for the user. But if user just want to talk with you, try to talk as natural and simplier to him as possible (and not with tons of text).`,
+    content: `You are a AI assistant for discord bot named "Eleazar" and created by "@vejoy_". You answer all questions. You have tons of tools (commands) that you can execute for the user. But if user just want to talk with you, try to talk as natural and simplier to him as possible (and not with tons of text).
+
+When using command tools, always choose the most appropriate command for the user's request. Always include all required parameters and only the parameters that are defined for that specific command. Special values like "all" and "half" should be passed as strings when mentioned by users.`,
   },
 };
 
@@ -64,15 +62,23 @@ function generateToolsFromCommands(client) {
 
       // Add the main command as a tool if it has an execute function
       if (command.execute) {
+        const commandDescription = enhanceCommandDescription(
+          commandData.name,
+          "",
+          commandData.description
+        );
+
         tools.push({
           type: "function",
           function: {
             name: commandData.name,
-            description: commandData.description,
+            description: commandDescription,
             parameters: {
               type: "object",
               properties: generateParametersFromOptions(
-                commandData.options || []
+                commandData.options || [],
+                commandData.name,
+                ""
               ),
               required: (commandData.options || [])
                 .filter((opt) => opt.required)
@@ -87,15 +93,23 @@ function generateToolsFromCommands(client) {
         Object.entries(command.subcommands).forEach(
           ([subcommandName, subcommand]) => {
             if (subcommand.data && subcommand.execute) {
+              const subcommandDescription = enhanceCommandDescription(
+                commandData.name,
+                subcommandName,
+                subcommand.data.description
+              );
+
               tools.push({
                 type: "function",
                 function: {
                   name: `${commandData.name}_${subcommandName}`,
-                  description: subcommand.data.description,
+                  description: subcommandDescription,
                   parameters: {
                     type: "object",
                     properties: generateParametersFromOptions(
-                      subcommand.data.options || []
+                      subcommand.data.options || [],
+                      commandData.name,
+                      subcommandName
                     ),
                     required: (subcommand.data.options || [])
                       .filter((opt) => opt.required)
@@ -112,11 +126,40 @@ function generateToolsFromCommands(client) {
     });
 }
 
-function generateParametersFromOptions(options) {
+// Helper function to enhance command descriptions
+function enhanceCommandDescription(commandName, subcommandName, description) {
+  // Special case for certain commands
+  if (commandName === "economy") {
+    if (subcommandName === "deposit") {
+      return `${description}. Moves money from your wallet to your bank account. Use "all" or "half" as amount to deposit everything or half of your balance.`;
+    } else if (subcommandName === "withdraw") {
+      return `${description}. Moves money from your bank account to your wallet. Use "all" or "half" as amount to withdraw everything or half of your bank balance.`;
+    } else if (subcommandName === "transfer") {
+      return `${description}. Transfers money from your wallet to another user. Requires both amount and receiver (user mention or ID).`;
+    }
+  }
+
+  return description;
+}
+
+function generateParametersFromOptions(options, commandName, subcommandName) {
   return options.reduce((params, option) => {
+    // Enhanced description for specific parameters
+    let enhancedDescription = option.description;
+
+    if (commandName === "economy") {
+      if (option.name === "amount") {
+        if (subcommandName === "deposit" || subcommandName === "withdraw") {
+          enhancedDescription = `${option.description}. You can use "all" or "half" as special values.`;
+        }
+      } else if (option.name === "receiver" && subcommandName === "transfer") {
+        enhancedDescription = `${option.description}. Must be a valid user mention or ID, NOT "bank".`;
+      }
+    }
+
     params[option.name] = {
       type: getParameterType(option.type),
-      description: option.description,
+      description: enhancedDescription,
       ...(option.choices && {
         enum: option.choices.map((choice) => choice.value),
       }),
@@ -146,7 +189,47 @@ async function createFakeInteraction(
   args,
   locale
 ) {
-  const parsedArgs = args ? JSON.parse(args) : {};
+  // Handle args which can be either a string that needs parsing or an already parsed object
+  let parsedArgs = {};
+
+  if (args) {
+    console.log(`Creating fake interaction with args type: ${typeof args}`);
+
+    if (typeof args === "string") {
+      // If it's an empty string or just whitespace, treat as empty object
+      if (!args.trim()) {
+        console.log("Args is empty string, using empty object");
+      } else {
+        try {
+          parsedArgs = JSON.parse(args);
+          console.log("Successfully parsed args string to object:", parsedArgs);
+        } catch (e) {
+          console.error("Error parsing command arguments:", e);
+          // Try to extract values from malformed JSON
+          try {
+            // Create a simple object parser for key-value pairs that might be in a malformed format
+            const argPairs = args.replace(/[{}]/g, "").split(",");
+            argPairs.forEach((pair) => {
+              const [key, value] = pair
+                .split(":")
+                .map((s) => s.trim().replace(/"/g, ""));
+              if (key && value) {
+                parsedArgs[key] = value;
+              }
+            });
+            console.log("Extracted args from malformed JSON:", parsedArgs);
+          } catch (ex) {
+            console.error("Failed to extract args from string:", ex);
+          }
+        }
+      }
+    } else if (typeof args === "object") {
+      parsedArgs = args;
+      console.log("Using args object directly:", parsedArgs);
+    }
+  } else {
+    console.log("No args provided, using empty object");
+  }
 
   return {
     commandName,
@@ -241,9 +324,114 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
   const [commandName, ...subcommandParts] = name.split("_");
   const subcommandName = subcommandParts.join("_");
 
+  // Add debug logging
+  console.log(`Executing tool call:`, {
+    commandName,
+    subcommandName,
+    args: JSON.stringify(args),
+    argsType: typeof args,
+  });
+
   const command = message.client.commands.get(commandName);
   if (!command) {
     return { success: false, response: `Command "${commandName}" not found.` };
+  }
+
+  // Validate arguments
+  let validationError = null;
+
+  // Check if command requires arguments
+  const commandOptions =
+    subcommandName && command.subcommands?.[subcommandName]
+      ? command.subcommands[subcommandName].data?.options
+      : command.data?.options;
+
+  if (commandOptions && commandOptions.length > 0) {
+    // Check for required parameters
+    const requiredParams = commandOptions
+      .filter((opt) => opt.required)
+      .map((opt) => opt.name);
+
+    // Parse args if it's a string
+    let parsedArgs = {};
+    if (typeof args === "string") {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        return {
+          success: false,
+          response: `Invalid arguments format: ${e.message}`,
+        };
+      }
+    } else if (typeof args === "object") {
+      parsedArgs = args;
+    }
+
+    // Detect common misuse patterns
+    if (commandName === "economy") {
+      // Check for deposit/transfer confusion
+      if (subcommandName === "deposit" && parsedArgs.receiver) {
+        return {
+          success: false,
+          response: `The deposit command doesn't take a 'receiver' parameter. If you're trying to deposit money to your bank, just use economy_deposit with an amount. If you're trying to send money to another user, use economy_transfer instead.`,
+        };
+      }
+      // Check for withdrawal/transfer confusion
+      if (subcommandName === "withdraw" && parsedArgs.receiver) {
+        return {
+          success: false,
+          response: `The withdraw command doesn't take a 'receiver' parameter. If you're trying to withdraw money from your bank, just use economy_withdraw with an amount.`,
+        };
+      }
+      // Check for transfer to "bank"
+      if (
+        subcommandName === "transfer" &&
+        parsedArgs.receiver &&
+        (parsedArgs.receiver.toLowerCase() === "bank" ||
+          parsedArgs.receiver.toLowerCase() === "my bank")
+      ) {
+        return {
+          success: false,
+          response: `To transfer money to your bank account, use the economy_deposit command instead of economy_transfer.`,
+        };
+      }
+    }
+
+    // Check for unexpected parameters
+    const validParams = commandOptions.map((opt) => opt.name);
+    const unexpectedParams = Object.keys(parsedArgs).filter(
+      (param) => !validParams.includes(param)
+    );
+
+    if (unexpectedParams.length > 0) {
+      console.log(
+        `Unexpected parameters detected: ${unexpectedParams.join(", ")}`
+      );
+
+      // Remove unexpected parameters
+      unexpectedParams.forEach((param) => {
+        delete parsedArgs[param];
+      });
+
+      // Replace the args with the cleaned version
+      if (typeof args === "string") {
+        toolCall.function.arguments = JSON.stringify(parsedArgs);
+      } else {
+        toolCall.function.arguments = parsedArgs;
+      }
+
+      console.log(`Cleaned parameters:`, parsedArgs);
+    }
+
+    // Check for missing required parameters
+    const missingParams = requiredParams.filter((param) => !parsedArgs[param]);
+
+    if (missingParams.length > 0) {
+      return {
+        success: false,
+        response: `Missing required parameters: ${missingParams.join(", ")}`,
+      };
+    }
   }
 
   try {
@@ -252,7 +440,7 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
       processingMessage,
       commandName,
       subcommandName,
-      args,
+      toolCall.function.arguments, // Use potentially cleaned arguments
       locale
     );
 
@@ -506,16 +694,42 @@ export default {
 
       // Process all tool calls, not just the last one
       for (const toolCall of tool_calls) {
+        console.log(`Processing tool call: ${toolCall.function.name}`);
+
+        // Log the raw argument data for debugging
+        console.log(`Tool call raw arguments:`, toolCall.function.arguments);
+        console.log(
+          `Tool call arguments type: ${typeof toolCall.function.arguments}`
+        );
+
+        // Handle string arguments that need to be parsed to objects
+        if (typeof toolCall.function.arguments === "string") {
+          try {
+            const parsedArgs = JSON.parse(toolCall.function.arguments);
+            toolCall.function.arguments = parsedArgs;
+            console.log(`Parsed string arguments to object:`, parsedArgs);
+          } catch (e) {
+            console.error(`Failed to parse arguments as JSON: ${e.message}`);
+            // Continue with the string version
+          }
+        }
+
         const { success, response } = await executeToolCall(
           toolCall,
           message,
           processingMessage,
           originalLanguage
         );
+
         if (success) {
           commandExecuted = true;
           toolCallResponse = response;
+          console.log(`Command executed successfully`);
           break; // Stop after first successful command execution
+        } else {
+          // If command failed, add the error response
+          toolCallResponse = response;
+          console.log(`Command execution failed: ${response}`);
         }
       }
 
