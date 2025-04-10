@@ -2,6 +2,9 @@ FROM oven/bun:1-alpine as builder
 
 WORKDIR /app
 
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+
 # Copy only package.json first (without the existing lockfile)
 COPY package.json ./
 
@@ -21,6 +24,9 @@ COPY . .
 FROM oven/bun:1-alpine
 
 WORKDIR /app
+
+# Install runtime dependencies for canvas and other native modules
+RUN apk add --no-cache cairo jpeg pango giflib
 
 # Copy only necessary files from builder stage
 COPY --from=builder /app/node_modules ./node_modules
