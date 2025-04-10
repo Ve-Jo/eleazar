@@ -18,8 +18,21 @@ const previewApp =
     ? (await import("./src/render-server/preview.js")).default
     : null;
 
-startResourceMonitor(100);
+//startResourceMonitor(process.env.NODE_ENV === "production" ? 300000 : 100);
 console.log("Starting bot...");
+
+// Force garbage collection if available (with --expose-gc flag)
+const forceGc = () => {
+  if (global.gc) {
+    global.gc();
+    console.log("Forced garbage collection completed");
+  }
+};
+
+// Schedule periodic garbage collection in production
+if (process.env.NODE_ENV === "production" && global.gc) {
+  setInterval(forceGc, 600000); // Run every 10 minutes
+}
 
 const client = new Client({
   intents: [
@@ -36,20 +49,33 @@ const client = new Client({
   ],
   sweepers: {
     messages: {
-      interval: 30000,
-      lifetime: 60000,
+      interval: process.env.NODE_ENV === "production" ? 15000 : 30000,
+      lifetime: process.env.NODE_ENV === "production" ? 30000 : 60000,
       filter: () => (message) => message.author.id !== client.user.id,
     },
     users: {
-      interval: 30000,
+      interval: process.env.NODE_ENV === "production" ? 15000 : 30000,
       filter: () => (user) =>
         !client.guilds.cache.some((guild) => guild.members.cache.has(user.id)),
     },
     guildMembers: {
-      interval: 30000,
+      interval: process.env.NODE_ENV === "production" ? 15000 : 30000,
       filter: () => () => true,
     },
   },
+  makeCache: Options.cacheWithLimits({
+    // Set stricter limits in production
+    MessageManager: {
+      maxSize: process.env.NODE_ENV === "production" ? 50 : 200,
+      keepOverLimit: (message) => message.author.id === client.user.id
+    },
+    UserManager: {
+      maxSize: process.env.NODE_ENV === "production" ? 100 : 1000
+    },
+    GuildMemberManager: {
+      maxSize: process.env.NODE_ENV === "production" ? 50 : 200
+    }
+  }),
 });
 
 setInterval(() => {
@@ -64,7 +90,7 @@ setInterval(() => {
     }
   });
   console.log("Manual message sweep completed");
-}, 60 * 1000);
+}, process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000);
 
 console.log("Loading commands...");
 await loadCommands(client);
@@ -197,11 +223,11 @@ await client.login(process.env.DISCORD_TOKEN);
 await initializeVoiceSessions();
 
 // Check for season transition every hour
-setInterval(async () => {
+/*setInterval(async () => {
   await Database.checkAndUpdateSeason();
-}, 60 * 60 * 1000);
+}, 60 * 60 * 1000);*
 
-Database.startPingCollection(client);
+Database.startPingCollection(client);*/
 
 // Start preview server if enabled
 if (previewApp) {
