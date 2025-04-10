@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json bun.lockb ./
 
 # Install dependencies with production flag
-RUN bun install --production --frozen-lockfile --no-progress
+RUN bun install --production --no-progress
 
 # Copy prisma schema
 COPY prisma ./prisma/
