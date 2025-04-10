@@ -19,8 +19,8 @@ export default {
         }
       : {};
 
-    // Try to get existing user
-    const user = await this.client.user.findUnique({
+    // Try to get the user with normal ID first
+    let user = await this.client.user.findUnique({
       where: {
         guildId_id: {
           guildId,
@@ -421,7 +421,10 @@ export default {
       // First check if the user already exists to avoid unnecessary operations
       const existingUser = await this.client.user.findUnique({
         where: {
-          guildId_id: { guildId, id: userId },
+          guildId_id: { 
+            guildId, 
+            id: userId 
+          },
         },
       });
 
@@ -436,7 +439,10 @@ export default {
         if (lastActivityAge > 5 * 60 * 1000) {
           return await this.client.user.update({
             where: {
-              guildId_id: { guildId, id: userId },
+              guildId_id: {
+                guildId,
+                id: userId,
+              },
             },
             data: {
               lastActivity: Date.now(),
@@ -469,11 +475,31 @@ export default {
         } catch (error) {
           // If another process created the user in the meantime (P2002 = unique constraint violation)
           if (error.code === "P2002") {
-            return await prisma.user.findUnique({
-              where: {
-                guildId_id: { guildId, id: userId },
-              },
-            });
+            // If there's a duplicate key error, try to fetch the existing user
+            try {
+              return await prisma.user.findUnique({
+                where: {
+                  guildId_id: {
+                    guildId,
+                    id: userId,
+                  },
+                },
+              });
+            } catch (findError) {
+              console.error("Error finding existing user:", findError);
+              // If the error is about duplicate Discord user ID, try with a composite ID
+              if (error.meta?.target?.includes("user_id")) {
+                const compositeId = `${userId}_${guildId}`;
+                return await prisma.user.create({
+                  data: {
+                    id: compositeId,
+                    guildId,
+                    lastActivity: Date.now(),
+                  },
+                });
+              }
+              throw findError;
+            }
           }
           throw error;
         }
@@ -494,7 +520,10 @@ export default {
 
         return await this.client.user.upsert({
           where: {
-            guildId_id: { guildId, id: userId },
+            guildId_id: {
+              guildId,
+              id: userId,
+            },
           },
           create: {
             id: userId,

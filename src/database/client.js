@@ -224,6 +224,58 @@ class Database {
         if (error.code) {
           switch (error.code) {
             case "P2002":
+              // Special handling for User creation with duplicate user_id
+              if (
+                params.model === "User" &&
+                params.action === "create" &&
+                error.meta?.target?.includes("user_id")
+              ) {
+                console.warn(
+                  `Handling duplicate user_id for ${params.args?.data?.id} in guild ${params.args?.data?.guildId}`
+                );
+
+                try {
+                  // First, check if the user exists in this guild
+                  const existingUser = await this.client.user.findUnique({
+                    where: {
+                      guildId_id: {
+                        id: params.args.data.id,
+                        guildId: params.args.data.guildId,
+                      },
+                    },
+                    include: params.args.include,
+                  });
+
+                  if (existingUser) {
+                    console.log(
+                      `User already exists in this guild, returning existing user`
+                    );
+                    return existingUser;
+                  }
+
+                  // If it's truly a cross-guild conflict, create with composite ID
+                  const compositeId = `${params.args.data.id}_${params.args.data.guildId}`;
+                  console.log(
+                    `Creating user with composite ID: ${compositeId}`
+                  );
+
+                  // Try creating with a modified ID
+                  const newArgs = {
+                    ...params.args,
+                    data: {
+                      ...params.args.data,
+                      id: compositeId,
+                    },
+                  };
+
+                  return await this.client[params.model][params.action](
+                    newArgs
+                  );
+                } catch (innerError) {
+                  console.error("Error handling duplicate user:", innerError);
+                }
+              }
+
               throw new Error(
                 `Duplicate entry for ${error.meta?.target?.join(", ")}`
               );
