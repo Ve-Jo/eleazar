@@ -2,11 +2,11 @@ FROM oven/bun:1-alpine as builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json bun.lockb ./
+# Copy only package.json first (without the existing lockfile)
+COPY package.json ./
 
-# Install dependencies with production flag
-RUN bun install --production --no-progress
+# Install dependencies with production flag and generate a new lockfile
+RUN bun install --production
 
 # Copy prisma schema
 COPY prisma ./prisma/
