@@ -83,7 +83,6 @@ export default {
       uk: "Перехід до наступного треку",
     },
   },
-  server: true,
   async preExecute(interaction, i18n) {
     /*return interaction.reply({
       content: "Музыкальный плеер пока-что неисправен",

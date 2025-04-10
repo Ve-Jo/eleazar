@@ -25,7 +25,6 @@ export default {
     },
   },
 
-  server: true,
   generate_image: {
     cooldown: 40,
   },
