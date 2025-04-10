@@ -1,1 +1,571 @@
-{}
+{
+  "commands": {
+    "economy": {
+      "balance": {
+        "title": "Balance",
+        "userNotFound": "User not found",
+        "imageError": "Error generating balance image"
+      },
+      "cases": {
+        "title": "Cases",
+        "selectCrate": "Select a case to open",
+        "openButton": "Open Case",
+        "cooldownActive": "This case is on cooldown for {{time}}",
+        "balance": "Your balance: {{balance}} coins",
+        "backButton": "Back to Crates",
+        "noCratesAvailable": "You don't have any of these crates",
+        "error": "An error occurred while processing your request",
+        "rewardIntro": "You opened a {{crate}} crate and received:\n",
+        "rewardCoins": "• {{amount}} coins\n",
+        "rewardXp": "• {{amount}} XP\n",
+        "rewardDiscount": "• {{amount}}% discount on {{type}} upgrade\n",
+        "rewardCooldown": "• {{time}} cooldown reduction for {{type}}\n"
+      },
+      "crime": {
+        "name": "crime",
+        "description": "Attempt to steal money from another user",
+        "cooldown": "You need to wait {{time}} seconds before committing another crime",
+        "selectTarget": "Select a user to steal from",
+        "noValidTargets": "No valid targets found (users must have coins to steal)",
+        "noSelection": "No target selected",
+        "title": "Crime",
+        "successTarget": "You successfully stole {{amount}} coins from {{target}}!",
+        "failTarget": "You were caught and had to pay a fine of {{amount}} coins!",
+        "error": "An error occurred while processing your crime attempt"
+      },
+      "deposit": {
+        "title": "Deposit",
+        "success": "Successfully deposited {{amount}} coins",
+        "amountGreaterThanZero": "Amount must be greater than 0",
+        "insufficientFunds": "Insufficient funds",
+        "invalidAmount": "Invalid amount",
+        "noBankAccount": "You don't have a bank account",
+        "error": "An error occurred while processing your deposit"
+      },
+      "leaderboard": {
+        "title": "Server Leaderboard",
+        "selectUser": "Select a user to view details",
+        "selectCategory": "Select category to view",
+        "categories": {
+          "total": "Total Balance",
+          "balance": "Balance",
+          "bank": "Bank Balance",
+          "level": "Level"
+        },
+        "selectedUser": "Selected user at position {{position}}",
+        "error": "An error occurred while processing your leaderboard request"
+      },
+      "level": {
+        "userNotFound": "User not found",
+        "error": "An error occurred while processing your level request",
+        "voiceTime": "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
+        "title": "Level"
+      },
+      "shop": {
+        "name": "shop",
+        "description": "View and purchase upgrades",
+        "title": "Shop",
+        "selectUpgrade": "Select an upgrade to view",
+        "purchaseButton": "Purchase",
+        "insufficientFunds": "You don't have enough coins for this upgrade",
+        "noSelection": "No upgrade selected",
+        "purchaseTitle": "Purchase Successful",
+        "purchaseSuccess": "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
+        "error": "An error occurred while processing your shop request",
+        "category_economy": "Economy Upgrades",
+        "category_cooldowns": "Cooldown Upgrades",
+        "revertButton": "Revert",
+        "revertButtonWithRefund": "Revert (-1 lvl, +{{refund}} coins)",
+        "revertSuccess": "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
+        "revertCooldown": "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
+        "cannotRevert": "Cannot revert a level 1 upgrade"
+      },
+      "transfer": {
+        "cannotTransferToSelf": "You cannot transfer money to yourself",
+        "insufficientFunds": "Insufficient funds",
+        "amountGreaterThanZero": "Amount must be greater than zero",
+        "invalidAmount": "Invalid amount",
+        "error": "An error occurred while processing your transfer",
+        "title": "Transfer"
+      },
+      "withdraw": {
+        "insufficientFunds": "Insufficient funds",
+        "amountGreaterThanZero": "Amount must be greater than zero",
+        "invalidAmount": "Invalid amount",
+        "noBankAccount": "You don't have a bank account",
+        "error": "An error occurred while processing your withdrawal",
+        "title": "Withdraw"
+      },
+      "work": {
+        "specialForCategory": "Specially for Eleazar",
+        "oldGamesCategory": "Our old games",
+        "title": "Game Selection",
+        "selectCategory": "Select a game category",
+        "playGame": "Play",
+        "gameStarted": "Starting {{game}}...",
+        "error": "An error occurred while processing your work request",
+        "gameError": "Error starting {{game}}. Please try again.",
+        "noGamesAvailable": "No games are currently available.",
+        "gameNotFound": "The selected game was not found."
+      }
+    },
+    "emotions": {
+      "name": "emotions",
+      "description": "Commands for emotions",
+      "myself": {
+        "blush": {
+          "title": "Blush",
+          "description": "<@{{user}}> is blushing!"
+        },
+        "smug": {
+          "title": "Smug",
+          "description": "<@{{user}}> looks smug!"
+        },
+        "happy": {
+          "title": "Happy",
+          "description": "<@{{user}}> is happy!"
+        },
+        "smile": {
+          "title": "Smile",
+          "description": "<@{{user}}> smiles!"
+        },
+        "dance": {
+          "title": "Dance",
+          "description": "<@{{user}}> is dancing!"
+        },
+        "like": {
+          "title": "Like",
+          "description": "<@{{user}}> likes this!"
+        },
+        "cry": {
+          "title": "Cry",
+          "description": "<@{{user}}> is crying!"
+        },
+        "nosebleed": {
+          "title": "Nosebleed",
+          "description": "<@{{user}}> has a nosebleed!"
+        },
+        "depression": {
+          "title": "Depression",
+          "description": "<@{{user}}> is depressed!"
+        },
+        "tea": {
+          "title": "Tea",
+          "description": "<@{{user}}> drinks tea!"
+        },
+        "nom": {
+          "title": "Nom",
+          "description": "<@{{user}}> is eating!"
+        },
+        "lick": {
+          "title": "Lick",
+          "description": "<@{{user}}> licks their lips!"
+        },
+        "sleep": {
+          "title": "Sleep",
+          "description": "<@{{user}}> is sleeping!"
+        },
+        "coffee": {
+          "title": "Coffee",
+          "description": "<@{{user}}> drinks coffee!"
+        },
+        "gah": {
+          "title": "Gah",
+          "description": "<@{{user}}> is surprised!"
+        },
+        "imageNotFound": "Image not found"
+      },
+      "negative": {
+        "bonk": {
+          "title": "Bonk",
+          "description": "<@{{user}}> bonks <@{{targetUser}}>!"
+        },
+        "punch": {
+          "title": "Punch",
+          "description": "<@{{user}}> punches <@{{targetUser}}>!"
+        },
+        "poke": {
+          "title": "Poke",
+          "description": "<@{{user}}> pokes <@{{targetUser}}>!"
+        },
+        "bully": {
+          "title": "Bully",
+          "description": "<@{{user}}> bullies <@{{targetUser}}>!"
+        },
+        "kick": {
+          "title": "Kick",
+          "description": "<@{{user}}> kicks <@{{targetUser}}>!"
+        },
+        "slap": {
+          "title": "Slap",
+          "description": "<@{{user}}> slaps <@{{targetUser}}>!"
+        },
+        "throw": {
+          "title": "Throw",
+          "description": "<@{{user}}> throws something at <@{{targetUser}}>!"
+        },
+        "bite": {
+          "title": "Bite",
+          "description": "<@{{user}}> bites <@{{targetUser}}>!"
+        },
+        "kill": {
+          "title": "Kill",
+          "description": "<@{{user}}> kills <@{{targetUser}}>!"
+        },
+        "threaten": {
+          "title": "Threaten",
+          "description": "<@{{user}}> threatens <@{{targetUser}}>!"
+        },
+        "tickle": {
+          "title": "Tickle",
+          "description": "<@{{user}}> tickles <@{{targetUser}}>!"
+        },
+        "imageNotFound": "Image not found",
+        "cannotSelectSelf": "You cannot select yourself",
+        "cannotSelectBot": "You cannot select a bot"
+      },
+      "positive": {
+        "wave": {
+          "title": "Wave",
+          "description": "<@{{user}}> waves at <@{{targetUser}}>!"
+        },
+        "wink": {
+          "title": "Wink",
+          "description": "<@{{user}}> winks at <@{{targetUser}}>!"
+        },
+        "pat": {
+          "title": "Pat",
+          "description": "<@{{user}}> pats <@{{targetUser}}>!"
+        },
+        "kiss": {
+          "title": "Kiss",
+          "description": "<@{{user}}> kisses <@{{targetUser}}>!"
+        },
+        "feed": {
+          "title": "Feed",
+          "description": "<@{{user}}> feeds <@{{targetUser}}>!"
+        },
+        "hug": {
+          "title": "Hug",
+          "description": "<@{{user}}> hugs <@{{targetUser}}>!"
+        },
+        "cuddle": {
+          "title": "Cuddle",
+          "description": "<@{{user}}> cuddles with <@{{targetUser}}>!"
+        },
+        "five": {
+          "title": "High Five",
+          "description": "<@{{user}}> high fives <@{{targetUser}}>!"
+        },
+        "glomp": {
+          "title": "Glomp",
+          "description": "<@{{user}}> glomps <@{{targetUser}}>!"
+        },
+        "hold": {
+          "title": "Hold",
+          "description": "<@{{user}}> holds hands with <@{{targetUser}}>!"
+        },
+        "boop": {
+          "title": "Boop",
+          "description": "<@{{user}}> boops <@{{targetUser}}>!"
+        },
+        "imageNotFound": "Image not found",
+        "cannotSelectSelf": "You cannot select yourself",
+        "cannotSelectBot": "You cannot select a bot",
+        "returnEmotion": "Return the emotion",
+        "onlyTargetUserCanRespond": "Only the target user can respond"
+      }
+    },
+    "filters": {
+      "image_memer": {
+        "noText": "No text provided",
+        "noUsername": "No username provided",
+        "errorApplyingFilter": "Error applying meme filter"
+      },
+      "text_memer": {
+        "errorApplyingFilter": "Error applying meme filter"
+      }
+    },
+    "help": {
+      "name": "help",
+      "description": "Get help with the bot",
+      "commands": {
+        "categoryMenu": {
+          "placeholder": "Select a category"
+        },
+        "subcommandMenu": {
+          "placeholder": "Select a command"
+        },
+        "next": "Next",
+        "previous": "Previous"
+      }
+    },
+    "images": {
+      "nsfw": {
+        "notFound": "Image not found",
+        "nsfwChannelOnly": "This command can only be used in NSFW channels"
+      },
+      "removebanner": {
+        "title": "Banner Removed",
+        "success": "Your banner has been removed successfully!",
+        "error": "An error occurred while removing the banner"
+      },
+      "setbanner": {
+        "title": "Banner Set",
+        "success": "Your banner has been set successfully!",
+        "error": "An error occurred while setting the banner",
+        "invalidImage": "Please provide a valid image file",
+        "imageTooLarge": "The image file is too large (max 8MB)",
+        "bannerPreview": "Banner Preview"
+      },
+      "sfw": {
+        "notFound": "Image not found"
+      }
+    },
+    "ai": {
+      "help": "Use one of the AI subcommands to access different AI features.",
+      "generate_image": {
+        "name": "generate",
+        "description": "Generate beautiful image by prompt",
+        "generated": "Generated image with prompt: {{prompt}}\nSeed: {{seed}}\nSteps: {{steps}}",
+        "failed": "Failed to generate the image. Please try again.",
+        "error": "An error occurred while generating the image. Please try again later.",
+        "gradio_error": "There was an error with the image generation service. Please try again later."
+      },
+      "transcribe_audio": {
+        "name": "transcribe",
+        "description": "Transcribe audio to text",
+        "invalid_file": "Please provide a valid audio file.",
+        "generated": "Transcription:\n\n{{transcription}}",
+        "failed": "Failed to transcribe the audio. Please try again.",
+        "error": "An error occurred while transcribing the audio. Please try again later.",
+        "too_long": "The transcription is too long to display. Here's a text file with the result:",
+        "no_attachment": "Please provide an audio file to transcribe.",
+        "invalid_attachment_type": "The provided file is not a supported audio format. Supported formats: {{accepted_types}}. Received: {{received_type}}",
+        "file_too_large": "The audio file is too large (max 25MB).",
+        "downloading": "Downloading audio file...",
+        "transcribing": "Transcribing audio...",
+        "result": "Transcription:\n\n{{transcription}}"
+      },
+      "upscale_image": {
+        "name": "upscale",
+        "description": "Upscale an image to improve its quality",
+        "invalid_file": "Please provide a valid image file.",
+        "invalid_dimensions": "Image dimensions must not exceed 1024x1024 pixels.\n\nYour current image is {{width}}x{{height}} pixels.",
+        "failed": "Failed to upscale the image. Please try again.",
+        "error": "An error occurred while upscaling the image. Please try again later.",
+        "upscaled": "Image upscaled with scale factor {{scale}}x",
+        "no_attachment": "Please provide an image to upscale.",
+        "not_an_image": "The provided file is not an image. Content type: {{content_type}}",
+        "file_too_large": "The image file is too large (max 10MB).",
+        "download_failed": "Failed to download the image.",
+        "processing": "Processing your image...",
+        "api_error": "Error connecting to the upscale API.",
+        "processing_failed": "Failed to process the image.",
+        "no_output": "The upscaling service did not return any output.",
+        "result_download_failed": "Failed to download the upscaled image.",
+        "success": "Here is your upscaled image!"
+      }
+    },
+    "music": {
+      "noMusicPlaying": "No music is currently playing",
+      "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+      "connectionTimeout": "There was a connection timeout to the music node",
+      "noAvailableNode": "There's no a available node to connect to, please retry again later",
+      "errorOccurred": "An error occurred while working with the music player: {{error}}",
+      "skippingSongError": "There was an error while skipping the song",
+      "player": {
+        "footerText": "Requested by {{author}}"
+      },
+      "autoplay": {
+        "autoplayApplied": "Autoplay state was set to {{enabled}}",
+        "name": "autoplay",
+        "description": "Toggle autoplay mode",
+        "autoplayToggled": "Autoplay mode has been toggled {{enabled}}",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "filters": {
+        "name": "filters",
+        "description": "Set the music filters",
+        "filterApplied": "Filter {{filter}} has been applied",
+        "invalidFilterProperty": "Invalid filter property",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "loop": {
+        "name": "loop",
+        "description": "Loop the current song/queue",
+        "loopApplied": "Loop type has been set to {{type}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "play": {
+        "name": "play",
+        "description": "Play a song",
+        "noMatchesFound": "No matches found",
+        "addedToQueue": "Added to queue: {{title}}",
+        "addedPlaylist": "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "loopApplied": "Loop type has been set to {{type}}",
+        "noLavalinkNode": "No Lavalink node available",
+        "connectionTimeout": "Connection timed out",
+        "noAvailableNode": "No available Node was found"
+      },
+      "previous": {
+        "name": "previous",
+        "description": "Play the previous song",
+        "noPreviousSongs": "There are no previous songs in the queue",
+        "addedPreviousToQueue": "Added previous song to queue: {{title}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in the same voice channel as the player"
+      },
+      "queue": {
+        "name": "queue",
+        "description": "Show the music queue",
+        "currentPlaying": "Currently playing: {{title}}",
+        "nextInQueue": "Next in queue: {{tracks}}",
+        "currentQueue": "Current queue",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "seek": {
+        "name": "seek",
+        "description": "Seek to a specific time in the current track",
+        "invalidTimeFormat": "Invalid time format. Use m:ss or ss",
+        "seekBeyondDuration": "You can't seek beyond the duration of the current track",
+        "seekedTo": "Seeked to {{time}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "skip": {
+        "name": "skip",
+        "description": "Skip the current song",
+        "skippedSong": "Skipped the current song",
+        "skippingSongError": "Failed to skip the current song",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "stop": {
+        "name": "stop",
+        "description": "Stop the music",
+        "musicStopped": "Music stopped",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "name": "play",
+      "description": "Play a song",
+      "noMatchesFound": "No matches found",
+      "addedToQueue": "Added to queue: {{title}}",
+      "addedPlaylist": "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
+      "loopApplied": "Loop mode has been set to {{type}}",
+      "noLavalinkNode": "No Lavalink node available",
+      "pauseApplied": "Music has been paused",
+      "pauseResumed": "Music has been resumed",
+      "skipApplied": "Skipped to the next track"
+    },
+    "counting": {
+      "remove": {
+        "name": "remove",
+        "description": "Remove counting channel",
+        "no_perms": "You don't have permissions to manage channels",
+        "no_channel": "No counting channel is set up",
+        "success": "Counting channel has been removed"
+      },
+      "setup": {
+        "name": "setup",
+        "description": "Setup counting channel",
+        "no_perms": "You don't have permissions to manage channels",
+        "success": "Counting channel setup successfully"
+      },
+      "status": {
+        "name": "status",
+        "description": "Show counting channel status",
+        "no_channel": "No counting channel is set up",
+        "status": "Counting channel status:\nChannel: {{channel}}\nCurrent number: {{number}}\nPin on each: {{pinoneach}}\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}"
+      }
+    }
+  },
+  "games": {
+    "2048": {
+      "alreadyRunning": "A 2048 game is already running in this channel!",
+      "name": "2048",
+      "startMessage": "Use the arrows to slide tiles and combine matching numbers!",
+      "description": "Play the classic 2048 puzzle game",
+      "score": "Your Score: {{score}}",
+      "gameOver": "Game Over! Final Score: {{score}}",
+      "invalidMove": "Invalid move!",
+      "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
+      "notYourGame": "This game is not for you!",
+      "error": "There was an error starting the game. Please try again."
+    },
+    "snake": {
+      "alreadyRunning": "A snake game is already running in this channel!",
+      "name": "Snake",
+      "startMessage": "Use the arrows to move the snake! 🐍",
+      "description": "Play classic snake game",
+      "score": "Your Score: {{score}}",
+      "gameOver": "Game Over! Final Score: {{score}}",
+      "invalidMove": "Invalid move!",
+      "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
+      "notYourGame": "This game is not for you!",
+      "error": "There was an error starting the game. Please try again."
+    }
+  },
+  "music": {
+    "buttons": {
+      "previous": "Previous",
+      "loop": "Loop",
+      "pause": "Pause",
+      "play": "Play",
+      "autoplay": "Autoplay",
+      "on": "ON",
+      "off": "OFF",
+      "skip": "Skip"
+    },
+    "update": {
+      "noMessage": "No now playing message found",
+      "trackInfoMissing": "Missing track info, cannot update player message",
+      "channelNotFound": "Channel not found, cannot update now playing message",
+      "messageNotFound": "Message not found, cannot update",
+      "messageDeleted": "Error fetching message, may be deleted",
+      "updateError": "Error updating now playing message",
+      "errorInHandler": "Error in playerUpdate handler",
+      "errorInEvent": "Error in playerUpdate event"
+    },
+    "events": {
+      "trackStart": "Started playing",
+      "channelNotFound": "Text channel not found, cannot send now playing message",
+      "trackIncomplete": "Track info incomplete, cannot create now playing message",
+      "creatingMessage": "Already creating now playing message, skipping duplicate",
+      "messageStored": "Now playing message stored"
+    },
+    "player": {
+      "title": "Now Playing",
+      "footerText": "Requested by {author}",
+      "additionalTracks": "Additional tracks",
+      "andMoreTracks": "And {count} more tracks",
+      "noTitle": "Unknown Title",
+      "noArtist": "Unknown Artist",
+      "duration": "Duration",
+      "queue": "Queue",
+      "emptyQueue": "Queue is empty",
+      "filters": "Filters",
+      "noFilters": "No filters"
+    },
+    "previous": {
+      "noPreviousSongs": "There are no previous songs in the queue",
+      "addedPreviousToQueue": "Added previous song to queue: {{title}}"
+    },
+    "autoplay": {
+      "autoplayApplied": "Autoplay is now {{state}}"
+    }
+  },
+  "components": {
+    "MusicPlayer": {
+      "queue": "Queue",
+      "moreItems": "more items",
+      "nowPlaying": "Now Playing"
+    }
+  }
+}
