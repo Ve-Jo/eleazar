@@ -59,8 +59,6 @@ export default {
               id: userId,
             },
           },
-          // Use skipDuplicates flag to avoid duplicate key errors
-          ...{ skipDuplicates: true },
         });
 
         if (existingUser) {

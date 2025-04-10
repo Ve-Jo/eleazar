@@ -10,17 +10,13 @@ export default {
   },
 
   localization_strings: {
-    command: {
-      name: {
-        en: "music",
-        ru: "музыка",
-        uk: "музика",
-      },
-      description: {
-        en: "Music control command",
-        ru: "Команда управления музыкой",
-        uk: "Команда керування музикою",
-      },
+    name: {
+      ru: "музыка",
+      uk: "музика",
+    },
+    description: {
+      ru: "Команда управления музыкой",
+      uk: "Команда керування музикою",
     },
     noMusicPlaying: {
       en: "No music is currently playing",
@@ -65,6 +61,26 @@ export default {
         ru: "Состояние автопроигрывания было установлено на {{enabled}}",
         uk: "Стан автопрогравання було встановлено на {{enabled}}",
       },
+    },
+    pauseApplied: {
+      en: "Music has been paused",
+      ru: "Музыка поставлена на паузу",
+      uk: "Музика поставлена на паузу",
+    },
+    pauseResumed: {
+      en: "Music has been resumed",
+      ru: "Воспроизведение музыки возобновлено",
+      uk: "Відтворення музики відновлено",
+    },
+    loopApplied: {
+      en: "Loop mode has been set to {{type}}",
+      ru: "Режим повтора установлен на {{type}}",
+      uk: "Режим повтору встановлено на {{type}}",
+    },
+    skipApplied: {
+      en: "Skipped to the next track",
+      ru: "Переход к следующему треку",
+      uk: "Перехід до наступного треку",
     },
   },
   server: true,

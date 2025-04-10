@@ -76,7 +76,7 @@ export default {
       const userId = targetUser.id;
 
       // Get all necessary data in parallel
-      const [levelData, currentSeason, voiceSession, guildSettings] =
+      let [levelData, currentSeason, voiceSession, guildSettings] =
         await Promise.all([
           Database.client.level.findUnique({
             where: {
@@ -96,10 +96,27 @@ export default {
           }),
         ]);
 
+      // If no level data exists, create default data
       if (!levelData) {
-        return interaction.editReply({
-          content: i18n.__("userNotFound"),
-          ephemeral: true,
+        await Database.client.level.create({
+          data: {
+            userId,
+            guildId,
+            xp: 0n,
+            gameXp: 0n,
+            seasonXp: 0n,
+          },
+        });
+        // Re-fetch the newly created data
+        levelData = await Database.client.level.findUnique({
+          where: {
+            userId_guildId: { userId, guildId },
+          },
+          select: {
+            xp: true,
+            gameXp: true,
+            seasonXp: true,
+          },
         });
       }
 

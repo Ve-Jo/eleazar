@@ -214,7 +214,19 @@ export default {
       },
     });
 
-    if (!level) return this.calculateLevel(0);
+    if (!level) {
+      // Create default level data if none exists
+      const newLevel = await this.client.level.create({
+        data: {
+          userId,
+          guildId,
+          xp: 0n,
+          gameXp: 0n,
+          seasonXp: 0n,
+        },
+      });
+      return this.calculateLevel(isGame ? newLevel.gameXp : newLevel.xp);
+    }
 
     return this.calculateLevel(isGame ? level.gameXp : level.xp);
   },
@@ -248,18 +260,48 @@ export default {
       }),
     ]);
 
-    if (!level) return {};
+    if (!level) {
+      // Create default level data if none exists
+      const newLevel = await this.client.level.create({
+        data: {
+          userId,
+          guildId,
+          xp: 0n,
+          gameXp: 0n,
+          seasonXp: 0n,
+        },
+        select: {
+          xp: true,
+          gameXp: true,
+          seasonXp: true,
+        },
+      });
+      return {
+        activity: this.calculateLevel(newLevel.xp),
+        gaming: this.calculateLevel(newLevel.gameXp),
+        season: this.calculateLevel(newLevel.seasonXp),
+        details: {
+          activity: {},
+          gaming: {},
+        },
+      };
+    }
 
     const result = {
       activity: this.calculateLevel(level.xp),
       gaming: this.calculateLevel(level.gameXp),
-      season: this.calculateLevel(level.seasonXp), // Add season level calculation
+      season: this.calculateLevel(level.seasonXp),
     };
 
     if (stats) {
       result.details = {
-        activity: stats.xpStats,
-        gaming: stats.gameXpStats,
+        activity: stats.xpStats || {},
+        gaming: stats.gameXpStats || {},
+      };
+    } else {
+      result.details = {
+        activity: {},
+        gaming: {},
       };
     }
 
