@@ -28,6 +28,9 @@ WORKDIR /app
 # Install runtime dependencies for canvas and other native modules
 RUN apk add --no-cache cairo jpeg pango giflib
 
+# Create a non-root user
+RUN addgroup -S appuser && adduser -S appuser -G appuser
+
 # Copy only necessary files from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
@@ -38,8 +41,11 @@ COPY --from=builder /app/package.json ./package.json
 # Set production environment
 ENV NODE_ENV=production
 
-# Use a non-root user for security
-RUN addgroup -S appuser && adduser -S appuser -G appuser
+# Fix permissions for the non-root user
+RUN mkdir -p /app/node_modules/.prisma/client && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
 USER appuser
 
 # Expose port if needed for preview server
