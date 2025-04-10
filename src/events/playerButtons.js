@@ -2,6 +2,75 @@ import { Events } from "discord.js";
 import i18n from "../utils/newI18n.js";
 import { createMusicButtons } from "../utils/musicButtons.js";
 
+// Register required localizations for the button handler
+const localization_strings = {
+  music: {
+    previous: {
+      noPreviousSongs: {
+        en: "There are no previous songs in the queue",
+        ru: "В очереди нет предыдущих песен",
+        uk: "В черзі немає попередніх пісень",
+      },
+      addedPreviousToQueue: {
+        en: "Added previous song to queue: {{title}}",
+        ru: "Добавлена предыдущая песня в очередь: {{title}}",
+        uk: "Додано попередню пісню в чергу: {{title}}",
+      },
+    },
+
+    loopApplied: {
+      en: "Loop is now {{type}}",
+      ru: "Цикл теперь {{type}}",
+      uk: "Цикл теперь {{type}}",
+    },
+    skipApplied: {
+      en: "Skipped song",
+      ru: "Песня пропущена",
+      uk: "Пісня пропущена",
+    },
+    pauseApplied: {
+      en: "Paused",
+      ru: "Пауза",
+      uk: "Пауза",
+    },
+    pauseResumed: {
+      en: "Resumed",
+      ru: "Продолжено",
+      uk: "Продовжено",
+    },
+    buttons: {
+      on: "On",
+      off: "Off",
+    },
+
+    autoplay: {
+      autoplayApplied: {
+        en: "Autoplay is now {{state}}",
+        ru: "Автоплей теперь {{state}}",
+        uk: "Автоплей теперь {{state}}",
+      },
+    },
+
+    errorOccurred: {
+      en: "An error occurred while processing the interaction: {{error}}",
+      ru: "Произошла ошибка при обработке взаимодействия: {{error}}",
+      uk: "Виникла помилка при обробці взаємодії: {{error}}",
+    },
+  },
+};
+
+// Register translations with i18n system
+Object.keys(localization_strings).forEach((category) => {
+  Object.keys(localization_strings[category]).forEach((component) => {
+    i18n.registerLocalizations(
+      category,
+      component,
+      localization_strings[category][component],
+      true
+    );
+  });
+});
+
 export default {
   name: Events.InteractionCreate,
   async execute(interaction) {
@@ -106,7 +175,9 @@ export default {
                 content:
                   `<@${interaction.user.id}> ` +
                   i18n.__("music.autoplay.autoplayApplied", {
-                    enabled: newState ? "ON" : "OFF",
+                    state: newState
+                      ? i18n.__("music.buttons.on")
+                      : i18n.__("music.buttons.off"),
                   }),
               })
               .then((int) => setTimeout(() => int.delete(), 5000));
@@ -120,7 +191,7 @@ export default {
         } catch (error) {
           console.error(error);
           return interaction.reply({
-            content: i18n.__("music.errorOccured"),
+            content: i18n.__("music.errorOccurred", { error: error.message }),
             ephemeral: true,
           });
         }
@@ -138,14 +209,16 @@ export default {
         }
 
         if (option !== "autoplay" && option !== "previous") {
-          const replyContent = i18n.__(
-            `music.${option}${
-              option === "pause" ? (player.paused ? "d" : "Resumed") : "Applied"
-            }`,
-            {
-              type: player.repeatMode,
-            }
-          );
+          const replyContent =
+            option === "pause"
+              ? i18n.__(
+                  player.paused ? "music.pauseApplied" : "music.pauseResumed"
+                )
+              : option === "loop"
+              ? i18n.__("music.loopApplied", { type: player.repeatMode })
+              : option === "skip"
+              ? i18n.__("music.skipApplied")
+              : i18n.__(`music.${option}Applied`);
 
           try {
             await interaction.reply({
@@ -160,7 +233,7 @@ export default {
         console.error(error);
         try {
           await interaction.reply({
-            content: i18n.__("music.errorOccured"),
+            content: i18n.__("music.errorOccurred", { error: error.message }),
             ephemeral: true,
           });
         } catch (replyError) {
