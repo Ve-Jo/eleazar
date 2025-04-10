@@ -149,15 +149,7 @@ export const DEFAULT_VALUES = {
 
 class Database {
   constructor() {
-    // Set connection pool configuration for production
-    const connectionPoolSettings = process.env.NODE_ENV === 'production' 
-      ? {
-          connection_limit: 5,
-          pool_timeout: 30,
-          idle_timeout: 30
-        }
-      : {};
-
+    // Set up Prisma client with correct configuration
     this.client = new PrismaClient({
       log:
         process.env.NODE_ENV === "production" ? ["error"] : ["query", "error"],
@@ -166,26 +158,26 @@ class Database {
           url: process.env.DATABASE_URL,
         },
       },
-      // Add connection pooling configuration
-      connection: connectionPoolSettings,
     });
 
-    // Add additional middleware for connection reuse in production
+    // Log connection status in production
     if (process.env.NODE_ENV === "production") {
+      console.log("Initializing database with production settings");
+
       // Middleware to detect and log connection issues
       this.client.$use(async (params, next) => {
         try {
           return await next(params);
         } catch (error) {
-          if (error.message && error.message.includes('Connection')) {
-            console.error('Database connection issue detected:', error.message);
+          if (error.message && error.message.includes("Connection")) {
+            console.error("Database connection issue detected:", error.message);
             // Try to reconnect
             try {
               await this.client.$disconnect();
               await this.client.$connect();
-              console.log('Successfully reconnected to database');
+              console.log("Successfully reconnected to database");
             } catch (reconnectError) {
-              console.error('Failed to reconnect to database:', reconnectError);
+              console.error("Failed to reconnect to database:", reconnectError);
             }
           }
           throw error;

@@ -3,7 +3,7 @@ FROM oven/bun:1-alpine as builder
 WORKDIR /app
 
 # Install build dependencies for native modules
-RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev postgresql-dev
 
 # Copy only package.json first (without the existing lockfile)
 COPY package.json ./
@@ -26,7 +26,7 @@ FROM oven/bun:1-alpine
 WORKDIR /app
 
 # Install runtime dependencies for canvas and other native modules
-RUN apk add --no-cache cairo jpeg pango giflib
+RUN apk add --no-cache cairo jpeg pango giflib postgresql-client
 
 # Create a non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser
