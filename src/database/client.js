@@ -149,6 +149,15 @@ export const DEFAULT_VALUES = {
 
 class Database {
   constructor() {
+    // Set connection pool configuration for production
+    const connectionPoolSettings = process.env.NODE_ENV === 'production' 
+      ? {
+          connection_limit: 5,
+          pool_timeout: 30,
+          idle_timeout: 30
+        }
+      : {};
+
     this.client = new PrismaClient({
       log:
         process.env.NODE_ENV === "production" ? ["error"] : ["query", "error"],
@@ -157,7 +166,32 @@ class Database {
           url: process.env.DATABASE_URL,
         },
       },
+      // Add connection pooling configuration
+      connection: connectionPoolSettings,
     });
+
+    // Add additional middleware for connection reuse in production
+    if (process.env.NODE_ENV === "production") {
+      // Middleware to detect and log connection issues
+      this.client.$use(async (params, next) => {
+        try {
+          return await next(params);
+        } catch (error) {
+          if (error.message && error.message.includes('Connection')) {
+            console.error('Database connection issue detected:', error.message);
+            // Try to reconnect
+            try {
+              await this.client.$disconnect();
+              await this.client.$connect();
+              console.log('Successfully reconnected to database');
+            } catch (reconnectError) {
+              console.error('Failed to reconnect to database:', reconnectError);
+            }
+          }
+          throw error;
+        }
+      });
+    }
 
     // Performance monitoring middleware
     this.client.$use(async (params, next) => {
@@ -398,9 +432,12 @@ class Database {
     try {
       const fs = await import("fs");
       const path = await import("path");
+      const { fileURLToPath } = await import("url");
 
-      const dirname = path.dirname(new URL(import.meta.url).pathname);
-      const files = await fs.promises.readdir(dirname);
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+
+      const files = await fs.promises.readdir(__dirname);
       const moduleFiles = files.filter(
         (file) =>
           file.endsWith(".js") && file !== "client.js" && !file.startsWith(".")
