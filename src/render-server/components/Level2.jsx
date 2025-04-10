@@ -131,7 +131,7 @@ const StyledRectangle = ({
       >
         {primaryText}
       </div>
-      {timerText && (
+      {/*{timerText && (
         <div
           style={{
             position: "absolute",
@@ -144,7 +144,7 @@ const StyledRectangle = ({
         >
           {formatTimer(timerText)}
         </div>
-      )}
+      )}*/}
       {progressBar && (
         <div
           style={{
