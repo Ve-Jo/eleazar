@@ -54,5 +54,18 @@ EXPOSE 2333
 # Configure memory limits for Node.js
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Run with db push instead of migrations for existing databases
-CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma db push --accept-data-loss && bun --expose-gc . 
+# Create a startup script to handle schema migrations properly
+RUN echo '#!/bin/sh\n\
+export DATABASE_URL=$PG_DATABASE_URL\n\
+echo "Generating Prisma Client..."\n\
+bunx prisma generate\n\
+\n\
+echo "Applying database schema changes..."\n\
+bunx prisma db push --skip-generate --accept-data-loss\n\
+\n\
+echo "Starting bot with garbage collection enabled..."\n\
+exec bun --expose-gc .\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Use the startup script
+CMD ["/app/start.sh"] 

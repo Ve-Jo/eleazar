@@ -16,7 +16,7 @@ model Guild {
 }
 
 model User {
-  id           String  @id @map("user_id")
+  id           String  @map("user_id")
   guildId      String  @map("guild_id")
   bannerUrl    String? @map("banner_url")
   lastActivity BigInt  @default(0) @map("last_activity")
@@ -31,7 +31,8 @@ model User {
   VoiceSession VoiceSession?
   crates    Crate[]    // Add relation to Crates
 
-  @@unique([guildId, id])
+  // Make the primary key a composite of guildId and id
+  @@id([guildId, id])
   @@index([guildId])
   @@index([lastActivity])
   @@map("users")
