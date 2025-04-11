@@ -89,7 +89,7 @@ export default {
   async execute(interaction, i18n) {
     if (!interaction.channel.nsfw) {
       return interaction.reply({
-        content: i18n.__("images.nsfw.nsfwChannelOnly"),
+        content: i18n.__("commands.images.nsfw.nsfwChannelOnly"),
         ephemeral: true,
       });
     }
@@ -145,7 +145,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("notFound"),
+        content: i18n.__("commands.images.nsfw.notFound"),
         ephemeral: true,
       });
     }
@@ -175,7 +175,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("notFound"),
+            content: i18n.__("commands.images.nsfw.notFound"),
             ephemeral: true,
           });
         }

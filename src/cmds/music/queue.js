@@ -58,11 +58,13 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("noMusicPlaying"));
+      return interaction.editReply(
+        i18n.__("commands.music.queue.noMusicPlaying")
+      );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.queue.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -71,12 +73,14 @@ export default {
     const current = player.queue.current;
     const nextTrack = player.queue.tracks;
 
-    const queueString = `${i18n.__("currentPlaying", {
+    const queueString = `${i18n.__("commands.music.queue.currentPlaying", {
       title: current.info.title,
-    })}\n${i18n.__("nextInQueue", {
+    })}\n${i18n.__("commands.music.queue.nextInQueue", {
       tracks: nextTrack.map((t) => t.info.title).join(", "),
     })}`;
 
-    await interaction.editReply(`${i18n.__("currentQueue")}\n${queueString}`);
+    await interaction.editReply(
+      `${i18n.__("commands.music.queue.currentQueue")}\n${queueString}`
+    );
   },
 };

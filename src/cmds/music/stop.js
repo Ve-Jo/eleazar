@@ -48,11 +48,13 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("noMusicPlaying"));
+      return interaction.editReply(
+        i18n.__("commands.music.stop.noMusicPlaying")
+      );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.stop.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -60,7 +62,7 @@ export default {
 
     await player.destroy(`${interaction.user.username} stopped the music`);
     await interaction.editReply({
-      content: i18n.__("musicStopped"),
+      content: i18n.__("commands.music.stop.musicStopped"),
     });
   },
 };

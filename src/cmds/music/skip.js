@@ -54,13 +54,13 @@ export default {
 
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("noMusicPlaying"),
+        content: i18n.__("commands.music.skip.noMusicPlaying"),
         ephemeral: true,
       });
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.skip.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -73,17 +73,17 @@ export default {
       if (autoplay) {
         await player.seek(player.queue.current.info.duration);
         return interaction.editReply({
-          content: i18n.__("skippedSong"),
+          content: i18n.__("commands.music.skip.skippedSong"),
           ephemeral: true,
         });
       }
       return interaction.editReply({
-        content: i18n.__("skippingSongError"),
+        content: i18n.__("commands.music.skip.skippingSongError"),
         ephemeral: true,
       });
     }
     await interaction.editReply({
-      content: i18n.__("skippedSong"),
+      content: i18n.__("commands.music.skip.skippedSong"),
       ephemeral: true,
     });
   },

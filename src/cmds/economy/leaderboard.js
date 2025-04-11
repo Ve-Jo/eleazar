@@ -305,8 +305,9 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(process.env.EMBED_COLOR)
           .setAuthor({
-            name: `${i18n.__("title")} - ${
-              i18n.__(`categories[${category}]`) || "Total Balance"
+            name: `${i18n.__("commands.economy.leaderboard.title")} - ${
+              i18n.__(`commands.economy.leaderboard.categories.${category}`) ||
+              "Total Balance"
             }`,
             iconURL: interaction.user.displayAvatarURL(),
           })
@@ -344,35 +345,39 @@ export default {
           // Create category selector without using getGroup
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
-            .setPlaceholder(i18n.__("selectCategory"))
+            .setPlaceholder(
+              i18n.__("commands.economy.leaderboard.selectCategory")
+            )
             .addOptions([
               {
-                label: i18n.__("categories[total]"),
+                label: i18n.__("commands.economy.leaderboard.categories.total"),
                 value: "total",
                 default: category === "total",
               },
               {
-                label: i18n.__("categories[balance]"),
+                label: i18n.__(
+                  "commands.economy.leaderboard.categories.balance"
+                ),
                 value: "balance",
                 default: category === "balance",
               },
               {
-                label: i18n.__("categories[bank]"),
+                label: i18n.__("commands.economy.leaderboard.categories.bank"),
                 value: "bank",
                 default: category === "bank",
               },
               {
-                label: i18n.__("categories[level]"),
+                label: i18n.__("commands.economy.leaderboard.categories.level"),
                 value: "level",
                 default: category === "level",
               },
               /*{
-                label: i18n.__("economy.leaderboard.categories.games"),
+                label: i18n.__("commands.economy.leaderboard.categories.games"),
                 value: "games",
                 default: category === "games",
               },
               {
-                label: i18n.__("economy.leaderboard.categories.season"),
+                label: i18n.__("commands.economy.leaderboard.categories.season"),
                 value: "season",
                 default: category === "season",
               },*/
@@ -387,9 +392,9 @@ export default {
           const selectOptions = validUsers.map((user, index) => ({
             label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
             value: (startIndex + index + 1).toString(),
-            description: `${i18n.__(`categories.${category}`)}: ${
-              user.sortValue
-            }`.slice(0, 50),
+            description: `${i18n.__(
+              `commands.economy.leaderboard.categories.${category}`
+            )}: ${user.sortValue}`.slice(0, 50),
           }));
 
           const selectMenu = new StringSelectMenuBuilder()
@@ -480,7 +485,7 @@ export default {
     } catch (error) {
       console.error("Error in leaderboard command:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.economy.leaderboard.error"),
         ephemeral: true,
       });
     }

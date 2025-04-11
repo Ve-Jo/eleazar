@@ -57,12 +57,12 @@ export default {
       });
 
       await interaction.editReply({
-        content: i18n.__("success"),
+        content: i18n.__("commands.images.removebanner.success"),
       });
     } catch (error) {
       console.error("Error removing banner:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.images.removebanner.error"),
         ephemeral: true,
       });
     }

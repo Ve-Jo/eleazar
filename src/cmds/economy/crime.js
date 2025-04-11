@@ -141,7 +141,9 @@ export default {
         });
 
         return interaction.editReply({
-          content: i18n.__("economy.crime.cooldown", { time: timeLeft }),
+          content: i18n.__("commands.economy.crime.cooldown", {
+            time: timeLeft,
+          }),
           files: [attachment],
           ephemeral: true,
         });
@@ -164,7 +166,7 @@ export default {
 
       if (validTargets.length === 0) {
         return interaction.editReply({
-          content: i18n.__("noValidTargets"),
+          content: i18n.__("commands.economy.crime.noValidTargets"),
           ephemeral: true,
         });
       }
@@ -172,7 +174,7 @@ export default {
       // Create selection menu with potential targets
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId("select_crime_target")
-        .setPlaceholder(i18n.__("selectTarget"))
+        .setPlaceholder(i18n.__("commands.economy.crime.selectTarget"))
         .addOptions(
           await Promise.all(
             validTargets.map(async (userData) => {
@@ -199,7 +201,7 @@ export default {
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
       const response = await interaction.editReply({
-        content: i18n.__("selectTarget"),
+        content: i18n.__("commands.economy.crime.selectTarget"),
         components: [row],
       });
 
@@ -377,16 +379,16 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(success ? process.env.EMBED_COLOR : "#ff0000")
           .setAuthor({
-            name: i18n.__("title"),
+            name: i18n.__("commands.economy.crime.title"),
             iconURL: user.displayAvatarURL(),
           })
           .setDescription(
             success
-              ? i18n.__("successTarget", {
+              ? i18n.__("commands.economy.crime.successTarget", {
                   amount,
                   target: target.displayName,
                 })
-              : i18n.__("failTarget", { amount })
+              : i18n.__("commands.economy.crime.failTarget", { amount })
           )
           .setImage(`attachment://crime.png`)
           .setTimestamp();
@@ -399,7 +401,7 @@ export default {
       } catch (error) {
         if (error.code === "INTERACTION_COLLECTOR_ERROR") {
           return interaction.editReply({
-            content: i18n.__("noSelection"),
+            content: i18n.__("commands.economy.crime.noSelection"),
             components: [],
           });
         }
@@ -408,7 +410,7 @@ export default {
     } catch (error) {
       console.error("Error in crime command:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.economy.crime.error"),
         ephemeral: true,
       });
     }

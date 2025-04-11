@@ -23,11 +23,6 @@ export default {
         uk: "Показати статус каналу для рахунку",
       },
     },
-    no_channel: {
-      en: "No counting channel is set up",
-      ru: "Канал для счета не настроен",
-      uk: "Канал для рахунку не налаштовано",
-    },
     status: {
       en: "Counting channel status:\nChannel: {{channel}}\nCurrent number: {{number}}\nPin on each: {{pinoneach}}\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}",
       ru: "Статус канала для счета:\nКанал: {{channel}}\nТекущее число: {{number}}\nЗакреплять на каждом: {{pinoneach}}\nЗакрепленная роль: {{pinnedrole}}\nТолько числа: {{only_numbers}}\nБез повторений: {{no_same_user}}\nНе уникальная роль: {{no_unique_role}}",
@@ -46,7 +41,7 @@ export default {
 
     if (!guildData?.settings?.counting?.channel_id) {
       return interaction.reply({
-        content: i18n.__("no_channel"),
+        content: i18n.__("commands.counting.no_channel"),
         ephemeral: true,
       });
     }
@@ -59,7 +54,7 @@ export default {
       : null;
 
     await interaction.reply({
-      content: i18n.__("status", {
+      content: i18n.__("commands.counting.status.status", {
         channel: channel?.name || "Unknown",
         number: guildData.settings.counting.message,
         pinoneach: guildData.settings.counting.pinoneach || "None",

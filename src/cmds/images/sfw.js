@@ -129,7 +129,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("notFound"),
+        content: i18n.__("commands.images.sfw.notFound"),
         ephemeral: true,
       });
     }
@@ -159,7 +159,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("notFound"),
+            content: i18n.__("commands.images.sfw.notFound"),
             ephemeral: true,
           });
         }

@@ -48,16 +48,6 @@ export default {
       ru: "Баланс",
       uk: "Баланс",
     },
-    userNotFound: {
-      en: "User not found",
-      ru: "Пользователь не найден",
-      uk: "Користувач не знайдений",
-    },
-    imageError: {
-      en: "Error generating balance image",
-      ru: "Ошибка при создании изображения баланса",
-      uk: "Помилка при створенні зображення балансу",
-    },
   },
 
   async execute(interaction, i18n) {
@@ -72,7 +62,7 @@ export default {
 
     if (!userData) {
       return interaction.editReply({
-        content: i18n.__("userNotFound"),
+        content: i18n.__("commands.economy.userNotFound"),
         ephemeral: true,
       });
     }
@@ -117,7 +107,7 @@ export default {
     if (!buffer) {
       console.error("Buffer is undefined or null");
       return interaction.editReply({
-        content: i18n.__("imageError"),
+        content: i18n.__("commands.economy.imageError"),
         ephemeral: true,
       });
     }
@@ -131,7 +121,7 @@ export default {
       .setColor(dominantColor?.embedColor ?? 0x0099ff) // Default color if dominantColor is undefined
       .setImage(`attachment://balance.png`)
       .setAuthor({
-        name: i18n.__("title"),
+        name: i18n.__("commands.economy.balance.title"),
         iconURL: user.avatarURL(),
       });
 

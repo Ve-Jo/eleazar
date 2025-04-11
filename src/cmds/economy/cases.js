@@ -69,11 +69,6 @@ export default {
       ru: "У вас нет таких ящиков",
       uk: "У вас немає таких скринь",
     },
-    error: {
-      en: "An error occurred while processing your request",
-      ru: "Произошла ошибка при обработке вашего запроса",
-      uk: "Сталася помилка під час обробки вашого запиту",
-    },
     rewardIntro: {
       en: "You opened a {{crate}} crate and received:\n",
       ru: "Вы открыли ящик {{crate}} и получили:\n",
@@ -264,7 +259,7 @@ export default {
         // Create open button
         const openButton = new ButtonBuilder()
           .setCustomId("open_crate")
-          .setLabel(i18n.__("openButton"))
+          .setLabel(i18n.__("commands.economy.cases.openButton"))
           .setStyle(ButtonStyle.Success)
           .setDisabled(!cratesList[selectedCrate].available);
 
@@ -274,11 +269,11 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor ?? 0x0099ff)
           .setAuthor({
-            name: i18n.__("title"),
+            name: i18n.__("commands.economy.cases.title"),
             iconURL: interaction.user.displayAvatarURL(),
           })
           .setDescription(
-            i18n.__("balance", {
+            i18n.__("commands.economy.cases.balance", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
@@ -311,7 +306,7 @@ export default {
 
           if (!selectedCrateInfo.available) {
             await i.reply({
-              content: i18n.__("cooldownActive", {
+              content: i18n.__("commands.economy.cases.cooldownActive", {
                 time: prettyMs(selectedCrateInfo.cooldown, { verbose: true }),
               }),
               ephemeral: true,
@@ -384,30 +379,30 @@ export default {
             // Create a button to go back to crates
             const backButton = new ButtonBuilder()
               .setCustomId("back_to_crates")
-              .setLabel(i18n.__("backButton"))
+              .setLabel(i18n.__("commands.economy.cases.backButton"))
               .setStyle(ButtonStyle.Secondary);
 
             const backRow = new ActionRowBuilder().addComponents(backButton);
 
             // Generate reward message text
-            let rewardText = i18n.__("rewardIntro", {
+            let rewardText = i18n.__("commands.economy.cases.rewardIntro", {
               crate: selectedCrateInfo.name,
             });
 
             if (rewards.coins > 0) {
-              rewardText += i18n.__("rewardCoins", {
+              rewardText += i18n.__("commands.economy.cases.rewardCoins", {
                 amount: rewards.coins,
               });
             }
 
             if (rewards.xp > 0) {
-              rewardText += i18n.__("rewardXp", {
+              rewardText += i18n.__("commands.economy.cases.rewardXp", {
                 amount: rewards.xp,
               });
             }
 
             if (rewards.discount > 0) {
-              rewardText += i18n.__("rewardDiscount", {
+              rewardText += i18n.__("commands.economy.cases.rewardDiscount", {
                 amount: rewards.discount,
               });
             }
@@ -421,7 +416,7 @@ export default {
                   `cooldownTypes.${cooldownType}`,
                   cooldownType
                 );
-                rewardText += i18n.__("economy.cases.rewardCooldown", {
+                rewardText += i18n.__("commands.economy.cases.rewardCooldown", {
                   type: cooldownTypeName,
                   time: prettyMs(reduction, { verbose: true }),
                 });
@@ -490,7 +485,7 @@ export default {
           } catch (error) {
             if (error.message.startsWith("Cooldown active:")) {
               await i.reply({
-                content: i18n.__("cooldownActive", {
+                content: i18n.__("commands.economy.cases.cooldownActive", {
                   time: prettyMs(parseInt(error.message.split(":")[1].trim()), {
                     verbose: true,
                   }),
@@ -499,13 +494,13 @@ export default {
               });
             } else if (error.message === "No crates available") {
               await i.reply({
-                content: i18n.__("noCratesAvailable"),
+                content: i18n.__("commands.economy.cases.noCratesAvailable"),
                 ephemeral: true,
               });
             } else {
               console.error("Error opening crate:", error);
               await i.reply({
-                content: i18n.__("error"),
+                content: i18n.__("commands.economy.error"),
                 ephemeral: true,
               });
             }
@@ -521,7 +516,7 @@ export default {
     } catch (error) {
       console.error("Error in crates command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.cases.error"),
+        content: i18n.__("commands.economy.cases.error"),
         ephemeral: true,
       });
     }

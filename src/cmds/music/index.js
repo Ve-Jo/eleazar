@@ -90,7 +90,7 @@ export default {
     });*/
     if (!interaction.member.voice.channel) {
       return interaction.reply({
-        content: i18n.__("notInVoiceChannel"),
+        content: i18n.__("commands.music.notInVoiceChannel"),
         ephemeral: true,
       });
     }

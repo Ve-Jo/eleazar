@@ -108,11 +108,13 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("noMusicPlaying"));
+      return interaction.editReply(
+        i18n.__("commands.music.filters.noMusicPlaying")
+      );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.filters.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -133,12 +135,14 @@ export default {
       await player.filterManager.applyPlayerFilters();
 
       await interaction.editReply(
-        i18n.__("filterApplied", {
+        i18n.__("commands.music.filters.filterApplied", {
           filter: `${filterName} ${filterProperty} ${value}`,
         })
       );
     } else {
-      return interaction.editReply(i18n.__("invalidFilterProperty"));
+      return interaction.editReply(
+        i18n.__("commands.music.filters.invalidFilterProperty")
+      );
     }
   },
 
@@ -150,7 +154,7 @@ export default {
     if (!player) {
       await interaction.respond([
         {
-          name: i18n.__("noMusicPlaying"),
+          name: i18n.__("commands.music.filters.noMusicPlaying"),
           value: "no music playing",
         },
       ]);
@@ -158,7 +162,7 @@ export default {
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.filters.notInVoiceChannel"),
           ephemeral: true,
         });
       }

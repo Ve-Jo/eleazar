@@ -141,11 +141,6 @@ export default {
         },
       },
     },
-    no_perms: {
-      en: "You don't have permissions to manage channels",
-      ru: "У вас нет прав на управление каналами",
-      uk: "У вас немає прав на керування каналами",
-    },
     success: {
       en: "Counting channel setup successfully",
       ru: "Канал для счета настроен успешно",
@@ -163,7 +158,7 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("no_perms"),
+        content: i18n.__("commands.counting.no_perms"),
         ephemeral: true,
       });
     }
@@ -223,7 +218,7 @@ export default {
     });
 
     await interaction.reply({
-      content: i18n.__("success", {
+      content: i18n.__("commands.counting.setup.success", {
         channel: channel.name,
         number: startNumber,
         pinoneach: pinOneEach,

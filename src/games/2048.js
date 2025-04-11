@@ -55,14 +55,10 @@ export default {
   id: "2048",
   title: "2048",
   emoji: "🎲",
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
-
-    // Access enhanced i18n either from this.i18n or create a local reference
-    // The enhanced i18n is injected by loadGames.js in getGameModule
-    const gameI18n = this.i18n || i18n;
 
     // Set locale based on interaction
     const locale = interaction.locale || interaction.guildLocale || "en";
@@ -78,7 +74,7 @@ export default {
 
     if (hasRunningGame) {
       return interaction.followUp({
-        content: gameI18n.__("alreadyRunning"),
+        content: i18n.__(`games.2048.alreadyRunning`),
         ephemeral: true,
       });
     }
@@ -172,7 +168,10 @@ export default {
       // Send initial game board
       const message = await interaction.followUp({
         content:
-          gameI18n.__("startMessage") + `\nHigh Score: ${currentHighScore}`,
+          i18n.__(`games.2048.startMessage`) +
+          `\n${i18n.__(`games.2048.highScore`, {
+            score: currentHighScore,
+          })}`,
         files: [{ attachment: buffer, name: "2048.png" }],
         components: [row],
         fetchReply: true,
@@ -242,7 +241,7 @@ export default {
             );
 
             await message.edit({
-              content: `${gameI18n.__("timesOut", {
+              content: `${i18n.__(`games.2048.timesOut`, {
                 score: gameInstance.state.score,
               })} (+${gameInstance.state.earning.toFixed(
                 1
@@ -264,7 +263,7 @@ export default {
         // Validate game exists and user has permission
         if (!gameInstance || i.user.id !== gameInstance.userId) {
           await i.reply({
-            content: gameI18n.__("notYourGame"),
+            content: i18n.__(`games.2048.notYourGame`),
             ephemeral: true,
           });
           return;
@@ -324,7 +323,7 @@ export default {
 
           // Update the message with new game state
           await message.edit({
-            content: gameI18n.__("score", { score: state.score }),
+            content: i18n.__(`games.2048.score`, { score: state.score }),
             files: [{ attachment: buffer, name: "2048.png" }],
             components: [row],
           });
@@ -387,7 +386,7 @@ export default {
               );
 
               await message.edit({
-                content: `${gameI18n.__("gameOver", {
+                content: `${i18n.__(`games.2048.gameOver`, {
                   score: state.score,
                 })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
                   isNewRecord ? " 🏆 New High Score!" : ""
@@ -402,7 +401,7 @@ export default {
               console.error("Error executing game 2048:", error);
               if (!interaction.replied) {
                 await interaction.reply({
-                  content: gameI18n.__("error"),
+                  content: i18n.__(`games.2048.error`),
                   ephemeral: true,
                 });
               }
@@ -411,7 +410,7 @@ export default {
         } else {
           // For invalid moves, just update the message content
           await message.edit({
-            content: gameI18n.__("invalidMove"),
+            content: i18n.__(`games.2048.invalidMove`),
             components: [row],
           });
         }
@@ -424,7 +423,7 @@ export default {
       console.error("Error executing game 2048:", error);
       if (!interaction.replied) {
         await interaction.reply({
-          content: gameI18n.__("error"),
+          content: i18n.__(`games.2048.error`),
           ephemeral: true,
         });
       }
@@ -455,6 +454,11 @@ export default {
       en: "Your Score: {{score}}",
       ru: "Ваш счет: {{score}}",
       uk: "Ваш рахунок: {{score}}",
+    },
+    highScore: {
+      en: "High Score: {{score}}",
+      ru: "Рекорд: {{score}}",
+      uk: "Рекорд: {{score}}",
     },
     gameOver: {
       en: "Game Over! Final Score: {{score}}",

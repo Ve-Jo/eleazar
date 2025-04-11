@@ -216,14 +216,14 @@ export default {
     // Handle invalid user selections
     if (targetUser.id === interaction.user.id) {
       return interaction.reply({
-        content: i18n.__("cannotSelectSelf"),
+        content: i18n.__("commands.emotions.positive.cannotSelectSelf"),
         ephemeral: true,
       });
     }
 
     if (targetUser.bot) {
       return interaction.reply({
-        content: i18n.__("cannotSelectBot"),
+        content: i18n.__("commands.emotions.positive.cannotSelectBot"),
         ephemeral: true,
       });
     }
@@ -273,9 +273,9 @@ export default {
       // Use translations with variable replacements
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR || "#2B2D31")
-        .setTitle(i18n.__(`${emotion}[title]`))
+        .setTitle(i18n.__(`commands.emotions.positive.${emotion}.title`))
         .setDescription(
-          i18n.__(`${emotion}[description]`, {
+          i18n.__(`commands.emotions.positive.${emotion}.description`, {
             user: interaction.user.id,
             targetUser: targetUser.id,
           })
@@ -288,7 +288,7 @@ export default {
 
     if (!embed) {
       return interaction.editReply({
-        content: i18n.__("imageNotFound"),
+        content: i18n.__("commands.emotions.positive.imageNotFound"),
       });
     }
 
@@ -322,7 +322,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [buttonRow] });
         } else {
           await i.reply({
-            content: i18n.__("imageNotFound"),
+            content: i18n.__("commands.emotions.positive.imageNotFound"),
             ephemeral: true,
           });
         }

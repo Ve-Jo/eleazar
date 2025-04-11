@@ -54,20 +54,20 @@ export default {
 
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("noMusicPlaying"),
+        content: i18n.__("commands.music.previous.noMusicPlaying"),
       });
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
       return interaction.editReply({
-        content: i18n.__("notInVoiceChannel"),
+        content: i18n.__("commands.music.previous.notInVoiceChannel"),
         ephemeral: true,
       });
     }
 
     if (player.queue.previous.length === 0) {
       return interaction.editReply({
-        content: i18n.__("noPreviousSongs"),
+        content: i18n.__("commands.music.previous.noPreviousSongs"),
       });
     }
 
@@ -76,7 +76,7 @@ export default {
     await player.queue.add(previousTrack, 0);
 
     await interaction.editReply({
-      content: i18n.__("addedPreviousToQueue", {
+      content: i18n.__("commands.music.previous.addedPreviousToQueue", {
         title: previousTrack.info.title,
       }),
     });

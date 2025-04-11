@@ -77,14 +77,14 @@ export default {
     );
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("noMusicPlaying"),
+        content: i18n.__("commands.music.seek.noMusicPlaying"),
         ephemeral: true,
       });
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
       return interaction.editReply({
-        content: i18n.__("notInVoiceChannel"),
+        content: i18n.__("commands.music.seek.notInVoiceChannel"),
         ephemeral: true,
       });
     }
@@ -94,21 +94,21 @@ export default {
 
     if (timeInMs === null) {
       return interaction.editReply({
-        content: i18n.__("invalidTimeFormat"),
+        content: i18n.__("commands.music.seek.invalidTimeFormat"),
         ephemeral: true,
       });
     }
 
     if (timeInMs > player.queue.current.info.duration) {
       return interaction.editReply({
-        content: i18n.__("seekBeyondDuration"),
+        content: i18n.__("commands.music.seek.seekBeyondDuration"),
         ephemeral: true,
       });
     }
 
     await player.seek(timeInMs);
     return interaction.editReply({
-      content: i18n.__("seekedTo", { time: timeString }),
+      content: i18n.__("commands.music.seek.seekedTo", { time: timeString }),
       ephemeral: true,
     });
   },
@@ -132,7 +132,10 @@ export default {
       ]);
     } else {
       return interaction.respond([
-        { name: "Invalid format. Use m:ss or ss", value: "0:00" },
+        {
+          name: i18n.__("commands.music.seek.invalidTimeFormat"),
+          value: "0:00",
+        },
       ]);
     }
   },

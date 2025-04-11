@@ -193,7 +193,9 @@ export default {
     // Get the file attachment
     const attachment = interaction.options.getAttachment("audio");
     if (!attachment) {
-      return interaction.editReply(i18n.__("no_attachment"));
+      return interaction.editReply(
+        i18n.__("commands.ai.transcribe_audio.no_attachment")
+      );
     }
 
     // Check file type
@@ -224,12 +226,16 @@ export default {
     // Check file size
     if (attachment.size > 25 * 1024 * 1024) {
       // 25 MB
-      return interaction.editReply(i18n.__("file_too_large"));
+      return interaction.editReply(
+        i18n.__("commands.ai.transcribe_audio.file_too_large")
+      );
     }
 
     try {
       // Download the file
-      await interaction.editReply(i18n.__("downloading"));
+      await interaction.editReply(
+        i18n.__("commands.ai.transcribe_audio.downloading")
+      );
 
       const response = await fetch(attachment.url);
       if (!response.ok) {
@@ -241,7 +247,9 @@ export default {
       const audioData = await response.arrayBuffer();
 
       // Transcribe the audio
-      await interaction.editReply(i18n.__("transcribing"));
+      await interaction.editReply(
+        i18n.__("commands.ai.transcribe_audio.transcribing")
+      );
 
       const formData = new FormData();
       formData.append("file", new Blob([audioData]), attachment.name);
@@ -269,13 +277,15 @@ export default {
 
       // Respond with the transcription
       return interaction.editReply({
-        content: i18n.__("result", {
+        content: i18n.__("commands.ai.transcribe_audio.result", {
           transcription: transcriptionData.text,
         }),
       });
     } catch (error) {
       console.error("Error transcribing audio:", error);
-      return interaction.editReply(i18n.__("error"));
+      return interaction.editReply(
+        i18n.__("commands.ai.transcribe_audio.error")
+      );
     }
   },
 };

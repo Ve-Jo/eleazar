@@ -10,12 +10,13 @@ export default {
   data: () => {
     const builder = new SlashCommandSubcommandBuilder()
       .setName("deposit")
-      .setDescription("Deposit money")
-      .addStringOption((option) =>
+      .setDescription("Deposit money into your bank account")
+      .addNumberOption((option) =>
         option
           .setName("amount")
-          .setDescription("Amount to deposit (or 'all', 'half')")
+          .setDescription("Amount to deposit")
           .setRequired(true)
+          .setMinValue(0)
       );
     return builder;
   },
@@ -27,8 +28,8 @@ export default {
         uk: "внести",
       },
       description: {
-        ru: "Внести деньги на счет",
-        uk: "Внести гроші на рахунок",
+        ru: "Внести деньги на ваш банковский счет",
+        uk: "Внести гроші на ваш банківський рахунок",
       },
     },
     options: {
@@ -38,20 +39,20 @@ export default {
           uk: "сума",
         },
         description: {
-          ru: "Сумма для внесения (или 'all', 'half')",
-          uk: "Сума для внесення (або 'all', 'half')",
+          ru: "Сумма для внесения",
+          uk: "Сума для внесення",
         },
       },
     },
     title: {
       en: "Deposit",
-      ru: "Внести",
-      uk: "Внести",
+      ru: "Внесение",
+      uk: "Внесення",
     },
-    success: {
-      en: "Successfully deposited {{amount}} coins",
-      ru: "Успешно внесено {{amount}} монет",
-      uk: "Успішно внесено {{amount}} монет",
+    depositSuccess: {
+      en: "Successfully deposited {{amount}} to your bank account.",
+      ru: "Успешно внесено {{amount}} на ваш банковский счет.",
+      uk: "Успішно внесено {{amount}} на ваш банківський рахунок.",
     },
     amountGreaterThanZero: {
       en: "Amount must be greater than 0",
@@ -82,162 +83,133 @@ export default {
 
   async execute(interaction, i18n) {
     await interaction.deferReply();
-    const amount = interaction.options.getString("amount");
 
     try {
-      // Get user data with all relations
+      // No need to set locale here as it's already set in interactionCreate
+      const amount = interaction.options.getNumber("amount");
+
+      // Validate the amount
+      if (amount <= 0) {
+        return interaction.editReply({
+          content: i18n.__("commands.economy.deposit.invalidAmount"),
+          ephemeral: true,
+        });
+      }
+
+      // Get user data
       const userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
 
-      // Calculate deposit amount
-      let amountInt = 0;
-      if (amount === "all") {
-        amountInt = Number(userData.economy?.balance || 0);
-      } else if (amount === "half") {
-        amountInt = Math.floor(Number(userData.economy?.balance || 0) / 2);
-      } else {
-        amountInt = parseInt(amount);
-        if (isNaN(amountInt)) {
-          return interaction.editReply({
-            content: i18n.__("invalidAmount"),
-            ephemeral: true,
-          });
-        }
-      }
-
-      // Calculate current bank balance with interest
-      let currentBankBalance = 0;
-      if (userData.economy) {
-        currentBankBalance = parseFloat(
-          await Database.calculateBankBalance(userData)
-        );
-      }
-
-      // Validate amount
-      if (!userData.economy || userData.economy.balance < amountInt) {
+      if (!userData || !userData.economy) {
         return interaction.editReply({
-          content: i18n.__("insufficientFunds"),
-          ephemeral: true,
-        });
-      }
-      if (amountInt <= 0) {
-        return interaction.editReply({
-          content: i18n.__("amountGreaterThanZero"),
+          content: i18n.__("commands.economy.deposit.userNotFound"),
           ephemeral: true,
         });
       }
 
-      // Calculate bank rate based on level
-      const xp = Number(userData.level?.xp?.toString() || 0);
-      const levelInfo = Database.calculateLevel(xp);
-      const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
-
-      // Apply bank rate upgrade
-      const bankRateUpgrade = userData.upgrades.find(
-        (u) => u.type === "bank_rate"
-      );
-      const bankRateLevel = bankRateUpgrade?.level || 1;
-      const bankRateBonus = (bankRateLevel - 1) * 5; // 5% increase per level
-
-      const bankRate = baseRate + bankRateBonus;
-
-      const userId = interaction.user.id;
-      const guildId = interaction.guild.id;
-
-      // Perform deposit operation in single transaction
-      await Database.client.$transaction(async (tx) => {
-        // Update economy record with both balance and bank changes
-        await tx.economy.update({
-          where: {
-            userId_guildId: {
-              userId,
-              guildId,
-            },
-          },
-          data: {
-            balance: {
-              decrement: amountInt,
-            },
-            bankBalance: (currentBankBalance + amountInt).toFixed(5),
-            bankRate: bankRate.toFixed(5),
-            bankStartTime: Date.now(),
-          },
+      // Check if user has enough money
+      if (userData.economy.balance < amount) {
+        return interaction.editReply({
+          content: i18n.__("commands.economy.deposit.notEnoughMoney"),
+          ephemeral: true,
         });
+      }
 
-        // Update user's last activity
-        await tx.user.update({
-          where: {
-            guildId_id: {
-              id: userId,
-              guildId,
-            },
+      // Process deposit
+      await Database.client.economy.update({
+        where: {
+          userId_guildId: {
+            userId: interaction.user.id,
+            guildId: interaction.guild.id,
           },
-          data: {
-            lastActivity: Date.now(),
-          },
-        });
+        },
+        data: {
+          balance: { decrement: amount },
+          bankBalance: { increment: amount },
+          bankStartTime: userData.economy.bankStartTime || new Date(),
+        },
       });
 
-      // Get updated user data directly from database
+      // Get updated user data
       const updatedUser = await Database.getUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
 
-      // Generate the transfer image
-      const [pngBuffer, dominantColor] = await generateImage("Transfer", {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
-            locale: interaction.user.locale,
+      // Generate deposit confirmation image - pass the i18n instance
+      const [buffer, dominantColor] = await generateImage(
+        "Transaction",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+          locale: interaction.locale,
+          transactionType: "deposit",
+          amount: amount,
+          afterBalance: updatedUser.economy.balance,
+          afterBank: updatedUser.economy.bankBalance,
+          returnDominant: true,
+          database: updatedUser,
         },
-        locale: interaction.locale,
-        database: { ...updatedUser },
-        amount: amountInt,
-        isDeposit: true,
-        returnDominant: true,
-      });
+        { image: 2, emoji: 1 },
+        i18n
+      );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
+      // Create response embed
+      if (!buffer) {
+        return interaction.editReply({
+          content: i18n.__("commands.economy.deposit.imageError"),
+          ephemeral: true,
+        });
+      }
+
+      const attachment = new AttachmentBuilder(buffer, {
         name: `deposit.png`,
       });
 
-      let deposit_embed = new EmbedBuilder()
-        .setColor(dominantColor?.embedColor)
+      const embed = new EmbedBuilder()
         .setTimestamp()
+        .setColor(dominantColor?.embedColor ?? 0x0099ff)
         .setImage(`attachment://deposit.png`)
         .setAuthor({
-          name: i18n.__("title"),
+          name: i18n.__("commands.economy.deposit.title"),
           iconURL: interaction.user.displayAvatarURL(),
-        });
+        })
+        .setDescription(
+          i18n.__("commands.economy.deposit.depositSuccess", {
+            amount: amount.toFixed(2),
+          })
+        );
 
+      // Send response
       await interaction.editReply({
-        embeds: [deposit_embed],
+        embeds: [embed],
         files: [attachment],
       });
     } catch (error) {
       console.error("Error in deposit command:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.economy.deposit.error"),
         ephemeral: true,
       });
     }

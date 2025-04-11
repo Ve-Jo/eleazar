@@ -322,7 +322,7 @@ export default {
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
-          .setPlaceholder(i18n.__("selectUpgrade"))
+          .setPlaceholder(i18n.__("commands.economy.shop.selectUpgrade"))
           .addOptions(
             Object.entries(upgradeInfo).map(([key, upgrade], index) => {
               let effectPerLevel, effectValue;
@@ -390,7 +390,7 @@ export default {
 
         const openButton = new ButtonBuilder()
           .setCustomId("purchase")
-          .setLabel(i18n.__("purchaseButton"))
+          .setLabel(i18n.__("commands.economy.shop.purchaseButton"))
           .setStyle(ButtonStyle.Success);
 
         // Add revert button
@@ -407,7 +407,9 @@ export default {
 
         if (currentLevel <= 1) {
           // Disable the button for level 1 upgrades
-          revertButton.setLabel(i18n.__("revertButton")).setDisabled(true);
+          revertButton
+            .setLabel(i18n.__("commands.economy.shop.revertButton"))
+            .setDisabled(true);
         } else {
           // Calculate refund amount for display (85% of current level price)
           const currentUpgradeInfo = await Database.getUpgradeInfo(
@@ -421,9 +423,9 @@ export default {
           // Set the button label with refund amount
           revertButton
             .setLabel(
-              i18n.__("revertButtonWithRefund", {
+              i18n.__("commands.economy.shop.revertButtonWithRefund", {
                 refund: refundAmount || 0,
-              }) || i18n.__("revertButton") // Fallback to simple "Revert" text
+              }) || i18n.__("commands.economy.shop.revertButton") // Fallback to simple "Revert" text
             )
             .setDisabled(false);
         }
@@ -437,11 +439,11 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
           .setAuthor({
-            name: i18n.__("title"),
+            name: i18n.__("commands.economy.shop.title"),
             iconURL: user.displayAvatarURL(),
           })
           .setDescription(
-            i18n.__("description", {
+            i18n.__("commands.economy.shop.description", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
@@ -484,7 +486,7 @@ export default {
           } catch (error) {
             if (error.message === "Insufficient balance") {
               await i.reply({
-                content: i18n.__("insufficientFunds"),
+                content: i18n.__("commands.economy.shop.insufficientFunds"),
                 ephemeral: true,
               });
             } else {
@@ -512,7 +514,7 @@ export default {
 
             // Show success message
             await i.followUp({
-              content: i18n.__("revertSuccess", {
+              content: i18n.__("commands.economy.shop.revertSuccess", {
                 type: upgradeName,
                 level: revertResult.newLevel,
                 refund: revertResult.refundAmount,
@@ -528,14 +530,14 @@ export default {
               const minutesLeft = Math.ceil(cooldownTime / (1000 * 60));
 
               await i.reply({
-                content: i18n.__("revertCooldown", {
+                content: i18n.__("commands.economy.shop.revertCooldown", {
                   minutes: minutesLeft,
                 }),
                 ephemeral: true,
               });
             } else if (error.message === "Cannot revert a level 1 upgrade") {
               await i.reply({
-                content: i18n.__("cannotRevert"),
+                content: i18n.__("commands.economy.shop.cannotRevert"),
                 ephemeral: true,
               });
             } else {
@@ -553,7 +555,7 @@ export default {
     } catch (error) {
       console.error("Error in shop command:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.economy.shop.error"),
         ephemeral: true,
       });
     }

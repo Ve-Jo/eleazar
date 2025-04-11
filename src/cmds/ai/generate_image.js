@@ -188,7 +188,7 @@ export default {
           ).setName("generated_image.png");
 
           await interaction.editReply({
-            content: i18n.__("generated", {
+            content: i18n.__("commands.ai.generate_image.generated", {
               prompt,
               seed: output.data[1] || "random", // Use the seed from output data
               steps: interferenceSteps,
@@ -201,13 +201,13 @@ export default {
       } catch (gradioError) {
         console.error("Gradio client error:", gradioError);
         return interaction.editReply({
-          content: i18n.__("gradio_error"),
+          content: i18n.__("commands.ai.generate_image.gradio_error"),
         });
       }
     } catch (error) {
       console.error("Error generating image:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.ai.generate_image.error"),
       });
     }
   },

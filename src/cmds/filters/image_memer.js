@@ -121,7 +121,7 @@ export default {
 
         if (!youtube_text) {
           await interaction.editReply({
-            content: i18n.__("noText"),
+            content: i18n.__("commands.filters.image_memer.noText"),
           });
           return;
         }
@@ -134,14 +134,14 @@ export default {
 
         if (!username) {
           await interaction.editReply({
-            content: i18n.__("noUsername"),
+            content: i18n.__("commands.filters.image_memer.noUsername"),
           });
           return;
         }
 
         if (!all_text_after_username) {
           await interaction.editReply({
-            content: i18n.__("noText"),
+            content: i18n.__("commands.filters.image_memer.noText"),
           });
           return;
         }
@@ -157,7 +157,9 @@ export default {
       await interaction.editReply({ files: [result] });
     } catch (error) {
       console.error("Error applying meme filter:", error);
-      await interaction.editReply(i18n.__("errorApplyingFilter"));
+      await interaction.editReply(
+        i18n.__("commands.filters.image_memer.errorApplyingFilter")
+      );
     }
   },
 };

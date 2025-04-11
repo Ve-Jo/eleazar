@@ -54,27 +54,17 @@ export default {
   id: "snake",
   title: "Snake",
   emoji: "🐍",
-  async execute(interaction) {
+  async execute(interaction, i18n) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
-
-    // Access enhanced i18n either from this.i18n or create a local reference
-    // The enhanced i18n is injected by loadGames.js in getGameModule
-    const gameI18n = this.i18n || i18n;
-
-    // Set locale based on interaction
-    const locale = interaction.locale || interaction.guildLocale || "en";
-    console.log(`[snake] Using locale: ${locale}`);
 
     // Check if user already has a running game
     const hasRunningGame = activeGames.has(gameKey);
 
     if (hasRunningGame) {
       return interaction.reply({
-        content: gamei18n.___game
-          ? gamei18n.___game("alreadyRunning")
-          : gameI18n.__("alreadyRunning"),
+        content: i18n.__(`games.snake.alreadyRunning`),
         ephemeral: true,
       });
     }
@@ -168,9 +158,12 @@ export default {
       // Send initial game board
       const message = await interaction.followUp({
         content:
-          (i18n.__("name")
-            ? i18n.__("startMessage")
-            : i18n.__("startMessage")) + `\nHigh Score: ${currentHighScore}`,
+          (i18n.__("games.snake.name")
+            ? i18n.__("games.snake.startMessage")
+            : i18n.__("games.snake.startMessage")) +
+          `\n${i18n.__(`games.snake.highScore`, {
+            score: currentHighScore,
+          })}`,
         files: [{ attachment: buffer, name: "snake.png" }],
         components: [row],
         fetchReply: true,
@@ -241,7 +234,7 @@ export default {
               }
 
               await message.edit({
-                content: `${gameI18n.__("timesOut", {
+                content: `${i18n.__(`games.snake.timesOut`, {
                   score: initialState.state.score,
                 })} (+${initialState.state.earning.toFixed(
                   1
@@ -269,7 +262,7 @@ export default {
         // Validate game exists and user has permission
         if (!gameInstance || i.user.id !== gameInstance.userId) {
           await i.reply({
-            content: gameI18n.__("notYourGame"),
+            content: i18n.__(`games.snake.notYourGame`),
             ephemeral: true,
           });
           return;
@@ -357,8 +350,8 @@ export default {
 
         if (!state.gameOver) {
           messageContent = validMove
-            ? gameI18n.__("score", { score: state.score })
-            : gameI18n.__("invalidMove");
+            ? i18n.__(`games.snake.score`, { score: state.score })
+            : i18n.__(`games.snake.invalidMove`);
           messageComponents = [row];
 
           const newBoard = await generateGameBoard(
@@ -419,7 +412,7 @@ export default {
             }
 
             await message.edit({
-              content: `${gameI18n.__("gameOver", {
+              content: `${i18n.__(`games.snake.gameOver`, {
                 score: state.score,
               })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
                 isNewRecord ? " 🏆 New High Score!" : ""
@@ -433,7 +426,7 @@ export default {
           } catch (error) {
             console.error("Error saving game results:", error);
             await message.edit({
-              content: gameI18n.__("error"),
+              content: i18n.__(`games.snake.error`),
               components: [],
             });
           }
@@ -463,7 +456,7 @@ export default {
       console.error("Error executing game snake:", error);
       if (!interaction.replied) {
         await interaction.reply({
-          content: gameI18n.__("error"),
+          content: i18n.__(`games.snake.error`),
           ephemeral: true,
         });
       }
@@ -499,6 +492,11 @@ export default {
       en: "Game Over! Final Score: {{score}}",
       ru: "Игра окончена! Финальный счет: {{score}}",
       uk: "Гра закінчилася! Фінальний рахунок: {{score}}",
+    },
+    highScore: {
+      en: "High Score: {{score}}",
+      ru: "Рекорд: {{score}}",
+      uk: "Рекорд: {{score}}",
     },
     invalidMove: {
       en: "Invalid move!",

@@ -221,14 +221,14 @@ export default {
 
     if (targetUser.id === interaction.user.id) {
       return interaction.reply({
-        content: i18n.__("cannotSelectSelf"),
+        content: i18n.__("commands.emotions.negative.cannotSelectSelf"),
         ephemeral: true,
       });
     }
 
     if (targetUser.bot) {
       return interaction.reply({
-        content: i18n.__("cannotSelectBot"),
+        content: i18n.__("commands.emotions.negative.cannotSelectBot"),
         ephemeral: true,
       });
     }
@@ -270,9 +270,9 @@ export default {
 
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`${emotion}[title]`))
+        .setTitle(i18n.__(`commands.emotions.negative.${emotion}.title`))
         .setDescription(
-          i18n.__(`${emotion}[description]`, {
+          i18n.__(`commands.emotions.negative.${emotion}.description`, {
             user: interaction.user.id,
             targetUser: targetUser.id,
           })
@@ -288,7 +288,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("imageNotFound"),
+        content: i18n.__("commands.emotions.negative.imageNotFound"),
         ephemeral: true,
       });
     }
@@ -318,7 +318,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("imageNotFound"),
+            content: i18n.__("commands.emotions.negative.imageNotFound"),
             ephemeral: true,
           });
         }

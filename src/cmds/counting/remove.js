@@ -23,16 +23,6 @@ export default {
         uk: "Видалити канал для рахунку",
       },
     },
-    no_perms: {
-      en: "You don't have permissions to manage channels",
-      ru: "У вас нет прав на управление каналами",
-      uk: "У вас немає прав на керування каналами",
-    },
-    no_channel: {
-      en: "No counting channel is set up",
-      ru: "Канал для счета не настроен",
-      uk: "Канал для рахунку не налаштовано",
-    },
     success: {
       en: "Counting channel has been removed",
       ru: "Канал для счета был удален",
@@ -50,7 +40,7 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("no_perms"),
+        content: i18n.__("commands.counting.no_perms"),
         ephemeral: true,
       });
     }
@@ -63,7 +53,7 @@ export default {
 
     if (!guildData?.settings?.counting?.channel_id) {
       return interaction.reply({
-        content: i18n.__("no_channel"),
+        content: i18n.__("commands.counting.no_channel"),
         ephemeral: true,
       });
     }
@@ -80,7 +70,7 @@ export default {
     });
 
     await interaction.reply({
-      content: i18n.__("success"),
+      content: i18n.__("commands.counting.remove.success"),
       ephemeral: true,
     });
   },

@@ -71,11 +71,13 @@ export default {
     );
 
     if (!player) {
-      return interaction.editReply(i18n.__("noMusicPlaying"));
+      return interaction.editReply(
+        i18n.__("commands.music.loop.noMusicPlaying")
+      );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.editReply({
-          content: i18n.__("notInVoiceChannel"),
+          content: i18n.__("commands.music.loop.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -83,6 +85,8 @@ export default {
 
     const loopType = interaction.options.getString("type");
     await player.setRepeatMode(loopType);
-    await interaction.editReply(i18n.__("loopApplied", { type: loopType }));
+    await interaction.editReply(
+      i18n.__("commands.music.loop.loopApplied", { type: loopType })
+    );
   },
 };

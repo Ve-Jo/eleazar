@@ -10,6 +10,7 @@ import {
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames, getGameModule } from "../../utils/loadGames.js";
+import i18n from "../../utils/newI18n.js";
 
 export default {
   data: () => {
@@ -118,12 +119,9 @@ export default {
       // Explicitly set locale based on interaction
       const locale = interaction.locale || interaction.guildLocale || "en";
       const normalizedLocale = locale.split("-")[0].toLowerCase();
-      console.log(
-        `[work] Using locale: ${normalizedLocale} for interaction ${interaction.id}`
-      );
 
       // Load games and convert Map to array
-      const gamesMap = await loadGames(i18n);
+      const gamesMap = await loadGames();
       const gamesArray = Array.from(gamesMap.values());
       console.log(
         `[work] Loaded ${gamesArray.length} games with titles:`,
@@ -140,7 +138,7 @@ export default {
         // Validate the requested game exists
         if (!gamesMap.has(requestedGame)) {
           await interaction.editReply({
-            content: i18n.__("gameNotFound"),
+            content: i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
           });
           return;
@@ -148,17 +146,17 @@ export default {
 
         console.log(`[work] Specific game requested: ${requestedGame}`);
         // Use getGameModule to get the game with enhanced i18n support
-        const gameModule = await getGameModule(requestedGame, normalizedLocale);
+        const gameModule = await getGameModule(requestedGame);
         if (!gameModule?.default) {
           await interaction.editReply({
-            content: i18n.__("gameNotFound"),
+            content: i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
           });
           return;
         }
 
         // Execute the game - enhanced i18n is already injected
-        await gameModule.default.execute(interaction);
+        await gameModule.default.execute(interaction, i18n);
         return;
       }
 
@@ -169,7 +167,7 @@ export default {
       );
 
       const games = {
-        [i18n.__("specialForCategory")]: {
+        [i18n.__("commands.economy.work.specialForCategory")]: {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
             size: 1024,
@@ -194,15 +192,7 @@ export default {
         interaction.user.id
       );
 
-      const generateGameMessage = async (messageLocale) => {
-        // Ensure locale is set before any i18n operations
-        // Make sure to use a normalized locale
-        const normalizedMessageLocale =
-          messageLocale?.split("-")[0].toLowerCase() || normalizedLocale;
-        console.log(
-          `[work] Setting locale to ${normalizedMessageLocale} for message generation`
-        );
-
+      const generateGameMessage = async () => {
         const categoryNames = Object.keys(games);
         const currentCategoryGames =
           games[categoryNames[currentCategory]]?.games_list || [];
@@ -239,7 +229,7 @@ export default {
               }),
             },
           },
-          locale: normalizedMessageLocale,
+          locale: i18n.getLocale(),
           database: userData,
           games: games,
           selectedGame,
@@ -258,7 +248,7 @@ export default {
         const embed = new EmbedBuilder()
           .setColor(dominantColor?.embedColor)
           .setAuthor({
-            name: i18n.__(`title`),
+            name: i18n.__(`commands.economy.work.title`),
             iconURL: interaction.user.displayAvatarURL(),
           })
           .setImage(`attachment://work_games.png`)
@@ -267,7 +257,7 @@ export default {
         // Create category select menu
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_category")
-          .setPlaceholder(i18n.__(`selectCategory`))
+          .setPlaceholder(i18n.__(`commands.economy.work.selectCategory`))
           .addOptions(
             categoryNames.map((category, index) => ({
               label: category,
@@ -289,22 +279,9 @@ export default {
           .setStyle(ButtonStyle.Primary)
           .setDisabled(highlightedGame >= currentCategoryGames.length - 1);
 
-        // Get play button label with debug logging
-        const playButtonKey = "economy.work.playGame";
-        const playButtonLabel = i18n.__(playButtonKey);
-        console.log(
-          `[work] Play button key "${playButtonKey}" translated to: "${playButtonLabel}"`
-        );
-
-        if (playButtonLabel === playButtonKey) {
-          console.warn(
-            `[work] Warning: Translation not found for play button key`
-          );
-        }
-
         const selectButton = new ButtonBuilder()
           .setCustomId("select_game")
-          .setLabel(playButtonLabel)
+          .setLabel(i18n.__(`commands.economy.work.playGame`))
           .setStyle(
             selectedGame === currentCategoryGames[highlightedGame]?.id
               ? ButtonStyle.Secondary
@@ -326,9 +303,7 @@ export default {
         };
       };
 
-      const message = await interaction.editReply(
-        await generateGameMessage(interaction.locale)
-      );
+      const message = await interaction.editReply(await generateGameMessage());
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
@@ -351,14 +326,8 @@ export default {
           games[categoryNames[currentCategory]]?.games_list;
 
         if (!currentCategoryGames || currentCategoryGames.length === 0) {
-          const noGamesKey = "economy.work.noGamesAvailable";
-          const noGamesMessage = i18n.__(noGamesKey);
-          console.log(
-            `[work-collect] No games key "${noGamesKey}" translated to: "${noGamesMessage}"`
-          );
-
           await i.reply({
-            content: noGamesMessage,
+            content: i18n.__(`commands.economy.work.noGamesAvailable`),
             ephemeral: true,
           });
           return;
@@ -371,9 +340,7 @@ export default {
           console.log(
             `[work-collect] Selected category ${currentCategory}: "${categoryNames[currentCategory]}"`
           );
-          await i.update(
-            await generateGameMessage(normalizedInteractionLocale)
-          );
+          await i.update(await generateGameMessage());
         } else if (i.customId === "prev_game") {
           if (highlightedGame > 0) {
             highlightedGame--;
@@ -381,9 +348,7 @@ export default {
             console.log(
               `[work-collect] Navigated to previous game: ${highlightedGame}`
             );
-            await i.update(
-              await generateGameMessage(normalizedInteractionLocale)
-            );
+            await i.update(await generateGameMessage());
           }
         } else if (i.customId === "next_game") {
           if (highlightedGame < currentCategoryGames.length - 1) {
@@ -392,23 +357,16 @@ export default {
             console.log(
               `[work-collect] Navigated to next game: ${highlightedGame}`
             );
-            await i.update(
-              await generateGameMessage(normalizedInteractionLocale)
-            );
+            await i.update(await generateGameMessage());
           }
         } else if (i.customId === "select_game") {
           const game = currentCategoryGames[highlightedGame];
           if (!game) {
-            const gameNotFoundKey = "economy.work.gameNotFound";
-            const gameNotFoundMessage = i18n.__(gameNotFoundKey);
-            console.log(
-              `[work-collect] Game not found key "${gameNotFoundKey}" translated to: "${gameNotFoundMessage}"`
-            );
-
             await i.reply({
-              content: gameNotFoundMessage,
+              content: i18n.__(`commands.economy.work.gameNotFound`),
               ephemeral: true,
             });
+
             return;
           }
 
@@ -424,26 +382,19 @@ export default {
             // Import and execute the game module
             console.log(`[work-collect] Loading game module: ${game.id}`);
             // Use getGameModule to get the game with enhanced i18n support
-            const gameModule = await getGameModule(game.id, normalizedLocale);
+            const gameModule = await getGameModule(game.id);
             if (!gameModule?.default) {
               throw new Error(`Game module ${game.id} not found or invalid`);
             }
 
-            // Execute the game - enhanced i18n is already injected
-            await gameModule.default.execute(i);
+            await gameModule.default.execute(i, i18n);
           } catch (error) {
             console.error(`Error executing game ${game.id}:`, error);
 
-            const gameErrorKey = "economy.work.gameError";
-            const gameErrorMessage = i18n.__(gameErrorKey, {
-              game: game.title,
-            });
-            console.log(
-              `[work-collect] Game error key "${gameErrorKey}" translated to: "${gameErrorMessage}"`
-            );
-
             await i.followUp({
-              content: gameErrorMessage,
+              content: i18n.__(`commands.economy.work.gameError`, {
+                game: game.title,
+              }),
               ephemeral: true,
             });
           }
@@ -458,7 +409,7 @@ export default {
     } catch (error) {
       console.error("Error in work command:", error);
       await interaction.editReply({
-        content: i18n.__("economy.work.error"),
+        content: i18n.__("commands.economy.error"),
         ephemeral: true,
       });
     }

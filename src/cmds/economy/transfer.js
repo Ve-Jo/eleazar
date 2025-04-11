@@ -104,7 +104,7 @@ export default {
     // Prevent self-transfers
     if (targetUser.id === interaction.user.id) {
       return interaction.editReply({
-        content: i18n.__("cannotTransferToSelf"),
+        content: i18n.__("commands.economy.transfer.cannotTransferToSelf"),
         ephemeral: true,
       });
     }
@@ -134,7 +134,7 @@ export default {
         amountInt = parseFloat(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
-            content: i18n.__("invalidAmount"),
+            content: i18n.__("commands.economy.transfer.invalidAmount"),
             ephemeral: true,
           });
         }
@@ -143,13 +143,13 @@ export default {
       // Validate amount
       if (!senderData.economy || senderData.economy.balance < amountInt) {
         return interaction.editReply({
-          content: i18n.__("insufficientFunds"),
+          content: i18n.__("commands.economy.transfer.insufficientFunds"),
           ephemeral: true,
         });
       }
       if (amountInt <= 0) {
         return interaction.editReply({
-          content: i18n.__("amountGreaterThanZero"),
+          content: i18n.__("commands.economy.transfer.amountGreaterThanZero"),
           ephemeral: true,
         });
       }
@@ -272,7 +272,7 @@ export default {
         .setTimestamp()
         .setImage(`attachment://transfer.png`)
         .setAuthor({
-          name: i18n.__("title"),
+          name: i18n.__("commands.economy.transfer.title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
@@ -283,7 +283,7 @@ export default {
     } catch (error) {
       console.error("Error in transfer command:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.economy.transfer.error"),
         ephemeral: true,
       });
     }

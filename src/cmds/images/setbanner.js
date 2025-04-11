@@ -212,7 +212,7 @@ export default {
       // Validate attachment
       if (!attachment.contentType?.startsWith("image/")) {
         return interaction.editReply({
-          content: i18n.__("invalidImage"),
+          content: i18n.__("commands.images.setbanner.invalidImage"),
           ephemeral: true,
         });
       }
@@ -220,7 +220,7 @@ export default {
       const MAX_SIZE = 8 * 1024 * 1024;
       if (attachment.size > MAX_SIZE) {
         return interaction.editReply({
-          content: i18n.__("imageTooLarge"),
+          content: i18n.__("commands.images.setbanner.imageTooLarge"),
           ephemeral: true,
         });
       }
@@ -230,14 +230,14 @@ export default {
         const response = await axios.head(attachment.url);
         if (!response.headers["content-type"]?.startsWith("image/")) {
           return interaction.editReply({
-            content: i18n.__("invalidImage"),
+            content: i18n.__("commands.images.setbanner.invalidImage"),
             ephemeral: true,
           });
         }
       } catch (error) {
         console.error("Error validating image URL:", error);
         return interaction.editReply({
-          content: i18n.__("invalidImage"),
+          content: i18n.__("commands.images.setbanner.invalidImage"),
           ephemeral: true,
         });
       }
@@ -318,19 +318,19 @@ export default {
         .setTimestamp()
         .setImage("attachment://banner_preview.png")
         .setAuthor({
-          name: i18n.__("title"),
+          name: i18n.__("commands.images.setbanner.title"),
           iconURL: interaction.user.displayAvatarURL(),
         });
 
       await interaction.editReply({
-        content: i18n.__("success"),
+        content: i18n.__("commands.images.setbanner.success"),
         embeds: [embed],
         files: [previewAttachment],
       });
     } catch (error) {
       console.error("Error setting banner:", error);
       await interaction.editReply({
-        content: i18n.__("error"),
+        content: i18n.__("commands.images.setbanner.error"),
         ephemeral: true,
       });
     }

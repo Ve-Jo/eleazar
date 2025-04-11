@@ -278,9 +278,9 @@ export default {
 
       return new EmbedBuilder()
         .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`${emotion}[title]`))
+        .setTitle(i18n.__(`commands.emotions.myself.${emotion}.title`))
         .setDescription(
-          i18n.__(`${emotion}[description]`, {
+          i18n.__(`commands.emotions.myself.${emotion}.description`, {
             user: interaction.user.id,
           })
         )
@@ -295,7 +295,7 @@ export default {
 
     if (!initialEmbed) {
       return interaction.reply({
-        content: i18n.__("imageNotFound"),
+        content: i18n.__("commands.emotions.myself.imageNotFound"),
         ephemeral: true,
       });
     }
@@ -325,7 +325,7 @@ export default {
           await i.update({ embeds: [newEmbed], components: [row] });
         } else {
           await i.reply({
-            content: i18n.__("imageNotFound"),
+            content: i18n.__("commands.emotions.myself.imageNotFound"),
             ephemeral: true,
           });
         }

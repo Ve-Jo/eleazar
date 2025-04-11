@@ -471,22 +471,14 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
 
     // If this is a subcommand
     if (subcommandName && command.subcommands?.[subcommandName]) {
-      // Get category from command or use command name as category
-      const category = command.data?.category || commandName;
-
-      // Create context-aware i18n for the subcommand
-      console.log(`Creating context for ${category}.${subcommandName}`);
-      commandI18n = i18n.createContextI18n(
-        "commands",
-        `${category}`,
-        effectiveLocale
-      );
+      // Set locale for i18n
+      i18n.setLocale(effectiveLocale);
 
       // Register any localizations if present
       if (command.subcommands[subcommandName].localization_strings) {
         i18n.registerLocalizations(
           "commands",
-          `${category}`,
+          `${commandName}.${subcommandName}`,
           command.subcommands[subcommandName].localization_strings
         );
       }
@@ -494,32 +486,25 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
       // Execute the subcommand
       response = await command.subcommands[subcommandName].execute(
         fakeInteraction,
-        commandI18n
+        i18n
       );
     }
     // Regular command without subcommands
     else if (command.execute) {
-      // Get category from command or use command name as category
-      const category = command.data?.category || commandName;
-
-      // Create context-aware i18n for the command
-      commandI18n = i18n.createContextI18n(
-        "commands",
-        category,
-        effectiveLocale
-      );
+      // Set locale for i18n
+      i18n.setLocale(effectiveLocale);
 
       // Register any localizations if present
       if (command.localization_strings) {
         i18n.registerLocalizations(
           "commands",
-          category,
+          commandName,
           command.localization_strings
         );
       }
 
       // Execute the command
-      response = await command.execute(fakeInteraction, commandI18n);
+      response = await command.execute(fakeInteraction);
     } else {
       return {
         success: false,
