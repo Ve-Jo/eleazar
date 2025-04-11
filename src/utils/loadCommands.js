@@ -95,7 +95,7 @@ export async function loadCommands(
         commandData = command.data;
       }
 
-      // Extract localizations from the command
+      // Register command localizations if available
       if (command.localization_strings) {
         console.log(
           `Registering localizations for ${category}.${commandData.name}`
@@ -104,7 +104,7 @@ export async function loadCommands(
         // Register command localizations with new i18n system
         i18n.registerLocalizations(
           "commands",
-          category,
+          commandData.name,
           command.localization_strings
         );
       }
@@ -150,14 +150,14 @@ export async function loadCommands(
                 console.log(subcommand.localization_strings);
                 console.log(JSON.stringify(subcommandModule.default, null, 2));
               }
-              // Fix path to avoid duplicate category
+              // Register subcommand localizations
               i18n.registerLocalizations(
                 "commands",
-                `${category}.${subcommandName}`,
+                `${commandData.name}.${subcommandName}`,
                 subcommand.localization_strings
               );
               console.log(
-                `Registered localizations for ${category}.${subcommandName}`
+                `Registered localizations for ${commandData.name}.${subcommandName}`
               );
             }
 

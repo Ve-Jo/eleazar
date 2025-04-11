@@ -1,4 +1,5 @@
 import { REST, Routes } from "discord.js";
+import i18n from "../utils/newI18n.js";
 
 class CommandManager {
   constructor(client) {
@@ -72,20 +73,28 @@ class CommandManager {
   }
 
   applyLocalizations(json, cmd) {
-    const locStrings =
-      cmd.localization_strings || cmd.data.localizationStrings || {};
+    // Register command localizations with i18n
+    if (cmd.localization_strings) {
+      i18n.registerLocalizations(
+        "commands",
+        cmd.data.name,
+        cmd.localization_strings
+      );
+    }
 
     // Apply name localizations
-    if (locStrings.name) {
-      json.name_localizations = this.filterLocalizations(locStrings.name);
+    if (cmd.localization_strings?.name) {
+      json.name_localizations = this.filterLocalizations(
+        cmd.localization_strings.name
+      );
     } else if (cmd.data.name_localizations) {
       json.name_localizations = cmd.data.name_localizations;
     }
 
     // Apply description localizations
-    if (locStrings.description) {
+    if (cmd.localization_strings?.description) {
       json.description_localizations = this.filterLocalizations(
-        locStrings.description
+        cmd.localization_strings.description
       );
     } else if (cmd.data.description_localizations) {
       json.description_localizations = cmd.data.description_localizations;
@@ -108,6 +117,12 @@ class CommandManager {
         // Type 1 = SUB_COMMAND
         const subcommand = cmd.subcommands[option.name];
         if (subcommand?.localization_strings) {
+          // Register subcommand localizations with i18n
+          i18n.registerLocalizations(
+            "commands",
+            `${cmd.data.name}.${option.name}`,
+            subcommand.localization_strings
+          );
           this.applySubcommandLocalizations(option, subcommand);
         }
       }
@@ -186,9 +201,7 @@ class CommandManager {
     for (const existingCommand of existingCommands) {
       const shouldKeep = newCommands.some(
         (cmd) => cmd.name === existingCommand.name
-      ); /*&&
-        (existingCommand.name !== "economy" ||
-          this.hasEconomyCommand(newCommands));*/
+      );
 
       if (!shouldKeep) {
         const route = isServer
@@ -207,10 +220,6 @@ class CommandManager {
         );
       }
     }
-  }
-
-  hasEconomyCommand(commands) {
-    return commands.some((cmd) => cmd.name === "economy");
   }
 
   async registerNewCommands(serverCommands, globalCommands) {

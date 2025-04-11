@@ -9,7 +9,7 @@ import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
-import i18n from "./newI18n.js";
+import defaultI18n from "./newI18n.js";
 
 // Configure Bun's garbage collector if available
 if (typeof Bun !== "undefined" && Bun.gc) {
@@ -473,7 +473,8 @@ function getDefaultColors() {
 export async function generateImage(
   component,
   props = {},
-  scaling = { image: 2, emoji: 1, debug: false }
+  scaling = { image: 2, emoji: 1, debug: false },
+  i18n = defaultI18n
 ) {
   let resvg = null;
   let renderedImage = null;
@@ -543,8 +544,7 @@ export async function generateImage(
       i18n.registerLocalizations(
         "components",
         component,
-        Component.localization_strings,
-        false
+        Component.localization_strings
       );
     }
 
@@ -586,29 +586,22 @@ export async function generateImage(
       console.log("Debug mode enabled for component rendering");
     }
 
-    // Create a translator for the component
+    // Provide i18n to the component
     if (formattedProps.locale) {
-      const locale = formattedProps.locale;
+      // Set the locale for i18n
+      i18n.setLocale(formattedProps.locale);
 
-      // Use the existing enhanced i18n instance if provided
-      if (props.i18n && typeof props.i18n.__ === "function") {
-        console.log("Using provided enhanced i18n translator");
-        formattedProps.i18n = props.i18n;
-      }
-      // Otherwise create a new context-specific i18n for the component
-      else {
-        console.log("Creating new context i18n translator for component");
+      // Add the i18n instance to props
+      formattedProps.i18n = i18n;
 
-        // Create context-specific i18n for the component
-        formattedProps.i18n = i18n.createContextI18n(
-          "components",
-          component,
-          locale
-        );
-        console.log(
-          `Created context i18n translator for component: ${component} with locale: ${locale}`
-        );
-      }
+      // Add a helper function to get translations with component prefix
+      formattedProps.t = (key) => {
+        return i18n.__(`components.${component}.${key}`);
+      };
+
+      console.log(
+        `Using i18n with locale ${formattedProps.locale} for component ${component}`
+      );
     }
 
     // Helper function to load image assets

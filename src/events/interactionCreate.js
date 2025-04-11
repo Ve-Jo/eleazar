@@ -89,34 +89,14 @@ export default {
       console.log(
         `Setting locale to ${locale} for user ${interaction.user.tag}`
       );
-      i18n.setLocale(locale);
 
-      // Create context-specific i18n for this command
-      let commandI18n;
+      // Create a fresh i18n instance for this interaction to maintain thread safety
+      const commandI18n = i18n;
+      commandI18n.setLocale(locale);
 
       // If this is a subcommand
       if (subcommandName && command.subcommands?.[subcommandName]) {
-        // Get category from command or use command name as category
-        const category = command.data?.category || commandName;
-
-        // Create context-aware i18n for the subcommand - without duplicating category
-        // Fix: Use just the subcommand name, not category.subcommandName as the path
-        console.log(`Creating context for ${category}.${subcommandName}`);
-
-        commandI18n = i18n.createContextI18n("commands", `${category}`, locale);
-
-        console.log(commandI18n);
-
-        // Register any localizations if present - with the correct scope
-        if (command.subcommands[subcommandName].localization_strings) {
-          i18n.registerLocalizations(
-            "commands",
-            `${category}`,
-            command.subcommands[subcommandName].localization_strings
-          );
-        }
-
-        // Execute the subcommand
+        // Execute the subcommand with the i18n instance
         await command.subcommands[subcommandName].execute(
           interaction,
           commandI18n
@@ -124,22 +104,7 @@ export default {
       }
       // Regular command without subcommands
       else if (command.execute) {
-        // Get category from command or use command name as category
-        const category = command.data?.category || commandName;
-
-        // Create context-aware i18n for the command
-        commandI18n = i18n.createContextI18n("commands", category, locale);
-
-        // Register any localizations if present
-        if (command.localization_strings) {
-          i18n.registerLocalizations(
-            "commands",
-            category,
-            command.localization_strings
-          );
-        }
-
-        // Execute the command
+        // Execute the command with the i18n instance
         await command.execute(interaction, commandI18n);
       } else {
         console.error(`Command ${commandName} has no execute method`);
