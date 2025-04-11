@@ -17,11 +17,11 @@ export async function loadGames(i18n = defaultI18n) {
   console.log(`[loadGames] Loading games for locale ${currentLocale}`);
 
   // First check if we have cached games for this locale
-  const cacheKey = `games_${currentLocale}`;
+  /*const cacheKey = `games_${currentLocale}`;
   if (gamesCache.has(cacheKey)) {
     console.log(`[loadGames] Using cached games for locale ${currentLocale}`);
     return gamesCache.get(cacheKey);
-  }
+  }*/
 
   try {
     // Get all game files
@@ -79,8 +79,7 @@ export async function loadGames(i18n = defaultI18n) {
       }
     }
 
-    // Cache results
-    gamesCache.set(cacheKey, games);
+    /*gamesCache.set(cacheKey, games);*/
 
     return games;
   } catch (error) {
