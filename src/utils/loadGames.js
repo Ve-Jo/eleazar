@@ -22,7 +22,7 @@ export function createGameI18n(gameId, locale = null) {
  * Load all games from the games directory
  * @returns {Map} Map of games with their data
  */
-export function loadGames() {
+export async function loadGames() {
   const currentLocale = i18n.getLocale();
   console.log(`[loadGames] Loading games for locale ${currentLocale}`);
 
@@ -49,7 +49,7 @@ export function loadGames() {
 
       try {
         // Import game module
-        const gameModule = import(`../games/${gameId}.js`);
+        const gameModule = await import(`../games/${gameId}.js`);
 
         // Set up basic game info
         const gameData = {
@@ -59,37 +59,30 @@ export function loadGames() {
           file: file,
         };
 
-        // Process imported module when available
-        gameModule
-          .then((module) => {
-            if (module.default) {
-              // Update with data from module
-              gameData.title = module.default.title || gameId;
-              gameData.emoji = module.default.emoji || "🎮";
+        if (gameModule.default) {
+          // Update with data from module
+          gameData.title = gameModule.default.title || gameId;
+          gameData.emoji = gameModule.default.emoji || "🎮";
 
-              // Register localizations if available
-              if (module.default.localization_strings) {
-                i18n.registerLocalizations(
-                  "games",
-                  gameId,
-                  module.default.localization_strings,
-                  false
-                );
+          // Register localizations if available
+          if (gameModule.default.localization_strings) {
+            i18n.registerLocalizations(
+              "games",
+              gameId,
+              gameModule.default.localization_strings,
+              false
+            );
 
-                // Get localized title if available
-                const gameI18n = createGameI18n(gameId, currentLocale);
-                if (module.default.localization_strings.name) {
-                  const localizedTitle = gameI18n.__("name");
-                  if (localizedTitle !== "name") {
-                    gameData.title = localizedTitle;
-                  }
-                }
+            // Get localized title if available
+            const gameI18n = createGameI18n(gameId, currentLocale);
+            if (gameModule.default.localization_strings.name) {
+              const localizedTitle = gameI18n.__("name");
+              if (localizedTitle !== "name") {
+                gameData.title = localizedTitle;
               }
             }
-          })
-          .catch((error) => {
-            console.error(`Error processing game module ${gameId}:`, error);
-          });
+          }
+        }
 
         // Add to games map
         games.set(gameId, gameData);

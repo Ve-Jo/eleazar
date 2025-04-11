@@ -22,10 +22,14 @@ export default {
           .setDescription("Choose a specific game to play directly")
           .setRequired(false)
           .addChoices(
-            ...Array.from(loadGames().values()).map((game) => ({
-              name: game.title,
-              value: game.id,
-            }))
+            {
+              name: "snake",
+              value: "snake",
+            },
+            {
+              name: "2048",
+              value: "2048",
+            }
           )
       );
 
@@ -119,7 +123,7 @@ export default {
       );
 
       // Load games and convert Map to array
-      const gamesMap = loadGames(i18n);
+      const gamesMap = await loadGames(i18n);
       const gamesArray = Array.from(gamesMap.values());
       console.log(
         `[work] Loaded ${gamesArray.length} games with titles:`,
@@ -133,6 +137,15 @@ export default {
       // Check if a specific game was requested
       const requestedGame = interaction.options.getString("game");
       if (requestedGame) {
+        // Validate the requested game exists
+        if (!gamesMap.has(requestedGame)) {
+          await interaction.editReply({
+            content: i18n.__("gameNotFound"),
+            ephemeral: true,
+          });
+          return;
+        }
+
         console.log(`[work] Specific game requested: ${requestedGame}`);
         // Use getGameModule to get the game with enhanced i18n support
         const gameModule = await getGameModule(requestedGame, normalizedLocale);
