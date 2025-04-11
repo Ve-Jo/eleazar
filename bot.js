@@ -83,7 +83,7 @@ setInterval(
       if (channel.messages) {
         channel.messages.cache.sweep((message) => {
           const lifetime =
-            message.author.id === client.user.id ? 60 * 1000 : 60 * 1000;
+            message.author?.id === client.user.id ? 60 * 1000 : 60 * 1000;
           return now - message.createdTimestamp > lifetime;
         });
       }
