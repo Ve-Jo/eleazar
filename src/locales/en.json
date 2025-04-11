@@ -31,7 +31,11 @@
         "title": "Crime",
         "successTarget": "You successfully stole {{amount}} coins from {{target}}!",
         "failTarget": "You were caught and had to pay a fine of {{amount}} coins!",
-        "error": "An error occurred while processing your crime attempt"
+        "error": "An error occurred while processing your crime attempt",
+        "command": {
+          "name": "crime",
+          "description": "Attempt to steal money from another user"
+        }
       },
       "deposit": {
         "title": "Deposit",
@@ -40,7 +44,8 @@
         "insufficientFunds": "Insufficient funds",
         "invalidAmount": "Invalid amount",
         "noBankAccount": "You don't have a bank account",
-        "error": "An error occurred while processing your deposit"
+        "error": "An error occurred while processing your deposit",
+        "depositSuccess": "Successfully deposited {{amount}} to your bank account."
       },
       "leaderboard": {
         "title": "Server Leaderboard",
@@ -59,7 +64,10 @@
         "userNotFound": "User not found",
         "error": "An error occurred while processing your level request",
         "voiceTime": "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
-        "title": "Level"
+        "title": "Level",
+        "level": "Level",
+        "nextLevel": "Next level",
+        "xp": "XP"
       },
       "shop": {
         "name": "shop",
@@ -78,7 +86,11 @@
         "revertButtonWithRefund": "Revert (-1 lvl, +{{refund}} coins)",
         "revertSuccess": "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
         "revertCooldown": "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
-        "cannotRevert": "Cannot revert a level 1 upgrade"
+        "cannotRevert": "Cannot revert a level 1 upgrade",
+        "command": {
+          "name": "shop",
+          "description": "View and purchase upgrades"
+        }
       },
       "transfer": {
         "cannotTransferToSelf": "You cannot transfer money to yourself",
@@ -107,7 +119,14 @@
         "gameError": "Error starting {{game}}. Please try again.",
         "noGamesAvailable": "No games are currently available.",
         "gameNotFound": "The selected game was not found."
-      }
+      },
+      "imageError": "Error generating image",
+      "userNotFound": "User not found",
+      "error": "An error occurred while processing your request",
+      "notEnoughMoney": "You don't have enough money",
+      "invalidAmount": "Please enter a valid amount",
+      "success": "Success!",
+      "cooldownActive": "This command is on cooldown"
     },
     "emotions": {
       "name": "emotions",
@@ -330,7 +349,11 @@
         "generated": "Generated image with prompt: {{prompt}}\nSeed: {{seed}}\nSteps: {{steps}}",
         "failed": "Failed to generate the image. Please try again.",
         "error": "An error occurred while generating the image. Please try again later.",
-        "gradio_error": "There was an error with the image generation service. Please try again later."
+        "gradio_error": "There was an error with the image generation service. Please try again later.",
+        "command": {
+          "name": "generate",
+          "description": "Generate beautiful image by prompt"
+        }
       },
       "transcribe_audio": {
         "name": "transcribe",
@@ -345,7 +368,11 @@
         "file_too_large": "The audio file is too large (max 25MB).",
         "downloading": "Downloading audio file...",
         "transcribing": "Transcribing audio...",
-        "result": "Transcription:\n\n{{transcription}}"
+        "result": "Transcription:\n\n{{transcription}}",
+        "command": {
+          "name": "transcribe",
+          "description": "Transcribe audio to text"
+        }
       },
       "upscale_image": {
         "name": "upscale",
@@ -365,7 +392,10 @@
         "no_output": "The upscaling service did not return any output.",
         "result_download_failed": "Failed to download the upscaled image.",
         "success": "Here is your upscaled image!"
-      }
+      },
+      "failed": "Failed to generate the image. Please try again.",
+      "error": "An error occurred while generating the image. Please try again later.",
+      "gradio_error": "There was an error with the image generation service. Please try again later."
     },
     "music": {
       "noMusicPlaying": "No music is currently playing",
@@ -382,7 +412,11 @@
         "name": "autoplay",
         "description": "Toggle autoplay mode",
         "autoplayToggled": "Autoplay mode has been toggled {{enabled}}",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "autoplay",
+          "description": "Toggle autoplay mode"
+        }
       },
       "filters": {
         "name": "filters",
@@ -390,14 +424,22 @@
         "filterApplied": "Filter {{filter}} has been applied",
         "invalidFilterProperty": "Invalid filter property",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "filters",
+          "description": "Set the music filters"
+        }
       },
       "loop": {
         "name": "loop",
         "description": "Loop the current song/queue",
         "loopApplied": "Loop type has been set to {{type}}",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "loop",
+          "description": "Loop the current song/queue"
+        }
       },
       "play": {
         "name": "play",
@@ -410,7 +452,11 @@
         "loopApplied": "Loop type has been set to {{type}}",
         "noLavalinkNode": "No Lavalink node available",
         "connectionTimeout": "Connection timed out",
-        "noAvailableNode": "No available Node was found"
+        "noAvailableNode": "No available Node was found",
+        "command": {
+          "name": "play",
+          "description": "Play a song"
+        }
       },
       "previous": {
         "name": "previous",
@@ -418,7 +464,11 @@
         "noPreviousSongs": "There are no previous songs in the queue",
         "addedPreviousToQueue": "Added previous song to queue: {{title}}",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in the same voice channel as the player"
+        "notInVoiceChannel": "You are not in the same voice channel as the player",
+        "command": {
+          "name": "previous",
+          "description": "Play the previous song"
+        }
       },
       "queue": {
         "name": "queue",
@@ -427,7 +477,11 @@
         "nextInQueue": "Next in queue: {{tracks}}",
         "currentQueue": "Current queue",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "queue",
+          "description": "Show the music queue"
+        }
       },
       "seek": {
         "name": "seek",
@@ -436,7 +490,11 @@
         "seekBeyondDuration": "You can't seek beyond the duration of the current track",
         "seekedTo": "Seeked to {{time}}",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "seek",
+          "description": "Seek to a specific time in the current track"
+        }
       },
       "skip": {
         "name": "skip",
@@ -444,14 +502,22 @@
         "skippedSong": "Skipped the current song",
         "skippingSongError": "Failed to skip the current song",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "skip",
+          "description": "Skip the current song"
+        }
       },
       "stop": {
         "name": "stop",
         "description": "Stop the music",
         "musicStopped": "Music stopped",
         "noMusicPlaying": "No music is currently playing",
-        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "command": {
+          "name": "stop",
+          "description": "Stop the music"
+        }
       },
       "name": "play",
       "description": "Play a song",
@@ -470,20 +536,34 @@
         "description": "Remove counting channel",
         "no_perms": "You don't have permissions to manage channels",
         "no_channel": "No counting channel is set up",
-        "success": "Counting channel has been removed"
+        "success": "Counting channel has been removed",
+        "command": {
+          "name": "remove",
+          "description": "Remove counting channel"
+        }
       },
       "setup": {
         "name": "setup",
         "description": "Setup counting channel",
         "no_perms": "You don't have permissions to manage channels",
-        "success": "Counting channel setup successfully"
+        "success": "Counting channel setup successfully",
+        "command": {
+          "name": "setup",
+          "description": "Setup counting channel"
+        }
       },
       "status": {
         "name": "status",
         "description": "Show counting channel status",
         "no_channel": "No counting channel is set up",
-        "status": "Counting channel status:\nChannel: {{channel}}\nCurrent number: {{number}}\nPin on each: {{pinoneach}}\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}"
-      }
+        "status": "Counting channel status:\nChannel: {{channel}}\nCurrent number: {{number}}\nPin on each: {{pinoneach}}\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}",
+        "command": {
+          "name": "status",
+          "description": "Show counting channel status"
+        }
+      },
+      "no_perms": "You don't have permissions to manage channels",
+      "no_channel": "No counting channel is set up"
     }
   },
   "games": {
