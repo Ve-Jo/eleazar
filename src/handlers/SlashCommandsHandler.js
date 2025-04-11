@@ -11,8 +11,22 @@ class CommandManager {
       console.log("Starting command registration process...");
 
       const { serverCommands, globalCommands } = this.prepareCommands(commands);
-      await this.cleanupOldCommands(serverCommands, globalCommands);
-      await this.registerNewCommands(serverCommands, globalCommands);
+
+      // Check if SERVER_SLASHES is true
+      const forceServer = process.env.SERVER_SLASHES === "true";
+
+      if (forceServer) {
+        console.log(
+          "Forcing all commands to be registered to the testing server."
+        );
+        await this.registerNewCommands(
+          serverCommands.concat(globalCommands),
+          []
+        );
+      } else {
+        await this.cleanupOldCommands(serverCommands, globalCommands);
+        await this.registerNewCommands(serverCommands, globalCommands);
+      }
 
       console.log("Command registration completed successfully.");
     } catch (error) {
@@ -174,7 +188,7 @@ class CommandManager {
         (cmd) => cmd.name === existingCommand.name
       ); /*&&
         (existingCommand.name !== "economy" ||
-          !this.hasEconomyCommand(newCommands));*/
+          this.hasEconomyCommand(newCommands));*/
 
       if (!shouldKeep) {
         const route = isServer
