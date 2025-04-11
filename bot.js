@@ -22,17 +22,17 @@ const previewApp =
 console.log("Starting bot...");
 
 // Force garbage collection if available (with --expose-gc flag)
-const forceGc = () => {
+/*const forceGc = () => {
   if (global.gc) {
     global.gc();
     console.log("Forced garbage collection completed");
   }
-};
+};*/
 
 // Schedule periodic garbage collection in production
-if (process.env.NODE_ENV === "production" && global.gc) {
+/*if (process.env.NODE_ENV === "production" && global.gc) {
   setInterval(forceGc, 600000); // Run every 10 minutes
-}
+}*/
 
 const client = new Client({
   intents: [
@@ -67,30 +67,33 @@ const client = new Client({
     // Set stricter limits in production
     MessageManager: {
       maxSize: process.env.NODE_ENV === "production" ? 50 : 200,
-      keepOverLimit: (message) => message.author.id === client.user.id
+      keepOverLimit: (message) => message.author.id === client.user.id,
     },
     UserManager: {
-      maxSize: process.env.NODE_ENV === "production" ? 100 : 1000
+      maxSize: process.env.NODE_ENV === "production" ? 100 : 1000,
     },
     GuildMemberManager: {
-      maxSize: process.env.NODE_ENV === "production" ? 50 : 200
-    }
+      maxSize: process.env.NODE_ENV === "production" ? 50 : 200,
+    },
   }),
 });
 
-setInterval(() => {
-  const now = Date.now();
-  client.channels.cache.forEach((channel) => {
-    if (channel.messages) {
-      channel.messages.cache.sweep((message) => {
-        const lifetime =
-          message.author.id === client.user.id ? 60 * 1000 : 60 * 1000;
-        return now - message.createdTimestamp > lifetime;
-      });
-    }
-  });
-  console.log("Manual message sweep completed");
-}, process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000);
+setInterval(
+  () => {
+    const now = Date.now();
+    client.channels.cache.forEach((channel) => {
+      if (channel.messages) {
+        channel.messages.cache.sweep((message) => {
+          const lifetime =
+            message.author.id === client.user.id ? 60 * 1000 : 60 * 1000;
+          return now - message.createdTimestamp > lifetime;
+        });
+      }
+    });
+    console.log("Manual message sweep completed");
+  },
+  process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000
+);
 
 console.log("Loading commands...");
 await loadCommands(client);

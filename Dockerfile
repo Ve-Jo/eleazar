@@ -55,4 +55,4 @@ EXPOSE 2333
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Run with db push instead of migrations for existing databases
-CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma db push --accept-data-loss && bun --expose-gc . 
+CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma db push --accept-data-loss && bun . 
