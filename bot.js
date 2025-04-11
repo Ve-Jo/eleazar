@@ -44,9 +44,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
   ],
   presence: { status: "online" },
-  partials: [
-    /*Partials.Message, Partials.Channel, Partials.GuildMember*/
-  ],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
   sweepers: {
     messages: {
       interval: process.env.NODE_ENV === "production" ? 15000 : 30000,
