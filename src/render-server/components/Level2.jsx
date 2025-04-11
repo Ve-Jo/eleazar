@@ -179,15 +179,15 @@ const StyledRectangle = ({
 const Level2 = (props) => {
   let {
     interaction,
-    currentXP = 52,
-    requiredXP = 120,
-    level = 1,
-    gameCurrentXP = 10,
-    gameRequiredXP = 900,
-    gameLevel = 1,
-    seasonXP = 25,
-    seasonEnds = Date.now() + 1000 * 60 * 60 * 24 * 7,
-    seasonNumber = 1,
+    currentXP /*= 52*/,
+    requiredXP /*= 120*/,
+    level /*= 1*/,
+    gameCurrentXP /*= 10*/,
+    gameRequiredXP /*= 900*/,
+    gameLevel /*= 1*/,
+    seasonXP /*= 25*/,
+    seasonEnds /*= Date.now() + 1000 * 60 * 60 * 24 * 7*/,
+    seasonNumber /*= 1*/,
     i18n,
   } = props;
 
