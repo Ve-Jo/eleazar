@@ -85,28 +85,28 @@ const Statistics = (props) => {
   let { interaction, database, i18n } = props;
 
   const translations = {
-    title: i18n.__("statistics.title") || "Статистика",
+    title: i18n.__("components.Statistics.title") || "Статистика",
     servers:
-      i18n.__("statistics.servers") ||
+      i18n.__("components.Statistics.servers") ||
       `${Math.floor(Math.random() * 100) + 1} серверов`,
     latency:
-      i18n.__("statistics.latency") ||
+      i18n.__("components.Statistics.latency") ||
       `${Math.floor(Math.random() * 100) + 1} мс`,
     /*cache_latency:
-      i18n.__("statistics.cache_latency") ||
+      i18n.__("components.Statistics.cache_latency") ||
       `Кэш: ${Math.floor(Math.random() * 10) + 1} мс`,*/
-    shards: i18n.__("statistics.shards") || "Шарды",
-    /*music: i18n.__("statistics.music") || "Музыкал. нода",
+    shards: i18n.__("components.Statistics.shards") || "Шарды",
+    /*music: i18n.__("components.Statistics.music") || "Музыкал. нода",
     music_players:
-      i18n.__("statistics.music_players") ||
+      i18n.__("components.Statistics.music_players") ||
       `${Math.floor(Math.random() * 10) + 1} плееров`,
-    render: i18n.__("statistics.render") || "Рендер сервер",
+    render: i18n.__("components.Statistics.render") || "Рендер сервер",
     render_requests:
-      i18n.__("statistics.render_requests") ||
+      i18n.__("components.Statistics.render_requests") ||
       `${Math.floor(Math.random() * 10) + 1} запросов`,
-    database: i18n.__("statistics.database") || "База данных",
+    database: i18n.__("components.Statistics.database") || "База данных",
     database_ping:
-      i18n.__("statistics.database_ping") ||
+      i18n.__("components.Statistics.database_ping") ||
       `Сред. скорость: ${Math.floor(Math.random() * 10) + 1} мс`,*/
   };
 

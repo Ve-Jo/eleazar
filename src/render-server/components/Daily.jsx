@@ -9,8 +9,13 @@ const Daily = (props) => {
     backgroundGradient,
   } = coloring;
 
-  console.log("AMOUNT");
-  console.log(amount);
+  const translations = Object.entries(Daily.localization_strings).reduce(
+    (acc, [key, translations]) => ({
+      ...acc,
+      [key]: translations[i18n.getLocale()] || translations.en,
+    }),
+    {}
+  );
 
   return (
     <div
@@ -53,7 +58,7 @@ const Daily = (props) => {
               color: textColor,
             }}
           >
-            🎁 {i18n.__("title")}!
+            🎁 {translations.title}!
           </div>
           <div
             style={{

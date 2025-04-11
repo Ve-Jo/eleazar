@@ -201,11 +201,15 @@ const Balance = (props) => {
     return banknotes;
   };
 
-  // Example usage:
-  // For 6000 units (6 banknotes), it will create a single row centered at X = 60
-  // For 11000 units (11 banknotes), it will create a pyramid (e.g., 5, 4, 2) centered at X = 60
-
   const { interaction, database, i18n, coloring } = props;
+
+  const translations = Object.entries(Balance.localization_strings).reduce(
+    (acc, [key, translations]) => ({
+      ...acc,
+      [key]: translations[i18n.getLocale()] || translations.en,
+    }),
+    {}
+  );
 
   const {
     textColor,
@@ -320,7 +324,7 @@ const Balance = (props) => {
                 color: textColor,
               }}
             >
-              {i18n.__("title")}!
+              {translations.title}
             </h2>
           </div>
           {/* Define bank container bounds */}
@@ -375,7 +379,7 @@ const Balance = (props) => {
                     opacity: "0.8",
                   }}
                 >
-                  {i18n.__("wallet").toUpperCase()}
+                  {translations.wallet.toUpperCase()}
                 </div>
                 <div
                   style={{
@@ -433,7 +437,7 @@ const Balance = (props) => {
                       color: secondaryTextColor,
                     }}
                   >
-                    {i18n.__("bank").toUpperCase()}
+                    {translations.bank.toUpperCase()}
                   </div>
                   {bankStartTime > 0 && bankRate > 0 ? (
                     <div
@@ -526,7 +530,7 @@ const Balance = (props) => {
                 >
                   {bankRate || "{holdingPercentage}"}
                   {"% "}
-                  {i18n.__("annual")} (
+                  {translations.annual} (
                   {prettyMilliseconds(Date.now() - Number(bankStartTime), {
                     colonNotation: true,
                     secondsDecimalDigits: 0,
