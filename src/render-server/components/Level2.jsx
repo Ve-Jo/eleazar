@@ -179,27 +179,42 @@ const StyledRectangle = ({
 const Level2 = (props) => {
   let {
     interaction,
-    currentXP /*= 52*/,
-    requiredXP /*= 120*/,
-    level /*= 1*/,
-    gameCurrentXP /*= 10*/,
-    gameRequiredXP /*= 900*/,
-    gameLevel /*= 1*/,
-    seasonXP /*= 25*/,
-    seasonEnds /*= Date.now() + 1000 * 60 * 60 * 24 * 7*/,
-    seasonNumber /*= 1*/,
+    currentXP = 0,
+    requiredXP = 100,
+    level = 1,
+    gameCurrentXP = 0,
+    gameRequiredXP = 100,
+    gameLevel = 1,
+    seasonXP = 0,
+    seasonEnds = Date.now() + 1000 * 60 * 60 * 24 * 7,
+    seasonNumber = 1,
     i18n,
   } = props;
 
+  // Ensure all numeric values are actually numbers
+  currentXP = Number(currentXP);
+  requiredXP = Number(requiredXP);
+  level = Number(level);
+  gameCurrentXP = Number(gameCurrentXP);
+  gameRequiredXP = Number(gameRequiredXP);
+  gameLevel = Number(gameLevel);
+  seasonXP = Number(seasonXP);
+
   // Calculate remaining time more precisely
-  const timeRemaining = Math.max(0, seasonEnds - Date.now());
-  const formattedTime = prettyMilliseconds(timeRemaining, {
-    colonNotation: true,
-    compact: false,
-    formatSubMilliseconds: false,
-    separateMilliseconds: false,
-    secondsDecimalDigits: 0,
-  });
+  const timeRemaining = seasonEnds
+    ? Math.max(0, Number(seasonEnds) - Date.now())
+    : 0;
+
+  const formattedTime =
+    timeRemaining > 0
+      ? prettyMilliseconds(timeRemaining, {
+          colonNotation: true,
+          compact: false,
+          formatSubMilliseconds: false,
+          separateMilliseconds: false,
+          secondsDecimalDigits: 0,
+        })
+      : "00:00:00";
 
   const translations = Object.entries(Level2.localization_strings).reduce(
     (acc, [key, translations]) => ({

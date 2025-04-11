@@ -65,6 +65,21 @@ export default {
       ru: "XP",
       uk: "XP",
     },
+    userNotFound: {
+      en: "User not found",
+      ru: "Пользователь не найден",
+      uk: "Користувача не знайдено",
+    },
+    imageError: {
+      en: "Failed to generate the image. Please try again.",
+      ru: "Не удалось сгенерировать изображение. Пожалуйста, попробуйте еще раз.",
+      uk: "Не вдалося згенерувати зображення. Будь ласка, спробуйте ще раз.",
+    },
+    error: {
+      en: "An error occurred while processing your request",
+      ru: "Произошла ошибка при обработке запроса",
+      uk: "Сталася помилка під час обробки запиту",
+    },
   },
 
   async execute(interaction) {
@@ -73,6 +88,7 @@ export default {
     try {
       const user = interaction.options.getMember("user") || interaction.member;
 
+      // Get user data with relationships
       const userData = await Database.getUser(
         interaction.guild.id,
         user.id,
@@ -86,7 +102,24 @@ export default {
         });
       }
 
-      // Generate level card image using the imageGenerator
+      // Fetch seasons data
+      const seasons = await Database.client.seasons.findFirst({
+        where: { id: "current" },
+      });
+
+      // Fetch and calculate all level data
+      const chatXp = Number(userData.Level?.xp || 0);
+      const chatLevelInfo = Database.calculateLevel(chatXp);
+
+      const gameXp = Number(userData.Level?.gameXp || 0);
+      const gameLevelInfo = Database.calculateLevel(gameXp);
+
+      const seasonXp = Number(userData.Level?.seasonXp || 0);
+      const seasonEnds =
+        seasons?.seasonEnds || Date.now() + 7 * 24 * 60 * 60 * 1000;
+      const seasonNumber = seasons?.seasonNumber || 1;
+
+      // Generate level card image
       const [buffer, dominantColor] = await generateImage(
         "Level2",
         {
@@ -111,11 +144,18 @@ export default {
           },
           locale: interaction.locale,
           returnDominant: true,
-          database: {
-            ...userData,
-          },
+          currentXP: chatLevelInfo.currentXP,
+          requiredXP: chatLevelInfo.requiredXP,
+          level: chatLevelInfo.level,
+          gameCurrentXP: gameLevelInfo.currentXP,
+          gameRequiredXP: gameLevelInfo.requiredXP,
+          gameLevel: gameLevelInfo.level,
+          seasonXP: seasonXp,
+          seasonEnds: Number(seasonEnds),
+          seasonNumber: Number(seasonNumber),
         },
-        { image: 2, emoji: 1 }
+        { image: 2, emoji: 1 },
+        i18n
       );
 
       if (!buffer) {
