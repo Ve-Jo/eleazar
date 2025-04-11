@@ -11,12 +11,11 @@ export default {
     const builder = new SlashCommandSubcommandBuilder()
       .setName("deposit")
       .setDescription("Deposit money into your bank account")
-      .addNumberOption((option) =>
+      .addStringOption((option) =>
         option
           .setName("amount")
-          .setDescription("Amount to deposit")
+          .setDescription("Amount to deposit (or 'all', 'half')")
           .setRequired(true)
-          .setMinValue(0)
       );
     return builder;
   },
@@ -39,8 +38,8 @@ export default {
           uk: "сума",
         },
         description: {
-          ru: "Сумма для внесения",
-          uk: "Сума для внесення",
+          ru: "Сумма для внесения (или 'all', 'half')",
+          uk: "Сума для внесення (або 'all', 'half')",
         },
       },
     },
@@ -64,6 +63,16 @@ export default {
       ru: "Недостаточно средств",
       uk: "Недостатньо коштів",
     },
+    notEnoughMoney: {
+      en: "You don't have enough money to deposit",
+      ru: "У вас недостаточно денег для внесения",
+      uk: "У вас недостатньо грошей для внесення",
+    },
+    imageError: {
+      en: "Failed to generate the image. Please try again.",
+      ru: "Не удалось сгенерировать изображение. Пожалуйста, попробуйте еще раз.",
+      uk: "Не вдалося згенерувати зображення. Будь ласка, спробуйте ще раз.",
+    },
     invalidAmount: {
       en: "Invalid amount",
       ru: "Неверная сумма",
@@ -85,16 +94,7 @@ export default {
     await interaction.deferReply();
 
     try {
-      // No need to set locale here as it's already set in interactionCreate
-      const amount = interaction.options.getNumber("amount");
-
-      // Validate the amount
-      if (amount <= 0) {
-        return interaction.editReply({
-          content: i18n.__("commands.economy.deposit.invalidAmount"),
-          ephemeral: true,
-        });
-      }
+      const amount = interaction.options.getString("amount");
 
       // Get user data
       const userData = await Database.getUser(
@@ -110,27 +110,93 @@ export default {
         });
       }
 
-      // Check if user has enough money
-      if (userData.economy.balance < amount) {
+      // Calculate deposit amount with precision
+      let amountInt = 0;
+      const userBalance = parseFloat(userData.economy.balance);
+
+      if (amount === "all") {
+        amountInt = userBalance;
+      } else if (amount === "half") {
+        amountInt = userBalance / 2;
+      } else {
+        amountInt = parseFloat(amount);
+        if (isNaN(amountInt)) {
+          return interaction.editReply({
+            content: i18n.__("commands.economy.deposit.invalidAmount"),
+            ephemeral: true,
+          });
+        }
+      }
+
+      // Ensure 5 decimal precision
+      amountInt = parseFloat(amountInt.toFixed(5));
+
+      // Validate amount
+      if (userBalance < amountInt) {
         return interaction.editReply({
           content: i18n.__("commands.economy.deposit.notEnoughMoney"),
           ephemeral: true,
         });
       }
+      if (amountInt <= 0) {
+        return interaction.editReply({
+          content: i18n.__("commands.economy.deposit.amountGreaterThanZero"),
+          ephemeral: true,
+        });
+      }
 
-      // Process deposit
-      await Database.client.economy.update({
-        where: {
-          userId_guildId: {
-            userId: interaction.user.id,
-            guildId: interaction.guild.id,
+      // Process deposit using transaction
+      await Database.client.$transaction(async (tx) => {
+        // Calculate bank rate based on level
+        const xp = Number(userData.level?.xp?.toString() || 0);
+        const levelInfo = Database.calculateLevel(xp);
+        const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
+
+        // Apply bank rate upgrade
+        const bankRateUpgrade = userData.upgrades.find(
+          (u) => u.type === "bank_rate"
+        );
+        const bankRateLevel = bankRateUpgrade?.level || 1;
+        const bankRateBonus = (bankRateLevel - 1) * 5; // 5% increase per level
+
+        const bankRate = baseRate + bankRateBonus;
+
+        // Get current bank balance with interest
+        let currentBankBalance = 0;
+        if (userData.economy) {
+          currentBankBalance = parseFloat(
+            await Database.calculateBankBalance(userData)
+          );
+        }
+
+        // Update economy record with both balance and bank changes
+        await tx.economy.update({
+          where: {
+            userId_guildId: {
+              userId: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
           },
-        },
-        data: {
-          balance: { decrement: amount },
-          bankBalance: { increment: amount },
-          bankStartTime: userData.economy.bankStartTime || new Date(),
-        },
+          data: {
+            balance: { decrement: amountInt },
+            bankBalance: (currentBankBalance + amountInt).toFixed(5),
+            bankRate: bankRate.toFixed(5),
+            bankStartTime: Date.now(),
+          },
+        });
+
+        // Update user's last activity
+        await tx.user.update({
+          where: {
+            guildId_id: {
+              id: interaction.user.id,
+              guildId: interaction.guild.id,
+            },
+          },
+          data: {
+            lastActivity: Date.now(),
+          },
+        });
       });
 
       // Get updated user data
@@ -140,9 +206,9 @@ export default {
         true
       );
 
-      // Generate deposit confirmation image - pass the i18n instance
+      // Generate deposit confirmation image
       const [buffer, dominantColor] = await generateImage(
-        "Transaction",
+        "Transfer",
         {
           interaction: {
             user: {
@@ -164,8 +230,8 @@ export default {
             },
           },
           locale: interaction.locale,
-          transactionType: "deposit",
-          amount: amount,
+          isDeposit: true,
+          amount: amountInt,
           afterBalance: updatedUser.economy.balance,
           afterBank: updatedUser.economy.bankBalance,
           returnDominant: true,
@@ -194,12 +260,7 @@ export default {
         .setAuthor({
           name: i18n.__("commands.economy.deposit.title"),
           iconURL: interaction.user.displayAvatarURL(),
-        })
-        .setDescription(
-          i18n.__("commands.economy.deposit.depositSuccess", {
-            amount: amount.toFixed(2),
-          })
-        );
+        });
 
       // Send response
       await interaction.editReply({

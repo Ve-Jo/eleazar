@@ -22,10 +22,6 @@ export default {
           .setName("amount")
           .setDescription("Amount to transfer (or 'all', 'half')")
           .setRequired(true)
-          .addChoices(
-            { name: "All", value: "all" },
-            { name: "Half", value: "half" }
-          )
       );
 
     return builder;

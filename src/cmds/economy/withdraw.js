@@ -200,10 +200,12 @@ export default {
           },
         },
         locale: interaction.locale,
-        database: { ...updatedUser },
-        amount: amountInt,
         isDeposit: false,
+        amount: amountInt,
+        afterBalance: updatedUser.economy.balance,
+        afterBank: updatedUser.economy.bankBalance,
         returnDominant: true,
+        database: { ...updatedUser },
       });
 
       const attachment = new AttachmentBuilder(pngBuffer, {
