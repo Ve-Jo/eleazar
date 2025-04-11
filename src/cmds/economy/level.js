@@ -88,7 +88,7 @@ export default {
 
       // Generate level card image using the imageGenerator
       const [buffer, dominantColor] = await generateImage(
-        "Level",
+        "Level2",
         {
           interaction: {
             user: {
