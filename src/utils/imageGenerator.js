@@ -540,8 +540,8 @@ export async function generateImage(
       );
 
       // Use the new i18n.registerLocalizations function
-      // First check if the function exists before calling it
-      if (typeof i18n.registerLocalizations === "function") {
+      // First check if i18n exists and has the registerLocalizations function
+      if (i18n && typeof i18n.registerLocalizations === "function") {
         i18n.registerLocalizations(
           "components",
           component,
@@ -549,7 +549,7 @@ export async function generateImage(
         );
       } else {
         console.warn(
-          `[generateImage] i18n.registerLocalizations is not a function. Skipping localization registration for ${component}`
+          `[generateImage] i18n is undefined or registerLocalizations is not a function. Skipping localization registration for ${component}`
         );
       }
     }

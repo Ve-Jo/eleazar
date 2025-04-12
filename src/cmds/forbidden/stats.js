@@ -92,7 +92,8 @@ export default {
         },
         locale: interaction.locale,
       },
-      { image: 2, emoji: 1 }
+      { image: 2, emoji: 1 },
+      i18n
     );
 
     const attachment = new AttachmentBuilder(imageResponse, {
