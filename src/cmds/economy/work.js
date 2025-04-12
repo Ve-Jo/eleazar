@@ -10,7 +10,6 @@ import {
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames, getGameModule } from "../../utils/loadGames.js";
-import i18n from "../../utils/newI18n.js";
 
 export default {
   data: () => {
@@ -121,7 +120,7 @@ export default {
       const normalizedLocale = locale.split("-")[0].toLowerCase();
 
       // Load games and convert Map to array
-      const gamesMap = await loadGames();
+      const gamesMap = await loadGames(i18n);
       const gamesArray = Array.from(gamesMap.values());
       console.log(
         `[work] Loaded ${gamesArray.length} games with titles:`,
@@ -146,7 +145,7 @@ export default {
 
         console.log(`[work] Specific game requested: ${requestedGame}`);
         // Use getGameModule to get the game with enhanced i18n support
-        const gameModule = await getGameModule(requestedGame);
+        const gameModule = await getGameModule(requestedGame, i18n);
         if (!gameModule?.default) {
           await interaction.editReply({
             content: i18n.__("commands.economy.work.gameNotFound"),
@@ -386,7 +385,7 @@ export default {
             // Import and execute the game module
             console.log(`[work-collect] Loading game module: ${game.id}`);
             // Use getGameModule to get the game with enhanced i18n support
-            const gameModule = await getGameModule(game.id);
+            const gameModule = await getGameModule(game.id, i18n);
             if (!gameModule?.default) {
               throw new Error(`Game module ${game.id} not found or invalid`);
             }

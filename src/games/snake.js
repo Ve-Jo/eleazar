@@ -59,11 +59,16 @@ export default {
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
 
+    // Add safety check for interaction state
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply();
+    }
+
     // Check if user already has a running game
     const hasRunningGame = activeGames.has(gameKey);
 
     if (hasRunningGame) {
-      return interaction.reply({
+      return interaction.followUp({
         content: i18n.__(`games.snake.alreadyRunning`),
         ephemeral: true,
       });
@@ -455,8 +460,13 @@ export default {
       });
     } catch (error) {
       console.error("Error executing game snake:", error);
-      if (!interaction.replied) {
+      if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
+          content: i18n.__(`games.snake.error`),
+          ephemeral: true,
+        });
+      } else {
+        await interaction.followUp({
           content: i18n.__(`games.snake.error`),
           ephemeral: true,
         });

@@ -1,7 +1,6 @@
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import defaultI18n from "./newI18n.js";
 
 const gamesCache = new Map();
 const __filename = fileURLToPath(import.meta.url);
@@ -55,7 +54,11 @@ export async function loadGames(i18n = defaultI18n) {
           gameData.emoji = gameModule.default.emoji || "🎮";
 
           // Register localizations if available
-          if (gameModule.default.localization_strings) {
+          if (
+            gameModule.default.localization_strings &&
+            i18n &&
+            typeof i18n.registerLocalizations === "function"
+          ) {
             i18n.registerLocalizations(
               "games",
               gameId,
@@ -101,7 +104,7 @@ export function clearGamesCache() {
  * @param {object} i18n - The i18n instance to use
  * @returns {Promise<object>} The game module
  */
-export async function getGameModule(gameId, i18n = defaultI18n) {
+export async function getGameModule(gameId, i18n) {
   try {
     const gamePath = path.join(__dirname, "..", "games", `${gameId}.js`);
     const gameModule = await import(gamePath);
@@ -113,7 +116,11 @@ export async function getGameModule(gameId, i18n = defaultI18n) {
     }
 
     // Register localizations if available
-    if (gameModule.default.localization_strings) {
+    if (
+      gameModule.default.localization_strings &&
+      i18n &&
+      typeof i18n.registerLocalizations === "function"
+    ) {
       i18n.registerLocalizations(
         "games",
         gameId,

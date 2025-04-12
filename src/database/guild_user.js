@@ -561,17 +561,136 @@ export default {
   },
 
   async getGameRecords(guildId, userId) {
-    // Use the improved statistics version which already handles all data formats
-    return this.getStatistics().getGameRecords(guildId, userId);
+    const user = await this.getUser(guildId, userId);
+    if (!user?.stats) {
+      // Return default game records if no stats exist
+      return {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
+    }
+
+    // Handle all possible data formats
+    let gameRecords = {};
+    try {
+      if (
+        typeof user.stats.gameRecords === "object" &&
+        !Array.isArray(user.stats.gameRecords)
+      ) {
+        // It's already an object
+        gameRecords = user.stats.gameRecords;
+      } else if (typeof user.stats.gameRecords === "string") {
+        // It's a JSON string, parse it
+        gameRecords = JSON.parse(
+          user.stats.gameRecords ||
+            '{"2048": {"highScore": 0}, "snake": {"highScore": 0}}'
+        );
+        // Handle double-stringified JSON (happens sometimes)
+        if (typeof gameRecords === "string") {
+          gameRecords = JSON.parse(gameRecords);
+        }
+      }
+    } catch (error) {
+      console.warn(
+        `Failed to parse game records for ${userId} in guild ${guildId}: ${error.message}`
+      );
+      return {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
+    }
+
+    // Clean and validate data
+    return {
+      2048: { highScore: Number(gameRecords?.["2048"]?.highScore || 0) },
+      snake: { highScore: Number(gameRecords?.snake?.highScore || 0) },
+    };
   },
 
   async updateGameHighScore(guildId, userId, gameId, newScore) {
-    // Use the improved statistics version which already handles all data formats
-    return this.getStatistics().updateGameHighScore(
-      guildId,
-      userId,
-      gameId,
-      newScore
-    );
+    try {
+      // Ensure user exists
+      await this.ensureGuildUser(guildId, userId);
+
+      const user = await this.getUser(guildId, userId);
+      if (!user?.stats) {
+        return false;
+      }
+
+      // Process existing game records - handle all possible formats
+      let currentRecords = {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
+
+      try {
+        if (
+          typeof user.stats.gameRecords === "object" &&
+          !Array.isArray(user.stats.gameRecords)
+        ) {
+          // It's already an object
+          currentRecords = user.stats.gameRecords;
+        } else if (typeof user.stats.gameRecords === "string") {
+          // It's a JSON string, parse it
+          currentRecords = JSON.parse(
+            user.stats.gameRecords ||
+              '{"2048": {"highScore": 0}, "snake": {"highScore": 0}}'
+          );
+          // Handle double-stringified JSON
+          if (typeof currentRecords === "string") {
+            currentRecords = JSON.parse(currentRecords);
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to parse game records for ${userId} in guild ${guildId}: ${error.message}`
+        );
+      }
+
+      // Ensure we have clean numeric values
+      const cleanRecords = {
+        2048: { highScore: Number(currentRecords?.["2048"]?.highScore || 0) },
+        snake: { highScore: Number(currentRecords?.snake?.highScore || 0) },
+      };
+
+      const currentHighScore = cleanRecords[gameId]?.highScore || 0;
+      const isNewRecord = newScore > currentHighScore;
+
+      // Only update database if there's a new record
+      if (isNewRecord) {
+        cleanRecords[gameId].highScore = newScore;
+
+        await this.client.statistics.upsert({
+          where: {
+            userId_guildId: { userId, guildId },
+          },
+          create: {
+            userId,
+            guildId,
+            gameRecords: cleanRecords, // Store as object directly
+            lastUpdated: Date.now(),
+          },
+          update: {
+            gameRecords: cleanRecords, // Store as object directly
+            lastUpdated: Date.now(),
+          },
+        });
+
+        return {
+          newHighScore: newScore,
+          previousHighScore: currentHighScore,
+          isNewRecord: true,
+        };
+      }
+
+      return {
+        newHighScore: null,
+        previousHighScore: currentHighScore,
+        isNewRecord: false,
+      };
+    } catch (error) {
+      console.error("Error updating game high score:", error);
+      return { isNewRecord: false, error: error.message };
+    }
   },
 };
