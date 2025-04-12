@@ -282,7 +282,7 @@ const GameLauncher = (props) => {
             >
               <span style={{ display: "flex" }}>💵</span>
               <span style={{ display: "flex" }}>
-                {database.economy.balance.toFixed(1)}
+                {database.economy?.balance?.toFixed(1) || 0}
               </span>
             </div>
           </div>

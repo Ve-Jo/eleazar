@@ -9,7 +9,6 @@ import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
-import defaultI18n from "./newI18n.js";
 
 // Configure Bun's garbage collector if available
 if (typeof Bun !== "undefined" && Bun.gc) {
@@ -474,7 +473,7 @@ export async function generateImage(
   component,
   props = {},
   scaling = { image: 2, emoji: 1, debug: false },
-  i18n = defaultI18n
+  i18n
 ) {
   let resvg = null;
   let renderedImage = null;
@@ -541,11 +540,18 @@ export async function generateImage(
       );
 
       // Use the new i18n.registerLocalizations function
-      i18n.registerLocalizations(
-        "components",
-        component,
-        Component.localization_strings
-      );
+      // First check if the function exists before calling it
+      if (typeof i18n.registerLocalizations === "function") {
+        i18n.registerLocalizations(
+          "components",
+          component,
+          Component.localization_strings
+        );
+      } else {
+        console.warn(
+          `[generateImage] i18n.registerLocalizations is not a function. Skipping localization registration for ${component}`
+        );
+      }
     }
 
     // Create a new props object with properly structured coloring
