@@ -145,6 +145,34 @@ export default {
     const crateKey = `crate_${type}`;
     const lastUsed = cooldowns[crateKey] || 0;
 
+    // If no timestamp found, check legacy format just in case
+    if (lastUsed === 0 && cooldowns[type]) {
+      console.warn(
+        `Found legacy cooldown format for crate ${type}, migrating to new format`
+      );
+      // Migrate old format to new format
+      cooldowns[crateKey] = cooldowns[type];
+      delete cooldowns[type];
+
+      // Save the updated format
+      await this.client.cooldown.upsert({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
+          },
+        },
+        create: {
+          userId,
+          guildId,
+          data: cooldowns,
+        },
+        update: {
+          data: cooldowns,
+        },
+      });
+    }
+
     // Get the base cooldown time for this crate type
     const baseTime = CRATE_TYPES[type]?.cooldown || COOLDOWNS.daily;
 
@@ -208,6 +236,19 @@ export default {
     const crateKey = `crate_${type}`;
     cooldowns[crateKey] = Date.now();
 
+    // Perform cleanup - remove expired cooldowns to keep the table clean
+    // But only for non-crate cooldowns to prevent wiping other crate cooldowns
+    const now = Date.now();
+    Object.entries(cooldowns).forEach(([key, timestamp]) => {
+      if (!key.startsWith("crate_")) {
+        const cooldownType = key;
+        const baseTime = COOLDOWNS[cooldownType];
+        if (!baseTime || now >= timestamp + baseTime) {
+          delete cooldowns[key];
+        }
+      }
+    });
+
     return this.client.cooldown.upsert({
       where: {
         userId_guildId: {
@@ -258,10 +299,22 @@ export default {
       return null;
     }
 
-    if (!cooldowns[type]) return null;
+    // For crate cooldowns, we need to use the crate key format
+    const cooldownKey = type.startsWith("crate_")
+      ? type
+      : ["daily", "weekly"].includes(type)
+      ? `crate_${type}`
+      : type;
 
-    // Reduce the cooldown timestamp
-    cooldowns[type] = Math.max(0, cooldowns[type] - amount);
+    if (!cooldowns[cooldownKey]) {
+      return null; // No cooldown to reduce
+    }
+
+    const currentValue = cooldowns[cooldownKey];
+    cooldowns[cooldownKey] = Math.max(
+      currentValue - amount,
+      Date.now() - 60 * 1000 // Set to at most 1 minute ago
+    );
 
     return this.client.cooldown.update({
       where: {
@@ -271,7 +324,7 @@ export default {
         },
       },
       data: {
-        data: cooldowns, // Store as object directly
+        data: cooldowns,
       },
     });
   },

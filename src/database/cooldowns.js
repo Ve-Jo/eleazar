@@ -79,16 +79,31 @@ export default {
     cooldowns[type] = Date.now();
 
     // Perform cleanup - remove expired cooldowns
+    // But make sure to preserve crate-related cooldowns!
     const now = Date.now();
     Object.entries(cooldowns).forEach(([cooldownType, timestamp]) => {
+      // Skip cleanup for crate cooldowns
+      if (cooldownType.startsWith("crate_")) return;
+
       const baseTime = COOLDOWNS[cooldownType];
       if (!baseTime || now >= timestamp + baseTime) {
         delete cooldowns[cooldownType];
       }
     });
 
-    // If no active cooldowns, delete the record
-    if (Object.keys(cooldowns).length === 0) {
+    // If no active cooldowns, delete the record ONLY if there are no crate cooldowns
+    // This ensures we don't accidentally delete crate cooldowns
+    const hasCrateCooldowns = Object.keys(cooldowns).some((key) =>
+      key.startsWith("crate_")
+    );
+    if (
+      Object.keys(cooldowns).length === 0 ||
+      (!hasCrateCooldowns &&
+        Object.keys(cooldowns).every((key) => {
+          const baseTime = COOLDOWNS[key];
+          return !baseTime || now >= cooldowns[key] + baseTime;
+        }))
+    ) {
       if (cooldown) {
         return this.client.cooldown.delete({
           where: {
