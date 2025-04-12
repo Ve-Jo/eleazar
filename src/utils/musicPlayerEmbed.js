@@ -9,66 +9,71 @@ const localization_strings = {
       title: {
         en: "Now Playing",
         ru: "Сейчас играет",
-        uk: "Зараз грає"
+        uk: "Зараз грає",
       },
       footerText: {
         en: "Requested by {author}",
         ru: "Запросил {author}",
-        uk: "Запитав {author}"
+        uk: "Запитав {author}",
       },
       additionalTracks: {
         en: "Additional tracks",
         ru: "Дополнительные треки",
-        uk: "Додаткові треки"
+        uk: "Додаткові треки",
       },
       andMoreTracks: {
         en: "And {count} more tracks",
         ru: "И еще {count} треков",
-        uk: "І ще {count} треків"
+        uk: "І ще {count} треків",
       },
       noTitle: {
         en: "Unknown Title",
         ru: "Неизвестное название",
-        uk: "Невідома назва"
+        uk: "Невідома назва",
       },
       noArtist: {
         en: "Unknown Artist",
         ru: "Неизвестный исполнитель",
-        uk: "Невідомий виконавець"
+        uk: "Невідомий виконавець",
       },
       duration: {
         en: "Duration",
         ru: "Длительность",
-        uk: "Тривалість"
+        uk: "Тривалість",
       },
       queue: {
         en: "Queue",
         ru: "Очередь",
-        uk: "Черга"
+        uk: "Черга",
       },
       emptyQueue: {
         en: "Queue is empty",
         ru: "Очередь пуста",
-        uk: "Черга порожня"
+        uk: "Черга порожня",
       },
       filters: {
         en: "Filters",
         ru: "Фильтры",
-        uk: "Фільтри"
+        uk: "Фільтри",
       },
       noFilters: {
         en: "No filters",
         ru: "Без фильтров",
-        uk: "Без фільтрів"
-      }
-    }
-  }
+        uk: "Без фільтрів",
+      },
+    },
+  },
 };
 
 // Register translations with i18n system
-Object.keys(localization_strings).forEach(category => {
-  Object.keys(localization_strings[category]).forEach(component => {
-    i18n.registerLocalizations(category, component, localization_strings[category][component], true);
+Object.keys(localization_strings).forEach((category) => {
+  Object.keys(localization_strings[category]).forEach((component) => {
+    i18n.registerLocalizations(
+      category,
+      component,
+      localization_strings[category][component],
+      true
+    );
   });
 });
 
@@ -118,61 +123,74 @@ export async function createOrUpdateMusicPlayerEmbed(
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
     // Generate the music player image
-    lastGeneratedImage = await generateImage("MusicPlayer", {
-      interaction: {
-        user: {
-          id: track.requester?.id || "unknown",
-          username: track.requester?.username || i18n.__("music.player.noTitle"),
-          displayName: track.requester?.displayName || i18n.__("music.player.noTitle"),
-          avatarURL: getAvatarUrl(track.requester),
-          locale: track.requester?.locale || "en",
+    lastGeneratedImage = await generateImage(
+      "MusicPlayer",
+      {
+        interaction: {
+          user: {
+            id: track.requester?.id || "unknown",
+            username:
+              track.requester?.username || i18n.__("music.player.noTitle"),
+            displayName:
+              track.requester?.displayName || i18n.__("music.player.noTitle"),
+            avatarURL: getAvatarUrl(track.requester),
+            locale: track.requester?.locale || "en",
+          },
         },
-      },
-      currentSong: {
-        title: track.info.title || i18n.__("music.player.noTitle"),
-        artist: track.info.author || i18n.__("music.player.noArtist"),
-        thumbnail: track.info.artworkUrl,
-        addedBy: track.requester?.username || i18n.__("music.player.noTitle"),
-        addedByAvatar: getAvatarUrl(track.requester),
+        currentSong: {
+          title: track.info.title || i18n.__("music.player.noTitle"),
+          artist: track.info.author || i18n.__("music.player.noArtist"),
+          thumbnail: track.info.artworkUrl,
+          addedBy: track.requester?.username || i18n.__("music.player.noTitle"),
+          addedByAvatar: getAvatarUrl(track.requester),
+          duration: track.info.duration,
+          user: {
+            id: track.requester?.id || "unknown",
+            username:
+              track.requester?.username || i18n.__("music.player.noTitle"),
+            displayName:
+              track.requester?.displayName || i18n.__("music.player.noTitle"),
+            avatarURL: getAvatarUrl(track.requester),
+          },
+        },
+        locale: track.requester?.locale || "en",
+        previousSong: previousSong
+          ? {
+              title: previousSong.info.title || i18n.__("music.player.noTitle"),
+              duration: previousSong.info.duration,
+              thumbnail: previousSong.info.artworkUrl,
+              user: {
+                id: previousSong.requester?.id || "unknown",
+                username:
+                  previousSong.requester?.username ||
+                  i18n.__("music.player.noTitle"),
+                displayName:
+                  previousSong.requester?.displayName ||
+                  i18n.__("music.player.noTitle"),
+                avatarURL: getAvatarUrl(previousSong.requester),
+              },
+            }
+          : undefined,
+        nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
+          title: t.info.title || i18n.__("music.player.noTitle"),
+          duration: t.info.duration,
+          thumbnail: t.info.artworkUrl,
+          user: {
+            id: t.requester?.id || "unknown",
+            username: t.requester?.username || i18n.__("music.player.noTitle"),
+            displayName:
+              t.requester?.displayName || i18n.__("music.player.noTitle"),
+            avatarURL: getAvatarUrl(t.requester),
+          },
+        })),
+        queueLength: player.queue.tracks.length,
+        currentTime: player.position,
         duration: track.info.duration,
-        user: {
-          id: track.requester?.id || "unknown",
-          username: track.requester?.username || i18n.__("music.player.noTitle"),
-          displayName: track.requester?.displayName || i18n.__("music.player.noTitle"),
-          avatarURL: getAvatarUrl(track.requester),
-        },
+        userAvatar: getAvatarUrl(track.requester),
       },
-      locale: track.requester?.locale || "en",
-      previousSong: previousSong
-        ? {
-            title: previousSong.info.title || i18n.__("music.player.noTitle"),
-            duration: previousSong.info.duration,
-            thumbnail: previousSong.info.artworkUrl,
-            user: {
-              id: previousSong.requester?.id || "unknown",
-              username: previousSong.requester?.username || i18n.__("music.player.noTitle"),
-              displayName:
-                previousSong.requester?.displayName || i18n.__("music.player.noTitle"),
-              avatarURL: getAvatarUrl(previousSong.requester),
-            },
-          }
-        : undefined,
-      nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
-        title: t.info.title || i18n.__("music.player.noTitle"),
-        duration: t.info.duration,
-        thumbnail: t.info.artworkUrl,
-        user: {
-          id: t.requester?.id || "unknown",
-          username: t.requester?.username || i18n.__("music.player.noTitle"),
-          displayName: t.requester?.displayName || i18n.__("music.player.noTitle"),
-          avatarURL: getAvatarUrl(t.requester),
-        },
-      })),
-      queueLength: player.queue.tracks.length,
-      currentTime: player.position,
-      duration: track.info.duration,
-      userAvatar: getAvatarUrl(track.requester),
-    });
+      { image: 1, emoji: 1 },
+      i18n
+    );
     lastGeneratedImageTimestamp = currentTime;
   }
 
