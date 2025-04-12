@@ -58,7 +58,7 @@ export default {
                 bankStartTime: DEFAULT_VALUES.economy.bankStartTime,
               },
               level: { xp: 0 },
-              cooldowns: { data: DEFAULT_VALUES.cooldowns },
+              cooldowns: { data: {} }, // Use object directly, not stringified
               upgrades: Object.entries(DEFAULT_VALUES.upgrades).map(
                 ([type, data]) => ({
                   type,
@@ -103,7 +103,25 @@ export default {
               case "xp":
                 return user.level?.xp ?? 0;
               case "cooldowns":
-                return JSON.parse(user.cooldowns?.data || "{}");
+                // Handle different cooldown data formats
+                if (!user.cooldowns) return {};
+
+                try {
+                  if (
+                    typeof user.cooldowns.data === "object" &&
+                    !Array.isArray(user.cooldowns.data)
+                  ) {
+                    return user.cooldowns.data;
+                  } else if (typeof user.cooldowns.data === "string") {
+                    return JSON.parse(user.cooldowns.data || "{}");
+                  }
+                  return {};
+                } catch (error) {
+                  console.warn(
+                    `Failed to parse cooldown data: ${error.message}`
+                  );
+                  return {};
+                }
               case "upgrades":
                 return (
                   user.upgrades?.reduce(
@@ -120,6 +138,24 @@ export default {
           }
 
           // Return full user data
+          const cooldownsData = user.cooldowns?.data;
+          let parsedCooldowns = {};
+
+          try {
+            if (
+              typeof cooldownsData === "object" &&
+              !Array.isArray(cooldownsData)
+            ) {
+              parsedCooldowns = cooldownsData;
+            } else if (typeof cooldownsData === "string") {
+              parsedCooldowns = JSON.parse(cooldownsData || "{}");
+            }
+          } catch (error) {
+            console.warn(
+              `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+            );
+          }
+
           return {
             ...user,
             balance: user.economy?.balance ?? DEFAULT_VALUES.economy.balance,
@@ -136,7 +172,7 @@ export default {
             totalEarned:
               user.stats?.totalEarned ?? DEFAULT_VALUES.stats.totalEarned,
             xp: user.level?.xp ?? 0,
-            cooldowns: JSON.parse(user.cooldowns?.data || "{}"),
+            cooldowns: parsedCooldowns,
             upgrades:
               user.upgrades?.reduce(
                 (acc, u) => ({

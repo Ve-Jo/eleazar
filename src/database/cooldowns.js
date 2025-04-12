@@ -6,7 +6,27 @@ export default {
     const user = await this.getUser(guildId, userId, { cooldowns: true });
     if (!user?.cooldowns) return 0;
 
-    const cooldowns = JSON.parse(user.cooldowns.data);
+    // Safeguard for data format consistency
+    let cooldowns = {};
+
+    // Prisma should already provide this as a parsed object, but let's be safe
+    if (user.cooldowns.data) {
+      if (
+        typeof user.cooldowns.data === "object" &&
+        !Array.isArray(user.cooldowns.data)
+      ) {
+        cooldowns = user.cooldowns.data;
+      } else if (typeof user.cooldowns.data === "string") {
+        try {
+          cooldowns = JSON.parse(user.cooldowns.data);
+        } catch (error) {
+          console.warn(
+            `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+          );
+        }
+      }
+    }
+
     const lastUsed = cooldowns[type] || 0;
     const baseTime = COOLDOWNS[type];
 
@@ -24,6 +44,10 @@ export default {
   },
 
   async updateCooldown(guildId, userId, type) {
+    // First, make sure the user exists to avoid constraint errors
+    await this.ensureUser(guildId, userId);
+
+    // Try to get the current cooldown data
     const cooldown = await this.client.cooldown.findUnique({
       where: {
         userId_guildId: {
@@ -33,23 +57,39 @@ export default {
       },
     });
 
-    const cooldowns = JSON.parse(cooldown?.data || "{}");
-    cooldowns[type] = Date.now();
+    // Initialize a clean object to work with
+    let cooldowns = {};
 
-    // Check if we need to store this cooldown
-    // If we're storing a cooldown that's already expired, don't bother
-    const baseTime = COOLDOWNS[type];
-    const now = Date.now();
-    const isExpired = now >= cooldowns[type] + baseTime;
-
-    if (isExpired) {
-      delete cooldowns[type]; // Remove expired cooldown
+    // If data exists and it's an object, use it directly
+    if (cooldown?.data) {
+      if (typeof cooldown.data === "object" && !Array.isArray(cooldown.data)) {
+        cooldowns = cooldown.data;
+      } else if (typeof cooldown.data === "string") {
+        try {
+          cooldowns = JSON.parse(cooldown.data);
+        } catch (error) {
+          console.warn(
+            `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+          );
+        }
+      }
     }
 
-    // If there are no meaningful cooldowns, delete the record instead of storing empty data
+    // Update the timestamp for this specific cooldown
+    cooldowns[type] = Date.now();
+
+    // Perform cleanup - remove expired cooldowns
+    const now = Date.now();
+    Object.entries(cooldowns).forEach(([cooldownType, timestamp]) => {
+      const baseTime = COOLDOWNS[cooldownType];
+      if (!baseTime || now >= timestamp + baseTime) {
+        delete cooldowns[cooldownType];
+      }
+    });
+
+    // If no active cooldowns, delete the record
     if (Object.keys(cooldowns).length === 0) {
       if (cooldown) {
-        // Delete existing record if it exists but would be empty
         return this.client.cooldown.delete({
           where: {
             userId_guildId: {
@@ -59,26 +99,34 @@ export default {
           },
         });
       }
-      // Return a mock record representing empty cooldowns
-      return { userId, guildId, data: "{}" };
+      return { userId, guildId, data: {} };
     }
 
-    // Otherwise update/create with the non-empty cooldown data
-    return this.client.cooldown.upsert({
-      where: {
-        userId_guildId: {
+    // Update or create cooldown record with a proper object (not stringified)
+    try {
+      return await this.client.cooldown.upsert({
+        where: {
+          userId_guildId: {
+            userId,
+            guildId,
+          },
+        },
+        create: {
           userId,
           guildId,
+          data: cooldowns, // Prisma will handle JSONB conversion
         },
-      },
-      create: {
-        userId,
-        guildId,
-        data: JSON.stringify(cooldowns),
-      },
-      update: {
-        data: JSON.stringify(cooldowns),
-      },
-    });
+        update: {
+          data: cooldowns, // Prisma will handle JSONB conversion
+        },
+      });
+    } catch (error) {
+      console.error(
+        `Error updating cooldown for ${userId} in guild ${guildId}:`,
+        error
+      );
+      // If something went wrong, return a placeholder
+      return { userId, guildId, data: {} };
+    }
   },
 };

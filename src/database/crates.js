@@ -117,7 +117,31 @@ export default {
     const user = await this.getUser(guildId, userId, { cooldowns: true });
     if (!user?.cooldowns) return 0;
 
-    const cooldowns = JSON.parse(user.cooldowns.data);
+    // Make sure we're working with a proper object
+    let cooldowns = {};
+
+    // Handle all possible data formats
+    if (user.cooldowns.data) {
+      try {
+        if (
+          typeof user.cooldowns.data === "object" &&
+          !Array.isArray(user.cooldowns.data)
+        ) {
+          // It's already an object
+          cooldowns = user.cooldowns.data;
+        } else if (typeof user.cooldowns.data === "string") {
+          // It's a JSON string, parse it
+          cooldowns = JSON.parse(user.cooldowns.data);
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+        );
+        // Reset to empty object if we can't parse
+        cooldowns = {};
+      }
+    }
+
     const crateKey = `crate_${type}`;
     const lastUsed = cooldowns[crateKey] || 0;
 
@@ -146,6 +170,9 @@ export default {
 
   // Update cooldown for a crate type
   async updateCrateCooldown(guildId, userId, type) {
+    // Ensure user exists first
+    await this.ensureUser(guildId, userId);
+
     const cooldown = await this.client.cooldown.findUnique({
       where: {
         userId_guildId: {
@@ -155,7 +182,29 @@ export default {
       },
     });
 
-    const cooldowns = JSON.parse(cooldown?.data || "{}");
+    // Make sure we're working with a proper object
+    let cooldowns = {};
+
+    // Handle all possible data formats
+    if (cooldown?.data) {
+      try {
+        if (
+          typeof cooldown.data === "object" &&
+          !Array.isArray(cooldown.data)
+        ) {
+          // It's already an object
+          cooldowns = cooldown.data;
+        } else if (typeof cooldown.data === "string") {
+          // It's a JSON string, parse it
+          cooldowns = JSON.parse(cooldown.data);
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+        );
+      }
+    }
+
     const crateKey = `crate_${type}`;
     cooldowns[crateKey] = Date.now();
 
@@ -169,10 +218,10 @@ export default {
       create: {
         userId,
         guildId,
-        data: JSON.stringify(cooldowns),
+        data: cooldowns, // Store as object directly
       },
       update: {
-        data: JSON.stringify(cooldowns),
+        data: cooldowns, // Store as object directly
       },
     });
   },
@@ -190,7 +239,25 @@ export default {
 
     if (!cooldown) return null;
 
-    const cooldowns = JSON.parse(cooldown.data);
+    // Make sure we're working with a proper object
+    let cooldowns = {};
+
+    // Handle all possible data formats
+    try {
+      if (typeof cooldown.data === "object" && !Array.isArray(cooldown.data)) {
+        // It's already an object
+        cooldowns = cooldown.data;
+      } else if (typeof cooldown.data === "string") {
+        // It's a JSON string, parse it
+        cooldowns = JSON.parse(cooldown.data);
+      }
+    } catch (error) {
+      console.warn(
+        `Failed to parse cooldown data for ${userId} in guild ${guildId}: ${error.message}`
+      );
+      return null;
+    }
+
     if (!cooldowns[type]) return null;
 
     // Reduce the cooldown timestamp
@@ -204,7 +271,7 @@ export default {
         },
       },
       data: {
-        data: JSON.stringify(cooldowns),
+        data: cooldowns, // Store as object directly
       },
     });
   },
