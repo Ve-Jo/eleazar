@@ -21,18 +21,16 @@ const previewApp =
 //startResourceMonitor(process.env.NODE_ENV === "production" ? 300000 : 100);
 console.log("Starting bot...");
 
-// Force garbage collection if available (with --expose-gc flag)
-/*const forceGc = () => {
+const forceGc = () => {
   if (global.gc) {
     global.gc();
     console.log("Forced garbage collection completed");
   }
-};*/
+};
 
-// Schedule periodic garbage collection in production
-/*if (process.env.NODE_ENV === "production" && global.gc) {
-  setInterval(forceGc, 600000); // Run every 10 minutes
-}*/
+if (process.env.NODE_ENV === "production" && global.gc) {
+  setInterval(forceGc, 600000);
+}
 
 const client = new Client({
   intents: [
