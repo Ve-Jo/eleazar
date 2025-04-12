@@ -162,7 +162,8 @@ export default {
             },
           },
         },
-        { image: 1, emoji: 1 }
+        { image: 1, emoji: 1 },
+        i18n
       );
 
       // Send initial game board
@@ -215,8 +216,8 @@ export default {
                   },
                 },
               },
-              { width: 400, height: 490 },
-              { image: 2, emoji: 1 }
+              { image: 2, emoji: 1 },
+              i18n
             );
 
             // Calculate game XP for timeout case
@@ -318,7 +319,8 @@ export default {
                 },
               },
             },
-            { image: 1, emoji: 1 }
+            { image: 1, emoji: 1 },
+            i18n
           );
 
           // Update the message with new game state
@@ -382,7 +384,8 @@ export default {
                     },
                   },
                 },
-                { image: 1, emoji: 1 }
+                { image: 1, emoji: 1 },
+                i18n
               );
 
               await message.edit({

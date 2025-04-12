@@ -115,7 +115,8 @@ export default {
             },
           },
         },
-        { image: 1, emoji: 1 }
+        { image: 1, emoji: 1 },
+        i18n
       );
     };
 
