@@ -21,52 +21,58 @@ export default {
         };
       }
 
-      // If record exists, proceed with normal processing
-      const stats = await this.client.statistics.upsert({
-        where: {
-          userId_guildId: { userId, guildId },
-        },
-        create: {
-          gameRecords: {
+      // Process the game records into a clean object
+      let gameRecords = {};
+
+      // Handle all possible data formats
+      if (existingStats.gameRecords) {
+        try {
+          if (
+            typeof existingStats.gameRecords === "object" &&
+            !Array.isArray(existingStats.gameRecords)
+          ) {
+            // It's already an object
+            gameRecords = existingStats.gameRecords;
+          } else if (typeof existingStats.gameRecords === "string") {
+            // It's a JSON string, parse it
+            gameRecords = JSON.parse(existingStats.gameRecords);
+            // Handle double-stringified JSON (happens sometimes)
+            if (typeof gameRecords === "string") {
+              gameRecords = JSON.parse(gameRecords);
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to parse game records for ${userId} in guild ${guildId}: ${error.message}`
+          );
+          // Reset to default if we can't parse
+          gameRecords = {
             2048: { highScore: 0 },
             snake: { highScore: 0 },
-          },
-          user: {
-            connect: {
-              guildId_id: { guildId, id: userId },
-            },
-          },
-        },
-        update: {},
-        select: { gameRecords: true },
-      });
-
-      let gameRecords = stats.gameRecords;
-
-      // Handle potentially stringified data
-      if (typeof gameRecords === "string") {
-        try {
-          gameRecords = JSON.parse(gameRecords);
-          if (typeof gameRecords === "string") {
-            gameRecords = JSON.parse(gameRecords);
-          }
-        } catch (e) {
-          console.error("Error parsing game records:", e);
-          gameRecords = {};
+          };
         }
+      } else {
+        // If gameRecords is null or undefined, use defaults
+        gameRecords = {
+          2048: { highScore: 0 },
+          snake: { highScore: 0 },
+        };
       }
 
       // Clean and validate data
       const cleanRecords = {
         2048: { highScore: Number(gameRecords?.["2048"]?.highScore || 0) },
-        snake: { highScore: Number(gameRecords?.["snake"]?.highScore || 0) },
+        snake: { highScore: Number(gameRecords?.snake?.highScore || 0) },
       };
 
-      // Update if data was corrupted
-      if (JSON.stringify(cleanRecords) !== JSON.stringify(stats.gameRecords)) {
+      // Fix data if it was corrupted
+      if (
+        JSON.stringify(cleanRecords) !==
+        JSON.stringify(existingStats.gameRecords)
+      ) {
         await this.client.statistics.update({
           where: { userId_guildId: { userId, guildId } },
-          data: { gameRecords: cleanRecords },
+          data: { gameRecords: cleanRecords }, // Store as object directly
         });
       }
 
@@ -82,47 +88,48 @@ export default {
 
   async updateGameHighScore(guildId, userId, gameType, score) {
     try {
-      // First check if the user exists in this guild
-      const existingUser = await this.client.user.findUnique({
-        where: {
-          guildId_id: { guildId, id: userId },
-        },
-      });
+      // First ensure user exists to avoid foreign key errors
+      await this.ensureGuildUser(guildId, userId);
 
-      if (!existingUser) {
-        // Create the user first to prevent duplicate records
-        await this.client.user.create({
-          data: {
-            id: userId,
-            guildId,
-            lastActivity: Date.now(),
-          },
-        });
-      }
-
-      // Check if statistics record exists
+      // Get current game records
       const stats = await this.client.statistics.findUnique({
         where: { userId_guildId: { userId, guildId } },
         select: { gameRecords: true },
       });
 
-      let currentRecords = {};
-      try {
-        currentRecords =
-          typeof stats?.gameRecords === "string"
-            ? JSON.parse(stats.gameRecords)
-            : stats?.gameRecords || {};
+      // Process existing game records - handle all possible formats
+      let currentRecords = {
+        2048: { highScore: 0 },
+        snake: { highScore: 0 },
+      };
 
-        if (typeof currentRecords === "string") {
-          currentRecords = JSON.parse(currentRecords);
+      if (stats?.gameRecords) {
+        try {
+          if (
+            typeof stats.gameRecords === "object" &&
+            !Array.isArray(stats.gameRecords)
+          ) {
+            // It's already an object
+            currentRecords = stats.gameRecords;
+          } else if (typeof stats.gameRecords === "string") {
+            // It's a JSON string, parse it
+            currentRecords = JSON.parse(stats.gameRecords);
+            // Handle double-stringified JSON
+            if (typeof currentRecords === "string") {
+              currentRecords = JSON.parse(currentRecords);
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to parse game records for ${userId} in guild ${guildId}: ${error.message}`
+          );
         }
-      } catch (e) {
-        console.error("Error parsing existing game records:", e);
       }
 
+      // Ensure we have clean numeric values
       const cleanRecords = {
         2048: { highScore: Number(currentRecords?.["2048"]?.highScore || 0) },
-        snake: { highScore: Number(currentRecords?.["snake"]?.highScore || 0) },
+        snake: { highScore: Number(currentRecords?.snake?.highScore || 0) },
       };
 
       const currentHighScore = cleanRecords[gameType]?.highScore || 0;
@@ -134,45 +141,27 @@ export default {
 
         // Execute the update in a transaction to prevent race conditions
         await this.client.$transaction(async (tx) => {
-          // Double-check if user still exists to prevent issues with concurrent deletions
-          const userExists = await tx.user.findUnique({
+          // Update user activity
+          await tx.user.update({
             where: {
               guildId_id: { guildId, id: userId },
             },
+            data: {
+              lastActivity: Date.now(),
+            },
           });
 
-          if (!userExists) {
-            // Create the user if it somehow disappeared
-            await tx.user.create({
-              data: {
-                id: userId,
-                guildId,
-                lastActivity: Date.now(),
-              },
-            });
-          } else {
-            // Update user activity
-            await tx.user.update({
-              where: {
-                guildId_id: { guildId, id: userId },
-              },
-              data: {
-                lastActivity: Date.now(),
-              },
-            });
-          }
-
-          // Now safely update or create the statistics record
+          // Update the statistics record directly with the object
           await tx.statistics.upsert({
             where: { userId_guildId: { userId, guildId } },
             create: {
               userId,
               guildId,
-              gameRecords: cleanRecords,
+              gameRecords: cleanRecords, // Store as object directly
               lastUpdated: Date.now(),
             },
             update: {
-              gameRecords: cleanRecords,
+              gameRecords: cleanRecords, // Store as object directly
               lastUpdated: Date.now(),
             },
           });
@@ -201,11 +190,39 @@ export default {
 
       if (!stats) return null;
 
-      let interactionStats = stats.interactionStats;
-      if (typeof interactionStats === "string") {
-        interactionStats = JSON.parse(interactionStats);
+      // Process interactionStats into a clean object
+      let interactionStats = {
+        commands: {},
+        buttons: {},
+        selectMenus: {},
+        modals: {},
+      };
+
+      // Handle all possible data formats
+      if (stats.interactionStats) {
+        try {
+          if (
+            typeof stats.interactionStats === "object" &&
+            !Array.isArray(stats.interactionStats)
+          ) {
+            // It's already an object
+            interactionStats = stats.interactionStats;
+          } else if (typeof stats.interactionStats === "string") {
+            // It's a JSON string, parse it
+            interactionStats = JSON.parse(stats.interactionStats);
+            // Handle double-stringified JSON
+            if (typeof interactionStats === "string") {
+              interactionStats = JSON.parse(interactionStats);
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to parse interaction stats for ${userId} in guild ${guildId}: ${error.message}`
+          );
+        }
       }
 
+      // Ensure we have the correct structure
       return {
         commands: interactionStats.commands || {},
         buttons: interactionStats.buttons || {},

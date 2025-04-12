@@ -242,61 +242,66 @@ export default {
         const validUsers = usersWithData.filter((user) => user !== null);
 
         // Generate leaderboard image
-        const pngBuffer = await generateImage("Leaderboard", {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
+        const pngBuffer = await generateImage(
+          "Leaderboard",
+          {
+            interaction: {
+              user: {
+                id: interaction.user.id,
+                username: interaction.user.username,
+                displayName: interaction.user.displayName,
+                avatarURL: interaction.user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: guild.id,
+                name: guild.name,
+                iconURL: guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
             },
-            guild: {
-              id: guild.id,
-              name: guild.name,
-              iconURL: guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
+            locale: interaction.locale,
+            category,
+            users: validUsers.map((user, index) => ({
+              id: user.id,
+              position: startIndex + index + 1,
+              name: user.name,
+              avatarURL: user.avatarURL,
+              value: user.displayValue,
+              coloring: user.coloring,
+              // Include all relevant data for each user
+              bannerUrl: user.bannerUrl,
+              balance: Number(user.economy?.balance || 0),
+              bank: Number(user.economy?.bankBalance || 0),
+              totalBalance:
+                Number(user.economy?.balance || 0) +
+                Number(user.economy?.bankBalance || 0),
+              xp: Number(user.Level?.xp || 0),
+              level: Database.calculateLevel(Number(user.Level?.xp || 0)).level,
+              xpStats: {
+                chat: Number(user.stats?.xpStats?.chat || 0),
+                voice: Number(user.stats?.xpStats?.voice || 0),
+              },
+              gameRecords: user.stats?.gameRecords || {
+                2048: { highScore: 0 },
+                snake: { highScore: 0 },
+              },
+              seasonStats: {
+                rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
+                totalXP: Number(user.Level?.seasonXp || 0),
+              },
+            })),
+            currentPage: page + 1,
+            totalPages: Math.max(1, currentTotalPages),
+            highlightedPosition,
           },
-          locale: interaction.locale,
-          category,
-          users: validUsers.map((user, index) => ({
-            id: user.id,
-            position: startIndex + index + 1,
-            name: user.name,
-            avatarURL: user.avatarURL,
-            value: user.displayValue,
-            coloring: user.coloring,
-            // Include all relevant data for each user
-            bannerUrl: user.bannerUrl,
-            balance: Number(user.economy?.balance || 0),
-            bank: Number(user.economy?.bankBalance || 0),
-            totalBalance:
-              Number(user.economy?.balance || 0) +
-              Number(user.economy?.bankBalance || 0),
-            xp: Number(user.Level?.xp || 0),
-            level: Database.calculateLevel(Number(user.Level?.xp || 0)).level,
-            xpStats: {
-              chat: Number(user.stats?.xpStats?.chat || 0),
-              voice: Number(user.stats?.xpStats?.voice || 0),
-            },
-            gameRecords: user.stats?.gameRecords || {
-              2048: { highScore: 0 },
-              snake: { highScore: 0 },
-            },
-            seasonStats: {
-              rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
-              totalXP: Number(user.Level?.seasonXp || 0),
-            },
-          })),
-          currentPage: page + 1,
-          totalPages: Math.max(1, currentTotalPages),
-          highlightedPosition,
-        });
+          { image: 2, emoji: 1 },
+          i18n
+        );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
           name: `leaderboard.png`,

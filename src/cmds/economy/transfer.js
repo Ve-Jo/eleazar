@@ -221,43 +221,48 @@ export default {
       );
 
       // Generate the transfer image
-      const [pngBuffer, dominantColor] = await generateImage("Transfer", {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
+      const [pngBuffer, dominantColor] = await generateImage(
+        "Transfer",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+              locale: interaction.user.locale,
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+          },
+          locale: interaction.locale,
+          database: { ...updatedSender },
+          amount: amountInt,
+          isTransfer: true,
+          recipient: {
+            id: targetUser.id,
+            username: targetUser.username,
+            displayName: targetUser.displayName,
+            avatarURL: targetUser.displayAvatarURL({
               extension: "png",
               size: 1024,
             }),
-            locale: interaction.user.locale,
+            balance: updatedRecipient.economy?.balance || 0,
           },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+          returnDominant: true,
         },
-        locale: interaction.locale,
-        database: { ...updatedSender },
-        amount: amountInt,
-        isTransfer: true,
-        recipient: {
-          id: targetUser.id,
-          username: targetUser.username,
-          displayName: targetUser.displayName,
-          avatarURL: targetUser.displayAvatarURL({
-            extension: "png",
-            size: 1024,
-          }),
-          balance: updatedRecipient.economy?.balance || 0,
-        },
-        returnDominant: true,
-      });
+        { image: 2, emoji: 1 },
+        i18n
+      );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
         name: `transfer.png`,

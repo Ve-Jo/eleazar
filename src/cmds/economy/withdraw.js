@@ -178,35 +178,40 @@ export default {
       );
 
       // Generate the transfer image
-      const [pngBuffer, dominantColor] = await generateImage("Transfer", {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
-            locale: interaction.user.locale,
+      const [pngBuffer, dominantColor] = await generateImage(
+        "Transfer",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+              locale: interaction.user.locale,
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+          locale: interaction.locale,
+          isDeposit: false,
+          amount: amountInt,
+          afterBalance: updatedUser.economy.balance,
+          afterBank: updatedUser.economy.bankBalance,
+          returnDominant: true,
+          database: { ...updatedUser },
         },
-        locale: interaction.locale,
-        isDeposit: false,
-        amount: amountInt,
-        afterBalance: updatedUser.economy.balance,
-        afterBank: updatedUser.economy.bankBalance,
-        returnDominant: true,
-        database: { ...updatedUser },
-      });
+        { image: 2, emoji: 1 },
+        i18n
+      );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
         name: `withdraw.png`,

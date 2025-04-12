@@ -32,9 +32,9 @@ export default {
       },
     },
     cooldown: {
-      en: "You need to wait {{time}} seconds before committing another crime",
-      ru: "Вам нужно подождать {{time}} секунд, прежде чем совершить новое преступление",
-      uk: "Вам потрібно зачекати {{time}} секунд, перш ніж вчинити новий злочин",
+      en: "You need to wait before committing another crime",
+      ru: "Вам нужно подождать прежде чем совершить новое преступление",
+      uk: "Вам потрібно зачекати перш ніж вчинити новий злочин",
     },
     selectTarget: {
       en: "Select a user to steal from",
@@ -129,21 +129,17 @@ export default {
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
             dominantColor: "user",
-            returnDominant: true,
           },
-          { image: 2, emoji: 2 }
+          { image: 2, emoji: 2 },
+          i18n
         );
 
-        const attachment = new AttachmentBuilder(pngBuffer.buffer, {
-          name: `crime_cooldown.${
-            pngBuffer.contentType === "image/gif" ? "gif" : "png"
-          }`,
+        const attachment = new AttachmentBuilder(pngBuffer, {
+          name: `crime_cooldown.png`,
         });
 
         return interaction.editReply({
-          content: i18n.__("commands.economy.crime.cooldown", {
-            time: timeLeft,
-          }),
+          content: i18n.__("commands.economy.crime.cooldown"),
           files: [attachment],
           ephemeral: true,
         });
@@ -326,51 +322,56 @@ export default {
             : [userData, targetData];
 
         // Generate crime result image
-        const pngBuffer = await generateImage("Crime", {
-          interaction: {
-            user: {
-              id: user.id,
-              username: user.username,
-              displayName: user.displayName,
-              avatarURL: user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
+        const pngBuffer = await generateImage(
+          "Crime",
+          {
+            interaction: {
+              user: {
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatarURL: user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: guild.id,
+                name: guild.name,
+                iconURL: guild.iconURL({ extension: "png", size: 1024 }),
+              },
             },
-            guild: {
-              id: guild.id,
-              name: guild.name,
-              iconURL: guild.iconURL({ extension: "png", size: 1024 }),
+            locale: interaction.locale,
+            victim: {
+              user: {
+                id: target.id,
+                username: target.user.username,
+                displayName: target.displayName,
+                avatarURL: target.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              balance: Number(updatedTargetData.economy?.balance || 0),
             },
+            robber: {
+              user: {
+                id: user.id,
+                username: user.username,
+                displayName: user.displayName,
+                avatarURL: user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              balance: Number(updatedUserData.economy?.balance || 0),
+            },
+            amount: amount,
+            success: success,
           },
-          locale: interaction.locale,
-          victim: {
-            user: {
-              id: target.id,
-              username: target.user.username,
-              displayName: target.displayName,
-              avatarURL: target.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-            balance: Number(updatedTargetData.economy?.balance || 0),
-          },
-          robber: {
-            user: {
-              id: user.id,
-              username: user.username,
-              displayName: user.displayName,
-              avatarURL: user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-            balance: Number(updatedUserData.economy?.balance || 0),
-          },
-          amount: amount,
-          success: success,
-        });
+          { image: 2, emoji: 1 },
+          i18n
+        );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
           name: `crime.png`,

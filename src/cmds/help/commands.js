@@ -54,6 +54,21 @@ export default {
       ru: "Назад",
       uk: "Назад",
     },
+    title: {
+      en: "Commands list",
+      ru: "Список команд",
+      uk: "Список команд",
+    },
+    youCannotUseThisMenu: {
+      en: "You cannot use this menu.",
+      ru: "Вы не можете использовать это меню.",
+      uk: "Ви не можете використовувати це меню.",
+    },
+    noCommandsAvailable: {
+      en: "No commands available",
+      ru: "Нет доступных команд",
+      uk: "Немає доступних команд",
+    },
   },
 
   async execute(interaction, i18n) {
@@ -502,35 +517,40 @@ export default {
     );
 
     const generateCommandImage = async () => {
-      const pngBuffer = await generateImage("SettingsDisplay", {
-        interaction: {
-          user: {
-            id: interaction.user.id,
-            username: interaction.user.username,
-            displayName: interaction.user.displayName,
-            avatarURL: interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            }),
+      const pngBuffer = await generateImage(
+        "SettingsDisplay",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
+            },
           },
-          guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
-              extension: "png",
-              size: 1024,
-            }),
-          },
+          locale: interaction.locale,
+          settings: commands,
+          highlightedPosition,
+          visibleCount,
+          height: 700,
+          width: 600,
+          maxSettingsHided: 4,
+          maxSettingsHidedWidth: 450,
         },
-        locale: interaction.locale,
-        settings: commands,
-        highlightedPosition,
-        visibleCount,
-        height: 700,
-        width: 600,
-        maxSettingsHided: 4,
-        maxSettingsHidedWidth: 450,
-      });
+        { image: 1, emoji: 1 },
+        i18n
+      );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
         name: `commands.${
@@ -553,7 +573,7 @@ export default {
         .setColor(process.env.EMBED_COLOR)
         .setImage("attachment://commands.png")
         .setAuthor({
-          name: getTranslation("title"),
+          name: getTranslation("commands.help.commands.title"),
           iconURL: interaction.user.avatarURL(),
         });
 
@@ -580,7 +600,9 @@ export default {
 
       return new StringSelectMenuBuilder()
         .setCustomId("category")
-        .setPlaceholder(getTranslation("categoryMenu[placeholder]"))
+        .setPlaceholder(
+          getTranslation("commands.help.commands.categoryMenu.placeholder")
+        )
         .addOptions(categoriesArray);
     };
 
@@ -616,12 +638,7 @@ export default {
           console.log(`[help.commands] Adding menu option: ${cmd.title}`);
           return {
             label: cmd.title || `Command ${index}`,
-            value: commandIndexes[index].toString(), // Use the actual index in the commands array
-            description: cmd.isSubcommand
-              ? `${cmd.parentCommand}`
-              : cmd.description.length > 50
-              ? cmd.description.slice(0, 47) + "..."
-              : cmd.description,
+            value: commandIndexes[index].toString(),
           };
         });
 
@@ -631,7 +648,9 @@ export default {
       if (options.length === 0) {
         options = [
           {
-            label: "No commands available",
+            label: getTranslation(
+              "commands.help.commands.subcommandMenu.noCommandsAvailable"
+            ),
             value: "none",
           },
         ];
@@ -639,7 +658,9 @@ export default {
 
       return new StringSelectMenuBuilder()
         .setCustomId("subcommand")
-        .setPlaceholder(getTranslation("subcommandMenu[placeholder]"))
+        .setPlaceholder(
+          getTranslation("commands.help.commands.subcommandMenu.placeholder")
+        )
         .addOptions(options);
     };
 
@@ -658,7 +679,9 @@ export default {
     collector.on("collect", async (i) => {
       if (i.user.id !== interaction.user.id) {
         await i.reply({
-          content: "You cannot use this menu.",
+          content: getTranslation(
+            "commands.help.commands.subcommandMenu.youCannotUseThisMenu"
+          ),
           ephemeral: true,
         });
         return;

@@ -209,37 +209,41 @@ export default {
         }
 
         // Generate game launcher image
-        const [pngBuffer, dominantColor] = await generateImage("GameLauncher", {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
+        const [pngBuffer, dominantColor] = await generateImage(
+          "GameLauncher",
+          {
+            interaction: {
+              user: {
+                id: interaction.user.id,
+                username: interaction.user.username,
+                displayName: interaction.user.displayName,
+                avatarURL: interaction.user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: interaction.guild.id,
+                name: interaction.guild.name,
+                iconURL: interaction.guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
             },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
+            locale: i18n.getLocale(),
+            database: userData,
+            games: games,
+            selectedGame,
+            currentLocale: i18n.getLocale(),
+            highlightedGame,
+            highlightedCategory: currentCategory,
+            returnDominant: true,
+            gameStats: currentGameRecords, // Use existing game records
           },
-          locale: i18n.getLocale(),
-          database: userData,
-          games: games,
-          selectedGame,
-          currentLocale: i18n.getLocale(),
-          highlightedGame,
-          highlightedCategory: currentCategory,
-          returnDominant: true,
-          i18n,
-          gameStats: currentGameRecords, // Use existing game records
-        });
+          { image: 2, emoji: 1 },
+          i18n
+        );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
           name: `work_games.png`,

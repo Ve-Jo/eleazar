@@ -421,9 +421,9 @@ export default {
       // First check if the user already exists to avoid unnecessary operations
       const existingUser = await this.client.user.findUnique({
         where: {
-          guildId_id: { 
-            guildId, 
-            id: userId 
+          guildId_id: {
+            guildId,
+            id: userId,
           },
         },
       });
@@ -561,53 +561,17 @@ export default {
   },
 
   async getGameRecords(guildId, userId) {
-    const user = await this.getUser(guildId, userId);
-    if (!user?.stats) {
-      // Return default game records if no stats exist
-      return {
-        2048: { highScore: 0 },
-        snake: { highScore: 0 },
-      };
-    }
-    return JSON.parse(user.stats.gameRecords);
+    // Use the improved statistics version which already handles all data formats
+    return this.getStatistics().getGameRecords(guildId, userId);
   },
 
   async updateGameHighScore(guildId, userId, gameId, newScore) {
-    const user = await this.getUser(guildId, userId);
-    if (!user?.stats) {
-      return false;
-    }
-
-    try {
-      const gameRecords = JSON.parse(user.stats.gameRecords);
-      const currentHighScore = gameRecords[gameId]?.highScore || 0;
-
-      // Only update if new score is higher
-      if (newScore > currentHighScore) {
-        gameRecords[gameId] = {
-          ...gameRecords[gameId],
-          highScore: newScore,
-        };
-
-        await this.client.statistics.update({
-          where: {
-            userId_guildId: {
-              userId,
-              guildId,
-            },
-          },
-          data: {
-            gameRecords: JSON.stringify(gameRecords),
-          },
-        });
-
-        return true; // Indicates a new high score was set
-      }
-
-      return false; // No new high score
-    } catch (error) {
-      console.error("Error updating game high score:", error);
-      return false;
-    }
+    // Use the improved statistics version which already handles all data formats
+    return this.getStatistics().updateGameHighScore(
+      guildId,
+      userId,
+      gameId,
+      newScore
+    );
   },
 };

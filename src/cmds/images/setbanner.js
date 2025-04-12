@@ -302,7 +302,8 @@ export default {
             ...userData,
           },
         },
-        { image: 2, emoji: 1 }
+        { image: 2, emoji: 1 },
+        i18n
       );
 
       if (!previewBuffer) {

@@ -227,7 +227,8 @@ export default {
             dominantColor: "user",
             returnDominant: true,
           },
-          { image: 2, emoji: 2 }
+          { image: 2, emoji: 2 },
+          i18n
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -369,7 +370,8 @@ export default {
                 dominantColor: "user",
                 returnDominant: true,
               },
-              { image: 2, emoji: 2 }
+              { image: 2, emoji: 2 },
+              i18n
             );
 
             const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
