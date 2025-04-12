@@ -3,6 +3,7 @@ import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.js";
 import init from "../utils/music.js";
 import Database from "../database/client.js";
 // import PingService from "../services/PingService.js";
+import StatusService from "../services/StatusService.js";
 
 export default {
   name: Events.ClientReady,
@@ -20,5 +21,8 @@ export default {
 
     // Start ping service
     //PingService.start(client);
+
+    // Start status service
+    StatusService.start(client);
   },
 };
