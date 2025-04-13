@@ -44,6 +44,7 @@
     "prisma": "6.2.0",
     "puppeteer": "^23.6.0",
     "react": "^18.3.1",
+    "redis": "^4.7.0",
     "replicate": "^1.0.1",
     "riffy": "^1.0.7-rc.1",
     "satori": "^0.12.1",

@@ -476,11 +476,34 @@ export default {
           const type = upgradeTypes[currentUpgrade];
 
           try {
-            // We'll modify the purchaseUpgrade method in the database to handle discounts
-            await Database.purchaseUpgrade(guild.id, user.id, type);
+            // Call the database method
+            const purchaseResult = await Database.purchaseUpgrade(
+              guild.id,
+              user.id,
+              type
+            );
 
-            // After successful purchase, reset the discount for this upgrade type
-            await Database.resetUpgradeDiscount(guild.id, user.id, type);
+            // --- Explicitly invalidate cache AFTER successful purchase ---
+            const userCacheKeyFull = Database._cacheKeyUser(
+              guild.id,
+              user.id,
+              true
+            );
+            const userCacheKeyBasic = Database._cacheKeyUser(
+              guild.id,
+              user.id,
+              false
+            );
+            // purchaseUpgrade already invalidates cooldowns if necessary
+            if (Database.redisClient) {
+              try {
+                const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
+                await Database.redisClient.del(keysToDel);
+                Database._logRedis("del", keysToDel.join(", "), true);
+              } catch (err) {
+                Database._logRedis("del", keysToDel.join(", "), err);
+              }
+            }
 
             // Show updated shop with new upgrade level
             await i.update(await generateShopMessage());
@@ -506,6 +529,35 @@ export default {
               user.id,
               type
             );
+
+            // --- Explicitly invalidate cache AFTER successful revert ---
+            const userCacheKeyFull = Database._cacheKeyUser(
+              guild.id,
+              user.id,
+              true
+            );
+            const userCacheKeyBasic = Database._cacheKeyUser(
+              guild.id,
+              user.id,
+              false
+            );
+            const cooldownCacheKey = Database._cacheKeyCooldown(
+              guild.id,
+              user.id
+            ); // revert sets a cooldown
+            if (Database.redisClient) {
+              try {
+                const keysToDel = [
+                  userCacheKeyFull,
+                  userCacheKeyBasic,
+                  cooldownCacheKey,
+                ];
+                await Database.redisClient.del(keysToDel);
+                Database._logRedis("del", keysToDel.join(", "), true);
+              } catch (err) {
+                Database._logRedis("del", keysToDel.join(", "), err);
+              }
+            }
 
             // Get the upgrade name from UpgradesDisplay for the success message
             const upgradeName = getUpgradeTranslation(

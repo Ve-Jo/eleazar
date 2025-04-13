@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import music from "../database/music.js";
+import music from "../database/client.js";
 
 export default {
   name: Events.VoiceStateUpdate,

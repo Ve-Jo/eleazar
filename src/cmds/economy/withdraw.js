@@ -78,15 +78,14 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const amount = interaction.options.getString("amount");
+    const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
 
     try {
-      // Get user data with all relations
-      const userData = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id
-      );
+      // Get user data *before* transaction
+      const initialUserData = await Database.getUser(guildId, userId, true);
 
-      if (!userData?.economy?.bankBalance) {
+      if (!initialUserData?.economy?.bankBalance) {
         return interaction.editReply({
           content: i18n.__("commands.economy.withdraw.noBankAccount"),
           ephemeral: true,
@@ -94,7 +93,10 @@ export default {
       }
 
       // Calculate current bank balance with interest
-      const currentBankBalance = await Database.calculateBankBalance(userData);
+      const currentBankBalance = await Database.calculateBankBalance(
+        initialUserData
+      );
+      // Note: calculateBankBalance now handles its own DB read if needed, no tx needed here.
 
       // Calculate withdrawal amount with precision
       let amountInt = 0;
@@ -151,7 +153,7 @@ export default {
             bankRate:
               parseFloat(remainingBalance) <= 0
                 ? "0.00000"
-                : userData.economy.bankRate,
+                : initialUserData.economy.bankRate,
             bankStartTime: parseFloat(remainingBalance) <= 0 ? 0 : Date.now(), // Reset interest calculation time
           },
         });
@@ -170,12 +172,26 @@ export default {
         });
       });
 
+      // --- Explicitly invalidate cache AFTER transaction ---
+      const userCacheKeyFull = Database._cacheKeyUser(guildId, userId, true);
+      const userCacheKeyBasic = Database._cacheKeyUser(guildId, userId, false);
+      const statsCacheKey = Database._cacheKeyStats(guildId, userId); // Stats might be affected by balance/activity
+      if (Database.redisClient) {
+        try {
+          const keysToDel = [
+            userCacheKeyFull,
+            userCacheKeyBasic,
+            statsCacheKey,
+          ];
+          await Database.redisClient.del(keysToDel);
+          Database._logRedis("del", keysToDel.join(", "), true);
+        } catch (err) {
+          Database._logRedis("del", keysToDel.join(", "), err);
+        }
+      }
+
       // Get updated user data
-      const updatedUser = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
+      const updatedUser = await Database.getUser(guildId, userId, true);
 
       // Generate the transfer image
       const [pngBuffer, dominantColor] = await generateImage(

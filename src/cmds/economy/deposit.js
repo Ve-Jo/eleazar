@@ -93,17 +93,16 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
 
+    const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+
     try {
       const amount = interaction.options.getString("amount");
 
-      // Get user data
-      const userData = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
+      // Get user data *before* the transaction
+      const initialUserData = await Database.getUser(guildId, userId, true);
 
-      if (!userData || !userData.economy) {
+      if (!initialUserData || !initialUserData.economy) {
         return interaction.editReply({
           content: i18n.__("commands.economy.deposit.userNotFound"),
           ephemeral: true,
@@ -112,7 +111,7 @@ export default {
 
       // Calculate deposit amount with precision
       let amountInt = 0;
-      const userBalance = parseFloat(userData.economy.balance);
+      const userBalance = parseFloat(initialUserData.economy.balance);
 
       if (amount === "all") {
         amountInt = userBalance;
@@ -148,12 +147,12 @@ export default {
       // Process deposit using transaction
       await Database.client.$transaction(async (tx) => {
         // Calculate bank rate based on level
-        const xp = Number(userData.level?.xp?.toString() || 0);
+        const xp = Number(initialUserData.level?.xp?.toString() || 0);
         const levelInfo = Database.calculateLevel(xp);
         const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
 
         // Apply bank rate upgrade
-        const bankRateUpgrade = userData.upgrades.find(
+        const bankRateUpgrade = initialUserData.upgrades.find(
           (u) => u.type === "bank_rate"
         );
         const bankRateLevel = bankRateUpgrade?.level || 1;
@@ -161,11 +160,11 @@ export default {
 
         const bankRate = baseRate + bankRateBonus;
 
-        // Get current bank balance with interest
+        // Get current bank balance with interest, using the transaction client
         let currentBankBalance = 0;
-        if (userData.economy) {
+        if (initialUserData.economy) {
           currentBankBalance = parseFloat(
-            await Database.calculateBankBalance(userData)
+            await Database.calculateBankBalance(initialUserData, tx)
           );
         }
 
@@ -173,8 +172,8 @@ export default {
         await tx.economy.update({
           where: {
             userId_guildId: {
-              userId: interaction.user.id,
-              guildId: interaction.guild.id,
+              userId: userId,
+              guildId: guildId,
             },
           },
           data: {
@@ -189,8 +188,8 @@ export default {
         await tx.user.update({
           where: {
             guildId_id: {
-              id: interaction.user.id,
-              guildId: interaction.guild.id,
+              id: userId,
+              guildId: guildId,
             },
           },
           data: {
@@ -199,12 +198,26 @@ export default {
         });
       });
 
-      // Get updated user data
-      const updatedUser = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
+      // --- Explicitly invalidate cache AFTER transaction ---
+      const userCacheKeyFull = Database._cacheKeyUser(guildId, userId, true);
+      const userCacheKeyBasic = Database._cacheKeyUser(guildId, userId, false);
+      const statsCacheKey = Database._cacheKeyStats(guildId, userId); // Stats might be affected by balance/activity
+      if (Database.redisClient) {
+        try {
+          const keysToDel = [
+            userCacheKeyFull,
+            userCacheKeyBasic,
+            statsCacheKey,
+          ];
+          await Database.redisClient.del(keysToDel);
+          Database._logRedis("del", keysToDel.join(", "), true);
+        } catch (err) {
+          Database._logRedis("del", keysToDel.join(", "), err);
+        }
+      }
+
+      // Get updated user data *after* invalidating cache
+      const updatedUser = await Database.getUser(guildId, userId, true);
 
       // Generate deposit confirmation image
       const [buffer, dominantColor] = await generateImage(
@@ -212,7 +225,7 @@ export default {
         {
           interaction: {
             user: {
-              id: interaction.user.id,
+              id: userId,
               username: interaction.user.username,
               displayName: interaction.user.displayName,
               avatarURL: interaction.user.displayAvatarURL({
@@ -221,7 +234,7 @@ export default {
               }),
             },
             guild: {
-              id: interaction.guild.id,
+              id: guildId,
               name: interaction.guild.name,
               iconURL: interaction.guild.iconURL({
                 extension: "png",

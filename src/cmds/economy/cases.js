@@ -100,7 +100,7 @@ export default {
 
     try {
       // Get user data
-      const userData = await Database.getUser(
+      let userData = await Database.getUser(
         interaction.guild.id,
         interaction.user.id
       );
@@ -442,6 +442,51 @@ export default {
             });
 
             backCollector.on("collect", async (i) => {
+              // --- Explicitly invalidate cache BEFORE fetching fresh data ---
+              const userCacheKeyFull = Database._cacheKeyUser(
+                interaction.guild.id,
+                interaction.user.id,
+                true
+              );
+              const userCacheKeyBasic = Database._cacheKeyUser(
+                interaction.guild.id,
+                interaction.user.id,
+                false
+              );
+              const statsCacheKey = Database._cacheKeyStats(
+                interaction.guild.id,
+                interaction.user.id
+              );
+              const cratesCacheKey = Database._cacheKeyCrates(
+                interaction.guild.id,
+                interaction.user.id
+              ); // Crate list might have changed
+              const cooldownCacheKey = Database._cacheKeyCooldown(
+                interaction.guild.id,
+                interaction.user.id
+              ); // Cooldowns definitely changed
+              if (Database.redisClient) {
+                try {
+                  const keysToDel = [
+                    userCacheKeyFull,
+                    userCacheKeyBasic,
+                    statsCacheKey,
+                    cratesCacheKey,
+                    cooldownCacheKey,
+                  ];
+                  await Database.redisClient.del(keysToDel);
+                  Database._logRedis("del", keysToDel.join(", "), true);
+                } catch (err) {
+                  Database._logRedis("del", keysToDel.join(", "), err);
+                }
+              }
+
+              // Fetch fresh user data AFTER invalidation
+              userData = await Database.getUser(
+                interaction.guild.id,
+                interaction.user.id
+              );
+
               // Refresh the crate data from the database
               const dailyCooldown = await Database.getCrateCooldown(
                 interaction.guild.id,

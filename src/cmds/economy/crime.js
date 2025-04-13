@@ -312,6 +312,48 @@ export default {
           await Database.updateCooldown(guild.id, user.id, "crime");
         }
 
+        // --- Explicitly invalidate cache AFTER transaction/cooldown update ---
+        const userCacheKeyFull = Database._cacheKeyUser(
+          guild.id,
+          user.id,
+          true
+        );
+        const userCacheKeyBasic = Database._cacheKeyUser(
+          guild.id,
+          user.id,
+          false
+        );
+        const targetCacheKeyFull = Database._cacheKeyUser(
+          guild.id,
+          targetId,
+          true
+        );
+        const targetCacheKeyBasic = Database._cacheKeyUser(
+          guild.id,
+          targetId,
+          false
+        );
+        const userStatsKey = Database._cacheKeyStats(guild.id, user.id);
+        const targetStatsKey = Database._cacheKeyStats(guild.id, targetId);
+        const userCooldownKey = Database._cacheKeyCooldown(guild.id, user.id);
+        if (Database.redisClient) {
+          try {
+            const keysToDel = [
+              userCacheKeyFull,
+              userCacheKeyBasic,
+              userStatsKey,
+              userCooldownKey,
+              targetCacheKeyFull,
+              targetCacheKeyBasic,
+              targetStatsKey,
+            ];
+            await Database.redisClient.del(keysToDel);
+            Database._logRedis("del", keysToDel.join(", "), true);
+          } catch (err) {
+            Database._logRedis("del", keysToDel.join(", "), err);
+          }
+        }
+
         // Get updated data (reuse the data if amount is zero to avoid unnecessary database queries)
         const [updatedUserData, updatedTargetData] =
           amount > 0

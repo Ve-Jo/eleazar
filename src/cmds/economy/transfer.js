@@ -207,6 +207,53 @@ export default {
         });
       });
 
+      // --- Explicitly invalidate cache AFTER transaction ---
+      const senderCacheKeyFull = Database._cacheKeyUser(
+        interaction.guild.id,
+        interaction.user.id,
+        true
+      );
+      const senderCacheKeyBasic = Database._cacheKeyUser(
+        interaction.guild.id,
+        interaction.user.id,
+        false
+      );
+      const recipientCacheKeyFull = Database._cacheKeyUser(
+        interaction.guild.id,
+        targetUser.id,
+        true
+      );
+      const recipientCacheKeyBasic = Database._cacheKeyUser(
+        interaction.guild.id,
+        targetUser.id,
+        false
+      );
+      // transferBalance -> addBalance invalidates stats too, but let's be explicit
+      const senderStatsKey = Database._cacheKeyStats(
+        interaction.guild.id,
+        interaction.user.id
+      );
+      const recipientStatsKey = Database._cacheKeyStats(
+        interaction.guild.id,
+        targetUser.id
+      );
+      if (Database.redisClient) {
+        try {
+          const keysToDel = [
+            senderCacheKeyFull,
+            senderCacheKeyBasic,
+            senderStatsKey,
+            recipientCacheKeyFull,
+            recipientCacheKeyBasic,
+            recipientStatsKey,
+          ];
+          await Database.redisClient.del(keysToDel);
+          Database._logRedis("del", keysToDel.join(", "), true);
+        } catch (err) {
+          Database._logRedis("del", keysToDel.join(", "), err);
+        }
+      }
+
       // Get updated user data
       const updatedSender = await Database.getUser(
         interaction.guild.id,

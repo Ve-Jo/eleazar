@@ -1,7 +1,7 @@
 import { LavalinkManager } from "lavalink-client";
 import { fileURLToPath } from "url";
 import autoPlayFunction from "../handlers/MusicAutoplay.js";
-import music from "../database/music.js";
+import music from "../database/client.js";
 import { dirname, join } from "path";
 import fetch from "node-fetch";
 import fs from "fs";
@@ -12,18 +12,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Utility function to safely get avatar URLs
 function getAvatarUrl(user) {
   if (!user) return null;
-  
+
   try {
     // If avatarURL is a function, call it
-    if (typeof user.avatarURL === 'function') {
+    if (typeof user.avatarURL === "function") {
       return user.avatarURL();
     }
     // If it's a string, use it directly
-    if (typeof user.avatarURL === 'string') {
+    if (typeof user.avatarURL === "string") {
       return user.avatarURL;
     }
     // Try displayAvatarURL next
-    if (typeof user.displayAvatarURL === 'function') {
+    if (typeof user.displayAvatarURL === "function") {
       return user.displayAvatarURL();
     }
     // Last resort - just return null
