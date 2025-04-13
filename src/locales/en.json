@@ -24,7 +24,7 @@
       "crime": {
         "name": "crime",
         "description": "Attempt to steal money from another user",
-        "cooldown": "You need to wait {{time}} seconds before committing another crime",
+        "cooldown": "You need to wait before committing another crime",
         "selectTarget": "Select a user to steal from",
         "noValidTargets": "No valid targets found (users must have coins to steal)",
         "noSelection": "No target selected",
@@ -45,7 +45,9 @@
         "invalidAmount": "Invalid amount",
         "noBankAccount": "You don't have a bank account",
         "error": "An error occurred while processing your deposit",
-        "depositSuccess": "Successfully deposited {{amount}} to your bank account."
+        "depositSuccess": "Successfully deposited {{amount}} to your bank account.",
+        "notEnoughMoney": "You don't have enough money to deposit",
+        "imageError": "Failed to generate the image. Please try again."
       },
       "leaderboard": {
         "title": "Server Leaderboard",
@@ -62,12 +64,13 @@
       },
       "level": {
         "userNotFound": "User not found",
-        "error": "An error occurred while processing your level request",
+        "error": "An error occurred while processing your request",
         "voiceTime": "Currently in voice: {{hours}}h {{minutes}}m | Earned: {{xp}} XP ({{rate}} XP/min)",
         "title": "Level",
         "level": "Level",
         "nextLevel": "Next level",
-        "xp": "XP"
+        "xp": "XP",
+        "imageError": "Failed to generate the image. Please try again."
       },
       "shop": {
         "name": "shop",
@@ -316,7 +319,10 @@
           "placeholder": "Select a command"
         },
         "next": "Next",
-        "previous": "Previous"
+        "previous": "Previous",
+        "youCannotUseThisMenu": "You cannot use this menu.",
+        "noCommandsAvailable": "No commands available",
+        "title": "Commands list"
       }
     },
     "images": {
@@ -577,7 +583,8 @@
       "invalidMove": "Invalid move!",
       "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
       "notYourGame": "This game is not for you!",
-      "error": "There was an error starting the game. Please try again."
+      "error": "There was an error starting the game. Please try again.",
+      "highScore": "High Score: {{score}}"
     },
     "snake": {
       "alreadyRunning": "A snake game is already running in this channel!",
@@ -589,7 +596,8 @@
       "invalidMove": "Invalid move!",
       "timesOut": "Game ended due to inactivity! Final Score: {{score}}",
       "notYourGame": "This game is not for you!",
-      "error": "There was an error starting the game. Please try again."
+      "error": "There was an error starting the game. Please try again.",
+      "highScore": "High Score: {{score}}"
     }
   },
   "music": {
@@ -646,6 +654,127 @@
       "queue": "Queue",
       "moreItems": "more items",
       "nowPlaying": "Now Playing"
+    },
+    "CratesDisplay": {
+      "cratesTitle": "Crates",
+      "userAvatarAlt": "User Avatar",
+      "cooldown": "On Cooldown",
+      "cooldownMessage": "This crate is on cooldown",
+      "readyToOpen": "Ready to open",
+      "quantityAvailable": "Available",
+      "availableCrates": "Available Crates",
+      "seasonXP": "Season XP",
+      "timeToOpen": "Hours to open",
+      "types": {
+        "daily": {
+          "name": "Daily Crate",
+          "description": "A crate you can open once every 24 hours"
+        },
+        "weekly": {
+          "name": "Weekly Crate",
+          "description": "A crate you can open once every 7 days"
+        },
+        "special": {
+          "description": "A special crate with unique rewards"
+        }
+      },
+      "cooldownTypes": {
+        "daily": "Daily Crate",
+        "work": "Work Command",
+        "crime": "Crime Command",
+        "message": "Message Rewards"
+      }
+    },
+    "CrateRewards": {
+      "rewardsTitle": "Rewards",
+      "fromCrate": "From {crateName}",
+      "userAvatarAlt": "User Avatar",
+      "rewardsReceived": "Rewards Received",
+      "coins": "Coins",
+      "xp": "Experience Points",
+      "discount": "Discount",
+      "cooldownReduction": "Cooldown Reduction",
+      "minutes": "minutes",
+      "on": "on",
+      "for": "for",
+      "noRewards": "No rewards received",
+      "dailyBonus": "Daily Bonus",
+      "dailyCooldown": "Daily Cooldown",
+      "crime": "Crime",
+      "bankRate": "Bank Interest",
+      "gamesEarning": "Games Earnings",
+      "dailyCrate": "Daily Crate",
+      "workCommand": "Work Command",
+      "crimeCommand": "Crime Command",
+      "messageRewards": "Message Rewards",
+      "onAllUpgrades": "on all upgrades"
+    },
+    "GameLauncher": {
+      "gameSelection": "Game Selection",
+      "userAvatarAlt": "User Avatar",
+      "highScore": "Record"
+    },
+    "Cooldown": {
+      "title": "Cooldown",
+      "remaining": "remaining"
+    },
+    "Balance": {
+      "title": "Balance",
+      "wallet": "WALLET",
+      "bank": "BANK",
+      "annual": "annual"
+    },
+    "Transfer": {
+      "deposit": "Deposit",
+      "withdraw": "Withdraw",
+      "transfer": "Transfer",
+      "amount": "Amount",
+      "wallet": "WALLET",
+      "bank": "BANK",
+      "balance": "BALANCE"
+    },
+    "UpgradesDisplay": {
+      "title": "Upgrades",
+      "level": "Level",
+      "nextLevel": "Next Level",
+      "price": "Price",
+      "balance": "Balance",
+      "discount": "Discount",
+      "category_economy": "Economy",
+      "category_cooldowns": "Cooldowns",
+      "upgrades": {
+        "daily_bonus": {
+          "name": "Daily Bonus",
+          "description": "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "daily_cooldown": {
+          "name": "Daily Cooldown",
+          "description": "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+        },
+        "crime": {
+          "name": "Crime Cooldown",
+          "description": "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+        },
+        "bank_rate": {
+          "name": "Bank Interest",
+          "description": "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)"
+        },
+        "games_earning": {
+          "name": "Games Earnings",
+          "description": "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)"
+        }
+      }
+    },
+    "Crime": {
+      "title": "Crime",
+      "victim": "Victim",
+      "robber": "Robber",
+      "success": "Successful Crime",
+      "fail": "Failed Crime"
+    },
+    "Snake": {
+      "title": "Snake",
+      "score": "Score:"
     }
   }
 }
