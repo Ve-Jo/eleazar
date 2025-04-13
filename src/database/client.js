@@ -155,6 +155,14 @@ const DEFAULT_RETENTION_DAYS = 1; // Keep only 7 days of analytics by default
 const BANK_MAX_INACTIVE_DAYS = 2;
 const BANK_MAX_INACTIVE_MS = BANK_MAX_INACTIVE_DAYS * 24 * 60 * 60 * 1000;
 
+// --- Retry Configuration ---
+const MAX_RETRIES = 5; // Max number of retries
+const INITIAL_DELAY_MS = 1000; // Initial delay in ms
+const MAX_DELAY_MS = 10000; // Maximum delay in ms
+
+// --- Delay Helper ---
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Define standard cache TTLs (in seconds)
 const CACHE_TTL = {
   USER: 60 * 15, // 15 minutes
@@ -206,10 +214,42 @@ class Database {
         );
 
         // Connect the client
-        this.redisClient.connect().catch((err) => {
-          console.error("Failed to connect Redis client:", err);
-          this.redisClient = null; // Disable caching if connect fails
-        });
+        (async () => {
+          // IIFE to use async/await for retry logic
+          let retries = 0;
+          let connected = false;
+          while (retries < MAX_RETRIES && !connected) {
+            try {
+              await this.redisClient.connect();
+              connected = true; // Connection successful
+              // Ready event should fire after this
+            } catch (err) {
+              retries++;
+              if (retries >= MAX_RETRIES) {
+                console.error(
+                  `Redis connect failed after ${MAX_RETRIES} retries:`,
+                  err
+                );
+                this.redisClient = null; // Disable caching
+                break; // Exit loop
+              }
+              const delayMs = Math.min(
+                INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+                MAX_DELAY_MS
+              );
+              console.warn(
+                `Redis connect failed (attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+              );
+              await delay(delayMs);
+            }
+          }
+          if (!connected) {
+            console.error(
+              "Failed to connect to Redis after multiple retries. Caching disabled."
+            );
+            this.redisClient = null;
+          }
+        })(); // End IIFE
       } else {
         console.warn(
           "REDIS_URL not found in environment variables. Redis caching will be disabled."
@@ -246,35 +286,67 @@ class Database {
       });
     }
 
-    // Performance monitoring middleware
+    // Performance monitoring & Retry middleware
     this.client.$use(async (params, next) => {
+      let retries = 0;
       const start = Date.now();
 
-      try {
-        const result = await next(params);
-        const duration = Date.now() - start;
+      while (retries < MAX_RETRIES) {
+        try {
+          const result = await next(params);
+          const duration = Date.now() - start;
 
-        if (duration > 500) {
-          console.warn(`Slow operation (${duration}ms):`, {
-            model: params.model,
-            action: params.action,
-            args: params.args,
-          });
-        }
-
-        return result;
-      } catch (error) {
-        const duration = Date.now() - start;
-        console.error(
-          `Operation ${params.model}.${params.action} failed after ${duration}ms`,
-          {
-            error: error.message,
-            stack: error.stack,
-            params,
+          // Log slow operations (optional)
+          if (duration > 500) {
+            console.warn(`Slow Prisma operation (${duration}ms):`, {
+              model: params.model,
+              action: params.action,
+              args: params.args,
+            });
           }
-        );
-        throw error;
+          return result; // Success, return result
+        } catch (error) {
+          const duration = Date.now() - start;
+          // Check if it's a connection-related error (adjust codes as needed)
+          // Common codes: P1001 (Can't reach DB), P1003 (DB does not exist), potentially others
+          const isConnectionError =
+            (error.code &&
+              ["P1000", "P1001", "P1002", "P1003", "P1017"].includes(
+                error.code
+              )) ||
+            (error.message &&
+              error.message.toLowerCase().includes("connection"));
+
+          retries++;
+          if (!isConnectionError || retries >= MAX_RETRIES) {
+            // Not a connection error OR max retries reached, log and re-throw
+            console.error(
+              `Prisma operation ${params.model}.${params.action} failed after ${duration}ms (Attempt ${retries}/${MAX_RETRIES}):`,
+              {
+                error: error.message,
+                code: error.code,
+                stack: error.stack,
+                params,
+              }
+            );
+            throw error;
+          }
+
+          // Is a connection error and retries remain
+          const delayMs = Math.min(
+            INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+            MAX_DELAY_MS
+          );
+          console.warn(
+            `Prisma operation ${params.model}.${params.action} failed due to connection error (Attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+          );
+          await delay(delayMs);
+        }
       }
+      // Should not be reached if loop logic is correct, but throw just in case
+      throw new Error(
+        `Prisma operation ${params.model}.${params.action} failed definitively after ${MAX_RETRIES} retries.`
+      );
     });
 
     // Error handling middleware with specific error messages
@@ -383,12 +455,42 @@ class Database {
     });
   }
 
+  // Initialize Prisma Client and connect
   async initialize() {
     try {
-      await this.client.$connect();
-      console.log("Database connection initialized successfully");
+      let retries = 0;
+      let connected = false;
+      while (retries < MAX_RETRIES && !connected) {
+        try {
+          await this.client.$connect();
+          console.log("Database connection initialized successfully");
+          connected = true;
+        } catch (error) {
+          retries++;
+          if (retries >= MAX_RETRIES) {
+            console.error(
+              `Prisma connect failed after ${MAX_RETRIES} retries:`,
+              error
+            );
+            throw error; // Re-throw after max retries
+          }
+          const delayMs = Math.min(
+            INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+            MAX_DELAY_MS
+          );
+          console.warn(
+            `Prisma connect failed (attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+          );
+          await delay(delayMs);
+        }
+      }
+
+      if (!connected) {
+        throw new Error("Failed to connect to Prisma after multiple retries.");
+      }
+
       /*await this.initializeModules();
-      await this.initializeSeason();*/
+       await this.initializeSeason();*/
       return this;
     } catch (error) {
       console.error("Failed to initialize database connection:", error);
@@ -492,8 +594,7 @@ class Database {
     // 1. Check cache
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           return deserializeWithBigInt(cachedData);
         }
@@ -513,7 +614,7 @@ class Database {
       if (season && this.redisClient) {
         try {
           const serializedData = serializeWithBigInt(season);
-          await this.redisClient.set(cacheKey, serializedData, {
+          await this._redisSet(cacheKey, serializedData, {
             EX: CACHE_TTL.SEASON,
           });
           this._logRedis("set", cacheKey, true);
@@ -814,8 +915,7 @@ class Database {
     // 1. Try fetching from Redis first
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           cooldowns = deserializeWithBigInt(cachedData); // Use your deserializer
         } else {
@@ -859,11 +959,9 @@ class Database {
       // 3. Store fetched data in Redis (if available)
       if (this.redisClient) {
         try {
-          await this.redisClient.set(
-            cacheKey,
-            serializeWithBigInt(cooldowns), // Use your serializer
-            { EX: CACHE_TTL.COOLDOWN } // Use defined TTL (node-redis syntax)
-          );
+          await this._redisSet(cacheKey, serializeWithBigInt(cooldowns), {
+            EX: CACHE_TTL.COOLDOWN,
+          }); // Use your serializer
           this._logRedis("set", cacheKey, true);
         } catch (err) {
           this._logRedis("set", cacheKey, err);
@@ -896,7 +994,7 @@ class Database {
     const cacheKey = this._cacheKeyCooldown(guildId, userId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
       }
@@ -1032,7 +1130,7 @@ class Database {
     const cacheKey = this._cacheKeyStats(guildId, userId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -1042,7 +1140,7 @@ class Database {
     const userCacheKey = this._cacheKeyUser(guildId, userId, true);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(userCacheKey);
+        await this._redisDel(userCacheKey);
         this._logRedis("del", userCacheKey, true);
       } catch (err) {
         this._logRedis("del", userCacheKey, err);
@@ -1090,7 +1188,7 @@ class Database {
     const cacheKey = this._cacheKeyStats(guildId, userId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -1100,7 +1198,7 @@ class Database {
     const userCacheKey = this._cacheKeyUser(guildId, userId, true);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(userCacheKey);
+        await this._redisDel(userCacheKey);
         this._logRedis("del", userCacheKey, true);
       } catch (err) {
         this._logRedis("del", userCacheKey, err);
@@ -1116,8 +1214,7 @@ class Database {
     // 1. Check cache
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           return deserializeWithBigInt(cachedData);
         }
@@ -1139,9 +1236,7 @@ class Database {
     if (this.redisClient) {
       try {
         const serializedData = serializeWithBigInt(crates);
-        await this.redisClient.set(cacheKey, serializedData, {
-          EX: CACHE_TTL.CRATE,
-        });
+        await this._redisSet(cacheKey, serializedData, { EX: CACHE_TTL.CRATE });
         this._logRedis("set", cacheKey, true);
       } catch (err) {
         this._logRedis("set", cacheKey, err);
@@ -1158,8 +1253,7 @@ class Database {
     // 1. Check cache
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           // Check for 'NOT_FOUND' marker? Maybe not needed with upsert.
           return deserializeWithBigInt(cachedData);
@@ -1193,9 +1287,7 @@ class Database {
     if (this.redisClient) {
       try {
         const serializedData = serializeWithBigInt(crate);
-        await this.redisClient.set(cacheKey, serializedData, {
-          EX: CACHE_TTL.CRATE,
-        });
+        await this._redisSet(cacheKey, serializedData, { EX: CACHE_TTL.CRATE });
         this._logRedis("set", cacheKey, true);
       } catch (err) {
         this._logRedis("set", cacheKey, err);
@@ -1238,7 +1330,7 @@ class Database {
     const cacheKeyList = this._cacheKeyCrates(guildId, userId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del([cacheKeySpecific, cacheKeyList]);
+        await this._redisDel([cacheKeySpecific, cacheKeyList]);
         this._logRedis("del", `${cacheKeySpecific}, ${cacheKeyList}`, true);
       } catch (err) {
         this._logRedis("del", `${cacheKeySpecific}, ${cacheKeyList}`, err);
@@ -1266,7 +1358,7 @@ class Database {
     const cacheKeyList = this._cacheKeyCrates(guildId, userId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del([cacheKeySpecific, cacheKeyList]);
+        await this._redisDel([cacheKeySpecific, cacheKeyList]);
         this._logRedis("del", `${cacheKeySpecific}, ${cacheKeyList}`, true);
       } catch (err) {
         this._logRedis("del", `${cacheKeySpecific}, ${cacheKeyList}`, err);
@@ -1346,7 +1438,7 @@ class Database {
     // Invalidate *before* DB operation here as we merge data below
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -1422,7 +1514,7 @@ class Database {
     // Invalidate *before* DB operation here as we merge data below
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -1789,7 +1881,7 @@ class Database {
           keysToDel.push(statsCacheKey);
         }
         if (keysToDel.length > 0) {
-          await this.redisClient.del(keysToDel);
+          await this._redisDel(keysToDel);
           this._logRedis("del", keysToDel.join(", "), true);
         }
       } catch (err) {
@@ -1913,7 +2005,7 @@ class Database {
       try {
         const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
         if (keysToDel.length > 0) {
-          await this.redisClient.del(keysToDel);
+          await this._redisDel(keysToDel);
           this._logRedis("del", keysToDel.join(", "), true);
         }
       } catch (err) {
@@ -2013,8 +2105,7 @@ class Database {
     // 2. Try fetching from Redis
     if (this.redisClient) {
       try {
-        const cachedUser = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedUser);
+        const cachedUser = await this._redisGet(cacheKey);
         if (cachedUser) {
           // Cache hit! Deserialize and return
           return deserializeWithBigInt(cachedUser);
@@ -2057,11 +2148,9 @@ class Database {
     // 5. Store in Redis (if user found and Redis available)
     if (user && this.redisClient) {
       try {
-        await this.redisClient.set(
-          cacheKey,
-          serializeWithBigInt(user), // Serialize the user object
-          { EX: CACHE_TTL.USER } // Use defined TTL (node-redis syntax)
-        );
+        await this._redisSet(cacheKey, serializeWithBigInt(user), {
+          EX: CACHE_TTL.USER,
+        }); // Serialize the user object
         this._logRedis("set", cacheKey, true);
       } catch (err) {
         this._logRedis("set", cacheKey, err);
@@ -2590,8 +2679,7 @@ class Database {
     // 1. Check cache
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           return deserializeWithBigInt(cachedData);
         }
@@ -2610,9 +2698,7 @@ class Database {
     if (guild && this.redisClient) {
       try {
         const serializedData = serializeWithBigInt(guild);
-        await this.redisClient.set(cacheKey, serializedData, {
-          EX: CACHE_TTL.GUILD,
-        });
+        await this._redisSet(cacheKey, serializedData, { EX: CACHE_TTL.GUILD });
         this._logRedis("set", cacheKey, true);
       } catch (err) {
         this._logRedis("set", cacheKey, err);
@@ -2632,7 +2718,7 @@ class Database {
     const cacheKey = this._cacheKeyGuild(guildId);
     if (this.redisClient) {
       try {
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -3130,7 +3216,7 @@ class Database {
       const cacheKey = this._cacheKeyPlayer(player.guildId);
       if (this.redisClient) {
         try {
-          await this.redisClient.del(cacheKey);
+          await this._redisDel(cacheKey);
           this._logRedis("del", cacheKey, true);
         } catch (err) {
           this._logRedis("del", cacheKey, err);
@@ -3158,8 +3244,7 @@ class Database {
     // 1. Check Cache
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
-        this._logRedis("get", cacheKey, cachedData);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) {
           return deserializeWithBigInt(cachedData); // Assuming player data needs deserialization
         }
@@ -4358,6 +4443,137 @@ class Database {
     }
 
     return cooldowns;
+  }
+
+  // --- Redis Command Wrappers with Retry ---
+  async _redisGet(key) {
+    if (!this.redisClient || !this.redisClient.isReady) {
+      this._logRedis("get", key, new Error("Redis client not ready"));
+      return null; // Or throw? Returning null allows fallback to DB.
+    }
+
+    let retries = 0;
+    while (retries < MAX_RETRIES) {
+      try {
+        const result = await this.redisClient.get(key);
+        this._logRedis("get", key, result);
+        return result;
+      } catch (error) {
+        // Check if it's a connection error (e.g., ECONNRESET, TIMEOUT)
+        const isConnectionError =
+          error.code === "ECONNRESET" ||
+          error.code === "ETIMEDOUT" ||
+          error.message.toLowerCase().includes("connection");
+        retries++;
+        if (!isConnectionError || retries >= MAX_RETRIES) {
+          this._logRedis("get", key, error);
+          return null; // Return null on non-connection error or max retries
+        }
+        const delayMs = Math.min(
+          INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+          MAX_DELAY_MS
+        );
+        console.warn(
+          `Redis GET failed for ${key} (Attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+        );
+        await delay(delayMs);
+        // Ensure client is reconnected if needed (node-redis might handle this automatically)
+        if (!this.redisClient.isReady) {
+          try {
+            await this.redisClient.connect();
+          } catch {}
+        }
+      }
+    }
+    return null; // Failed after retries
+  }
+
+  async _redisSet(key, value, options) {
+    if (!this.redisClient || !this.redisClient.isReady) {
+      this._logRedis("set", key, new Error("Redis client not ready"));
+      return false;
+    }
+
+    let retries = 0;
+    while (retries < MAX_RETRIES) {
+      try {
+        await this.redisClient.set(key, value, options);
+        this._logRedis("set", key, true);
+        return true;
+      } catch (error) {
+        const isConnectionError =
+          error.code === "ECONNRESET" ||
+          error.code === "ETIMEDOUT" ||
+          error.message.toLowerCase().includes("connection");
+        retries++;
+        if (!isConnectionError || retries >= MAX_RETRIES) {
+          this._logRedis("set", key, error);
+          return false;
+        }
+        const delayMs = Math.min(
+          INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+          MAX_DELAY_MS
+        );
+        console.warn(
+          `Redis SET failed for ${key} (Attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+        );
+        await delay(delayMs);
+        if (!this.redisClient.isReady) {
+          try {
+            await this.redisClient.connect();
+          } catch {}
+        }
+      }
+    }
+    return false;
+  }
+
+  async _redisDel(keys) {
+    if (!this.redisClient || !this.redisClient.isReady) {
+      this._logRedis(
+        "del",
+        Array.isArray(keys) ? keys.join(", ") : keys,
+        new Error("Redis client not ready")
+      );
+      return false;
+    }
+    const keysToDelete = Array.isArray(keys) ? keys : [keys];
+    if (keysToDelete.length === 0) return true;
+
+    let retries = 0;
+    while (retries < MAX_RETRIES) {
+      try {
+        await this.redisClient.del(keysToDelete);
+        this._logRedis("del", keysToDelete.join(", "), true);
+        return true;
+      } catch (error) {
+        const isConnectionError =
+          error.code === "ECONNRESET" ||
+          error.code === "ETIMEDOUT" ||
+          error.message.toLowerCase().includes("connection");
+        retries++;
+        if (!isConnectionError || retries >= MAX_RETRIES) {
+          this._logRedis("del", keysToDelete.join(", "), error);
+          return false;
+        }
+        const delayMs = Math.min(
+          INITIAL_DELAY_MS * Math.pow(2, retries - 1),
+          MAX_DELAY_MS
+        );
+        console.warn(
+          `Redis DEL failed for ${keysToDelete.join(
+            ", "
+          )} (Attempt ${retries}/${MAX_RETRIES}). Retrying in ${delayMs}ms...`
+        );
+        await delay(delayMs);
+        if (!this.redisClient.isReady) {
+          try {
+            await this.redisClient.connect();
+          } catch {}
+        }
+      }
+    }
+    return false;
   }
 }
 
