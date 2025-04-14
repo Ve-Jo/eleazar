@@ -11,7 +11,7 @@ export default {
       .addStringOption((option) =>
         option
           .setName("prompt")
-          .setDescription("Enter your prompt")
+          .setDescription("Enter your prompt (English gives better results)")
           .setRequired(true)
       )
       .addIntegerOption((option) =>
