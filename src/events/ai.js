@@ -23,7 +23,7 @@ const CONFIG = {
   maxContextLength: 4,
   // Toggle AI's ability to use tools/commands
   enableTools: true,
-  maxToolCallsPerTurn: 2,
+  maxToolCallsPerTurn: 1,
   initialContext: {
     role: "system",
     content: `You are a friendly AI assistant for a Discord bot named "Eleazar" created by "@vejoy_". 
