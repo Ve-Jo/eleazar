@@ -5,8 +5,18 @@ import i18n from "../utils/newI18n.js";
 // Configuration
 const CONFIG = {
   models: {
-    text: ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile"],
-    vision: ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"],
+    text: [
+      "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "meta-llama/llama-4-scout-17b-16e-instruct",
+      "llama-3.3-70b-versatile",
+      "llama-3.1-70b-versatile",
+    ],
+    vision: [
+      "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "meta-llama/llama-4-scout-17b-16e-instruct",
+      "llama-3.2-90b-vision-preview",
+      "llama-3.2-11b-vision-preview",
+    ],
   },
   maxContextLength: 4,
   initialContext: {
@@ -596,17 +606,21 @@ export default {
       .replace(`<@${message.client.user.id}>`, "")
       .trim();
 
+    // Determine the locale for this interaction
+    const userLocale = message.guild?.preferredLocale || "en";
+    // Normalize locale (e.g., 'en-US' -> 'en')
+    const normalizedLocale = userLocale.split("-")[0].toLowerCase();
+    // Fallback to 'en' if normalized locale isn't supported
+    const effectiveLocale = ["en", "ru", "uk"].includes(normalizedLocale)
+      ? normalizedLocale
+      : "en";
+
     message.channel.sendTyping();
     const processingMessage = await message.channel.send(
       "Processing your request..."
     );
 
     try {
-      const {
-        language: { from: originalLanguage },
-        translation: translatedMessage,
-      } = await translate(messageContent, null, "en");
-
       const isVisionRequest = message.attachments.size > 0;
       const modelType = isVisionRequest ? "vision" : "text";
 
@@ -620,7 +634,7 @@ export default {
             {
               role: "user",
               content: [
-                { type: "text", text: translatedMessage },
+                { type: "text", text: messageContent },
                 {
                   type: "image_url",
                   image_url: { url: message.attachments.first().url },
@@ -630,7 +644,7 @@ export default {
           ]
         : [
             ...state.userContexts[message.author.id],
-            { role: "user", content: translatedMessage },
+            { role: "user", content: messageContent },
           ].slice(-CONFIG.maxContextLength - 1);
 
       const tools = isVisionRequest
@@ -703,7 +717,7 @@ export default {
           toolCall,
           message,
           processingMessage,
-          originalLanguage
+          effectiveLocale
         );
 
         if (success) {
@@ -726,16 +740,7 @@ export default {
             `Tool response: ${toolCallResponse}`;
         }
 
-        const translatedResponse = await translate(
-          finalResponse,
-          "en",
-          originalLanguage
-        );
-        await sendResponse(
-          message,
-          processingMessage,
-          translatedResponse.translation
-        );
+        await sendResponse(message, processingMessage, finalResponse);
 
         if (!isVisionRequest) {
           state.userContexts[message.author.id].push({
