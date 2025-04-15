@@ -19,7 +19,23 @@ export default {
   data: () => {
     const builder = new SlashCommandSubcommandBuilder()
       .setName("cases")
-      .setDescription("Open cases and get rewards");
+      .setDescription("Open cases and get rewards")
+      .addStringOption((option) =>
+        option
+          .setName("case")
+          .setDescription("Choose a specific case to open directly")
+          .setRequired(false)
+          .addChoices(
+            {
+              name: "daily",
+              value: "daily",
+            },
+            {
+              name: "weekly",
+              value: "weekly",
+            }
+          )
+      );
 
     return builder;
   },
@@ -32,6 +48,18 @@ export default {
       description: {
         ru: "Открыть кейсы и получить награды",
         uk: "Відкрити кейси та отримати нагороди",
+      },
+    },
+    options: {
+      case: {
+        name: {
+          ru: "кейс",
+          uk: "кейс",
+        },
+        description: {
+          ru: "Выберите конкретный кейс для прямого открытия",
+          uk: "Виберіть конкретний кейс для прямого відкриття",
+        },
       },
     },
     title: {
@@ -104,6 +132,168 @@ export default {
         interaction.guild.id,
         interaction.user.id
       );
+
+      // Check if a specific case was requested
+      const requestedCase = interaction.options.getString("case");
+      if (requestedCase) {
+        // Check if requested case is available (not on cooldown)
+        if (["daily", "weekly"].includes(requestedCase)) {
+          const cooldown = await Database.getCrateCooldown(
+            interaction.guild.id,
+            interaction.user.id,
+            requestedCase
+          );
+
+          if (cooldown > 0) {
+            await interaction.editReply({
+              content: i18n.__("commands.economy.cases.cooldownActive", {
+                time: prettyMs(cooldown, { verbose: true }),
+              }),
+            });
+            return;
+          }
+
+          try {
+            // Get crate type info for display
+            const userLocale = i18n.getUserLocale
+              ? i18n.getUserLocale()
+              : interaction.locale.split("-")[0].toLowerCase();
+
+            const getCrateTranslation = (path, defaultValue) => {
+              const pathParts = path.split(".");
+              let result = CratesDisplay.localization_strings;
+              for (const part of pathParts) {
+                if (!result[part]) return defaultValue;
+                result = result[part];
+              }
+              return result[userLocale] || result.en || defaultValue;
+            };
+
+            const crateName = getCrateTranslation(
+              `types.${requestedCase}.name`,
+              requestedCase
+            );
+            const crateEmoji = CRATE_TYPES[requestedCase]?.emoji || "🎁";
+
+            // Open the case directly
+            const rewards = await Database.openCrate(
+              interaction.guild.id,
+              interaction.user.id,
+              requestedCase
+            );
+
+            // Generate reward display
+            const [rewardBuffer] = await generateImage(
+              "CrateRewards",
+              {
+                interaction: {
+                  user: {
+                    id: interaction.user.id,
+                    username: interaction.user.username,
+                    displayName: interaction.user.displayName,
+                    avatarURL: interaction.user.displayAvatarURL({
+                      extension: "png",
+                      size: 1024,
+                    }),
+                  },
+                  guild: {
+                    id: interaction.guild.id,
+                    name: interaction.guild.name,
+                    iconURL: interaction.guild.iconURL({
+                      extension: "png",
+                      size: 1024,
+                    }),
+                  },
+                },
+                locale: interaction.locale,
+                crateType: requestedCase,
+                crateEmoji: crateEmoji,
+                crateName: crateName,
+                rewards: rewards,
+                dominantColor: "user",
+                returnDominant: true,
+              },
+              { image: 2, emoji: 2 },
+              i18n
+            );
+
+            const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
+              name: `reward.png`,
+            });
+
+            // Generate reward message text
+            let rewardText = i18n.__("commands.economy.cases.rewardIntro", {
+              crate: crateName,
+            });
+
+            if (rewards.coins > 0) {
+              rewardText += i18n.__("commands.economy.cases.rewardCoins", {
+                amount: rewards.coins,
+              });
+            }
+
+            if (rewards.xp > 0) {
+              rewardText += i18n.__("commands.economy.cases.rewardXp", {
+                amount: rewards.xp,
+              });
+            }
+
+            if (rewards.discount > 0) {
+              rewardText += i18n.__("commands.economy.cases.rewardDiscount", {
+                amount: rewards.discount,
+              });
+            }
+
+            if (Object.keys(rewards.cooldownReductions).length > 0) {
+              for (const [cooldownType, reduction] of Object.entries(
+                rewards.cooldownReductions
+              )) {
+                // Use CratesDisplay translations for cooldown types
+                const cooldownTypeName = getCrateTranslation(
+                  `cooldownTypes.${cooldownType}`,
+                  cooldownType
+                );
+                rewardText += i18n.__("commands.economy.cases.rewardCooldown", {
+                  type: cooldownTypeName,
+                  time: prettyMs(reduction, { verbose: true }),
+                });
+              }
+            }
+
+            await interaction.editReply({
+              content: rewardText,
+              files: [rewardAttachment],
+            });
+
+            return;
+          } catch (error) {
+            if (error.message.startsWith("Cooldown active:")) {
+              await interaction.editReply({
+                content: i18n.__("commands.economy.cases.cooldownActive", {
+                  time: prettyMs(parseInt(error.message.split(":")[1].trim()), {
+                    verbose: true,
+                  }),
+                }),
+              });
+            } else {
+              console.error("Error opening case directly:", error);
+              await interaction.editReply({
+                content: i18n.__("commands.economy.error"),
+              });
+            }
+            return;
+          }
+        } else {
+          // For non-standard cases (inventory cases), could implement here
+          await interaction.editReply({
+            content: i18n.__("commands.economy.cases.noCratesAvailable"),
+          });
+          return;
+        }
+      }
+
+      // If we reach here, no specific case was requested or direct opening failed
+      // Continue with original code to show the case menu
 
       // Get all crates the user has (including core ones like daily/weekly)
       const crates = await Database.getUserCrates(
