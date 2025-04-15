@@ -23,23 +23,21 @@ const CONFIG = {
   maxContextLength: 4,
   // Toggle AI's ability to use tools/commands
   enableTools: true,
-  maxToolCallsPerTurn: 1,
   initialContext: {
     role: "system",
-    content: `You are a friendly AI assistant for a Discord bot named "Eleazar" created by "@vejoy_". 
+    content: `You are a natural and helpful AI assistant for a Discord bot named "Eleazar" created by "@vejoy_". 
 
-CONVERSATION MODE:
+CONVERSATION NOTICE:
 - By default, assume the user just wants to have a casual conversation.
-- In conversation mode, respond naturally, be helpful, and don't try to execute commands unless specifically asked.
+- In conversation, respond naturally, be helpful, and don't try to execute tools unless specifically asked.
 - Keep your responses conversational, concise, and engaging.
 
-TOOL USAGE MODE:
-- Only switch to tool usage mode when the user clearly requests a specific task that requires tools.
+TOOL USAGE NOTICE:
+- Only run tools when the user clearly requests a specific task that requires tools.
 - Examples of clear task requests: "show me my balance", "translate this text", "help me create a poll", etc.
-- When in tool usage mode, think step-by-step about what commands are needed and execute them.
-- After completing tasks with tools, return to conversation mode.
+- When you are running tool, make sure you're filling all the parameters correctly.
 
-Do not mention tools, commands, or your internal processes to the user. Just be natural and helpful.`,
+Do not mention tools, commands, or your internal processes to the user. Always answer in the same language as the user.`,
   },
 };
 
@@ -51,16 +49,8 @@ const state = {
 
 // Helper functions
 function getAvailableModel(modelType) {
-  const now = Date.now();
-  for (const model of CONFIG.models[modelType]) {
-    if (
-      !state.modelCooldowns[modelType][model] ||
-      state.modelCooldowns[modelType][model] <= now
-    ) {
-      return model;
-    }
-  }
-  return null;
+  // Simply return the first model in the list
+  return CONFIG.models[modelType][0];
 }
 
 function updateModelCooldown(modelType, modelName, retryAfter) {
@@ -1058,149 +1048,6 @@ async function sendResponse(message, processingMessage, content) {
   }
 }
 
-// Helper function to process a single turn of the agentic conversation
-async function processAgenticTurn(
-  client,
-  message,
-  processingMessage,
-  currentMessages,
-  effectiveLocale,
-  tools,
-  modelType,
-  depth
-) {
-  if (depth > CONFIG.maxToolCallsPerTurn) {
-    console.warn("Max tool call depth reached.");
-    // Find the last assistant message to return
-    for (let i = currentMessages.length - 1; i >= 0; i--) {
-      if (currentMessages[i].role === "assistant") {
-        return currentMessages[i].content || "Reached maximum tool call depth.";
-      }
-    }
-    return "Reached maximum tool call depth."; // Fallback
-  }
-
-  let response;
-  let retries = 0;
-  const maxRetries = CONFIG.models[modelType].length * 2; // Allow retrying each model once
-  let currentModel;
-
-  while (retries < maxRetries) {
-    currentModel = getAvailableModel(modelType);
-    if (!currentModel) {
-      console.log("No models available, waiting...");
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds before checking again
-      // Simple retry increment, might need smarter logic if all models stay on cooldown
-      retries++;
-      continue;
-    }
-
-    console.log(
-      `Attempting API call with model: ${currentModel}, Depth: ${depth}`
-    );
-    try {
-      response = await client.groq.chat.completions.create({
-        model: currentModel,
-        messages: currentMessages,
-        tools: tools,
-        tool_choice: depth > 0 ? "auto" : "none",
-      });
-      break; // Success
-    } catch (error) {
-      console.error(`API Error with model ${currentModel}:`, error);
-      if (await handleRateLimit(error, modelType, currentModel)) {
-        console.log(
-          `Rate limit hit for ${currentModel}. Cooldown updated. Retrying...`
-        );
-        retries++;
-        continue; // Try next available model or wait
-      }
-      // If it's not a rate limit error, rethrow it
-      throw error;
-    }
-  }
-
-  if (!response) {
-    throw new Error(
-      "Failed to get a response after trying available models and retries."
-    );
-  }
-
-  const messageResponse = response.choices[0].message;
-  const aiContent = messageResponse.content;
-  const toolCalls = messageResponse.tool_calls || [];
-
-  // Add AI's response (thinking or final answer) to history
-  if (aiContent || toolCalls.length > 0) {
-    // Only add if there's content or tool calls requested
-    currentMessages.push({
-      role: "assistant",
-      content: aiContent,
-      tool_calls: toolCalls,
-    });
-  }
-
-  if (toolCalls.length > 0) {
-    console.log(`AI requested ${toolCalls.length} tool calls.`);
-    const toolResultMessages = [];
-
-    for (const toolCall of toolCalls) {
-      console.log(`Executing tool: ${toolCall.function.name}`);
-      // Log the raw argument data for debugging
-      console.log(`Tool call raw arguments:`, toolCall.function.arguments);
-      console.log(
-        `Tool call arguments type: ${typeof toolCall.function.arguments}`
-      );
-
-      // It's crucial that executeToolCall can handle stringified JSON
-      const { success, response: toolResponse } = await executeToolCall(
-        toolCall,
-        message,
-        processingMessage,
-        effectiveLocale
-      );
-
-      console.log(
-        `Tool ${toolCall.function.name} execution ${
-          success ? "succeeded" : "failed"
-        }. Response:`,
-        toolResponse
-      );
-
-      toolResultMessages.push({
-        tool_call_id: toolCall.id,
-        role: "tool",
-        // Ensure the response is stringified, even if it's already a string
-        content:
-          typeof toolResponse === "string"
-            ? toolResponse
-            : JSON.stringify(toolResponse),
-      });
-    }
-
-    // Add tool results to history
-    currentMessages.push(...toolResultMessages);
-
-    // Call recursively for the next step
-    response = await processAgenticTurn(
-      client,
-      message,
-      processingMessage,
-      currentMessages,
-      effectiveLocale,
-      tools,
-      modelType,
-      depth + 1
-    );
-  } else {
-    // No tool calls, this is the final response
-    console.log("No tool calls requested by AI. Final response:", aiContent);
-    response = aiContent || "I have finished executing the requested actions."; // Provide a fallback if content is null
-  }
-
-  return response;
-}
-
 // Main event handler
 export default {
   name: Events.MessageCreate,
@@ -1227,6 +1074,7 @@ export default {
     );
 
     try {
+      // Determine if this is a vision request based on attachments
       const isVisionRequest = message.attachments.size > 0;
       const modelType = isVisionRequest ? "vision" : "text";
 
@@ -1276,207 +1124,99 @@ export default {
           ? []
           : generateToolsFromCommands(message.client);
 
-      console.log(`Generated ${tools.length} tools for AI to use. Tools data:`);
-      console.log(JSON.stringify(tools, null, 2));
+      console.log(`Generated ${tools.length} tools for AI to use.`);
 
-      // --- Start: Modified Agentic Flow ---
+      // Get the model to use
+      const currentModel = getAvailableModel(modelType);
+      console.log(`Making API call with model: ${currentModel}`);
 
-      let finalResponse = null;
-      let modelUsed = null; // Keep track of the model used for the first call
-
-      // Prepare for the first API call
-      let firstCallRetries = 0;
-      const firstCallMaxRetries = CONFIG.models[modelType].length * 2;
-
-      while (firstCallRetries < firstCallMaxRetries) {
-        const currentModel = getAvailableModel(modelType);
-        if (!currentModel) {
-          console.log("No models available for initial call, waiting...");
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-          firstCallRetries++;
-          continue;
-        }
-        modelUsed = currentModel; // Store the model being used
-
-        console.log(`Attempting initial API call with model: ${currentModel}`);
-        try {
-          const initialApiResponse =
-            await message.client.groq.chat.completions.create({
-              model: currentModel,
-              messages: initialMessages, // Use the prepared history + user message
-              tools: tools,
-              tool_choice: tools.length > 0 ? "auto" : "none",
-            });
-
-          const firstMessageResponse = initialApiResponse.choices[0].message;
-          const initialAiContent = firstMessageResponse.content;
-          const initialToolCalls = firstMessageResponse.tool_calls || [];
-
-          // Add the first AI response to the history immediately
-          if (initialAiContent || initialToolCalls.length > 0) {
-            initialMessages.push({
-              role: "assistant",
-              content: initialAiContent,
-              tool_calls: initialToolCalls,
-            });
-          }
-
-          // Check if the first response requires tools
-          if (initialToolCalls.length > 0) {
-            console.log(
-              `Initial response requested ${initialToolCalls.length} tool calls. Entering agentic loop.`
-            );
-            const toolResultMessages = [];
-
-            // Execute the first set of tools
-            for (const toolCall of initialToolCalls) {
-              console.log(`Executing initial tool: ${toolCall.function.name}`);
-              console.log(
-                `Initial tool call raw arguments:`,
-                toolCall.function.arguments
-              );
-              console.log(
-                `Initial tool call arguments type: ${typeof toolCall.function
-                  .arguments}`
-              );
-
-              const { success, response: toolResponse } = await executeToolCall(
-                toolCall,
-                message,
-                processingMessage,
-                effectiveLocale
-              );
-
-              console.log(
-                `Initial tool ${toolCall.function.name} execution ${
-                  success ? "succeeded" : "failed"
-                }. Response:`,
-                toolResponse
-              );
-
-              toolResultMessages.push({
-                tool_call_id: toolCall.id,
-                role: "tool",
-                content:
-                  typeof toolResponse === "string"
-                    ? toolResponse
-                    : JSON.stringify(toolResponse),
-              });
-            }
-
-            // Add tool results to history
-            initialMessages.push(...toolResultMessages);
-
-            // Now, call processAgenticTurn for potential further steps, starting at depth 1
-            finalResponse = await processAgenticTurn(
-              message.client,
-              message,
-              processingMessage,
-              initialMessages, // Pass the updated history
-              effectiveLocale,
-              tools,
-              modelType,
-              1 // Start depth at 1 since the first turn is done
-            );
-
-            // After tool execution is complete, clear context except for system message
-            if (CONFIG.initialContext) {
-              console.log(
-                "Tool execution complete. Clearing context except for system message."
-              );
-              state.userContexts[message.author.id] = [CONFIG.initialContext];
-            } else {
-              console.log("Tool execution complete. Clearing entire context.");
-              state.userContexts[message.author.id] = [];
-            }
-          } else {
-            // No tool calls in the initial response, treat it as a simple chat response
-            console.log(
-              "Initial response had no tool calls. Treating as chat."
-            );
-            finalResponse = initialAiContent || "Okay."; // Use the content directly
-          }
-
-          break; // Success, exit the retry loop
-        } catch (error) {
-          console.error(
-            `API Error during initial call with model ${currentModel}:`,
-            error
-          );
-          if (await handleRateLimit(error, modelType, currentModel)) {
-            console.log(
-              `Rate limit hit for ${currentModel}. Cooldown updated. Retrying initial call...`
-            );
-            firstCallRetries++;
-            continue; // Try next available model or wait
-          }
-          // If it's not a rate limit error, throw it to the outer catch block
-          throw error;
-        }
-      } // End of initial call retry loop
-
-      if (finalResponse === null && firstCallRetries >= firstCallMaxRetries) {
-        // This means we exhausted all models/retries on the *initial* call
-        throw new Error(
-          "Failed to get an initial response after trying available models and retries."
-        );
+      let response;
+      try {
+        response = await message.client.groq.chat.completions.create({
+          model: currentModel,
+          messages: initialMessages,
+          tools: tools,
+          tool_choice: tools.length > 0 ? "auto" : "none",
+        });
+      } catch (error) {
+        console.error(`API Error with model ${currentModel}:`, error);
+        throw error;
       }
 
-      // --- End: Modified Agentic Flow ---
+      const messageResponse = response.choices[0].message;
+      const aiContent = messageResponse.content;
+      const toolCalls = messageResponse.tool_calls || [];
 
-      // Send the final response (either from chat or agentic loop)
+      let finalResponse = aiContent;
+
+      // If there are tool calls, process them
+      if (toolCalls.length > 0) {
+        console.log(`AI requested ${toolCalls.length} tool calls.`);
+
+        // Process tool calls
+        for (const toolCall of toolCalls) {
+          console.log(`Executing tool: ${toolCall.function.name}`);
+
+          const { success, response: toolResponse } = await executeToolCall(
+            toolCall,
+            message,
+            processingMessage,
+            effectiveLocale
+          );
+
+          console.log(
+            `Tool ${toolCall.function.name} execution ${
+              success ? "succeeded" : "failed"
+            }. Response:`,
+            toolResponse
+          );
+
+          // Add tool result to the response
+          if (!success) {
+            finalResponse = toolResponse;
+          } else if (typeof toolResponse === "string") {
+            finalResponse = toolResponse;
+          } else {
+            finalResponse = JSON.stringify(toolResponse);
+          }
+        }
+      }
+
+      // Send the final response
       if (finalResponse) {
         await sendResponse(message, processingMessage, finalResponse);
 
-        // Update user history (consistent logic as before)
-        if (!isVisionRequest) {
-          // 'initialMessages' contains the full trace up to the point before the last processAgenticTurn call
-          // or just user -> assistant if it was treated as chat.
-          // If agentic loop ran, processAgenticTurn returned the *final* AI content,
-          // but the history ('initialMessages') might not have that very last message object yet.
+        // Add the conversation to context for future reference
+        if (CONFIG.initialContext) {
+          state.userContexts[message.author.id] = [
+            CONFIG.initialContext,
+            { role: "user", content: messageContent },
+            { role: "assistant", content: finalResponse },
+          ];
+        } else {
+          state.userContexts[message.author.id] = [
+            { role: "user", content: messageContent },
+            { role: "assistant", content: finalResponse },
+          ];
+        }
 
-          // Check if the final response content is already the last assistant message in history
-          const lastMessageInHistory =
-            initialMessages[initialMessages.length - 1];
-          let needsFinalAssistantResponseAdded = true;
-
-          if (
-            lastMessageInHistory?.role === "assistant" &&
-            lastMessageInHistory.content === finalResponse &&
-            !lastMessageInHistory.tool_calls
-          ) {
-            // The final chat response or the last response from processAgenticTurn was already added correctly
-            needsFinalAssistantResponseAdded = false;
-          } else if (lastMessageInHistory?.role === "tool") {
-            // The loop finished, but the final assistant message saying "Okay" or similar wasn't added
-            needsFinalAssistantResponseAdded = true;
-          }
-
-          if (needsFinalAssistantResponseAdded) {
-            // Add the final assistant message if it wasn't part of the trace already
-            initialMessages.push({ role: "assistant", content: finalResponse });
-          }
-
-          // Now, prune the potentially updated initialMessages history
-          state.userContexts[message.author.id] = initialMessages;
-          const currentHistory = state.userContexts[message.author.id];
-          const historyStartIndex = CONFIG.initialContext ? 1 : 0;
-          if (
-            currentHistory.length - historyStartIndex >
-            CONFIG.maxContextLength
-          ) {
-            state.userContexts[message.author.id] = [
-              ...(CONFIG.initialContext ? [currentHistory[0]] : []),
-              ...currentHistory.slice(-CONFIG.maxContextLength),
-            ];
-          }
+        // Trim history if needed
+        const currentHistory = state.userContexts[message.author.id];
+        const historyStartIndex = CONFIG.initialContext ? 1 : 0;
+        if (
+          currentHistory.length - historyStartIndex >
+          CONFIG.maxContextLength
+        ) {
+          state.userContexts[message.author.id] = [
+            ...(CONFIG.initialContext ? [currentHistory[0]] : []),
+            ...currentHistory.slice(-CONFIG.maxContextLength),
+          ];
         }
       } else {
-        // Handle cases where finalResponse is empty or null after the logic above
         await sendResponse(
           message,
           processingMessage,
-          "Something went wrong, and I couldn't generate a final response."
+          "I didn't have a response for that."
         );
       }
     } catch (error) {
@@ -1484,7 +1224,7 @@ export default {
       await sendResponse(
         message,
         processingMessage,
-        `An error occurred while processing your request.\n\n[Debug: Error - ${error.message}]`
+        `An error occurred while processing your request.`
       );
     }
   },
