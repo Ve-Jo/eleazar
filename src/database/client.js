@@ -2612,7 +2612,8 @@ class Database {
       await this.updateUpgrades(guildId, userId, upgrades);
     }
 
-    return this.client.user.update({
+    // Perform the database update
+    const updatedUser = await this.client.user.update({
       where: {
         guildId_id: {
           guildId,
@@ -2627,6 +2628,40 @@ class Database {
         upgrades: true,
       },
     });
+
+    // Invalidate Redis cache after successful DB update
+    if (this.redisClient) {
+      const cacheKeyFull = this._cacheKeyUser(guildId, userId, true);
+      const cacheKeyBasic = this._cacheKeyUser(guildId, userId, false);
+      try {
+        const deletedCount = await this._redisDel([
+          cacheKeyFull,
+          cacheKeyBasic,
+        ]);
+        if (deletedCount > 0) {
+          this._logRedis(
+            "DEL",
+            `${cacheKeyFull}, ${cacheKeyBasic}`,
+            `Invalidated user cache on update (${deletedCount} keys)`
+          );
+        } else {
+          // Log if keys weren't found, might indicate they already expired
+          this._logRedis(
+            "DEL_MISS",
+            `${cacheKeyFull}, ${cacheKeyBasic}`,
+            "User cache keys not found for invalidation"
+          );
+        }
+      } catch (err) {
+        console.error(
+          `Redis DEL Error during user update invalidation for key ${cacheKeyFull}/${cacheKeyBasic}:`,
+          err
+        );
+        // Don't throw, update succeeded, cache will expire eventually
+      }
+    }
+
+    return updatedUser; // Return the updated user data from the DB
   }
 
   // Helper method to ensure user exists
