@@ -2097,73 +2097,176 @@ class Database {
     );
   }
 
-  async getUser(guildId, userId, includeRelations = true) {
-    // 1. Define Cache Key
-    // Include 'relations' in the key if they are requested, as the cached data structure depends on it
+  async getUser(guildId, userId, includeRelations = true, tx = null) {
+    const prisma = tx || this.client;
     const cacheKey = this._cacheKeyUser(guildId, userId, includeRelations);
 
-    // 2. Try fetching from Redis
+    // Try fetching from cache first
     if (this.redisClient) {
       try {
         const cachedUser = await this._redisGet(cacheKey);
         if (cachedUser) {
-          // Cache hit! Deserialize and return
-          return deserializeWithBigInt(cachedUser);
+          this._logRedis("HIT", cacheKey, "User found in cache");
+          return cachedUser;
+        } else {
+          this._logRedis("MISS", cacheKey);
         }
       } catch (err) {
-        this._logRedis("get", cacheKey, err);
-        // Fallback to DB on error
+        console.error(`Redis GET Error for key ${cacheKey}:`, err);
+        // Proceed to fetch from DB if cache fails
       }
     }
 
-    // 3. Cache Miss or Redis Error: Fetch from Database
-    await this.ensureGuild(guildId); // Ensure guild exists
+    try {
+      const user = await prisma.user.findUnique({
+        where: { guildId_id: { guildId, id: userId } },
+        include: includeRelations
+          ? {
+              economy: true,
+              stats: true,
+              cooldowns: true,
+              upgrades: true,
+              Level: true,
+              VoiceSession: true,
+              crates: true,
+            }
+          : undefined, // Only include relations if requested
+      });
 
-    const include = includeRelations
-      ? {
-          economy: true,
-          Level: true,
-          cooldowns: true,
-          upgrades: true,
-          stats: true, // Changed from statistics to stats to match schema
+      if (user && this.redisClient) {
+        try {
+          await this._redisSet(cacheKey, user, { EX: CACHE_TTL.USER });
+          this._logRedis("SET", cacheKey, "User cached");
+        } catch (err) {
+          console.error(`Redis SET Error for key ${cacheKey}:`, err);
         }
-      : {};
+      }
 
-    // Try to get the user with normal ID first
-    let user = await this.client.user.findUnique({
-      where: {
-        guildId_id: {
-          guildId,
-          id: userId,
-        },
-      },
-      include,
-    });
-
-    // If user doesn't exist, create it with default values
-    if (!user) {
-      return this.createUser(guildId, userId);
+      return user;
+    } catch (error) {
+      console.error(
+        `Error fetching user ${userId} in guild ${guildId}:`,
+        error
+      );
+      throw error; // Rethrow to be handled by the caller
     }
+  }
 
-    // 5. Store in Redis (if user found and Redis available)
-    if (user && this.redisClient) {
+  /**
+   * Gets the locale preference for a specific user.
+   * @param {string} guildId - The guild ID.
+   * @param {string} userId - The user ID.
+   * @returns {Promise<string|null>} The user's locale string or null if not set/found.
+   */
+  async getUserLocale(guildId, userId) {
+    const cacheKey = this._cacheKeyUserLocale(guildId, userId);
+
+    // Try fetching from cache first
+    if (this.redisClient) {
       try {
-        await this._redisSet(cacheKey, serializeWithBigInt(user), {
-          EX: CACHE_TTL.USER,
-        }); // Serialize the user object
-        this._logRedis("set", cacheKey, true);
+        const cachedLocale = await this._redisGet(cacheKey);
+        if (cachedLocale !== null && cachedLocale !== undefined) {
+          // Check specifically for null/undefined miss
+          this._logRedis("HIT", cacheKey, "User locale found in cache");
+          return cachedLocale; // Return cached value (could be null if explicitly cached as null)
+        } else {
+          this._logRedis("MISS", cacheKey);
+        }
       } catch (err) {
-        this._logRedis("set", cacheKey, err);
+        console.error(`Redis GET Error for key ${cacheKey}:`, err);
       }
-    } else if (!user) {
-      // Optional: Cache a 'not_found' marker for a short duration
-      // if (this.redisClient) {
-      //   try { await this.redisClient.set(cacheKey, 'NOT_FOUND', 'EX', 60); } catch(e){}
-      // }
-      // But createUser handles this, so maybe not necessary here.
     }
 
-    return user;
+    try {
+      // Fetch only the necessary field
+      const user = await this.client.user.findUnique({
+        where: { guildId_id: { guildId, id: userId } },
+        select: { locale: true },
+      });
+
+      const locale = user ? user.locale : null;
+
+      // Cache the result (even if null)
+      if (this.redisClient) {
+        try {
+          // Cache null explicitly to represent 'checked and not found'
+          await this._redisSet(
+            cacheKey,
+            locale === null ? "$$NULL$$" : locale,
+            { EX: CACHE_TTL.USER }
+          );
+          this._logRedis(
+            "SET",
+            cacheKey,
+            `User locale cached (Value: ${locale})`
+          );
+        } catch (err) {
+          console.error(`Redis SET Error for key ${cacheKey}:`, err);
+        }
+      }
+
+      return locale;
+    } catch (error) {
+      console.error(
+        `Error fetching locale for user ${userId} in guild ${guildId}:`,
+        error
+      );
+      return null; // Return null on error
+    }
+  }
+
+  /**
+   * Sets the locale preference for a specific user.
+   * @param {string} guildId - The guild ID.
+   * @param {string} userId - The user ID.
+   * @param {string} locale - The locale string to set.
+   * @returns {Promise<void>}
+   */
+  async setUserLocale(guildId, userId, locale) {
+    try {
+      await this.updateUser(guildId, userId, { locale: locale });
+
+      // Update/Invalidate caches after successful DB update
+      if (this.redisClient) {
+        const localeCacheKey = this._cacheKeyUserLocale(guildId, userId);
+        const userCacheKeyFull = this._cacheKeyUser(guildId, userId, true);
+        const userCacheKeyBasic = this._cacheKeyUser(guildId, userId, false);
+
+        try {
+          // Update locale cache directly
+          await this._redisSet(localeCacheKey, locale, { EX: CACHE_TTL.USER });
+          this._logRedis(
+            "SET",
+            localeCacheKey,
+            `User locale updated in cache (Value: ${locale})`
+          );
+
+          // Invalidate full and basic user caches as locale is part of the user object
+          await this._redisDel([userCacheKeyFull, userCacheKeyBasic]);
+          this._logRedis(
+            "DEL",
+            userCacheKeyFull,
+            "Invalidated full user cache"
+          );
+          this._logRedis(
+            "DEL",
+            userCacheKeyBasic,
+            "Invalidated basic user cache"
+          );
+        } catch (err) {
+          console.error(
+            `Redis DEL/SET Error during locale update for user ${userId} in guild ${guildId}:`,
+            err
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Error setting locale for user ${userId} in guild ${guildId}:`,
+        error
+      );
+      throw error; // Rethrow to indicate failure
+    }
   }
 
   async createUser(guildId, userId, data = {}) {
@@ -4338,8 +4441,13 @@ class Database {
 
   // --- Cache Key Helper Methods ---
   _cacheKeyUser(guildId, userId, full = true) {
-    return `user:${guildId}:${userId}:${full ? "full" : "basic"}`;
+    return `user:${guildId}:${userId}${full ? ":full" : ""}`;
   }
+
+  _cacheKeyUserLocale(guildId, userId) {
+    return `user:${guildId}:${userId}:locale`;
+  }
+
   _cacheKeyCooldown(guildId, userId) {
     return `cooldown:${guildId}:${userId}`;
   }
@@ -4365,7 +4473,7 @@ class Database {
     return `season:current`;
   }
   _cacheKeyVoiceSession(guildId, userId) {
-    return `voicesession:${guildId}:${userId}`;
+    return `voice_session:${guildId}:${userId}`;
   }
   _cacheKeyAllVoiceSessions(guildId, channelId) {
     return `voicesessions:${guildId}:${channelId}`;
