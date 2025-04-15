@@ -1,6 +1,8 @@
 import { Events } from "discord.js";
 import { translate } from "bing-translate-api";
 import i18n from "../utils/newI18n.js";
+import { Memer } from "memer.ts"; // Import Memer for text_memer command
+import Database from "../database/client.js";
 
 // Configuration
 const CONFIG = {
@@ -482,228 +484,6 @@ function getParameterType(optionType) {
   return typeMap[optionType] || "string";
 }
 
-async function createFakeInteraction(
-  message,
-  processingMessage,
-  commandName,
-  subcommandName,
-  args,
-  locale
-) {
-  // Handle args which can be either a string that needs parsing or an already parsed object
-  let parsedArgs = {};
-
-  if (args) {
-    console.log(`Creating fake interaction with args type: ${typeof args}`);
-
-    if (typeof args === "string") {
-      // If it's an empty string or just whitespace, treat as empty object
-      if (!args.trim()) {
-        console.log("Args is empty string, using empty object");
-      } else {
-        try {
-          parsedArgs = JSON.parse(args);
-          console.log("Successfully parsed args string to object:", parsedArgs);
-        } catch (e) {
-          console.error("Error parsing command arguments:", e);
-          // Try to extract values from malformed JSON
-          try {
-            // Create a simple object parser for key-value pairs that might be in a malformed format
-            const argPairs = args.replace(/[{}]/g, "").split(",");
-            argPairs.forEach((pair) => {
-              const [key, value] = pair
-                .split(":")
-                .map((s) => s.trim().replace(/"/g, ""));
-              if (key && value) {
-                parsedArgs[key] = value;
-              }
-            });
-            console.log("Extracted args from malformed JSON:", parsedArgs);
-          } catch (ex) {
-            console.error("Failed to extract args from string:", ex);
-          }
-        }
-      }
-    } else if (typeof args === "object") {
-      parsedArgs = args;
-      console.log("Using args object directly:", parsedArgs);
-    }
-  } else {
-    console.log("No args provided, using empty object");
-  }
-
-  // Handle known parameter mapping issues
-  // For example, AI might pass user_id when the command expects user
-  if (parsedArgs.user_id && !parsedArgs.user) {
-    console.log("Found user_id parameter, mapping to user parameter");
-    parsedArgs.user = parsedArgs.user_id;
-    delete parsedArgs.user_id;
-  }
-
-  // Command-specific parameter normalization
-  if (
-    commandName === "emotions" &&
-    (subcommandName === "positive" || subcommandName === "negative")
-  ) {
-    // Emotions commands always need a user parameter
-    console.log("Emotions command detected, ensuring proper user parameter");
-
-    // Handle cases where the AI might provide target, target_user, etc. instead of user
-    const possibleUserParams = [
-      "target",
-      "target_user",
-      "targetUser",
-      "target_id",
-      "targetId",
-    ];
-    for (const param of possibleUserParams) {
-      if (parsedArgs[param] && !parsedArgs.user) {
-        console.log(`Found ${param} parameter, mapping to user parameter`);
-        parsedArgs.user = parsedArgs[param];
-        delete parsedArgs[param];
-        break;
-      }
-    }
-
-    // If still no user parameter and there's an emotion, try to infer the user is the message author
-    if (!parsedArgs.user && parsedArgs.emotion) {
-      console.log("No user parameter found, defaulting to message author");
-      // DO NOT default to message author as the emotions command has a check against this
-      // parsedArgs.user = message.author.id;
-    }
-  }
-
-  // Ensure guild ID is available and valid
-  if (!message.guild?.id) {
-    console.error(
-      "WARNING: No guild ID available in message object for AI command execution!"
-    );
-    // If we're in a DM, log this fact
-    if (message.channel.type === 1) {
-      // 1 is DM channel type
-      console.log("Command is being executed in a DM channel");
-    }
-  } else {
-    console.log(`Using guild ID: ${message.guild.id} for AI command execution`);
-  }
-
-  // Create the interaction object with all required properties
-  const fakeInteraction = {
-    commandName,
-    user: message.author,
-    guild: message.guild,
-    guildId: message.guild?.id, // Explicitly provide guildId as a top-level property
-    member: message.member,
-    channel: message.channel,
-    channelId: message.channel.id, // Explicitly provide channelId as a top-level property
-    client: message.client,
-    reply: async (content) => processingMessage.edit(content),
-    editReply: async (content) => processingMessage.edit(content),
-    deferReply: async () => processingMessage.edit("Processing..."),
-    followUp: async (content) => message.channel.send(content),
-    options: {
-      getSubcommand: () => subcommandName,
-      getString: (name) => parsedArgs[name]?.toString() || null,
-      getInteger: (name) =>
-        parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
-      getBoolean: (name) =>
-        parsedArgs[name] === true || parsedArgs[name] === "true",
-      getMember: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return message.member;
-
-        // Handle direct user IDs - if it's a valid snowflake
-        if (/^\d{17,19}$/.test(value)) {
-          return message.guild.members.cache.get(value) || message.member;
-        }
-
-        // Handle mentions
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          const userId = value.replace(/[<@!>]/g, "");
-          return message.guild.members.cache.get(userId) || message.member;
-        }
-
-        // Try to find by username as fallback
-        const memberByName = message.guild.members.cache.find(
-          (member) =>
-            member.user.username.toLowerCase() ===
-            value.toLowerCase().replace("@", "")
-        );
-
-        return memberByName || message.member;
-      },
-      getUser: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-
-        // Handle direct user IDs - if it's a valid snowflake
-        if (/^\d{17,19}$/.test(value)) {
-          return message.client.users.cache.get(value);
-        }
-
-        // Handle mentions
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          return message.client.users.cache.get(value.replace(/[<@!>]/g, ""));
-        }
-
-        // Try to find by username
-        return message.client.users.cache.find(
-          (u) =>
-            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
-        );
-      },
-      getChannel: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<#") && value.endsWith(">")) {
-          return message.guild.channels.cache.get(value.replace(/[<#>]/g, ""));
-        }
-        return message.guild.channels.cache.find(
-          (c) => c.name.toLowerCase() === value.toLowerCase()
-        );
-      },
-      getRole: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<@&") && value.endsWith(">")) {
-          return message.guild.roles.cache.get(value.replace(/[<@&>]/g, ""));
-        }
-        return message.guild.roles.cache.find(
-          (r) => r.name.toLowerCase() === value.toLowerCase()
-        );
-      },
-      getNumber: (name) =>
-        parsedArgs[name] ? parseFloat(parsedArgs[name]) : null,
-      getAttachment: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        return message.attachments.find((a) => a.id === value);
-      },
-      getMentionable: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          const id = value.replace(/[<@!>]/g, "");
-          return (
-            message.guild.members.cache.get(id) ||
-            message.guild.roles.cache.get(id) ||
-            message.client.users.cache.get(id)
-          );
-        }
-        return null;
-      },
-    },
-    locale,
-    isChatInputCommand: () => true,
-    isCommand: () => true,
-    deferred: false,
-    replied: false,
-    ephemeral: false,
-  };
-
-  return fakeInteraction;
-}
-
 async function executeToolCall(toolCall, message, processingMessage, locale) {
   const { name, arguments: args } = toolCall.function;
   const [commandName, ...subcommandParts] = name.split("_");
@@ -847,31 +627,142 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
   }
 
   try {
-    const fakeInteraction = await createFakeInteraction(
-      message,
-      processingMessage,
+    // Create a proxy for command execution that integrates with the existing command system
+    const aiCommandProxy = {
+      isChatInputCommand: () => true,
+      isCommand: () => true,
+      options: {
+        getSubcommand: () => subcommandName,
+      },
       commandName,
-      subcommandName,
-      toolCall.function.arguments, // Use potentially cleaned arguments
-      locale
-    );
+      user: message.author,
+      member: message.member,
+      guild: message.guild,
+      guildId: message.guild?.id,
+      channel: message.channel,
+      channelId: message.channel.id,
+      client: message.client,
+      locale: locale || message.guild?.preferredLocale || "en",
+      reply: async (content) => processingMessage.edit(content),
+      editReply: async (content) => processingMessage.edit(content),
+      deferReply: async () => processingMessage.edit("Processing..."),
+      followUp: async (content) => message.channel.send(content),
+      deferred: false,
+      replied: false,
+      ephemeral: false,
+    };
 
-    // Validate guild ID - critical for database operations
-    if (!fakeInteraction.guildId) {
-      console.error(
-        `ERROR: No guild ID in fakeInteraction for command ${commandName}`
-      );
-      if (message.guild?.id) {
-        console.log(`Recovering guild ID from message: ${message.guild.id}`);
-        fakeInteraction.guildId = message.guild.id;
-        fakeInteraction.guild = message.guild;
-      } else {
-        return {
-          success: false,
-          response: `Error: This command requires a server (guild) to function. It cannot be used in DMs or when guild ID is unavailable.`,
-        };
+    // Add options getters that directly use the parsed arguments
+    let parsedArgs = {};
+    if (typeof args === "string") {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.error("Error parsing arguments:", e);
+        parsedArgs = {};
       }
+    } else if (typeof args === "object" && args !== null) {
+      parsedArgs = args;
     }
+
+    // Create option getters for the command
+    const optionGetters = {
+      getString: (name) => parsedArgs[name]?.toString() || null,
+      getInteger: (name) =>
+        parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
+      getBoolean: (name) =>
+        parsedArgs[name] === true || parsedArgs[name] === "true",
+      getNumber: (name) =>
+        parsedArgs[name] ? parseFloat(parsedArgs[name]) : null,
+      getUser: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+
+        // Handle direct user IDs - if it's a valid snowflake
+        if (/^\d{17,19}$/.test(value)) {
+          return message.client.users.cache.get(value);
+        }
+
+        // Handle mentions
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          return message.client.users.cache.get(value.replace(/[<@!>]/g, ""));
+        }
+
+        // Try to find by username
+        return message.client.users.cache.find(
+          (u) =>
+            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
+        );
+      },
+      getMember: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return message.member;
+
+        // Handle direct user IDs - if it's a valid snowflake
+        if (/^\d{17,19}$/.test(value)) {
+          return message.guild.members.cache.get(value) || message.member;
+        }
+
+        // Handle mentions
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          const userId = value.replace(/[<@!>]/g, "");
+          return message.guild.members.cache.get(userId) || message.member;
+        }
+
+        // Try to find by username as fallback
+        const memberByName = message.guild.members.cache.find(
+          (member) =>
+            member.user.username.toLowerCase() ===
+            value.toLowerCase().replace("@", "")
+        );
+
+        return memberByName || message.member;
+      },
+      getChannel: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<#") && value.endsWith(">")) {
+          return message.guild.channels.cache.get(value.replace(/[<#>]/g, ""));
+        }
+        return message.guild.channels.cache.find(
+          (c) => c.name.toLowerCase() === value.toLowerCase()
+        );
+      },
+      getRole: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<@&") && value.endsWith(">")) {
+          return message.guild.roles.cache.get(value.replace(/[<@&>]/g, ""));
+        }
+        return message.guild.roles.cache.find(
+          (r) => r.name.toLowerCase() === value.toLowerCase()
+        );
+      },
+      getAttachment: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        return message.attachments.find((a) => a.id === value);
+      },
+      getMentionable: (name) => {
+        const value = parsedArgs[name];
+        if (!value) return null;
+        if (value.startsWith("<@") && value.endsWith(">")) {
+          const id = value.replace(/[<@!>]/g, "");
+          return (
+            message.guild.members.cache.get(id) ||
+            message.guild.roles.cache.get(id) ||
+            message.client.users.cache.get(id)
+          );
+        }
+        return null;
+      },
+    };
+
+    // Add option getters to the proxy
+    aiCommandProxy.options = {
+      ...aiCommandProxy.options,
+      ...optionGetters,
+    };
 
     // Set locale based on user or guild preferences
     let effectiveLocale = locale || message.guild?.preferredLocale || "en";
@@ -895,7 +786,6 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
     i18n.setLocale(effectiveLocale);
 
     // Create context-specific i18n for this command
-    let commandI18n;
     let response;
 
     // Perform pre-execution validation
@@ -909,7 +799,7 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
     );
 
     if (hasUserOption) {
-      const userValue = fakeInteraction.options.getUser("user");
+      const userValue = aiCommandProxy.options.getUser("user");
       if (!userValue) {
         console.log("User option exists but getUser('user') returned null");
         const rawUserValue =
@@ -948,7 +838,7 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
 
       // Execute the subcommand
       response = await command.subcommands[subcommandName].execute(
-        fakeInteraction,
+        aiCommandProxy,
         i18n
       );
     }
@@ -967,7 +857,7 @@ async function executeToolCall(toolCall, message, processingMessage, locale) {
       }
 
       // Execute the command
-      response = await command.execute(fakeInteraction);
+      response = await command.execute(aiCommandProxy, i18n);
     } else {
       return {
         success: false,
@@ -1060,13 +950,41 @@ export default {
       .trim();
 
     // Determine the locale for this interaction
-    const userLocale = message.guild?.preferredLocale || "en";
-    // Normalize locale (e.g., 'en-US' -> 'en')
-    const normalizedLocale = userLocale.split("-")[0].toLowerCase();
-    // Fallback to 'en' if normalized locale isn't supported
-    const effectiveLocale = ["en", "ru", "uk"].includes(normalizedLocale)
-      ? normalizedLocale
-      : "en";
+    let effectiveLocale = "en"; // Default to English
+    try {
+      // 1. Try fetching the user's saved locale from the database
+      const userDbLocale = await Database.getUserLocale(
+        message.guild?.id,
+        message.author.id
+      );
+      if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
+        effectiveLocale = userDbLocale;
+        console.log(
+          `Using saved locale for ${message.author.tag}: ${effectiveLocale}`
+        );
+      } else {
+        // 2. Fallback to guild preferred locale if user locale isn't set or invalid
+        const guildLocale = message.guild?.preferredLocale;
+        if (guildLocale) {
+          // Normalize locale (e.g., 'en-US' -> 'en')
+          const normalizedGuildLocale = guildLocale.split("-")[0].toLowerCase();
+          // Use guild locale if it's supported
+          if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
+            effectiveLocale = normalizedGuildLocale;
+            console.log(
+              `Using guild locale for ${message.author.tag}: ${effectiveLocale}`
+            );
+          }
+        }
+        // 3. If neither user nor guild locale is valid/available, 'en' remains the default.
+      }
+    } catch (dbError) {
+      console.error(
+        `Error fetching user locale for ${message.author.id}, defaulting to 'en':`,
+        dbError
+      );
+      // Keep default 'en' on database error
+    }
 
     message.channel.sendTyping();
     const processingMessage = await message.channel.send(
@@ -1125,6 +1043,7 @@ export default {
           : generateToolsFromCommands(message.client);
 
       console.log(`Generated ${tools.length} tools for AI to use.`);
+      console.log(JSON.stringify(tools, null, 2));
 
       // Get the model to use
       const currentModel = getAvailableModel(modelType);
@@ -1178,6 +1097,56 @@ export default {
             finalResponse = toolResponse;
           } else {
             finalResponse = JSON.stringify(toolResponse);
+          }
+        }
+      } else {
+        // Check if the AI tried to use a "fake" tool in text format
+        const fakeToolCall = detectFakeToolCalls(aiContent);
+        if (fakeToolCall) {
+          console.log(
+            `Detected fake tool call in AI response: ${fakeToolCall.name}`
+          );
+
+          // Create a proper tool call from the fake one
+          const properToolCall = {
+            function: {
+              name: fakeToolCall.name,
+              arguments: JSON.stringify(fakeToolCall.args),
+            },
+          };
+
+          // Execute the real tool
+          const { success, response: toolResponse } = await executeToolCall(
+            properToolCall,
+            message,
+            processingMessage,
+            effectiveLocale
+          );
+
+          console.log(
+            `Converted fake tool ${fakeToolCall.name} execution ${
+              success ? "succeeded" : "failed"
+            }. Response:`,
+            toolResponse
+          );
+
+          // Replace the fake tool text with the real response
+          // First remove the fake tool call syntax completely
+          let cleanedResponse = aiContent.replace(fakeToolCall.fullMatch, "");
+          // Then add the real tool response
+          finalResponse =
+            cleanedResponse.trim() +
+            (cleanedResponse.trim() ? "\n\n" : "") +
+            (typeof toolResponse === "string"
+              ? toolResponse
+              : JSON.stringify(toolResponse));
+
+          // Clear context when a fake tool call is detected to prevent this behavior from repeating
+          console.log("Clearing context due to fake tool call detection");
+          if (CONFIG.initialContext) {
+            state.userContexts[message.author.id] = [CONFIG.initialContext];
+          } else {
+            state.userContexts[message.author.id] = [];
           }
         }
       }
@@ -1262,4 +1231,84 @@ function inspectCommandStructure(obj, label, maxDepth = 2) {
   const safeObj = safeStringify(obj);
   console.log(JSON.stringify(safeObj, null, 2));
   console.log(`======= END INSPECTION: ${label} =======\n`);
+}
+
+// Function to detect fake tool calls in text
+function detectFakeToolCalls(text) {
+  if (!text) return null;
+
+  // Pattern for detecting HTML-like tags with attributes
+  // This will match patterns like <command param="value" param2="value2"></command>
+  const tagPattern =
+    /<([a-zA-Z0-9_]+)([^>]*?)>(.*?)<\/\1>|<([a-zA-Z0-9_]+)([^>]*?)\/?>/g;
+
+  // Pattern for extracting attributes from matched tag
+  const attrPattern = /([a-zA-Z0-9_]+)=["']([^"']*)["']/g;
+
+  const matches = Array.from(text.matchAll(tagPattern));
+
+  if (matches.length === 0) return null;
+
+  // Check all matches and return the first valid one
+  for (const match of matches) {
+    // Extract the tag name - either from the opening/closing pair or self-closing tag
+    const tagName = match[1] || match[4];
+    // Extract the attributes part - either from opening/closing pair or self-closing tag
+    const attributesText = match[2] || match[5];
+    // Extract the full match
+    const fullMatch = match[0];
+
+    // Skip if this doesn't look like a command
+    if (!tagName) continue;
+
+    // Check if the tag name exists as a command or command_subcommand pattern
+    // First, get all available commands from the client.commands collection
+    const allCommands = [];
+    const validCommandPattern =
+      /(filters|economy|music|counting|emotions|images|help|ai)(_[a-zA-Z0-9_]+)?/;
+
+    // Skip common HTML tags and formatting tags that are not commands
+    const commonTags = [
+      "div",
+      "span",
+      "p",
+      "a",
+      "img",
+      "function",
+      "code",
+      "pre",
+      "b",
+      "i",
+      "u",
+      "strong",
+      "em",
+      "br",
+      "hr",
+    ];
+    if (commonTags.includes(tagName.toLowerCase())) continue;
+
+    // Only process tags that match our command pattern or are known commands
+    if (!validCommandPattern.test(tagName)) continue;
+
+    // Extract attributes as key-value pairs
+    const attributes = {};
+    let attrMatch;
+    while ((attrMatch = attrPattern.exec(attributesText)) !== null) {
+      attributes[attrMatch[1]] = attrMatch[2];
+    }
+
+    console.log(
+      `Detected potential fake tool: ${tagName} with attributes:`,
+      attributes
+    );
+
+    // Return information about the fake tool call
+    return {
+      name: tagName,
+      args: attributes,
+      fullMatch: fullMatch,
+    };
+  }
+
+  return null;
 }
