@@ -94,6 +94,19 @@ export default {
       const commandI18n = i18n;
       commandI18n.setLocale(locale);
 
+      // Save the determined locale to the database for future use
+      // Do this asynchronously, don't wait for it to finish
+      Database.setUserLocale(
+        interaction.guild.id,
+        interaction.user.id,
+        locale
+      ).catch((err) => {
+        console.error(
+          `Failed to save locale for user ${interaction.user.id}:`,
+          err
+        );
+      });
+
       // If this is a subcommand
       if (subcommandName && command.subcommands?.[subcommandName]) {
         // Execute the subcommand with the i18n instance
