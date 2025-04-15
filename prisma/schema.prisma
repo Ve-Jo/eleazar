@@ -20,6 +20,7 @@ model User {
   guildId      String  @map("guild_id")
   bannerUrl    String? @map("banner_url")
   lastActivity BigInt  @default(0) @map("last_activity")
+  locale       String? @map("locale")
 
   // Relations
   guild     Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
