@@ -200,6 +200,17 @@ const Level2 = (props) => {
   gameLevel = Number(gameLevel);
   seasonXP = Number(seasonXP);
 
+  // Debug log to verify the values
+  console.log("Level2 Component Debug:");
+  console.log({
+    chat: { level, currentXP, requiredXP },
+    game: { gameLevel, gameCurrentXP, gameRequiredXP },
+  });
+
+  // Ensure gameLevel is correctly displayed even when it's greater than 1
+  // A level of 0 would be displayed as 1 (minimum level)
+  gameLevel = Math.max(1, gameLevel);
+
   // Calculate remaining time more precisely
   const timeRemaining = seasonEnds
     ? Math.max(0, Number(seasonEnds) - Date.now())
@@ -240,7 +251,7 @@ const Level2 = (props) => {
         position: "relative",
       }}
     >
-      {console.log(interaction)}
+      {/* No need to log interaction here, we've already logged what we need */}
 
       <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
         <StyledRectangle
