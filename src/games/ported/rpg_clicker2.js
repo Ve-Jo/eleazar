@@ -9,7 +9,26 @@ import {
   StringSelectMenuOptionBuilder,
 } from "discord.js";
 import ms from "ms";
-import rpgImagesJson from "../../../other/rpg_images.json" assert { type: "json" };
+const rpgImagesJson = [
+  "https://i.pinimg.com/originals/80/2c/2b/802c2bab8ab08640ba84de46834dbff5.jpg",
+  "https://cdnb.artstation.com/p/assets/images/images/018/099/011/large/steven-nicodemus-arid-desert-originally-wild-west-1-rgb.jpg?1558370159",
+  "https://external-preview.redd.it/VkT6ycP5C8hA035TOY32s55VAdWPLcG4cFUgALReT70.jpg?auto=webp&s=a292046179bf77e3520c756181c4731aff07793c",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQWpgPno9vnVSJ-Q_oyIqzdFyMreMNoowurUPqBZDRG2EKuz3crRGfQKoXgh_TqSoeQ10M&usqp=CAU",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTEfj3IFbOYTCFax5U9y4ns3My0rLyh6zWElbc-84Ulg5LvkqtD_QdfWR7LHmu5zkS4I60&usqp=CAU",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZySlgNZMhhIRuke1ZK3AaZdACH_JwT19KU3zQZbGkzL2XMctKgIenpWamHgXV1IYbIW8&usqp=CAU",
+  "https://p4.wallpaperbetter.com/wallpaper/530/393/250/fantasy-landscape-barren-desert-wallpaper-preview.jpg",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQsBZFU_2cFPUuwFI1qaVkEXiytN247K_ltSACYsLp2jmrxrQGccoOZDkFfBptgFVUX08&usqp=CAU",
+  "https://img.wallpapersafari.com/desktop/1600/900/10/10/S8y3hi.jpg",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTxSWDnDQOOhfqsF0Zk9rLROunQBSPHD9aut7sjZJhX9JHAUFvNMLrYJE0O2CZ1ZUsA9Q&usqp=CAU",
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqnsAQKF5pMdpe7VuEwaNkt2I2Dz5pSMjikME8OHos-0hISf_Jupw3rgy4jVxg-BLprsI&usqp=CAU",
+  "https://cdn.wallpapersafari.com/41/1/402zWG.jpg",
+  "https://wallup.net/wp-content/uploads/2019/10/1000408-fantasy-art-artwork-original-wallpaper-fantastic-748x421.jpg",
+  "https://i.pinimg.com/originals/de/03/43/de0343ee9567968c2a83ee2ac60ad12f.jpg",
+  "https://i.pinimg.com/originals/d4/e8/a2/d4e8a25b2e1ee0fee61786b23d233003.jpg",
+  "https://i.pinimg.com/originals/3b/c9/74/3bc974ebcd496769bfb1d359aa082cf7.jpg",
+  "https://i.pinimg.com/originals/ec/11/aa/ec11aa7d046b778f87bea0958f776f8f.jpg",
+  "https://i.pinimg.com/originals/3b/c9/74/3bc974ebcd496769bfb1d359aa082cf7.jpg",
+];
 import { DEFAULT_GAME_SCHEMAS } from "../../database/legacyClient.js";
 function randomInteger(min, max) {
   let rand = min - 0.5 + Math.random() * (max - min + 1);
