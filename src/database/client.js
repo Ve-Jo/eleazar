@@ -2987,6 +2987,7 @@ class Database {
           guildId,
           xpStats: { [type]: 0 },
         },
+        levelUp: null,
       };
     }
 
@@ -3003,6 +3004,9 @@ class Database {
           },
         },
       });
+
+      // Get the current XP before adding more
+      const currentXp = existingLevel?.xp || 0n;
 
       // Update XP and season XP for the user
       const updatedLevel = await prisma.level.upsert({
@@ -3023,6 +3027,9 @@ class Database {
           seasonXp: { increment: amount },
         },
       });
+
+      // Check for level up
+      const levelUp = this.checkLevelUp(currentXp, updatedLevel.xp);
 
       // Check if stats record exists
       const existingStats = await prisma.statistics.findUnique({
@@ -3070,7 +3077,7 @@ class Database {
         });
       }
 
-      return { level: updatedLevel, stats };
+      return { level: updatedLevel, stats, levelUp, type: "chat" };
     });
   }
 
@@ -3089,6 +3096,7 @@ class Database {
           guildId,
           gameXpStats: { [gameType]: 0 },
         },
+        levelUp: null,
       };
     }
 
@@ -3106,6 +3114,9 @@ class Database {
           },
         },
       });
+
+      // Get the current game XP before adding more
+      const currentGameXp = existingLevel?.gameXp || 0n;
 
       // Update total game XP and season XP in Level model
       const level = await prisma.level.upsert({
@@ -3126,6 +3137,9 @@ class Database {
           seasonXp: { increment: amount }, // Also increment season XP
         },
       });
+
+      // Check for level up
+      const levelUp = this.checkLevelUp(currentGameXp, level.gameXp);
 
       // Check if stats record exists
       const existingStats = await prisma.statistics.findUnique({
@@ -3173,7 +3187,7 @@ class Database {
         });
       }
 
-      return { level, stats };
+      return { level, stats, levelUp, type: gameType };
     });
   }
 
@@ -3223,18 +3237,53 @@ class Database {
   }
 
   calculateLevel(xp) {
-    // Convert BigInt to number for calculations
     const xpNumber = typeof xp === "bigint" ? Number(xp) : xp;
-    const level = Math.floor(Math.sqrt(xpNumber / 100));
-    const currentLevelXP = Math.pow(level, 2) * 100;
-    const nextLevelXP = Math.pow(level + 1, 2) * 100;
 
-    return {
-      level: Math.max(1, level),
+    console.log(`calculateLevel input XP: ${xpNumber}`);
+
+    const level = Math.floor(Math.sqrt(xpNumber / 100)) + 1;
+    const currentLevelXP = Math.pow(level - 1, 2) * 100;
+    const nextLevelXP = Math.pow(level, 2) * 100;
+
+    const actualLevel = xpNumber < 100 ? 1 : level;
+
+    const result = {
+      level: actualLevel,
       currentXP: xpNumber - currentLevelXP,
       requiredXP: nextLevelXP - currentLevelXP,
       totalXP: xpNumber,
     };
+
+    console.log(`calculateLevel result: ${JSON.stringify(result)}`);
+
+    return result;
+  }
+
+  checkLevelUp(oldXp, newXp) {
+    const oldXpNumber = typeof oldXp === "bigint" ? Number(oldXp) : oldXp;
+    const newXpNumber = typeof newXp === "bigint" ? Number(newXp) : newXp;
+
+    // Calculate old level using the same formula
+    const oldLevelCalc = Math.floor(Math.sqrt(oldXpNumber / 100)) + 1;
+    const oldLevel = oldXpNumber < 100 ? 1 : oldLevelCalc;
+
+    // Calculate new level using the same formula
+    const newLevelCalc = Math.floor(Math.sqrt(newXpNumber / 100)) + 1;
+    const newLevel = newXpNumber < 100 ? 1 : newLevelCalc;
+
+    console.log(
+      `checkLevelUp: old XP ${oldXpNumber} (level ${oldLevel}), new XP ${newXpNumber} (level ${newLevel})`
+    );
+
+    if (newLevel > oldLevel) {
+      return {
+        oldLevel,
+        newLevel,
+        levelUp: true,
+      };
+    }
+
+    return null;
   }
 
   async savePlayer(player) {

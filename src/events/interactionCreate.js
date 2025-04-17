@@ -1,6 +1,7 @@
 import { Events, Collection } from "discord.js";
 import Database from "../database/client.js";
 import i18n from "../utils/newI18n.js";
+import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 // Cooldown collection for tracking command usage
 const cooldowns = new Collection();
@@ -129,6 +130,44 @@ export default {
 
       // Update user's last activity - with guild creation if needed
       await Database.ensureGuildUser(interaction.guild.id, interaction.user.id);
+
+      // Increment command count
+      await Database.incrementCommandCount(
+        interaction.guild.id,
+        interaction.user.id
+      );
+
+      // Add XP for using a command
+      // Get guild settings for XP amount per command
+      const guildSettings = await Database.client.guild.findUnique({
+        where: { id: interaction.guild.id },
+        select: { settings: true },
+      });
+
+      // Default XP per command is 5, can be customized in guild settings
+      const xpPerCommand = guildSettings?.settings?.xp_per_command || 5;
+
+      // Add XP and check for level-up
+      if (xpPerCommand > 0) {
+        const xpResult = await Database.addXP(
+          interaction.guild.id,
+          interaction.user.id,
+          xpPerCommand,
+          "chat"
+        );
+
+        // Handle level-up notification if user leveled up
+        if (xpResult.levelUp) {
+          await handleLevelUp(
+            interaction.client,
+            interaction.guild.id,
+            interaction.user.id,
+            xpResult.levelUp,
+            xpResult.type,
+            interaction.channel
+          );
+        }
+      }
     } catch (error) {
       console.error(`Error executing ${commandName}:`, error);
 

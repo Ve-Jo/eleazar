@@ -2,6 +2,7 @@ import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import i18n from "../utils/newI18n.js";
 import { generateImage } from "../utils/imageGenerator.js";
 import Database from "../database/client.js";
+import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 // Game state management for multi-user synchronization
 const activeGames = new Map();
@@ -222,12 +223,24 @@ export default {
 
               // Only add XP if there's something to add
               if (gameXP > 0) {
-                await Database.addGameXP(
+                const xpResult = await Database.addGameXP(
                   interaction.guildId,
                   interaction.user.id,
                   gameXP,
                   "snake"
                 );
+
+                // Handle level-up notification if the user leveled up
+                if (xpResult.levelUp) {
+                  await handleLevelUp(
+                    interaction.client,
+                    interaction.guildId,
+                    interaction.user.id,
+                    xpResult.levelUp,
+                    xpResult.type,
+                    interaction.channel
+                  );
+                }
               }
 
               // Only add earnings if there's something to add
@@ -400,12 +413,24 @@ export default {
 
             // Only add XP if there's something to add
             if (gameXP > 0) {
-              await Database.addGameXP(
+              const xpResult = await Database.addGameXP(
                 interaction.guildId,
                 interaction.user.id,
                 gameXP,
                 "snake"
               );
+
+              // Handle level-up notification if the user leveled up
+              if (xpResult.levelUp) {
+                await handleLevelUp(
+                  interaction.client,
+                  interaction.guildId,
+                  interaction.user.id,
+                  xpResult.levelUp,
+                  xpResult.type,
+                  interaction.channel
+                );
+              }
             }
 
             // Only add earnings if there's something to add

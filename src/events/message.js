@@ -1,6 +1,7 @@
 import { Events } from "discord.js";
 import Database from "../database/client.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
+import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 export default {
   name: Events.MessageCreate,
@@ -211,7 +212,26 @@ export default {
           },
         });
 
-        await Database.addXP(guild.id, author.id, xpPerMessage, "chat");
+        // Add XP and check for level-up
+        const xpResult = await Database.addXP(
+          guild.id,
+          author.id,
+          xpPerMessage,
+          "chat"
+        );
+
+        // Handle level-up notification if user leveled up
+        if (xpResult.levelUp) {
+          await handleLevelUp(
+            message.client,
+            guild.id,
+            author.id,
+            xpResult.levelUp,
+            xpResult.type,
+            channel
+          );
+        }
+
         await Database.updateCooldown(guild.id, author.id, "message");
         await Database.incrementMessageCount(guild.id, author.id);
       }
