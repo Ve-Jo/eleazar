@@ -32,6 +32,90 @@ class I18n {
       this.loadTranslations(locale);
     }
 
+    // Register level-up notification strings
+    this.registerNestedLocalizations(
+      "levelUp",
+      "",
+      {
+        chat: {
+          title: {
+            en: "Level Up!",
+            ru: "Повышение уровня!",
+            uk: "Підвищення рівня!",
+          },
+          description: {
+            en: "You've leveled up from {oldLevel} to {newLevel}!",
+            ru: "Вы повысили уровень с {oldLevel} до {newLevel}!",
+            uk: "Ви підвищили рівень з {oldLevel} до {newLevel}!",
+          },
+          footer: {
+            en: "Keep chatting to gain more XP!",
+            ru: "Продолжайте общаться, чтобы получить больше XP!",
+            uk: "Продовжуйте спілкуватися, щоб отримати більше XP!",
+          },
+        },
+        game: {
+          title: {
+            en: "Game Level Up!",
+            ru: "Повышение игрового уровня!",
+            uk: "Підвищення ігрового рівня!",
+          },
+          description: {
+            en: "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
+            ru: "Вы повысили свой игровой уровень с {oldLevel} до {newLevel}, играя в {game}!",
+            uk: "Ви підвищили свій ігровий рівень з {oldLevel} до {newLevel}, граючи в {game}!",
+          },
+          footer: {
+            en: "Keep playing games to gain more Game XP!",
+            ru: "Продолжайте играть, чтобы получить больше игрового XP!",
+            uk: "Продовжуйте грати, щоб отримати більше ігрового XP!",
+          },
+        },
+      },
+      true
+    );
+
+    // Add direct translation entries as fallback
+    const levelUpStrings = {
+      chat: {
+        title: {
+          en: "Level Up!",
+          ru: "Повышение уровня!",
+          uk: "Підвищення рівня!",
+        },
+        description: {
+          en: "You've leveled up from {oldLevel} to {newLevel}!",
+          ru: "Вы повысили уровень с {oldLevel} до {newLevel}!",
+          uk: "Ви підвищили рівень з {oldLevel} до {newLevel}!",
+        },
+        footer: {
+          en: "Keep chatting to gain more XP!",
+          ru: "Продолжайте общаться, чтобы получить больше XP!",
+          uk: "Продовжуйте спілкуватися, щоб отримати більше XP!",
+        },
+      },
+      game: {
+        title: {
+          en: "Game Level Up!",
+          ru: "Повышение игрового уровня!",
+          uk: "Підвищення ігрового рівня!",
+        },
+        description: {
+          en: "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
+          ru: "Вы повысили свой игровой уровень с {oldLevel} до {newLevel}, играя в {game}!",
+          uk: "Ви підвищили свій ігровий рівень з {oldLevel} до {newLevel}, граючи в {game}!",
+        },
+        footer: {
+          en: "Keep playing games to gain more Game XP!",
+          ru: "Продолжайте играть, чтобы получить больше игрового XP!",
+          uk: "Продовжуйте грати, щоб отримати більше ігрового XP!",
+        },
+      },
+    };
+
+    // Register the legacy levelUpStrings (now with the new structure)
+    this.registerNestedLocalizations("levelUp", "", levelUpStrings, true);
+
     this.initialized = true;
   }
 
@@ -370,6 +454,12 @@ class I18n {
    * @param {boolean} save - Whether to save to file
    */
   registerNestedLocalizations(category, path, obj, save) {
+    console.log(
+      `Registering nested localizations for category: ${category}, path: ${
+        path || "(root)"
+      }`
+    );
+
     for (const key in obj) {
       const value = obj[key];
 
@@ -383,18 +473,20 @@ class I18n {
           // Handle locale map
           for (const locale in value) {
             if (this.supportedLocales.includes(locale)) {
-              const translationKey = `${category}.${path}.${key}`;
+              // Build the translation key based on whether path is empty
+              const translationKey = path
+                ? `${category}.${path}.${key}`
+                : `${category}.${key}`;
+              console.log(
+                `Adding translation: ${locale}:${translationKey} = ${value[locale]}`
+              );
               this.addTranslation(locale, translationKey, value[locale]);
             }
           }
         } else {
-          // Recurse deeper
-          this.registerNestedLocalizations(
-            category,
-            `${path}.${key}`,
-            value,
-            save
-          );
+          // Recurse deeper with proper path joining
+          const nextPath = path ? `${path}.${key}` : key;
+          this.registerNestedLocalizations(category, nextPath, value, save);
         }
       }
     }
@@ -406,10 +498,49 @@ class I18n {
   clearCache() {
     this.translationCache.clear();
   }
+
+  /**
+   * Debug method to dump the translation table for a specific key
+   * @param {string} key - The translation key to debug
+   */
+  debugTranslations(key) {
+    console.log(`\n=== DEBUG TRANSLATIONS FOR KEY: ${key} ===`);
+
+    for (const locale of this.supportedLocales) {
+      const translation = this.getNestedValue(this.translations[locale], key);
+
+      if (translation !== undefined) {
+        if (typeof translation === "object") {
+          // For nested objects, show the structure
+          console.log(
+            `${locale} (object):`,
+            JSON.stringify(translation, null, 2)
+          );
+        } else {
+          // For direct strings, show the value
+          console.log(`${locale}: "${translation}"`);
+        }
+      } else {
+        // Try a direct translation lookup
+        const directTranslation = this.__(key, {}, locale);
+        if (directTranslation !== key) {
+          console.log(`${locale}: "${directTranslation}" (via __ method)`);
+        } else {
+          console.log(`${locale}: undefined`);
+        }
+      }
+    }
+
+    console.log(`=== END DEBUG ===`);
+    return this;
+  }
 }
 
 // Create and initialize a single instance
 const i18n = new I18n();
 i18n.initialize();
+
+// Debug the level-up translations after initialization
+i18n.debugTranslations("levelUp");
 
 export default i18n;
