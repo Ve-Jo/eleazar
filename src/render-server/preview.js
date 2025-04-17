@@ -99,46 +99,155 @@ process.on("SIGINT", () => {
 
 // Create i18n mock with translations
 function createI18nMock(lang, Component) {
-  return {
-    getLocale: () => lang,
-    __: (key) => {
+  const mockI18n = {
+    // Core i18n methods
+    getLocale: function () {
+      return lang;
+    },
+    setLocale: function (locale) {
+      console.log(`[PREVIEW] Setting locale to ${locale}`);
+      return locale;
+    },
+    __: function (key, replacements = {}) {
       try {
-        // Simple keys (no dots)
-        if (
-          Component.localization_strings &&
-          Component.localization_strings[key]
-        ) {
-          return (
-            Component.localization_strings[key][lang] ||
-            Component.localization_strings[key].en ||
-            key
-          );
+        // Handle nested keys with dot notation (e.g., "levelUp.chat.title")
+        const keyParts = key.split(".");
+
+        // Check if Component has localization_strings
+        if (Component && Component.localization_strings) {
+          // For simple keys directly in localization_strings
+          if (keyParts.length === 1 && Component.localization_strings[key]) {
+            const translation =
+              Component.localization_strings[key][lang] ||
+              Component.localization_strings[key].en ||
+              key;
+            return applyReplacements(translation, replacements);
+          }
+
+          // For nested keys
+          if (keyParts.length > 1) {
+            // Try to find the key in component's localization_strings
+            // First try the exact structure (e.g., levelUp.chat.title)
+            const firstKey = keyParts[0];
+            if (Component.localization_strings[firstKey]) {
+              let currentObj = Component.localization_strings[firstKey];
+
+              // Handle single-level nesting (most common case)
+              if (keyParts.length === 2 && typeof currentObj === "object") {
+                // Check if it's a direct language map
+                if (currentObj[lang] || currentObj.en) {
+                  return applyReplacements(
+                    currentObj[lang] || currentObj.en,
+                    replacements
+                  );
+                }
+
+                // Check if second part exists
+                const secondKey = keyParts[1];
+                if (currentObj[secondKey]) {
+                  const translation =
+                    currentObj[secondKey][lang] ||
+                    currentObj[secondKey].en ||
+                    key;
+                  return applyReplacements(translation, replacements);
+                }
+              }
+
+              // Handle multiple levels of nesting (e.g., levelUp.chat.title)
+              // This traverses deeper into the structure
+              for (let i = 1; i < keyParts.length; i++) {
+                if (currentObj && typeof currentObj === "object") {
+                  currentObj = currentObj[keyParts[i]];
+                } else {
+                  break;
+                }
+              }
+
+              // If we found a language map at the end
+              if (currentObj && (currentObj[lang] || currentObj.en)) {
+                return applyReplacements(
+                  currentObj[lang] || currentObj.en,
+                  replacements
+                );
+              }
+            }
+          }
         }
 
-        // Complex keys (with dots)
-        const [category, stringKey] = key.split(".");
-        if (
-          Component.localization_strings &&
-          Component.localization_strings[stringKey]
-        ) {
-          return (
-            Component.localization_strings[stringKey][lang] ||
-            Component.localization_strings[stringKey].en ||
-            key
-          );
-        }
-
-        return key;
+        // Fallback to returning the key itself
+        console.log(`Translation not found for key: ${key}`);
+        return applyReplacements(key, replacements);
       } catch (e) {
         console.error("Translation error:", e);
         return key;
       }
     },
+    // Helper methods
+    getTranslation: function (key, replacements = {}, locale = null) {
+      return this.__(key, replacements, locale || lang);
+    },
+    getNestedValue: function (obj, path) {
+      if (!obj || !path) return undefined;
+      const parts = path.split(".");
+      let current = obj;
+      for (const part of parts) {
+        if (current === undefined || current === null) return undefined;
+        current = current[part];
+      }
+      return current;
+    },
+    // Mock debug/registration functions
+    debugTranslations: function (key) {
+      console.log(`[PREVIEW] Debug translations for key: ${key}`);
+      return this;
+    },
+    registerLocalizations: function (category, name, localizations) {
+      console.log(
+        `[PREVIEW] Registering localizations for ${category}.${name}`
+      );
+      return this;
+    },
+    initialized: true,
+    supportedLocales: ["en", "ru", "uk"],
+    translations: {},
   };
+
+  return mockI18n;
+}
+
+// Helper function to apply replacements to translation strings
+function applyReplacements(text, replacements) {
+  if (!replacements || typeof replacements !== "object" || !text) {
+    return text;
+  }
+
+  let result = text;
+
+  // Process each replacement
+  for (const [key, value] of Object.entries(replacements)) {
+    // Skip undefined values
+    if (value === undefined) continue;
+
+    // Convert value to string
+    const stringValue = String(value);
+
+    // Replace {{key}} pattern (double braces)
+    const doublePattern = `{{${key}}}`;
+    result = result.replace(new RegExp(doublePattern, "g"), stringValue);
+
+    // Replace {key} pattern (single braces)
+    const singlePattern = `{${key}}`;
+    result = result.replace(new RegExp(singlePattern, "g"), stringValue);
+  }
+
+  return result;
 }
 
 // Function to create mockData with specified language
 async function createMockData(lang = "en", Component = null) {
+  // Create i18n mock for this component
+  const i18nMock = createI18nMock(lang, Component);
+
   // Mock data for Leaderboard component
   if (Component?.name === "Leaderboard") {
     const usernames = [
@@ -208,7 +317,7 @@ async function createMockData(lang = "en", Component = null) {
 
     return {
       locale: lang,
-      i18n: createI18nMock(lang, Component),
+      i18n: i18nMock,
       users: users.sort((a, b) => b.value - a.value),
       currentPage: 1,
       totalPages: 3,
@@ -226,11 +335,39 @@ async function createMockData(lang = "en", Component = null) {
     };
   }
 
+  // Mock data for LevelUp component
+  if (Component?.name === "LevelUp") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+        guild: {
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      // LevelUp specific properties
+      type: "chat", // chat or game
+      currentXP: 75,
+      requiredXP: 100,
+      level: 5,
+      oldLevel: 4,
+      dominantColor: "user",
+    };
+  }
+
   // Mock data for CratesDisplay component
   if (Component?.name === "CratesDisplay") {
     return {
       locale: lang,
-      i18n: createI18nMock(lang, Component),
+      i18n: i18nMock,
       interaction: {
         user: {
           id: "123456789",
@@ -296,7 +433,7 @@ async function createMockData(lang = "en", Component = null) {
   if (Component?.name === "CrateRewards") {
     return {
       locale: lang,
-      i18n: createI18nMock(lang, Component),
+      i18n: i18nMock,
       interaction: {
         user: {
           id: "123456789",
@@ -335,6 +472,7 @@ async function createMockData(lang = "en", Component = null) {
 
     return {
       locale: lang,
+      i18n: i18nMock,
       interaction: {
         user: {
           id: "123456789",
@@ -357,7 +495,6 @@ async function createMockData(lang = "en", Component = null) {
           bankStartTime: 25,
         },
       },
-      i18n: createI18nMock(lang, Component),
       amount: 250.5,
       // Add these properties to test different modes
       isDeposit: false,
@@ -370,6 +507,7 @@ async function createMockData(lang = "en", Component = null) {
   // Default mock data for other components
   return {
     locale: lang, // Add locale for imageGenerator
+    i18n: i18nMock, // Add the i18n mock object
     interaction: {
       user: {
         id: "123456789",
@@ -420,7 +558,6 @@ async function createMockData(lang = "en", Component = null) {
           .map(() => Math.floor(Math.random() * 100) + 1),
       },
     },
-    i18n: createI18nMock(lang, Component),
     currentSong: {
       title: "Example Song",
       artist: "Example Artist",
@@ -673,8 +810,9 @@ app.get("/:componentName", async (req, res) => {
       return res.status(404).send(`Component ${componentName} not found`);
     }
 
-    // Add special controls for Transfer component
+    // Add special controls for specific components
     let additionalControls = "";
+
     if (componentName === "Transfer") {
       additionalControls = `
         <div class="mode-controls">
@@ -682,6 +820,17 @@ app.get("/:componentName", async (req, res) => {
           <button class="mode-btn" data-mode="deposit" onclick="changeMode('deposit')">Deposit</button>
           <button class="mode-btn" data-mode="withdraw" onclick="changeMode('withdraw')">Withdraw</button>
           <button class="mode-btn active" data-mode="transfer" onclick="changeMode('transfer')">Transfer</button>
+        </div>
+      `;
+    }
+
+    // Add type toggle for LevelUp component
+    if (componentName === "LevelUp") {
+      additionalControls = `
+        <div class="type-controls">
+          <span>Type: </span>
+          <button class="type-btn active" data-type="chat" onclick="changeType('chat')">Chat</button>
+          <button class="type-btn" data-type="game" onclick="changeType('game')">Game</button>
         </div>
       `;
     }
@@ -724,6 +873,7 @@ app.get("/:componentName", async (req, res) => {
           let debugMode = storage.get('debugMode', 'false') === 'true';
           let currentMode = storage.get('transferMode', 'transfer');
           let darkTheme = storage.get('darkTheme', 'true') === 'true';
+          let currentType = storage.get('levelUpType', 'chat');
           
           function toggleDebug() {
             debugMode = !debugMode;
@@ -747,6 +897,25 @@ app.get("/:componentName", async (req, res) => {
               type: 'themeChange',
               component: '${componentName}',
               darkTheme: darkTheme
+            }));
+            
+            refreshImage();
+          }
+          
+          function changeType(type) {
+            if ('${componentName}' !== 'LevelUp') return;
+            
+            currentType = type;
+            storage.set('levelUpType', type);
+            document.querySelectorAll('.type-btn').forEach(btn => {
+              btn.classList.toggle('active', btn.dataset.type === type);
+            });
+            
+            // Notify server about type change
+            ws.send(JSON.stringify({
+              type: 'typeChange',
+              component: '${componentName}',
+              levelType: type
             }));
             
             refreshImage();
@@ -777,6 +946,10 @@ app.get("/:componentName", async (req, res) => {
             
             if ('${componentName}' === 'Transfer') {
               url += '&mode=' + currentMode;
+            }
+            
+            if ('${componentName}' === 'LevelUp') {
+              url += '&type=' + currentType;
             }
             
             url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light') + '&t=' + Date.now();
@@ -823,16 +996,34 @@ app.get("/:componentName", async (req, res) => {
 
           // Initialize on load
           window.onload = () => {
+            // Initialize language buttons
             document.querySelectorAll('.lang-btn').forEach(btn => {
               btn.classList.toggle('active', btn.dataset.lang === currentLang);
             });
-            document.getElementById('debugButton').classList.toggle('active', debugMode);
-            document.getElementById('themeButton').classList.toggle('active', darkTheme);
-            document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
             
+            // Initialize debug button
+            if (document.getElementById('debugButton')) {
+              document.getElementById('debugButton').classList.toggle('active', debugMode);
+            }
+            
+            // Initialize theme button
+            if (document.getElementById('themeButton')) {
+              document.getElementById('themeButton').classList.toggle('active', darkTheme);
+              document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
+            }
+            
+            // Initialize Transfer mode buttons if applicable
             if ('${componentName}' === 'Transfer') {
               document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === currentMode);
+              });
+            }
+            
+            // Initialize LevelUp type buttons if applicable
+            if ('${componentName}' === 'LevelUp') {
+              document.querySelectorAll('.type-btn').forEach(btn => {
+                console.log('Setting type button:', btn.dataset.type, currentType);
+                btn.classList.toggle('active', btn.dataset.type === currentType);
               });
             }
           };
@@ -920,6 +1111,27 @@ app.get("/:componentName", async (req, res) => {
             background: #673AB7;
             color: white;
           }
+          .type-controls {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+            align-items: center;
+          }
+          .type-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #e0e0e0;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .type-btn.active {
+            background: #2196F3;
+            color: white;
+          }
+          .type-btn[data-type="game"].active {
+            background: #1DB935;
+          }
           .dimensions {
             position: absolute;
             top: 0;
@@ -982,6 +1194,7 @@ app.get("/:componentName/image", async (req, res) => {
     const { componentName } = req.params;
     const lang = req.query.lang || "en";
     const mode = req.query.mode || "transfer"; // Get mode from query params
+    const type = req.query.type || "chat"; // Get type from query params for LevelUp
     const debug = req.query.debug === "true"; // Parse debug parameter
     const theme = req.query.theme || "dark"; // Get theme from query params
     const isDarkTheme = theme === "dark";
@@ -1002,8 +1215,9 @@ app.get("/:componentName/image", async (req, res) => {
     }
 
     console.log(
-      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, debug: ${debug}, theme: ${theme}`
+      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}`
     );
+
     // Generate image with mock props
     const mockData = await createMockData(lang, Component);
 
@@ -1019,6 +1233,11 @@ app.get("/:componentName/image", async (req, res) => {
         mockData.isDeposit = false;
         mockData.isTransfer = true;
       }
+    }
+
+    // Apply type settings for LevelUp component
+    if (componentName === "LevelUp" && mockData) {
+      mockData.type = type;
     }
 
     // Add debug flag to mockData
@@ -1048,14 +1267,72 @@ app.get("/:componentName/image", async (req, res) => {
           };
     }
 
-    const buffer = await generateImage(Component, mockData, {
-      image: 2,
-      emoji: 2,
-      debug: debug, // Pass debug flag to image generator
-    });
+    // Validate the i18n object
+    if (!mockData.i18n || typeof mockData.i18n.__ !== "function") {
+      console.error("Invalid i18n object in mockData:", mockData.i18n);
+      mockData.i18n = createI18nMock(lang, Component);
+    }
 
-    if (!buffer || !Buffer.isBuffer(buffer)) {
-      throw new Error("Generated image is invalid");
+    // Ensure there's an initialized flag
+    if (mockData.i18n) {
+      mockData.i18n.initialized = true;
+    }
+
+    let buffer;
+    try {
+      buffer = await generateImage(
+        Component,
+        mockData,
+        {
+          image: 2,
+          emoji: 2,
+          debug: debug, // Pass debug flag to image generator
+        },
+        mockData.i18n
+      );
+
+      if (!buffer || !Buffer.isBuffer(buffer)) {
+        throw new Error("Generated image is invalid");
+      }
+    } catch (renderError) {
+      console.error("Error generating image:", renderError);
+
+      // Create an error image with the error message
+      const errorMessage = renderError.message || "Unknown error";
+      const errorStack = renderError.stack || "";
+
+      try {
+        // Send a fallback error image
+        const { createCanvas } = await import("canvas");
+        const canvas = createCanvas(800, 400);
+        const ctx = canvas.getContext("2d");
+
+        // Fill background
+        ctx.fillStyle = "#FF0000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add error message
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "24px Arial";
+        ctx.fillText(`Error rendering component: ${componentName}`, 20, 40);
+        ctx.fillText(`Message: ${errorMessage.substring(0, 80)}`, 20, 80);
+
+        // Add small stack trace
+        ctx.font = "12px Arial";
+        const stackLines = errorStack.split("\n");
+        for (let i = 0; i < Math.min(stackLines.length, 8); i++) {
+          ctx.fillText(stackLines[i].substring(0, 100), 20, 120 + i * 20);
+        }
+
+        res.setHeader("Content-Type", "image/png");
+        const errorBuffer = canvas.toBuffer();
+        res.send(errorBuffer);
+        return;
+      } catch (canvasError) {
+        console.error("Error creating error image:", canvasError);
+        res.status(500).send(`Error rendering component: ${errorMessage}`);
+        return;
+      }
     }
 
     // Determine content type
@@ -1092,6 +1369,7 @@ wss.on("connection", (ws) => {
     mode: "transfer",
     debug: false,
     darkTheme: true,
+    levelType: "chat",
   });
 
   ws.on("message", (message) => {
@@ -1104,7 +1382,8 @@ wss.on("connection", (ws) => {
         data.type === "langChange" ||
         data.type === "modeChange" ||
         data.type === "debugChange" ||
-        data.type === "themeChange"
+        data.type === "themeChange" ||
+        data.type === "typeChange"
       ) {
         // Update which component, language, and mode this client is viewing
         const clientData = clients.get(ws);
@@ -1117,6 +1396,10 @@ wss.on("connection", (ws) => {
 
         if (data.mode) {
           clientData.mode = data.mode;
+        }
+
+        if (data.levelType) {
+          clientData.levelType = data.levelType;
         }
 
         if (data.type === "debugChange") {
@@ -1134,7 +1417,9 @@ wss.on("connection", (ws) => {
         console.log(
           `Client updated: component=${data.component}, lang=${
             clientData.lang
-          }, mode=${clientData.mode}, debug=${clientData.debug}, theme=${
+          }, mode=${clientData.mode}, levelType=${
+            clientData.levelType
+          }, debug=${clientData.debug}, theme=${
             clientData.darkTheme ? "dark" : "light"
           }`
         );
@@ -1152,6 +1437,11 @@ wss.on("connection", (ws) => {
         if (data.type === "modeChange") {
           console.log(`Mode changed to: ${data.mode}`);
           ws.send(JSON.stringify({ type: "modeChange" }));
+        }
+
+        if (data.type === "typeChange") {
+          console.log(`Type changed to: ${data.levelType}`);
+          ws.send(JSON.stringify({ type: "typeChange" }));
         }
       }
     } catch (e) {
