@@ -8,8 +8,12 @@ const GameLauncher = (props) => {
     highlightedGame = 0,
     highlightedCategory = 0,
     width = 750,
-    height = 450,
-    gameStats = { 2048: { highScore: 0 }, snake: { highScore: 0 } },
+    height = 500,
+    gameStats = {
+      2048: { highScore: 0 },
+      snake: { highScore: 0 },
+      rpg_clicker2: { highScore: 0 },
+    },
     coloring,
   } = props;
 
@@ -44,6 +48,18 @@ const GameLauncher = (props) => {
           id: "2048",
           title: "2048",
           emoji: "🎲",
+        },
+      ],
+    },
+    legacy: {
+      translationKey: "oldGamesCategory",
+      avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
+      games_list: [
+        {
+          id: "rpg_clicker2",
+          title: "RPG Clicker",
+          emoji: "⚔️",
+          isLegacy: true,
         },
       ],
     },
@@ -378,7 +394,7 @@ const GameLauncher = (props) => {
 
 GameLauncher.dimensions = {
   width: 750,
-  height: 450,
+  height: 500,
 };
 
 // Static translations object
@@ -397,6 +413,16 @@ GameLauncher.localization_strings = {
     en: "Record",
     ru: "Рекорд",
     uk: "Рекорд",
+  },
+  oldGamesCategory: {
+    en: "Legacy Games",
+    ru: "Старые игры",
+    uk: "Старі ігри",
+  },
+  specialForCategory: {
+    en: "Specially for Eleazar",
+    ru: "Специально для Eleazar",
+    uk: "Спеціально для Eleazar",
   },
 };
 
