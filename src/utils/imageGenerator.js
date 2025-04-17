@@ -594,15 +594,41 @@ export async function generateImage(
 
     // Provide i18n to the component
     if (formattedProps.locale) {
+      // Create a fallback i18n if none provided
+      const safeI18n = i18n || {
+        // Ensure all required methods are properly defined
+        setLocale: function (locale) {
+          return locale;
+        },
+        __: function (key) {
+          return key;
+        },
+        getLocale: function () {
+          return formattedProps.locale;
+        },
+        registerLocalizations: function () {
+          return null;
+        },
+        debugTranslations: function () {
+          return null;
+        },
+        getTranslation: function (key) {
+          return key;
+        },
+        getNestedValue: function (obj, path) {
+          return undefined;
+        },
+      };
+
       // Set the locale for i18n
-      i18n.setLocale(formattedProps.locale);
+      safeI18n.setLocale(formattedProps.locale);
 
       // Add the i18n instance to props
-      formattedProps.i18n = i18n;
+      formattedProps.i18n = safeI18n;
 
       // Add a helper function to get translations with component prefix
       formattedProps.t = (key) => {
-        return i18n.__(`components.${component}.${key}`);
+        return safeI18n.__(`components.${component}.${key}`);
       };
 
       console.log(

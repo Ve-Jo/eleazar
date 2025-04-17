@@ -6,8 +6,17 @@ const gamesCache = new Map();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- Default i18n object (basic fallback) ---
+const defaultI18n = {
+  getLocale: () => "en",
+  __: (key) => key, // Return the key itself
+  registerLocalizations: () => {},
+  has: (key) => false, // Add missing 'has' method to default i18n
+};
+// --------------------------------------------
+
 /**
- * Load all games from the games directory
+ * Load all games from the games directory, including ported legacy games.
  * @param {object} i18n - The i18n instance to use
  * @returns {Map} Map of games with their data
  */
@@ -23,62 +32,117 @@ export async function loadGames(i18n = defaultI18n) {
   }*/
 
   try {
-    // Get all game files
-    const gamesDir = path.join(__dirname, "../games");
-    const gameFiles = fs
-      .readdirSync(gamesDir)
-      .filter((file) => file.endsWith(".js"));
+    // Directories to scan for games
+    const gameDirs = [
+      path.join(__dirname, "../games"),
+      path.join(__dirname, "../games/ported"), // Add ported directory
+    ];
 
     // Create games map
     const games = new Map();
 
-    // Load each game
-    for (const file of gameFiles) {
-      const gameId = file.replace(".js", "");
+    // Load games from each directory
+    for (const gamesDir of gameDirs) {
+      if (!fs.existsSync(gamesDir)) {
+        console.warn(`[loadGames] Directory not found: ${gamesDir}`);
+        continue; // Skip if directory doesn't exist
+      }
 
-      try {
-        // Import game module
-        const gameModule = await import(`../games/${gameId}.js`);
+      const gameFiles = fs
+        .readdirSync(gamesDir)
+        .filter((file) => file.endsWith(".js"));
 
-        // Set up basic game info
-        const gameData = {
-          id: gameId,
-          title: gameId, // Default title
-          emoji: "🎮", // Default emoji
-          file: file,
-        };
+      for (const file of gameFiles) {
+        const gameId = file.replace(".js", "");
+        const gamePath = path.join(gamesDir, file);
+        const relativePath = path.relative(
+          path.join(__dirname, ".."),
+          gamePath
+        ); // Get path relative to src
 
-        if (gameModule.default) {
-          // Update with data from module
-          gameData.title = gameModule.default.title || gameId;
-          gameData.emoji = gameModule.default.emoji || "🎮";
+        // Avoid duplicates if a game exists in both dirs (though unlikely)
+        if (games.has(gameId)) continue;
 
-          // Register localizations if available
-          if (
-            gameModule.default.localization_strings &&
-            i18n &&
-            typeof i18n.registerLocalizations === "function"
-          ) {
-            i18n.registerLocalizations(
-              "games",
-              gameId,
-              gameModule.default.localization_strings
-            );
+        try {
+          // Import game module using the full path
+          const gameModule = await import(gamePath);
 
-            // Get localized title if available
-            if (gameModule.default.localization_strings.name) {
-              const localizedTitle = i18n.__(`games.${gameId}.name`);
-              if (localizedTitle !== "name") {
-                gameData.title = localizedTitle;
+          // Set up basic game info
+          const gameData = {
+            id: gameId,
+            title: gameId, // Default title
+            emoji: "🎮", // Default emoji
+            file: relativePath, // Store relative path
+            isLegacy: false, // Default legacy status
+          };
+
+          if (gameModule.default) {
+            // Update with data from module
+            gameData.title =
+              gameModule.default.title ||
+              gameModule.default?.game_info?.name ||
+              gameId;
+            gameData.emoji =
+              gameModule.default.emoji ||
+              gameModule.default?.game_info?.emoji ||
+              "🎮";
+            gameData.isLegacy = gameModule.default.isLegacy || false;
+            gameData.description =
+              gameModule.default.description ||
+              gameModule.default?.game_info?.description ||
+              "";
+
+            // Register localizations if available
+            if (
+              gameModule.default.localization_strings &&
+              i18n &&
+              typeof i18n.registerLocalizations === "function"
+            ) {
+              i18n.registerLocalizations(
+                "games",
+                gameId,
+                gameModule.default.localization_strings
+              );
+
+              // Get localized title if available
+              const localizedTitleKey = `games.${gameId}.name`;
+              if (
+                gameModule.default.localization_strings.name &&
+                typeof i18n.has === "function" &&
+                i18n.has(localizedTitleKey)
+              ) {
+                gameData.title = i18n.__(localizedTitleKey);
+              }
+              // Get localized description if available
+              const localizedDescKey = `games.${gameId}.description`;
+              if (
+                gameModule.default.localization_strings.description &&
+                typeof i18n.has === "function" &&
+                i18n.has(localizedDescKey)
+              ) {
+                gameData.description = i18n.__(localizedDescKey);
               }
             }
+            // Attempt to use game_info if localization_strings not present
+            else if (gameModule.default.game_info) {
+              gameData.title = gameModule.default.game_info.name || gameId;
+              gameData.emoji = gameModule.default.game_info.emoji || "🎮";
+              gameData.description =
+                gameModule.default.game_info.description || "";
+            }
           }
-        }
 
-        // Add to games map
-        games.set(gameId, gameData);
-      } catch (error) {
-        console.error(`Error loading game ${gameId}:`, error);
+          // Add to games map
+          games.set(gameId, gameData);
+          console.log(
+            `[loadGames] Loaded game: ${gameId} (Legacy: ${gameData.isLegacy})`
+          );
+        } catch (error) {
+          console.error(
+            `Error loading game ${gameId} from ${gamePath}:`,
+            error
+          );
+        }
       }
     }
 
@@ -102,11 +166,23 @@ export function clearGamesCache() {
  * Get a specific game module
  * @param {string} gameId - The game ID to load
  * @param {object} i18n - The i18n instance to use
- * @returns {Promise<object>} The game module
+ * @returns {Promise<object|null>} The game module or null on error
  */
 export async function getGameModule(gameId, i18n) {
   try {
-    const gamePath = path.join(__dirname, "..", "games", `${gameId}.js`);
+    // First try to get the game module from standard games folder
+    let gamePath = path.join(__dirname, "..", "games", `${gameId}.js`);
+
+    // If not found, check if it's in the ported directory
+    if (!fs.existsSync(gamePath)) {
+      gamePath = path.join(__dirname, "..", "games", "ported", `${gameId}.js`);
+      if (!fs.existsSync(gamePath)) {
+        console.error(`Game file not found for ${gameId}`);
+        return null;
+      }
+    }
+
+    console.log(`[getGameModule] Importing game module from: ${gamePath}`);
     const gameModule = await import(gamePath);
 
     // If no game module or invalid format, return null
