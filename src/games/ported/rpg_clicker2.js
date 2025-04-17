@@ -1,4 +1,3 @@
-import legacyDb from "../../database/legacyClient.js";
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -632,8 +631,7 @@ export default {
             data.class_stats.mana < data.class_stats.mana_max / 4 &&
             data.class_stats.mana !== 0
           ) {
-            activities =
-              activities + `\n\` 🔮 Мало маны! \` У вас меньше четверти маны!`;
+            activities.push(`\` 🔮 Мало маны! \` У вас меньше четверти маны!`);
           }
           if (
             data.class_stats.arrows < data.class_stats.arrows / 8 &&
