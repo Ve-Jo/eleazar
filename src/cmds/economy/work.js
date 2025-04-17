@@ -8,6 +8,7 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
+import legacyDb from "../../database/legacyClient.js"; // Import legacy client
 import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames, getGameModule } from "../../utils/loadGames.js";
 
@@ -29,6 +30,10 @@ export default {
             {
               name: "2048",
               value: "2048",
+            },
+            {
+              name: "rpg_clicker2",
+              value: "rpg_clicker2",
             }
           )
       );
@@ -127,7 +132,16 @@ export default {
         gamesArray.map((g) => `${g.id}: "${g.title}"`)
       );
 
-      if (gamesArray.length === 0) {
+      // Add legacy RPG Clicker game manually
+      gamesMap.set("rpg_clicker2", {
+        id: "rpg_clicker2",
+        title: "RPG Clicker",
+        emoji: "⚔️",
+        file: "../games/ported/rpg_clicker2.js",
+        isLegacy: true,
+      });
+
+      if (gamesMap.size === 0) {
         throw new Error("No games found");
       }
 
@@ -165,15 +179,31 @@ export default {
         interaction.user.id
       );
 
+      // Filter out rpg_clicker2 from the gamesArray to avoid duplication
+      const legacyGamesArray = gamesArray.filter((game) => game.isLegacy);
+      const specialCategoryGamesArray = gamesArray.filter(
+        (game) => !game.isLegacy
+      );
+
       const games = {
         [i18n.__("commands.economy.work.specialForCategory")]: {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
             size: 1024,
           }),
-          games_list: gamesArray.map((game) => ({
+          games_list: specialCategoryGamesArray.map((game) => ({
             ...game,
             highScore: gameRecords[game.id]?.highScore || 0,
+          })),
+        },
+        [i18n.__("commands.economy.work.oldGamesCategory")]: {
+          avatar: interaction.client.user.displayAvatarURL({
+            extension: "png",
+            size: 1024,
+          }),
+          games_list: legacyGamesArray.map((game) => ({
+            ...game,
+            highScore: "-",
           })),
         },
       };
@@ -320,8 +350,9 @@ export default {
         const normalizedInteractionLocale = interactionLocale
           .split("-")[0]
           .toLowerCase();
+        // No need to set i18n locale here, it should be handled by middleware or initial setup
         console.log(
-          `[work-collect] Setting locale to ${normalizedInteractionLocale} for interaction`
+          `[work-collect] Handling interaction with locale ${normalizedInteractionLocale}`
         );
 
         const categoryNames = Object.keys(games);
@@ -369,31 +400,47 @@ export default {
               content: i18n.__(`commands.economy.work.gameNotFound`),
               ephemeral: true,
             });
-
             return;
           }
 
           selectedGame = game.id;
           console.log(
-            `[work-collect] Selected game ${game.id}: "${game.title}"`
+            `[work-collect] Selected game ${game.id}: "${game.title}" (Legacy: ${game.isLegacy})`
           );
 
           // Remove components before starting game
           await i.update({ components: [] });
 
           try {
-            // Import and execute the game module
-            console.log(`[work-collect] Loading game module: ${game.id}`);
-            // Use getGameModule to get the game with enhanced i18n support
+            // Load the game module using the stored relative file path
+            console.log(
+              `[work-collect] Loading game module: ${game.id} from ${game.file}`
+            );
             const gameModule = await getGameModule(game.id, i18n);
-            if (!gameModule?.default) {
-              throw new Error(`Game module ${game.id} not found or invalid`);
+
+            if (!gameModule?.default?.execute) {
+              // Check if execute function exists
+              throw new Error(
+                `Game module ${game.id} missing execute function`
+              );
             }
 
-            await gameModule.default.execute(i, i18n);
+            // Execute based on legacy status
+            if (game.isLegacy) {
+              console.log(`[work-collect] Executing legacy game: ${game.id}`);
+              // Assuming legacy game execute signature is (client, message)
+              // We need to adapt or pass legacyDb somehow.
+              // Let's pass interaction and legacyDb for now.
+              // IMPORTANT: The legacy game file rpg_clicker2.js needs modification
+              // to accept (interaction, legacyDb) and use legacyDb for db calls.
+              await gameModule.default.execute(i, legacyDb); // Pass interaction and legacy DB
+            } else {
+              console.log(`[work-collect] Executing standard game: ${game.id}`);
+              await gameModule.default.execute(i, i18n); // Standard execution
+            }
           } catch (error) {
             console.error(`Error executing game ${game.id}:`, error);
-
+            // Use followUp as update was already sent to remove components
             await i.followUp({
               content: i18n.__(`commands.economy.work.gameError`, {
                 game: game.title,
