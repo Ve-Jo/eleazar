@@ -1092,5 +1092,23 @@
       "title": "Змейка",
       "score": "Счет:"
     }
+  },
+  "levelUp": {
+    "chatLevelUp": "Повышение уровня!",
+    "chatLevelUpDesc": "Вы повысили уровень с {oldLevel} до {newLevel}!",
+    "chatLevelUpFooter": "Продолжайте общаться, чтобы получить больше XP!",
+    "gameLevelUp": "Повышение игрового уровня!",
+    "gameLevelUpDesc": "Вы повысили свой игровой уровень с {oldLevel} до {newLevel}, играя в {game}!",
+    "gameLevelUpFooter": "Продолжайте играть, чтобы получить больше игрового XP!",
+    "chat": {
+      "title": "Повышение уровня!",
+      "description": "Вы повысили уровень с {oldLevel} до {newLevel}!",
+      "footer": "Продолжайте общаться, чтобы получить больше XP!"
+    },
+    "game": {
+      "title": "Повышение игрового уровня!",
+      "description": "Вы повысили свой игровой уровень с {oldLevel} до {newLevel}, играя в {game}!",
+      "footer": "Продолжайте играть, чтобы получить больше игрового XP!"
+    }
   }
 }

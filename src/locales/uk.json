@@ -1092,5 +1092,23 @@
       "title": "Змійка",
       "score": "Рахунок:"
     }
+  },
+  "levelUp": {
+    "chatLevelUp": "Підвищення рівня!",
+    "chatLevelUpDesc": "Ви підвищили рівень з {oldLevel} до {newLevel}!",
+    "chatLevelUpFooter": "Продовжуйте спілкуватися, щоб отримати більше XP!",
+    "gameLevelUp": "Підвищення ігрового рівня!",
+    "gameLevelUpDesc": "Ви підвищили свій ігровий рівень з {oldLevel} до {newLevel}, граючи в {game}!",
+    "gameLevelUpFooter": "Продовжуйте грати, щоб отримати більше ігрового XP!",
+    "chat": {
+      "title": "Підвищення рівня!",
+      "description": "Ви підвищили рівень з {oldLevel} до {newLevel}!",
+      "footer": "Продовжуйте спілкуватися, щоб отримати більше XP!"
+    },
+    "game": {
+      "title": "Підвищення ігрового рівня!",
+      "description": "Ви підвищили свій ігровий рівень з {oldLevel} до {newLevel}, граючи в {game}!",
+      "footer": "Продовжуйте грати, щоб отримати більше ігрового XP!"
+    }
   }
 }

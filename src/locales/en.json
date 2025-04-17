@@ -776,5 +776,23 @@
       "title": "Snake",
       "score": "Score:"
     }
+  },
+  "levelUp": {
+    "chatLevelUp": "Level Up!",
+    "chatLevelUpDesc": "You've leveled up from {oldLevel} to {newLevel}!",
+    "chatLevelUpFooter": "Keep chatting to gain more XP!",
+    "gameLevelUp": "Game Level Up!",
+    "gameLevelUpDesc": "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
+    "gameLevelUpFooter": "Keep playing games to gain more Game XP!",
+    "chat": {
+      "title": "Level Up!",
+      "description": "You've leveled up from {oldLevel} to {newLevel}!",
+      "footer": "Keep chatting to gain more XP!"
+    },
+    "game": {
+      "title": "Game Level Up!",
+      "description": "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
+      "footer": "Keep playing games to gain more Game XP!"
+    }
   }
 }
