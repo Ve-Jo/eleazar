@@ -31,6 +31,7 @@ model User {
   Level     Level?
   VoiceSession VoiceSession?
   crates    Crate[]    // Add relation to Crates
+  legacyGameData LegacyGameData[] // Add relation to LegacyGameData
 
   // Make the primary key a composite of guildId and id
   @@id([guildId, id])
@@ -198,4 +199,20 @@ model Crate {
   @@unique([userId, guildId, type])
   @@index([type])
   @@map("crates")
+}
+
+// New model for legacy game data
+model LegacyGameData {
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  gameId  String @map("game_id") // Identifier for the legacy game (e.g., "rpg_clicker2")
+  data    Json   @default("{}") // Stores the game data in its original JSON format
+
+  // Relations - reference the composite key
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+
+  @@unique([userId, guildId, gameId]) // Ensure unique data per user, guild, and game
+  @@index([gameId])
+  @@map("legacy_game_data")
 }
