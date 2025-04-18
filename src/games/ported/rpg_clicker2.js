@@ -199,7 +199,7 @@ export default {
 
           let data = await client.fdb.get(`${key}`, "rpg_clicker2", true);
 
-          if (data.global_mob.here == 0) {
+          if (data?.global_mob?.here == 0) {
             var chance = Math.floor(randomInteger(0, 20));
 
             var first_name = [
@@ -248,9 +248,9 @@ export default {
               "Стань могущественным повелителем в этих адских землях!"
             );
 
-          if (data.global_mob.health <= 0 && data.global_mob.here === 1) {
+          if (data?.global_mob?.health <= 0 && data?.global_mob?.here === 1) {
             await client.fdb.set(`${key}.global_mob.here`, 0, "rpg_clicker2");
-            if (data.user.home === 2) {
+            if (data?.user?.home === 2) {
               await client.fdb.set(`${key}.user.home`, 0, "rpg_clicker2");
               await client.fdb.set(`${key}.mob_dead`, 1, "rpg_clicker2");
             }
@@ -330,8 +330,8 @@ export default {
             client.db.delete(`${key}.mana`);
           }
 
-          if (data?.global_mob.health_max === data?.global_mob.health) {
-            if (data.global_mob.here == 1) {
+          if (data?.global_mob?.health_max === data?.global_mob?.health) {
+            if (data?.global_mob?.here == 1) {
               activities.push(
                 "` 🗺️ ОБЬЯВЛЕН БОСС! ` Вы можете попробовать с ним сразиться.\n"
               );
@@ -353,26 +353,26 @@ export default {
           }
 
           if (
-            !data.location.wallpaper_link ||
-            data.location.wallpaper_link == null
+            !data?.location?.wallpaper_link ||
+            data?.location?.wallpaper_link == null
           ) {
             await random_rpg_image();
           }
 
           if (
-            data.location.distance_to == 0 ||
-            data.location.fixed_distance >= data.location.distance_to
+            data?.location?.distance_to == 0 ||
+            data?.location?.fixed_distance >= data?.location?.distance_to
           ) {
             await client.fdb.set(`${key}.location.name`, "Дремущий лес");
             await client.fdb.inc(`${key}.location.level`, 1, "rpg_clicker2");
             let fixer = NaN;
-            if (2.5 - data.location.level / 5 < 1) {
+            if (2.5 - data?.location?.level / 5 < 1) {
               fixer = 1.2;
             }
             await client.fdb.set(
               `${key}.location.distance_to`,
-              data.location.distance_to *
-                (fixer || 2.5 - data.location.level / 5)
+              data?.location?.distance_to *
+                (fixer || 2.5 - data?.location?.level / 5)
             );
             activities.push(
               `\` 🗺️ ВНИМАНИЕ! \` Уровень мира повышен! Мобы стали сильнее!\n\` 💰 \` Прибыль за убийства мобов увеличена!\n`
@@ -4078,8 +4078,7 @@ export default {
             case "rpg2_home_phone": {
               if (data.user.mobile === 0) {
                 await client.fdb.set(`${key}.user.mobile`, 1);
-              }
-              if (data.user.mobile === 1) {
+              } else if (data.user.mobile === 1) {
                 await client.fdb.set(`${key}.user.mobile`, 0);
               }
               break;

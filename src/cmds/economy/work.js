@@ -168,8 +168,14 @@ export default {
           return;
         }
 
-        // Execute the game - enhanced i18n is already injected
-        await gameModule.default.execute(interaction, i18n);
+        // Execute the game - handle legacy vs non-legacy
+        if (gameModule.default.isLegacy) {
+          // Pass legacy DB for legacy games
+          await gameModule.default.execute(interaction, legacyDb);
+        } else {
+          // Pass i18n for non-legacy games
+          await gameModule.default.execute(interaction, i18n);
+        }
         return;
       }
 

@@ -126,6 +126,109 @@ export const DEFAULT_GAME_SCHEMAS = {
       regeneration: 0,
     },
   },
+  mining2: {
+    player: {
+      username: null,
+      id: null,
+      status: "playing",
+      x: 0,
+      y: 0,
+      health: 100,
+      health_max: 100,
+      health_regen_speed: 0.01,
+      blocks_broken: 0,
+      attack_damage: 5,
+      pickaxe: "stone",
+      pickaxe_damage: 1,
+      pickaxe_durability: 50,
+      pickaxe_durability_max: 50,
+      level: 1,
+      xp: 0,
+      xp_needed: 100,
+      coins: 0,
+      place_cooldown: 0,
+      place_cooldown_max: 10,
+      active_item: 1,
+      inventory: [],
+      travelling: false,
+      travelling_progress: 0,
+      travelling_to: 0,
+      shop_cooldown: 0,
+      shop_cooldown_max: 5,
+      area_unlocked: 1,
+      cooldown: 0,
+      cooldown_max: 0.5,
+      stats: {
+        coins_spent: 0,
+        blocks_placed: 0,
+        blocks_broken: 0,
+        mobs_killed: 0,
+        deaths: 0,
+        total_travelling_distance: 0,
+        playtime: 0,
+      },
+      upgrades: {
+        health: 1,
+        damage: 1,
+        pickaxe_durability: 1,
+        cooldown: 1,
+        shop_cooldown: 1,
+        place_cooldown: 1,
+        inventory_slots: 1,
+      },
+    },
+    visible_area: {
+      area: 1,
+      x: 0,
+      y: 0,
+      width: 11,
+      height: 11,
+    },
+    money: 0,
+    inventory: { size: 0 },
+    tools_inventory: { size: 0 },
+    shopping: {
+      status: 0,
+      page: 0,
+    },
+    tools: {
+      sword: {
+        durability: 50,
+        durability_max: 50,
+        damage: 5,
+      },
+      vision: {
+        number: 11,
+      },
+      backpack: {
+        size: 10,
+      },
+      tools_backpack: {
+        size: 5,
+      },
+    },
+    selected_block: {},
+    custom_block: {},
+    custom_textures: [],
+    blocks: [],
+    mobs: [],
+    destroyed: [],
+    placed: {},
+    destroying: {
+      mob: 0,
+      x: 0,
+      y: 0,
+      points: 0,
+      points_max: 0,
+    },
+    modificators: {
+      mobs_health: 1,
+    },
+    other: {
+      latest_message_id: 0,
+      latest_starting: 0,
+    },
+  },
 };
 
 // In-memory cache for when DB operations fail
@@ -140,6 +243,33 @@ const safeJsonParse = (jsonString, defaultValue = {}) => {
     return defaultValue;
   }
 };
+
+// Add this helper function for safe JSON serialization
+function safeParse(obj) {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+
+  const seen = new WeakSet();
+
+  function replacer(key, value) {
+    if (key === "") return value; // Initial call
+
+    if (value === null || typeof value !== "object") {
+      return value;
+    }
+
+    if (seen.has(value)) {
+      return "[Circular Reference]";
+    }
+
+    seen.add(value);
+    return value;
+  }
+
+  // Use the replacer function to handle circular structures
+  return JSON.parse(JSON.stringify(obj, replacer));
+}
 
 /**
  * Fetches or creates the legacy game data record for a specific user and game.
@@ -180,8 +310,19 @@ async function getLegacyGameData(guildId, userId, gameId) {
       const defaultData = DEFAULT_GAME_SCHEMAS[gameId] || {};
 
       try {
-        legacyData = await prisma.legacyGameData.create({
-          data: {
+        // Try to upsert instead of just creating - this prevents unique constraint errors
+        legacyData = await prisma.legacyGameData.upsert({
+          where: {
+            userId_guildId_gameId: {
+              userId,
+              guildId,
+              gameId,
+            },
+          },
+          update: {
+            data: JSON.stringify(defaultData), // Update with default if it exists
+          },
+          create: {
             userId,
             guildId,
             gameId,
@@ -191,15 +332,42 @@ async function getLegacyGameData(guildId, userId, gameId) {
         });
 
         console.log(
-          `Created new legacy game data for ${gameId} (${guildId}/${userId})`
+          `Created/updated legacy game data for ${gameId} (${guildId}/${userId})`
         );
-      } catch (createError) {
-        console.error("Error creating legacy game data:", createError);
+      } catch (upsertError) {
+        console.error("Error upserting legacy game data:", upsertError);
 
-        // If DB creation fails, use default data and cache it in memory
-        const defaultData = DEFAULT_GAME_SCHEMAS[gameId] || {};
-        memoryCache.set(cacheKey, defaultData);
-        return defaultData;
+        // If operation fails, try one more approach
+        try {
+          // Maybe the record was created in between our check and create attempt
+          // Try to get it again
+          legacyData = await prisma.legacyGameData.findUnique({
+            where: {
+              userId_guildId_gameId: {
+                userId,
+                guildId,
+                gameId,
+              },
+            },
+            select: { data: true },
+          });
+
+          if (!legacyData) {
+            // If still not found, use default data and cache it in memory
+            const defaultData = DEFAULT_GAME_SCHEMAS[gameId] || {};
+            memoryCache.set(cacheKey, defaultData);
+            return defaultData;
+          }
+        } catch (retryError) {
+          console.error(
+            "Error retrying to fetch legacy game data:",
+            retryError
+          );
+          // If DB operations completely fail, use default data and cache it in memory
+          const defaultData = DEFAULT_GAME_SCHEMAS[gameId] || {};
+          memoryCache.set(cacheKey, defaultData);
+          return defaultData;
+        }
       }
     }
 
@@ -236,58 +404,26 @@ async function setLegacyGameData(guildId, userId, gameId, data) {
   const cacheKey = `${guildId}:${userId}:${gameId}`;
 
   try {
-    // Always update the memory cache first for immediate access
-    memoryCache.set(cacheKey, data);
+    // Use the safe serializer to handle circular references
+    const safeData = safeParse(data);
 
-    // Check if record exists first
-    let exists;
-    try {
-      exists = await prisma.legacyGameData.findUnique({
-        where: {
-          userId_guildId_gameId: { userId, guildId, gameId },
-        },
-        select: { id: true },
-      });
-    } catch (findError) {
-      console.error("Error checking if legacy game data exists:", findError);
-      // Return true because we've already updated the memory cache
-      return true;
-    }
-
-    try {
-      if (exists) {
-        // Update existing record
-        await prisma.legacyGameData.update({
-          where: {
-            userId_guildId_gameId: { userId, guildId, gameId },
-          },
-          data: {
-            data: JSON.stringify(data), // Store as JSON string
-          },
-        });
-      } else {
-        // Create a new record
-        await prisma.legacyGameData.create({
-          data: {
-            userId,
-            guildId,
-            gameId,
-            data: JSON.stringify(data || DEFAULT_GAME_SCHEMAS[gameId] || {}),
-          },
-        });
-      }
-    } catch (dbError) {
-      console.error("Error saving legacy game data to database:", dbError);
-      // Return true because we've already updated the memory cache
-      return true;
-    }
-
+    await prisma.legacyGameData.upsert({
+      where: {
+        userId_guildId_gameId: { userId, guildId, gameId },
+      },
+      update: {
+        data: JSON.stringify(safeData || DEFAULT_GAME_SCHEMAS[gameId] || {}),
+      },
+      create: {
+        userId,
+        guildId,
+        gameId,
+        data: JSON.stringify(safeData || DEFAULT_GAME_SCHEMAS[gameId] || {}),
+      },
+    });
     return true;
   } catch (error) {
-    console.error(
-      `Error setting legacy game data for ${gameId} (${guildId}/${userId}):`,
-      error
-    );
+    console.error("Error upserting legacy game data to database:", error);
     return false;
   }
 }
@@ -323,24 +459,49 @@ async function getLegacyValue(
  * @returns {Promise<boolean>} Success status.
  */
 async function setLegacyValue(guildId, userId, gameId, key, value) {
+  console.log(
+    `Setting ${gameId} value at path: ${key} = ${JSON.stringify(value)}`
+  );
+
   // Get current data from cache if possible
   const cacheKey = `${guildId}:${userId}:${gameId}`;
-  const cachedData = memoryCache.get(cacheKey);
 
-  let data;
-  if (cachedData) {
-    // Use cached data if available
-    data = cachedData;
-  } else {
-    // Otherwise fetch from database
-    data = await getLegacyGameData(guildId, userId, gameId);
-  }
+  // Always get the full data to ensure we work with latest
+  let data = await getLegacyGameData(guildId, userId, gameId);
 
   // Update the value
   _.set(data, key, value);
 
+  // Update memory cache immediately
+  memoryCache.set(cacheKey, data);
+
   // Save the updated data
-  return setLegacyGameData(guildId, userId, gameId, data);
+  try {
+    // Use the safe serializer to handle circular references
+    const safeData = safeParse(data);
+
+    const updated = await prisma.legacyGameData.upsert({
+      where: {
+        userId_guildId_gameId: { userId, guildId, gameId },
+      },
+      update: {
+        data: JSON.stringify(safeData || DEFAULT_GAME_SCHEMAS[gameId] || {}),
+      },
+      create: {
+        userId,
+        guildId,
+        gameId,
+        data: JSON.stringify(safeData || DEFAULT_GAME_SCHEMAS[gameId] || {}),
+      },
+    });
+
+    console.log(`Database updated for ${gameId}, path: ${key}`);
+    return true;
+  } catch (error) {
+    console.error(`Error setting ${gameId} value at ${key}:`, error);
+    // Still return true because memory cache was updated
+    return true;
+  }
 }
 
 /**
