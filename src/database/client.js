@@ -83,7 +83,7 @@ export const UPGRADES = {
     category: "economy",
   },
   daily_cooldown: {
-    emoji: "⏱️",
+    emoji: "⏳",
     basePrice: 50,
     priceMultiplier: 1.4,
     effectValue: 30 * 60 * 1000, // 30 minutes reduction per level
