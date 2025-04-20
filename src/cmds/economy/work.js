@@ -34,6 +34,18 @@ export default {
             {
               name: "rpg_clicker2",
               value: "rpg_clicker2",
+            },
+            /*{
+              name: "mining2",
+              value: "mining2",
+            },*/
+            {
+              name: "coinflip",
+              value: "coinflip",
+            },
+            {
+              name: "tower",
+              value: "tower",
             }
           )
       );
@@ -64,15 +76,20 @@ export default {
         },
       },
     },
-    specialForCategory: {
-      en: "Specially for Eleazar",
-      ru: "Специально для Eleazar",
-      uk: "Спеціально для Eleazar",
+    standardGamesCategory: {
+      en: "Standard Games",
+      ru: "Обычные Игры",
+      uk: "Звичайні Ігри",
+    },
+    riskyGamesCategory: {
+      en: "Risky Games",
+      ru: "Рискованные Игры",
+      uk: "Ризиковані Ігри",
     },
     oldGamesCategory: {
-      en: "Our old games",
-      ru: "Наши старые игры",
-      uk: "Наші старі ігри",
+      en: "Legacy Games",
+      ru: "Старые Игры",
+      uk: "Старі Ігри",
     },
     title: {
       en: "Game Selection",
@@ -185,38 +202,87 @@ export default {
         interaction.user.id
       );
 
-      // Filter out rpg_clicker2 from the gamesArray to avoid duplication
-      const legacyGamesArray = gamesArray.filter((game) => game.isLegacy);
-      const specialCategoryGamesArray = gamesArray.filter(
-        (game) => !game.isLegacy
+      // Filter games into categories
+      const standardGamesArray = gamesArray.filter(
+        (game) =>
+          !game.isLegacy &&
+          !game.file.startsWith("games/risky/") &&
+          !game.file.startsWith("games/ported/") // Ensure ported are not standard
+      );
+      const riskyGamesArray = gamesArray.filter((game) =>
+        game.file.startsWith("games/risky/")
+      );
+      const legacyGamesArray = gamesArray.filter(
+        (game) => game.isLegacy || game.file.startsWith("games/ported/")
       );
 
-      const games = {
-        [i18n.__("commands.economy.work.specialForCategory")]: {
+      // Use translated category names
+      const standardCategoryName = i18n.__(
+        "commands.economy.work.standardGamesCategory"
+      );
+      const riskyCategoryName = i18n.__(
+        "commands.economy.work.riskyGamesCategory"
+      );
+      const legacyCategoryName = i18n.__(
+        "commands.economy.work.oldGamesCategory"
+      );
+
+      const games = {};
+
+      // Add categories only if they have games
+      if (standardGamesArray.length > 0) {
+        games[standardCategoryName] = {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
             size: 1024,
           }),
-          games_list: specialCategoryGamesArray.map((game) => ({
+          games_list: standardGamesArray.map((game) => ({
             ...game,
             highScore: gameRecords[game.id]?.highScore || 0,
           })),
-        },
-        [i18n.__("commands.economy.work.oldGamesCategory")]: {
+        };
+      }
+
+      if (riskyGamesArray.length > 0) {
+        games[riskyCategoryName] = {
+          avatar: interaction.client.user.displayAvatarURL({
+            extension: "png",
+            size: 1024,
+          }),
+          games_list: riskyGamesArray.map((game) => ({
+            ...game,
+            // Risky games might not track high score in the same way, adjust if needed
+            highScore: gameRecords[game.id]?.highScore || "-", // Or keep 0
+          })),
+        };
+      }
+
+      if (legacyGamesArray.length > 0) {
+        games[legacyCategoryName] = {
           avatar: interaction.client.user.displayAvatarURL({
             extension: "png",
             size: 1024,
           }),
           games_list: legacyGamesArray.map((game) => ({
             ...game,
-            highScore: "-",
+            highScore: "-", // Legacy games might not have scores tracked
           })),
-        },
-      };
+        };
+      }
+
+      // Handle case where no games are categorized (shouldn't happen if loadGames works)
+      if (Object.keys(games).length === 0) {
+        console.warn("[work] No games were categorized.");
+        await interaction.editReply({
+          content: i18n.__("commands.economy.work.noGamesAvailable"),
+          ephemeral: true,
+        });
+        return;
+      }
 
       let selectedGame = null;
       let highlightedGame = 0;
-      let currentCategory = 0;
+      let currentCategory = 0; // Index of the current category
 
       // Store current game records to avoid fetching again
       let currentGameRecords = gameRecords;
@@ -411,11 +477,11 @@ export default {
 
           selectedGame = game.id;
           console.log(
-            `[work-collect] Selected game ${game.id}: "${game.title}" (Legacy: ${game.isLegacy})`
+            `[work-collect] Selected game ${game.id}: \"${game.title}\" (Legacy: ${game.isLegacy})`
           );
 
-          // Remove components before starting game
-          await i.update({ components: [] });
+          // Defer the update instead of sending a full update
+          await i.deferUpdate();
 
           try {
             // Load the game module using the stored relative file path
@@ -439,10 +505,12 @@ export default {
               // Let's pass interaction and legacyDb for now.
               // IMPORTANT: The legacy game file rpg_clicker2.js needs modification
               // to accept (interaction, legacyDb) and use legacyDb for db calls.
-              await gameModule.default.execute(i, legacyDb); // Pass interaction and legacy DB
+              await gameModule.default.execute(interaction, legacyDb); // Pass interaction and legacy DB
             } else {
               console.log(`[work-collect] Executing standard game: ${game.id}`);
-              await gameModule.default.execute(i, i18n); // Standard execution
+              // For non-legacy games like Tower
+              // Pass the ORIGINAL interaction from the work command's scope
+              await gameModule.default.execute(interaction, i18n);
             }
           } catch (error) {
             console.error(`Error executing game ${game.id}:`, error);
