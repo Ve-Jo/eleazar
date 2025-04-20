@@ -35,6 +35,7 @@ export async function loadGames(i18n = defaultI18n) {
     // Directories to scan for games
     const gameDirs = [
       path.join(__dirname, "../games"),
+      path.join(__dirname, "../games/risky"), // Add risky directory
       path.join(__dirname, "../games/ported"), // Add ported directory
     ];
 
@@ -170,16 +171,27 @@ export function clearGamesCache() {
  */
 export async function getGameModule(gameId, i18n) {
   try {
-    // First try to get the game module from standard games folder
-    let gamePath = path.join(__dirname, "..", "games", `${gameId}.js`);
+    // Define potential paths
+    const possiblePaths = [
+      path.join(__dirname, "..", "games", `${gameId}.js`),
+      path.join(__dirname, "..", "games", "risky", `${gameId}.js`),
+      path.join(__dirname, "..", "games", "ported", `${gameId}.js`),
+    ];
 
-    // If not found, check if it's in the ported directory
-    if (!fs.existsSync(gamePath)) {
-      gamePath = path.join(__dirname, "..", "games", "ported", `${gameId}.js`);
-      if (!fs.existsSync(gamePath)) {
-        console.error(`Game file not found for ${gameId}`);
-        return null;
+    let gamePath = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        gamePath = p;
+        break;
       }
+    }
+
+    // If no path was found
+    if (!gamePath) {
+      console.error(
+        `Game file not found for ${gameId} in checked directories.`
+      );
+      return null;
     }
 
     console.log(`[getGameModule] Importing game module from: ${gamePath}`);
