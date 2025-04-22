@@ -431,7 +431,7 @@ export default {
           if (data.user.health_current <= 0) {
             await client.fdb.set(
               `${key}.user.health_current`,
-              user.health_max,
+              data.user.health_max,
               "rpg_clicker2"
             );
             await client.fdb.set(
@@ -456,7 +456,7 @@ export default {
             );
             await client.fdb.set(
               `${key}.class_stats.mana`,
-              user3.mana_max,
+              data.class_stats.mana_max,
               "rpg_clicker2"
             );
             client.createTimeout(`timeouts.${key}`, ms("30m"));
@@ -4447,7 +4447,6 @@ export default {
                 data.stones.regeneration_bonus + 2
               );
 
-              var user3 = await client.fdb.get(`${key}.class`);
               await client.fdb.set(
                 `${key}.class_stats.regeneration`,
                 data.class_stats.regeneration * (1 + 2 / 100)
