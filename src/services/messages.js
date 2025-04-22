@@ -13,6 +13,9 @@ import {
 import { getAvailableModels, getModelCapabilities } from "./groqModels.js";
 import processAiRequest from "../handlers/processAiRequest.js";
 
+// Track the last message with components for each user
+const lastUserComponentMessages = new Map();
+
 export function splitMessage(message, maxLength = 2000) {
   if (message.length <= maxLength) return [message];
   const chunks = [];
@@ -167,6 +170,19 @@ export async function sendResponse(
   const chunks = splitMessage(sanitized);
   let finalMsg;
 
+  // Remove components from previous message if it exists
+  const previousMsg = lastUserComponentMessages.get(userId);
+  if (previousMsg && previousMsg.editable) {
+    try {
+      await previousMsg.edit({ components: [] });
+    } catch (error) {
+      console.error(
+        "Failed to remove components from previous message:",
+        error
+      );
+    }
+  }
+
   try {
     await processingMessage.edit({ content: chunks[0] || "...", components });
     finalMsg = processingMessage;
@@ -181,7 +197,10 @@ export async function sendResponse(
     await message.channel.send(chunks[i]).catch(() => {});
   }
 
+  // Store the new message with components
   if (finalMsg && components.length) {
+    lastUserComponentMessages.set(userId, finalMsg);
+
     const collector = finalMsg.createMessageComponentCollector({
       filter: (i) =>
         (i.isButton() || i.isStringSelectMenu()) && i.user.id === userId,
@@ -247,6 +266,21 @@ export async function sendResponse(
           finalMsg,
           locale
         );
+      }
+    });
+
+    collector.on("end", () => {
+      // When the collector ends, check if this is still the latest message with components
+      if (lastUserComponentMessages.get(userId) === finalMsg) {
+        // If it is and it's still editable, remove the components
+        if (finalMsg.editable) {
+          finalMsg.edit({ components: [] }).catch((error) => {
+            console.error(
+              "Failed to remove components after collector end:",
+              error
+            );
+          });
+        }
       }
     });
   }
