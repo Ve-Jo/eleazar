@@ -53,22 +53,22 @@ export const CRATE_TYPES = {
       xp_amount: 50,
       discount_chance: 0.3,
       discount_amount: 5, // 5% discount
-      cooldown_reducer_chance: 0.2,
-      cooldown_reducer_amount: 10 * 60 * 1000, // 10 minutes
+      cooldown_reducer_chance: 0, // Removed cooldown reducer
+      cooldown_reducer_amount: 0, // Removed cooldown reducer
     },
   },
   weekly: {
     cooldown: 7 * 24 * 60 * 60 * 1000, // 7 days
     emoji: "📦",
     rewards: {
-      min_coins: 100,
-      max_coins: 500,
-      xp_chance: 0.7,
-      xp_amount: 200,
-      discount_chance: 0.5,
-      discount_amount: 10, // 10% discount
-      cooldown_reducer_chance: 0.4,
-      cooldown_reducer_amount: 30 * 60 * 1000, // 30 minutes
+      min_coins: 50, // Reduced from 100
+      max_coins: 250, // Reduced from 500
+      xp_chance: 0.5, // Reduced from 0.7
+      xp_amount: 100, // Reduced from 200
+      discount_chance: 0.3, // Reduced from 0.5
+      discount_amount: 5, // Reduced from 10%
+      cooldown_reducer_chance: 0, // Removed cooldown reducer
+      cooldown_reducer_amount: 0, // Removed cooldown reducer
     },
   },
   // Add more crate types as needed
@@ -1711,7 +1711,7 @@ class Database {
       xp: 0,
       seasonXp: 0,
       discount: 0,
-      cooldownReductions: {},
+      cooldownReductions: {}, // Empty object for backward compatibility
     };
 
     // Generate coins reward
@@ -1732,15 +1732,7 @@ class Database {
       rewards.discount = crateConfig.rewards.discount_amount;
     }
 
-    // Cooldown reducer (chance-based)
-    if (Math.random() < crateConfig.rewards.cooldown_reducer_chance) {
-      // Select a random cooldown to reduce
-      const cooldownTypes = ["daily", "work", "crime", "message"];
-      const randomCooldown =
-        cooldownTypes[Math.floor(Math.random() * cooldownTypes.length)];
-      rewards.cooldownReductions[randomCooldown] =
-        crateConfig.rewards.cooldown_reducer_amount;
-    }
+    // Removed cooldown reducer logic
 
     return rewards;
   }
@@ -1763,12 +1755,7 @@ class Database {
         await this.addUpgradeDiscount(guildId, userId, rewards.discount);
       }
 
-      // Apply cooldown reductions
-      for (const [cooldownType, reduction] of Object.entries(
-        rewards.cooldownReductions
-      )) {
-        await this.reduceCooldown(guildId, userId, cooldownType, reduction);
-      }
+      // Cooldown reductions have been removed from the rewards system
     });
 
     return rewards;
