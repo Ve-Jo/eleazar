@@ -148,6 +148,11 @@ export default {
       ru: "Произошла ошибка с сервисом генерации изображений. Пожалуйста, попробуйте позже.",
       uk: "Виникла помилка з сервісом генерації зображень. Будь ласка, спробуйте пізніше.",
     },
+    generating: {
+      en: "Generating image with prompt: {{prompt}}...",
+      ru: "Генерируется изображение с запросом: {{prompt}}...",
+      uk: "Генерується зображення з запитом: {{prompt}}...",
+    },
   },
 
   async execute(interaction, i18n) {
@@ -161,10 +166,50 @@ export default {
     let seed = interaction.options.getInteger("seed") || 0;
     console.log(JSON.stringify({ prompt, width, height }, null, 2));
 
+    // Validate interference steps - if outside range, clamp to valid range
+    if (interferenceSteps > 5) {
+      console.log(`Clamping interference steps from ${interferenceSteps} to 5`);
+      interferenceSteps = 5;
+    } else if (interferenceSteps < 2) {
+      console.log(`Clamping interference steps from ${interferenceSteps} to 2`);
+      interferenceSteps = 2;
+    }
+
+    // Send a status update even if the original interaction was deferred
     try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: i18n.__("commands.ai.generate_image.generating", {
+            prompt,
+          }),
+          ephemeral: false,
+        });
+      } else if (interaction.deferred) {
+        await interaction.editReply({
+          content: i18n.__("commands.ai.generate_image.generating", {
+            prompt,
+          }),
+        });
+      }
+
       // First try using Gradio client
       try {
         const client = await Client.connect("black-forest-labs/FLUX.1-schnell");
+
+        const progressUpdate = setInterval(async () => {
+          try {
+            if (!interaction.replied && !interaction.deferred) return;
+            await interaction.editReply({
+              content: i18n.__("commands.ai.generate_image.generating", {
+                prompt,
+              }),
+            });
+          } catch (e) {
+            console.error("Error updating progress:", e);
+            clearInterval(progressUpdate);
+          }
+        }, 8000);
+
         const output = await client.predict("/infer", [
           prompt,
           seed,
@@ -173,6 +218,8 @@ export default {
           height,
           interferenceSteps,
         ]);
+
+        clearInterval(progressUpdate);
 
         console.log("Gradio output:", output);
 
@@ -187,28 +234,71 @@ export default {
             Buffer.from(imageBuffer)
           ).setName("generated_image.png");
 
-          await interaction.editReply({
-            content: i18n.__("commands.ai.generate_image.generated", {
+          const responseContent = i18n.__(
+            "commands.ai.generate_image.generated",
+            {
               prompt,
               seed: output.data[1] || "random", // Use the seed from output data
               steps: interferenceSteps,
-            }),
-            files: [attachment],
-          });
+            }
+          );
+
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply({
+              content: responseContent,
+              files: [attachment],
+            });
+          } else {
+            await interaction.reply({
+              content: responseContent,
+              files: [attachment],
+            });
+          }
           return;
         }
         throw new Error("No image in response");
       } catch (gradioError) {
         console.error("Gradio client error:", gradioError);
-        return interaction.editReply({
-          content: i18n.__("commands.ai.generate_image.gradio_error"),
-        });
+        const errorMessage = i18n.__("commands.ai.generate_image.gradio_error");
+
+        if (interaction.replied || interaction.deferred) {
+          return interaction.editReply({
+            content: errorMessage,
+          });
+        } else {
+          return interaction.reply({
+            content: errorMessage,
+          });
+        }
       }
     } catch (error) {
       console.error("Error generating image:", error);
-      await interaction.editReply({
-        content: i18n.__("commands.ai.generate_image.error"),
-      });
+      const errorMessage = i18n.__("commands.ai.generate_image.error");
+
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply({
+            content: errorMessage,
+          });
+        } else {
+          await interaction.reply({
+            content: errorMessage,
+          });
+        }
+      } catch (replyError) {
+        console.error("Error sending error response:", replyError);
+        // As a last resort, try sending a new message
+        try {
+          await interaction.channel.send({
+            content: i18n.__("commands.ai.generate_image.error", {
+              user: interaction.user,
+              error: errorMessage,
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to send any error message:", e);
+        }
+      }
     }
   },
 };
