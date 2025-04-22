@@ -93,7 +93,7 @@ export default {
         state.score *
         0.01 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
-        (1 + (5 - timeInMinutes) / 5); // Time multiplier
+        (1 + Math.min(timeInMinutes, 5) / 5); // Time multiplier that caps at 2x for 5+ minutes
 
       return earning;
     };
