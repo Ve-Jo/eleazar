@@ -361,7 +361,8 @@
         "command": {
           "name": "generate",
           "description": "Generate beautiful image by prompt"
-        }
+        },
+        "generating": "Generating image with prompt: {{prompt}}..."
       },
       "transcribe_audio": {
         "name": "transcribe",
@@ -863,6 +864,12 @@
           "everyone": "@ everyone",
           "here": "@ here"
         }
+      }
+    },
+    "message": {
+      "transcription": {
+        "success": "Transcription of voice message:\n\n{text}",
+        "failed": "Sorry, I couldn't transcribe that voice message."
       }
     }
   }
