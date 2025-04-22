@@ -156,7 +156,8 @@ async function generateActiveTowerImage(gameInstance, interaction, i18n) {
     currentFloor: gameInstance.currentFloor,
     tilesPerRow: gameInstance.tilesPerRow,
     currentPrize: gameInstance.currentPrize,
-    nextPrize: gameInstance.calculatePrize(gameInstance.currentFloor + 1),
+    // Calculate the next prize correctly based on current floor
+    nextPrize: gameInstance.calculatePrize(gameInstance.currentFloor),
     maxFloors: MAX_FLOORS,
     lastAction: gameInstance.lastAction,
     gameOver: gameInstance.gameOver,
@@ -425,18 +426,20 @@ export default {
             });
             return;
           }
-          // Check balance only when setting bet
-          const userData = await Database.getUser(guildId, userId);
-          const userBalance = parseFloat(userData?.economy?.balance || 0);
-          if (!userData || !userData.economy || userBalance < betAmount) {
-            await modalSubmission.reply({
-              content: i18n.__("games.tower.notEnoughMoney", {
-                balance: userBalance.toFixed(2),
-                bet: betAmount,
-              }),
-              ephemeral: true,
-            });
-            return;
+          // Check balance only when setting bet and only if in a guild
+          if (guildId) {
+            const userData = await Database.getUser(guildId, userId);
+            const userBalance = parseFloat(userData?.economy?.balance || 0);
+            if (!userData || !userData.economy || userBalance < betAmount) {
+              await modalSubmission.reply({
+                content: i18n.__("games.tower.notEnoughMoney", {
+                  balance: userBalance.toFixed(2),
+                  bet: betAmount,
+                }),
+                ephemeral: true,
+              });
+              return;
+            }
           }
 
           pendingBet = betAmount;
@@ -479,23 +482,25 @@ export default {
           }
 
           // Final balance check before starting
-          const userDataStart = await Database.getUser(guildId, userId);
-          const userBalanceStart = parseFloat(
-            userDataStart?.economy?.balance || 0
-          );
-          if (
-            !userDataStart ||
-            !userDataStart.economy ||
-            userBalanceStart < pendingBet
-          ) {
-            await i.reply({
-              content: i18n.__("games.tower.notEnoughMoney", {
-                balance: userBalanceStart.toFixed(2),
-                bet: pendingBet,
-              }),
-              ephemeral: true,
-            });
-            return;
+          if (guildId) {
+            const userDataStart = await Database.getUser(guildId, userId);
+            const userBalanceStart = parseFloat(
+              userDataStart?.economy?.balance || 0
+            );
+            if (
+              !userDataStart ||
+              !userDataStart.economy ||
+              userBalanceStart < pendingBet
+            ) {
+              await i.reply({
+                content: i18n.__("games.tower.notEnoughMoney", {
+                  balance: userBalanceStart.toFixed(2),
+                  bet: pendingBet,
+                }),
+                ephemeral: true,
+              });
+              return;
+            }
           }
 
           // Initialize actual Game State
@@ -516,8 +521,10 @@ export default {
 
           activeGames.set(gameKey, gameInstance);
 
-          // Deduct bet
-          await Database.addBalance(guildId, userId, -gameInstance.betAmount);
+          // Deduct bet if in a guild
+          if (guildId) {
+            await Database.addBalance(guildId, userId, -gameInstance.betAmount);
+          }
 
           // Update message to game state
           await i.deferUpdate(); // Defer this interaction before editing message
@@ -634,7 +641,9 @@ export default {
 
             // Add prize to balance
             const prizeTaken = gameInstance.currentPrize;
-            await Database.addBalance(guildId, userId, prizeTaken);
+            if (guildId) {
+              await Database.addBalance(guildId, userId, prizeTaken);
+            }
 
             // Update UI
             await gameInteraction.deferUpdate();
@@ -717,7 +726,9 @@ export default {
                 const maxPrize = gameInstance.calculatePrize(MAX_FLOORS - 1);
 
                 // Add prize to balance
-                await Database.addBalance(guildId, userId, maxPrize);
+                if (guildId) {
+                  await Database.addBalance(guildId, userId, maxPrize);
+                }
 
                 // Update UI
                 await gameInteraction.deferUpdate();
@@ -746,8 +757,9 @@ export default {
                 createRestartCollector(gameInstance);
               } else {
                 // Continue to next floor
+                // Calculate the current prize based on the floor that was just completed
                 gameInstance.currentPrize = gameInstance.calculatePrize(
-                  gameInstance.currentFloor
+                  gameInstance.currentFloor - 1
                 );
                 gameInstance.ensureBombPosition(gameInstance.currentFloor);
 
