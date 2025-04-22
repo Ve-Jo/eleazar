@@ -113,7 +113,7 @@
       },
       "work": {
         "specialForCategory": "Specially for Eleazar",
-        "oldGamesCategory": "Our old games",
+        "oldGamesCategory": "Legacy Games",
         "title": "Game Selection",
         "selectCategory": "Select a game category",
         "playGame": "Play",
@@ -121,7 +121,9 @@
         "error": "An error occurred while processing your work request",
         "gameError": "Error starting {{game}}. Please try again.",
         "noGamesAvailable": "No games are currently available.",
-        "gameNotFound": "The selected game was not found."
+        "gameNotFound": "The selected game was not found.",
+        "standardGamesCategory": "Standard Games",
+        "riskyGamesCategory": "Risky Games"
       },
       "imageError": "Error generating image",
       "userNotFound": "User not found",
@@ -793,6 +795,75 @@
       "title": "Game Level Up!",
       "description": "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
       "footer": "Keep playing games to gain more Game XP!"
+    }
+  },
+  "events": {
+    "ai": {
+      "messages": {
+        "processing": "Processing your request with `{model}`...",
+        "rateLimited": "Model `{model}` is currently rate-limited. Please try again in about {minutes} minute(s) or select a different model.",
+        "visionMismatch": "Model `{model}` does not support image input. Please select a model with 'Vision' capability for this request.",
+        "errorOccurred": "😥 An error occurred: {error}",
+        "modelDetailsError": "😥 Error checking model details: {error}",
+        "noModelsFound": "Sorry, I couldn't find any suitable AI models to use right now{vision, select, vision { for image analysis} other {}}.",
+        "selectModelPrompt": "Please select an AI model to use for this chat. You can also configure context memory and tool usage below.",
+        "modelSelectedProcessing": "Model selected: `{model}`. Processing your request...",
+        "selectionTimeout": "Model selection timed out.",
+        "selectionError": "Sorry, I encountered an error while preparing model selection options.",
+        "toolComplete": "Tool actions completed.",
+        "noTextResponse": "I didn't get a text response for that.",
+        "noTextResponseInternal": "(No text response received)",
+        "emptyResponseInternal": "(Received an empty response from the AI)",
+        "toolsDisabledNote": "*(AI tried to use tools, but they are currently disabled.)*",
+        "toolExecution": "🔧 Executing {count, plural, one {# tool} other {# tools}}..."
+      },
+      "buttons": {
+        "systemPrompt": {
+          "on": "System Prompt: ON",
+          "off": "System Prompt: OFF",
+          "tools": {
+            "on": "Tools: ON",
+            "off": "Tools: OFF",
+            "offModel": "Tools: OFF (Model)"
+          },
+          "clearContext": "Context ({current}/{max})"
+        },
+        "menus": {
+          "modelSelect": {
+            "placeholder": "Select an AI model"
+          }
+        },
+        "toolResult": {
+          "successPrefix": "🔧 **Tool Result ({command}):**",
+          "errorPrefix": "⚠️ **Tool Error ({command}):**"
+        },
+        "toolExec": {
+          "parseError": "Error: Could not parse the arguments provided for the command {command}. Please ensure arguments are a valid JSON string. Received: {args}",
+          "commandNotFound": "Command \"{command}\" not found.",
+          "dmRestricted": "Error: This command can only be used in servers, not in DMs.",
+          "economyDepositError": "The 'deposit' command is for your own bank. Use 'transfer' to send money to someone else.",
+          "economyTransferError": "To put money in your bank, use the 'deposit' command.",
+          "economyWithdrawError": "The 'withdraw' command is only for your own bank.",
+          "missingParams": "Error: Missing required parameters for command '{command}': {missing}. Required: {required}. Please provide values for these.",
+          "userNotFound": "Error: Could not find the user specified: {user}. Please provide a valid user mention, ID, or username.",
+          "missingPermissions": "I seem to be missing the required permissions to do that.",
+          "errorGeneric": "An error occurred while running the command: {error}",
+          "successGeneric": "Command executed successfully."
+        },
+        "collector": {
+          "contextClear": {
+            "success": "Conversation context cleared!"
+          },
+          "modelChange": {
+            "success": "Model changed to `{model}`. This will be used for your next request."
+          }
+        },
+        "sanitization": {
+          "mention": "(mention)",
+          "everyone": "@ everyone",
+          "here": "@ here"
+        }
+      }
     }
   }
 }
