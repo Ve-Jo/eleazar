@@ -500,6 +500,20 @@ class I18n {
   }
 
   /**
+   * Save translations for all supported locales to their respective files.
+   */
+  saveAllTranslations() {
+    console.log(
+      `Attempting to save translations for locales: ${this.supportedLocales.join(
+        ", "
+      )}`
+    );
+    for (const locale of this.supportedLocales) {
+      this.saveTranslations(locale); // Use the existing save method
+    }
+  }
+
+  /**
    * Debug method to dump the translation table for a specific key
    * @param {string} key - The translation key to debug
    */
