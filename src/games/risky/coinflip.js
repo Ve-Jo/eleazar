@@ -153,8 +153,11 @@ export default {
 
     try {
       // Fetch initial balance before generating the first image
-      const initialUserData = await Database.getUser(guildId, userId);
-      const initialBalance = parseFloat(initialUserData?.economy?.balance || 0);
+      let initialBalance = 0;
+      if (guildId) {
+        const initialUserData = await Database.getUser(guildId, userId);
+        initialBalance = parseFloat(initialUserData?.economy?.balance || 0);
+      }
 
       const initialBuffer = await generateCoinflipImage(
         gameInstance,
@@ -255,22 +258,43 @@ export default {
                   return;
                 }
 
-                // Check user balance
-                const userData = await Database.getUser(guildId, userId);
-                const userBalance = parseFloat(userData?.economy?.balance || 0);
+                // Only check balance if in a guild
+                if (guildId) {
+                  // Check user balance
+                  const userData = await Database.getUser(guildId, userId);
+                  const userBalance = parseFloat(
+                    userData?.economy?.balance || 0
+                  );
 
-                if (!userData || !userData.economy || userBalance < betAmount) {
-                  await modalInteraction.reply({
-                    content: i18n.__("games.coinflip.notEnoughMoney", {
-                      balance: userBalance.toFixed(2),
-                      bet: betAmount,
-                    }),
-                    ephemeral: true,
-                  });
-                  return;
+                  if (
+                    !userData ||
+                    !userData.economy ||
+                    userBalance < betAmount
+                  ) {
+                    await modalInteraction.reply({
+                      content: i18n.__("games.coinflip.notEnoughMoney", {
+                        balance: userBalance.toFixed(2),
+                        bet: betAmount,
+                      }),
+                      ephemeral: true,
+                    });
+                    return;
+                  }
                 }
 
                 gameInstance.betAmount = betAmount;
+
+                // Get current balance
+                let userBalance = 0;
+                if (guildId) {
+                  const currentBalanceData = await Database.getUser(
+                    guildId,
+                    userId
+                  );
+                  userBalance = parseFloat(
+                    currentBalanceData?.economy?.balance || 0
+                  );
+                }
 
                 const updatedBuffer = await generateCoinflipImage(
                   gameInstance,
@@ -320,24 +344,26 @@ export default {
             }
 
             // Double-check balance before proceeding
-            const userDataFlip = await Database.getUser(guildId, userId);
-            const userBalanceFlip = parseFloat(
-              userDataFlip?.economy?.balance || 0
-            );
+            if (guildId) {
+              const userDataFlip = await Database.getUser(guildId, userId);
+              const userBalanceFlip = parseFloat(
+                userDataFlip?.economy?.balance || 0
+              );
 
-            if (
-              !userDataFlip ||
-              !userDataFlip.economy ||
-              userBalanceFlip < gameInstance.betAmount
-            ) {
-              await i.followUp({
-                content: i18n.__("games.coinflip.notEnoughMoney", {
-                  balance: userBalanceFlip.toFixed(2),
-                  bet: gameInstance.betAmount,
-                }),
-                ephemeral: true,
-              });
-              return;
+              if (
+                !userDataFlip ||
+                !userDataFlip.economy ||
+                userBalanceFlip < gameInstance.betAmount
+              ) {
+                await i.followUp({
+                  content: i18n.__("games.coinflip.notEnoughMoney", {
+                    balance: userBalanceFlip.toFixed(2),
+                    bet: gameInstance.betAmount,
+                  }),
+                  ephemeral: true,
+                });
+                return;
+              }
             }
 
             // --- Dynamic Payout Calculation ---
@@ -346,30 +372,55 @@ export default {
             let changeAmount = 0;
             let profitMultiplier = 0;
 
-            if (win) {
-              gameInstance.lastResult = "win";
-              // Calculate dynamic profit multiplier
-              profitMultiplier =
-                (1 / gameInstance.winProbability) * HOUSE_EDGE_FACTOR - 1;
-              // Ensure multiplier isn't negative if HOUSE_EDGE_FACTOR is aggressive and P is high
-              profitMultiplier = Math.max(0, profitMultiplier);
+            // Only interact with database if we have a guild
+            if (guildId) {
+              if (win) {
+                gameInstance.lastResult = "win";
+                // Calculate dynamic profit multiplier
+                profitMultiplier =
+                  (1 / gameInstance.winProbability) * HOUSE_EDGE_FACTOR - 1;
+                // Ensure multiplier isn't negative if HOUSE_EDGE_FACTOR is aggressive and P is high
+                profitMultiplier = Math.max(0, profitMultiplier);
 
-              changeAmount = parseFloat(
-                (gameInstance.betAmount * profitMultiplier).toFixed(2)
-              );
-              gameInstance.totalWon += changeAmount;
-              await Database.addBalance(guildId, userId, changeAmount);
-              messageContent = i18n.__("games.coinflip.winMessage", {
-                amount: changeAmount.toFixed(2),
-              });
+                changeAmount = parseFloat(
+                  (gameInstance.betAmount * profitMultiplier).toFixed(2)
+                );
+                gameInstance.totalWon += changeAmount;
+                await Database.addBalance(guildId, userId, changeAmount);
+                messageContent = i18n.__("games.coinflip.winMessage", {
+                  amount: changeAmount.toFixed(2),
+                });
+              } else {
+                gameInstance.lastResult = "lose";
+                changeAmount = -gameInstance.betAmount;
+                gameInstance.totalLost += Math.abs(changeAmount);
+                await Database.addBalance(guildId, userId, changeAmount);
+                messageContent = i18n.__("games.coinflip.loseMessage", {
+                  amount: Math.abs(changeAmount).toFixed(2),
+                });
+              }
             } else {
-              gameInstance.lastResult = "lose";
-              changeAmount = -gameInstance.betAmount;
-              gameInstance.totalLost += Math.abs(changeAmount);
-              await Database.addBalance(guildId, userId, changeAmount);
-              messageContent = i18n.__("games.coinflip.loseMessage", {
-                amount: Math.abs(changeAmount).toFixed(2),
-              });
+              // In DM, just show the result without updating balance
+              if (win) {
+                gameInstance.lastResult = "win";
+                profitMultiplier =
+                  (1 / gameInstance.winProbability) * HOUSE_EDGE_FACTOR - 1;
+                profitMultiplier = Math.max(0, profitMultiplier);
+                changeAmount = parseFloat(
+                  (gameInstance.betAmount * profitMultiplier).toFixed(2)
+                );
+                gameInstance.totalWon += changeAmount;
+                messageContent = i18n.__("games.coinflip.winMessage", {
+                  amount: changeAmount.toFixed(2),
+                });
+              } else {
+                gameInstance.lastResult = "lose";
+                changeAmount = -gameInstance.betAmount;
+                gameInstance.totalLost += Math.abs(changeAmount);
+                messageContent = i18n.__("games.coinflip.loseMessage", {
+                  amount: Math.abs(changeAmount).toFixed(2),
+                });
+              }
             }
 
             // Add result to history (uses the actual changeAmount)
@@ -380,10 +431,13 @@ export default {
             );
 
             // Get updated balance AFTER the change
-            const updatedUserData = await Database.getUser(guildId, userId);
-            const updatedBalance = parseFloat(
-              updatedUserData?.economy?.balance || 0
-            );
+            let updatedBalance = 0;
+            if (guildId) {
+              const updatedUserData = await Database.getUser(guildId, userId);
+              updatedBalance = parseFloat(
+                updatedUserData?.economy?.balance || 0
+              );
+            }
 
             const updatedBuffer = await generateCoinflipImage(
               gameInstance,

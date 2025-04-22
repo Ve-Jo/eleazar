@@ -90,13 +90,17 @@ export default {
     // Calculate earning based on score and time
     const calculateEarning = async (state) => {
       // Get user data to check for games_earning upgrade
-      const userData = await Database.getUser(
-        interaction.guildId,
-        interaction.user.id
-      );
+      let userData = null;
+      // Check if guildId exists (will be null in DMs)
+      if (interaction.guildId) {
+        userData = await Database.getUser(
+          interaction.guildId,
+          interaction.user.id
+        );
+      }
 
       // Apply games earning upgrade
-      const gamesEarningUpgrade = userData.upgrades.find(
+      const gamesEarningUpgrade = userData?.upgrades?.find(
         (u) => u.type === "games_earning"
       );
       const gamesEarningLevel = gamesEarningUpgrade?.level || 1;
@@ -141,10 +145,12 @@ export default {
 
     try {
       // Get current stats to display high score at start
-      const gameRecords = await Database.getGameRecords(
-        interaction.guildId,
-        interaction.user.id
-      );
+      const gameRecords = interaction.guildId
+        ? await Database.getGameRecords(
+            interaction.guildId,
+            interaction.user.id
+          )
+        : null;
       const currentHighScore = gameRecords?.["2048"]?.highScore || 0;
 
       const buffer = await generateImage(
@@ -229,38 +235,44 @@ export default {
                 gameInstance.state.score * 0.5 // Score bonus
             );
 
-            const xpResult = await Database.addGameXP(
-              interaction.guildId,
-              interaction.user.id,
-              gameXP,
-              "2048"
-            );
-
-            // Debug logging for game XP and level-up
-            console.log("2048 Game XP Debug:");
-            console.log({
-              userId: interaction.user.id,
-              addedXP: gameXP,
-              xpResult,
-            });
-
-            // Handle level-up notification if the user leveled up
-            if (xpResult.levelUp) {
-              await handleLevelUp(
-                interaction.client,
+            // Only add XP and level-up if in a guild
+            if (interaction.guildId) {
+              const xpResult = await Database.addGameXP(
                 interaction.guildId,
                 interaction.user.id,
-                xpResult.levelUp,
-                xpResult.type,
-                interaction.channel
+                gameXP,
+                "2048"
               );
+
+              // Debug logging for game XP and level-up
+              console.log("2048 Game XP Debug:");
+              console.log({
+                userId: interaction.user.id,
+                addedXP: gameXP,
+                xpResult,
+              });
+
+              // Handle level-up notification if the user leveled up
+              if (xpResult.levelUp) {
+                await handleLevelUp(
+                  interaction.client,
+                  interaction.guildId,
+                  interaction.user.id,
+                  xpResult.levelUp,
+                  xpResult.type,
+                  interaction.channel
+                );
+              }
             }
 
-            await Database.addBalance(
-              interaction.guildId,
-              interaction.user.id,
-              gameInstance.state.earning
-            );
+            // Only add balance if in a guild
+            if (interaction.guildId) {
+              await Database.addBalance(
+                interaction.guildId,
+                interaction.user.id,
+                gameInstance.state.earning
+              );
+            }
 
             await message.edit({
               content: `${i18n.__(`games.2048.timesOut`, {
@@ -359,53 +371,57 @@ export default {
               const timePlayed = (Date.now() - state.startTime) / 1000;
               const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
-              // Update high score
-              const highScoreResult = await Database.updateGameHighScore(
-                interaction.guildId,
-                interaction.user.id,
-                "2048",
-                state.score
-              );
-
-              const isNewRecord = highScoreResult.isNewRecord;
-
-              // Only add XP if there's something to add
-              if (gameXP > 0) {
-                const xpResult = await Database.addGameXP(
+              // Only update high score if in a guild
+              let isNewRecord = false;
+              if (interaction.guildId) {
+                // Update high score
+                const highScoreResult = await Database.updateGameHighScore(
                   interaction.guildId,
                   interaction.user.id,
-                  gameXP,
-                  "2048"
+                  "2048",
+                  state.score
                 );
 
-                // Debug logging for game XP and level-up
-                console.log("2048 Game XP Debug:");
-                console.log({
-                  userId: interaction.user.id,
-                  addedXP: gameXP,
-                  xpResult,
-                });
+                isNewRecord = highScoreResult.isNewRecord;
 
-                // Handle level-up notification if the user leveled up
-                if (xpResult.levelUp) {
-                  await handleLevelUp(
-                    interaction.client,
+                // Only add XP if there's something to add
+                if (gameXP > 0) {
+                  const xpResult = await Database.addGameXP(
                     interaction.guildId,
                     interaction.user.id,
-                    xpResult.levelUp,
-                    xpResult.type,
-                    interaction.channel
+                    gameXP,
+                    "2048"
+                  );
+
+                  // Debug logging for game XP and level-up
+                  console.log("2048 Game XP Debug:");
+                  console.log({
+                    userId: interaction.user.id,
+                    addedXP: gameXP,
+                    xpResult,
+                  });
+
+                  // Handle level-up notification if the user leveled up
+                  if (xpResult.levelUp) {
+                    await handleLevelUp(
+                      interaction.client,
+                      interaction.guildId,
+                      interaction.user.id,
+                      xpResult.levelUp,
+                      xpResult.type,
+                      interaction.channel
+                    );
+                  }
+                }
+
+                // Only add balance if there's something to add
+                if (state.earning > 0) {
+                  await Database.addBalance(
+                    interaction.guildId,
+                    interaction.user.id,
+                    state.earning
                   );
                 }
-              }
-
-              // Only add balance if there's something to add
-              if (state.earning > 0) {
-                await Database.addBalance(
-                  interaction.guildId,
-                  interaction.user.id,
-                  state.earning
-                );
               }
 
               // Generate final game board
@@ -432,8 +448,12 @@ export default {
               await message.edit({
                 content: `${i18n.__(`games.2048.gameOver`, {
                   score: state.score,
-                })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
-                  isNewRecord ? " 🏆 New High Score!" : ""
+                })}${
+                  interaction.guildId
+                    ? ` (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
+                        isNewRecord ? " 🏆 New High Score!" : ""
+                      }`
+                    : ""
                 }`,
                 files: [{ attachment: finalBoard, name: "2048.png" }],
                 components: [],

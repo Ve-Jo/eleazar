@@ -150,10 +150,12 @@ export default {
 
     try {
       // Get current stats to display high score at start
-      const gameRecords = await Database.getGameRecords(
-        interaction.guildId,
-        interaction.user.id
-      );
+      const gameRecords = interaction.guildId
+        ? await Database.getGameRecords(
+            interaction.guildId,
+            interaction.user.id
+          )
+        : null;
       const currentHighScore = gameRecords?.snake?.highScore || 0;
 
       const buffer = await generateGameBoard(
@@ -211,54 +213,62 @@ export default {
             );
 
             try {
-              // Save high score first
-              const highScoreResult = await Database.updateGameHighScore(
-                interaction.guildId,
-                interaction.user.id,
-                "snake",
-                initialState.state.score
-              );
-
-              const isNewRecord = highScoreResult.isNewRecord;
-
-              // Only add XP if there's something to add
-              if (gameXP > 0) {
-                const xpResult = await Database.addGameXP(
+              // Only save high score if in a guild
+              let isNewRecord = false;
+              if (interaction.guildId) {
+                // Save high score first
+                const highScoreResult = await Database.updateGameHighScore(
                   interaction.guildId,
                   interaction.user.id,
-                  gameXP,
-                  "snake"
+                  "snake",
+                  initialState.state.score
                 );
 
-                // Handle level-up notification if the user leveled up
-                if (xpResult.levelUp) {
-                  await handleLevelUp(
-                    interaction.client,
+                isNewRecord = highScoreResult.isNewRecord;
+
+                // Only add XP if there's something to add
+                if (gameXP > 0) {
+                  const xpResult = await Database.addGameXP(
                     interaction.guildId,
                     interaction.user.id,
-                    xpResult.levelUp,
-                    xpResult.type,
-                    interaction.channel
+                    gameXP,
+                    "snake"
+                  );
+
+                  // Handle level-up notification if the user leveled up
+                  if (xpResult.levelUp) {
+                    await handleLevelUp(
+                      interaction.client,
+                      interaction.guildId,
+                      interaction.user.id,
+                      xpResult.levelUp,
+                      xpResult.type,
+                      interaction.channel
+                    );
+                  }
+                }
+
+                // Only add earnings if there's something to add
+                if (initialState.state.earning > 0) {
+                  await Database.addBalance(
+                    interaction.guildId,
+                    interaction.user.id,
+                    initialState.state.earning
                   );
                 }
-              }
-
-              // Only add earnings if there's something to add
-              if (initialState.state.earning > 0) {
-                await Database.addBalance(
-                  interaction.guildId,
-                  interaction.user.id,
-                  initialState.state.earning
-                );
               }
 
               await message.edit({
                 content: `${i18n.__(`games.snake.timesOut`, {
                   score: initialState.state.score,
-                })} (+${initialState.state.earning.toFixed(
-                  1
-                )} 💵, +${gameXP} Game XP)${
-                  isNewRecord ? " 🏆 New High Score!" : ""
+                })}${
+                  interaction.guildId
+                    ? ` (+${initialState.state.earning.toFixed(
+                        1
+                      )} 💵, +${gameXP} Game XP)${
+                        isNewRecord ? " 🏆 New High Score!" : ""
+                      }`
+                    : ""
                 }`,
                 files: [{ attachment: finalBoard, name: "snake.png" }],
                 components: [],
@@ -401,52 +411,60 @@ export default {
             const timePlayed = (Date.now() - state.startTime) / 1000;
             const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
 
-            // Save high score first
-            const highScoreResult = await Database.updateGameHighScore(
-              interaction.guildId,
-              interaction.user.id,
-              "snake",
-              state.score
-            );
-
-            const isNewRecord = highScoreResult.isNewRecord;
-
-            // Only add XP if there's something to add
-            if (gameXP > 0) {
-              const xpResult = await Database.addGameXP(
+            // Only update database if in a guild
+            let isNewRecord = false;
+            if (interaction.guildId) {
+              // Save high score first
+              const highScoreResult = await Database.updateGameHighScore(
                 interaction.guildId,
                 interaction.user.id,
-                gameXP,
-                "snake"
+                "snake",
+                state.score
               );
 
-              // Handle level-up notification if the user leveled up
-              if (xpResult.levelUp) {
-                await handleLevelUp(
-                  interaction.client,
+              isNewRecord = highScoreResult.isNewRecord;
+
+              // Only add XP if there's something to add
+              if (gameXP > 0) {
+                const xpResult = await Database.addGameXP(
                   interaction.guildId,
                   interaction.user.id,
-                  xpResult.levelUp,
-                  xpResult.type,
-                  interaction.channel
+                  gameXP,
+                  "snake"
+                );
+
+                // Handle level-up notification if the user leveled up
+                if (xpResult.levelUp) {
+                  await handleLevelUp(
+                    interaction.client,
+                    interaction.guildId,
+                    interaction.user.id,
+                    xpResult.levelUp,
+                    xpResult.type,
+                    interaction.channel
+                  );
+                }
+              }
+
+              // Only add earnings if there's something to add
+              if (state.earning > 0) {
+                await Database.addBalance(
+                  interaction.guildId,
+                  interaction.user.id,
+                  state.earning
                 );
               }
-            }
-
-            // Only add earnings if there's something to add
-            if (state.earning > 0) {
-              await Database.addBalance(
-                interaction.guildId,
-                interaction.user.id,
-                state.earning
-              );
             }
 
             await message.edit({
               content: `${i18n.__(`games.snake.gameOver`, {
                 score: state.score,
-              })} (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
-                isNewRecord ? " 🏆 New High Score!" : ""
+              })}${
+                interaction.guildId
+                  ? ` (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
+                      isNewRecord ? " 🏆 New High Score!" : ""
+                    }`
+                  : ""
               }`,
               files: [{ attachment: gameOverBoard, name: "snake.png" }],
               components: [],
