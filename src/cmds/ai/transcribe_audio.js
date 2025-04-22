@@ -20,6 +20,11 @@ async function convertAudio(inputPath, outputPath) {
 
 export async function transcribeAudio(client, audioUrl, language = "auto") {
   try {
+    // Validate the audioUrl parameter
+    if (!audioUrl || typeof audioUrl !== "string" || !audioUrl.trim()) {
+      throw new Error("Invalid or empty audio URL provided");
+    }
+
     const response = await fetch(audioUrl);
     const originalFilePath = `./temp_original_audio_file${path.extname(
       audioUrl

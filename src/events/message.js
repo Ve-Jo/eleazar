@@ -2,13 +2,53 @@ import { Events } from "discord.js";
 import Database from "../database/client.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 import { handleLevelUp } from "../utils/levelUpHandler.js";
+import i18n from "../utils/newI18n.js";
+
+// --- Start Localization Definitions ---
+const localization_strings = {
+  transcription: {
+    success: {
+      en: "Transcription of voice message:\n\n{text}",
+      ru: "Расшифровка голосового сообщения:\n\n{text}",
+      uk: "Розшифровка голосового повідомлення:\n\n{text}",
+    },
+    failed: {
+      en: "Sorry, I couldn't transcribe that voice message.",
+      ru: "К сожалению, я не смог расшифровать это голосовое сообщение.",
+      uk: "На жаль, я не зміг розшифрувати це голосове повідомлення.",
+    },
+  },
+};
+// --- End Localization Definitions ---
 
 export default {
   name: Events.MessageCreate,
+  localization_strings: localization_strings,
   async execute(message) {
     if (message.author.bot) return;
 
     const { guild, channel, author } = message;
+
+    // Determine locale for message sender
+    let effectiveLocale = "en";
+    try {
+      const userDbLocale = await Database.getUserLocale(guild?.id, author.id);
+      if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
+        effectiveLocale = userDbLocale;
+      } else if (guild?.preferredLocale) {
+        const normalizedGuildLocale = guild.preferredLocale
+          .split("-")[0]
+          .toLowerCase();
+        if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
+          effectiveLocale = normalizedGuildLocale;
+        }
+      }
+    } catch (dbError) {
+      console.error(
+        `Error fetching user locale for ${author.id}, defaulting to 'en':`,
+        dbError
+      );
+    }
 
     // Handle voice message transcription
     if (message.attachments.size > 0) {
@@ -19,24 +59,36 @@ export default {
         try {
           await message.channel.sendTyping();
           const transcription = await transcribeAudio(
-            audioAttachment.url,
-            message.client
+            message.client,
+            audioAttachment.url
           );
 
-          if (transcription.length > 2000) {
-            const chunks = transcription.match(/.{1,2000}/g);
-            for (const chunk of chunks) {
-              await message.reply(chunk);
+          if (transcription && transcription.text) {
+            const transcriptionText = transcription.text;
+
+            if (transcriptionText.length > 2000) {
+              const chunks = transcriptionText.match(/.{1,2000}/g);
+              for (const chunk of chunks) {
+                await message.reply(chunk);
+              }
+            } else {
+              await message.reply(
+                i18n.__(
+                  "events.message.transcription.success",
+                  { text: transcriptionText },
+                  effectiveLocale
+                )
+              );
             }
           } else {
             await message.reply(
-              `Transcription of voice message:\n\n${transcription}`
+              i18n.__("events.message.transcription.failed", effectiveLocale)
             );
           }
         } catch (error) {
           console.error("Error transcribing voice message:", error);
           await message.reply(
-            "Sorry, I couldn't transcribe that voice message."
+            i18n.__("events.message.transcription.failed", effectiveLocale)
           );
         }
       }
