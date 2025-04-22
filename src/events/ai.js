@@ -1,1314 +1,623 @@
-import { Events } from "discord.js";
+import {
+  Events,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ActionRowBuilder,
+  ComponentType,
+  InteractionType,
+} from "discord.js";
 import { translate } from "bing-translate-api";
-import i18n from "../utils/newI18n.js";
-import { Memer } from "memer.ts"; // Import Memer for text_memer command
+import { Memer } from "memer.ts";
 import Database from "../database/client.js";
+import fetch from "node-fetch";
+import { Groq } from "groq-sdk";
+import CONFIG from "../config/aiConfig.js";
+import i18n from "../utils/newI18n.js";
+import {
+  state,
+  isModelRateLimited,
+  setModelRateLimit,
+} from "../state/state.js";
+import {
+  fetchGroqModels,
+  extractModelSize,
+  getAvailableModels,
+  getAvailableModel,
+  updateModelCooldown,
+  getModelCapabilities,
+  getApiClientForModel,
+} from "../services/groqModels.js";
+import {
+  generateToolsFromCommands,
+  getParameterType,
+} from "../services/tools.js";
+import {
+  splitMessage,
+  buildInteractionComponents,
+  sendResponse,
+} from "../services/messages.js";
+import processAiRequest from "../handlers/processAiRequest.js";
+import {
+  getUserPreferences,
+  updateUserPreference,
+  clearUserHistory,
+  addConversationToHistory,
+} from "../state/prefs.js";
 
-// Configuration
-const CONFIG = {
-  models: {
-    text: [
-      /*"qwen-qwq-32b",*/
-      "meta-llama/llama-4-maverick-17b-128e-instruct",
-      "meta-llama/llama-4-scout-17b-16e-instruct",
-      "llama-3.3-70b-versatile",
-      "llama-3.1-70b-versatile",
-    ],
-    vision: [
-      /*"qwen-qwq-32b",*/
-      "meta-llama/llama-4-maverick-17b-128e-instruct",
-      "meta-llama/llama-4-scout-17b-16e-instruct",
-      "llama-3.2-90b-vision-preview",
-      "llama-3.2-11b-vision-preview",
-    ],
+// --- Start Localization Definitions ---
+const localization_strings = {
+  messages: {
+    processing: {
+      en: "Processing your request with `{model}`...",
+      ru: "Обрабатываю ваш запрос с `{model}`...",
+      uk: "Обробляю ваш запит з `{model}`...",
+    },
+    rateLimited: {
+      en: "Model `{model}` is currently rate-limited. Please try again in about {minutes} minute(s) or select a different model.",
+      ru: "Модель `{model}` в даний момент обмежена. Будь ласка, спробуйте ще раз через {minutes} хвилин або виберіть іншу модель.",
+      uk: "Модель `{model}` в даний момент обмежена. Будь ласка, спробуйте ще раз через {minutes} хвилин або виберіть іншу модель.",
+    },
+    visionMismatch: {
+      en: "Model `{model}` does not support image input. Please select a model with 'Vision' capability for this request.",
+      ru: "Модель `{model}` не підтримує зображення. Будь ласка, виберіть модель з 'Vision' функціоналом для цього запиту.",
+      uk: "Модель `{model}` не підтримує зображення. Будь ласка, виберіть модель з 'Vision' функціоналом для цього запиту.",
+    },
+    errorOccurred: {
+      en: "😥 An error occurred: {error}",
+      ru: "😥 Произошла ошибка: {error}",
+      uk: "😥 Виникла помилка: {error}",
+    },
+    modelDetailsError: {
+      en: "😥 Error checking model details: {error}",
+      ru: "😥 Ошибка при проверке деталей модели: {error}",
+      uk: "😥 Помилка при перевірці деталей моделі: {error}",
+    },
+    noModelsFound: {
+      en: "Sorry, I couldn't find any suitable AI models to use right now{vision, select, vision { for image analysis} other {}}.",
+      ru: "Извините, я не смог найти подходящие модели для использования в данный момент{vision, select, vision { для анализа изображений} other {}}.",
+      uk: "Вибачте, я не зміг знайти підходящі моделі для використання в даний момент{vision, select, vision { для аналізу зображень} other {}}.",
+    },
+    selectModelPrompt: {
+      en: "Please select an AI model to use for this chat. You can also configure context memory and tool usage below.",
+      ru: "Пожалуйста, выберите модель для использования в этом чате. Вы также можете настроить контекстную память и использование инструментов ниже.",
+      uk: "Будь ласка, виберіть модель для використання в цьому чаті. Ви також можете налаштувати контекстну память та використання інструментів нижче.",
+    },
+    modelSelectedProcessing: {
+      en: "Model selected: `{model}`. Processing your request...",
+      ru: "Модель выбрана: `{model}`. Обрабатываю ваш запрос...",
+      uk: "Модель вибрана: `{model}`. Обробляю ваш запит...",
+    },
+    selectionTimeout: {
+      en: "Model selection timed out.",
+      ru: "Выбор модели завершен.",
+      uk: "Вибір моделі завершено.",
+    },
+    selectionError: {
+      en: "Sorry, I encountered an error while preparing model selection options.",
+      ru: "Извините, я столкнулся с ошибкой при подготовке вариантов выбора модели.",
+      uk: "Вибачте, я зустрів помилку при підготовці варіантів вибору моделі.",
+    },
+    toolComplete: {
+      en: "Tool actions completed.",
+      ru: "Действия инструментов завершены.",
+      uk: "Дії інструментів завершено.",
+    },
+    noTextResponse: {
+      en: "I didn't get a text response for that.",
+      ru: "Я не получил текстового ответа на этот запрос.",
+      uk: "Я не отримав текстового відповіді на цей запит.",
+    },
+    noTextResponseInternal: {
+      en: "(No text response received)",
+      ru: "(Не получен текстовый ответ)",
+      uk: "(Не отримано текстового відповіді)",
+    },
+    emptyResponseInternal: {
+      en: "(Received an empty response from the AI)",
+      ru: "(Получен пустой ответ от AI)",
+      uk: "(Отримано порожній відповідь від AI)",
+    },
+    toolsDisabledNote: {
+      en: "*(AI tried to use tools, but they are currently disabled.)*",
+      ru: "*(AI попытался использовать инструменты, но они в данный момент отключены.)*",
+      uk: "*(AI спробував використовувати інструменти, але вони в даний момент відключені.)*",
+    },
   },
-  maxContextLength: 4,
-  // Toggle AI's ability to use tools/commands
-  enableTools: true,
-  initialContext: {
-    role: "system",
-    content: `You are a natural and helpful AI assistant for a Discord bot named "Eleazar" created by "@vejoy_". 
-
-CONVERSATION NOTICE:
-- By default, assume the user just wants to have a casual conversation.
-- In conversation, respond naturally, be helpful, and don't try to execute tools unless specifically asked.
-- Keep your responses conversational, concise, and engaging.
-
-TOOL USAGE NOTICE:
-- Only run tools when the user clearly requests a specific task that requires tools.
-- Examples of clear task requests: "show me my balance", "translate this text", "help me create a poll", etc.
-- When you are running tool, make sure you're filling all the parameters correctly.
-
-Do not mention tools, commands, or your internal processes to the user. Always answer in the same language as the user.`,
+  buttons: {
+    systemPrompt: {
+      on: {
+        en: "System Prompt: ON",
+        ru: "Системный промт: ВКЛ",
+        uk: "Системне повідомлення: ВКЛ",
+      },
+      off: {
+        en: "System Prompt: OFF",
+        ru: "Системный промт: ВЫКЛ",
+        uk: "Системне повідомлення: ВИКЛ",
+      },
+      tools: {
+        on: {
+          en: "Tools: ON",
+          ru: "Инструменты: ВКЛ",
+          uk: "Інструменти: ВКЛ",
+        },
+        off: {
+          en: "Tools: OFF",
+          ru: "Инструменты: ВЫКЛ",
+          uk: "Інструменти: ВИМК",
+        },
+        offModel: {
+          en: "Tools: OFF (Model)",
+          ru: "Инструменты: ВЫКЛ (Модель)",
+          uk: "Інструменти: ВИМК (Модель)",
+        },
+      },
+      clearContext: {
+        en: "Context ({current}/{max})",
+        ru: "Контекст ({current}/{max})",
+        uk: "Контекст ({current}/{max})",
+      },
+    },
+    menus: {
+      modelSelect: {
+        placeholder: {
+          en: "Select an AI model",
+          ru: "Выберите модель AI",
+          uk: "Виберіть модель AI",
+        },
+      },
+    },
+    toolResult: {
+      successPrefix: {
+        en: "🔧 **Tool Result ({command}):**",
+        ru: "🔧 **Результат инструмента ({command}):**",
+        uk: "🔧 **Результат інструменту ({command}):**",
+      },
+      errorPrefix: {
+        en: "⚠️ **Tool Error ({command}):**",
+        ru: "⚠️ **Ошибка инструмента ({command}):**",
+        uk: "⚠️ **Помилка інструменту ({command}):**",
+      },
+    },
+    toolExec: {
+      parseError: {
+        en: "Error: Could not parse the arguments provided for the command {command}. Please ensure arguments are a valid JSON string. Received: {args}",
+        ru: "Ошибка: Не удалось разобрать аргументы, предоставленные для команды {command}. Пожалуйста, убедитесь, что аргументы являются допустимой строкой JSON. Получено: {args}",
+        uk: "Помилка: Не вдалося розібрати аргументи, надані для команди {command}. Будь ласка, переконайтеся, що аргументи є допустимою рядковою строкою JSON. Отримано: {args}",
+      },
+      commandNotFound: {
+        en: 'Command "{command}" not found.',
+        ru: 'Команда "{command}" не найдена.',
+        uk: 'Команда "{command}" не знайдена.',
+      },
+      dmRestricted: {
+        en: "Error: This command can only be used in servers, not in DMs.",
+        ru: "Ошибка: Эта команда может быть использована только в серверах, а не в личных сообщениях.",
+        uk: "Помилка: Ця команда може бути використана тільки в серверах, а не в особистих повідомленнях.",
+      },
+      economyDepositError: {
+        en: "The 'deposit' command is for your own bank. Use 'transfer' to send money to someone else.",
+        ru: "Команда 'deposit' предназначена для вашего собственного банка. Используйте 'transfer', чтобы перевести деньги кому-либо другому.",
+        uk: "Команда 'deposit' призначена для вашого власного банку. Використовуйте 'transfer', щоб передати гроші іншому.",
+      },
+      economyTransferError: {
+        en: "To put money in your bank, use the 'deposit' command.",
+        ru: "Чтобы положить деньги в ваш банк, используйте команду 'deposit'.",
+        uk: "Щоб покласти гроші в ваш банк, використовуйте команду 'deposit'.",
+      },
+      economyWithdrawError: {
+        en: "The 'withdraw' command is only for your own bank.",
+        ru: "Команда 'withdraw' предназначена только для вашего собственного банка.",
+        uk: "Команда 'withdraw' призначена тільки для вашого власного банку.",
+      },
+      missingParams: {
+        en: "Error: Missing required parameters for command '{command}': {missing}. Required: {required}. Please provide values for these.",
+        ru: "Ошибка: Отсутствуют обязательные параметры для команды '{command}': {missing}. Обязательно: {required}. Пожалуйста, предоставьте значения для этих параметров.",
+        uk: "Помилка: Відсутні обов'язкові параметри для команди '{command}': {missing}. Обов'язково: {required}. Будь ласка, надайте значення для цих параметрів.",
+      },
+      userNotFound: {
+        en: "Error: Could not find the user specified: {user}. Please provide a valid user mention, ID, or username.",
+        ru: "Ошибка: Не удалось найти указанного пользователя: {user}. Пожалуйста, предоставьте допустимый упоминание пользователя, ID или имя пользователя.",
+        uk: "Помилка: Не вдалося знайти вказаного користувача: {user}. Будь ласка, надайте допустимий упоминання користувача, ID або ім'я користувача.",
+      },
+      missingPermissions: {
+        en: "I seem to be missing the required permissions to do that.",
+        ru: "Я кажусь, что у меня нет необходимых разрешений для этого.",
+        uk: "Я здаюсь, що у мене немає необхідних дозволів для цього.",
+      },
+      errorGeneric: {
+        en: "An error occurred while running the command: {error}",
+        ru: "Произошла ошибка при выполнении команды: {error}",
+        uk: "Виникла помилка при виконанні команди: {error}",
+      },
+      successGeneric: {
+        en: "Command executed successfully.",
+        ru: "Команда выполнена успешно.",
+        uk: "Команда виконана успішно.",
+      },
+    },
+    collector: {
+      contextClear: {
+        success: {
+          en: "Conversation context cleared!",
+          ru: "Контекст диалога очищен!",
+          uk: "Контекст діалогу очищений!",
+        },
+      },
+      modelChange: {
+        success: {
+          en: "Model changed to `{model}`. This will be used for your next request.",
+          ru: "Модель изменена на `{model}`. Это будет использоваться для вашего следующего запроса.",
+          uk: "Модель змінена на `{model}`. Це буде використовуватися для вашого наступного запиту.",
+        },
+      },
+    },
+    sanitization: {
+      // Optional: Keep these internal?
+      mention: { en: "(mention)", ru: "(упоминание)", uk: "(упоминання)" },
+      everyone: { en: "@ everyone", ru: "@ всех", uk: "@ всіх" },
+      here: { en: "@ here", ru: "@ здесь", uk: "@ тут" },
+    },
   },
 };
+// --- End Localization Definitions ---
 
-// State management
-const state = {
-  modelCooldowns: { text: {}, vision: {} },
-  userContexts: {},
-};
+function validateEnvironment() {
+  let isValid = true;
+  const missingVars = [];
 
-// Helper functions
-function getAvailableModel(modelType) {
-  // Simply return the first model in the list
-  return CONFIG.models[modelType][0];
-}
-
-function updateModelCooldown(modelType, modelName, retryAfter) {
-  state.modelCooldowns[modelType][modelName] = Date.now() + retryAfter * 1000;
-}
-
-async function handleRateLimit(error, modelType, currentModel) {
-  if (
-    error.status === 429 ||
-    error.error?.error?.code === "rate_limit_exceeded"
-  ) {
-    const retryAfter = error.headers?.["retry-after"] || 60;
-    updateModelCooldown(modelType, currentModel, retryAfter);
-    return true;
+  if (!process.env.GROQ_API) {
+    console.error("⚠️ Missing GROQ_API environment variable");
+    missingVars.push("GROQ_API");
+    isValid = false;
   }
-  return false;
+
+  if (!isValid) {
+    console.error(
+      `❌ AI module cannot function without: ${missingVars.join(", ")}`
+    );
+  } else {
+    console.log("✅ AI module environment variables validated");
+  }
+
+  return isValid;
 }
 
-function generateToolsFromCommands(client) {
-  console.log("Generating tools from commands...");
+validateEnvironment();
 
-  return Array.from(client.commands.values())
-    .filter((command) => command.data && command.data.ai !== false)
-    .flatMap((command) => {
-      const commandData = command.data;
-      console.log(`Processing command: ${commandData.name}`);
+async function checkAndInitGroqClient(client) {
+  const clientPath = CONFIG.groq.clientPath;
 
-      // Debug the actual command structure
-      inspectCommandStructure(command, `Command ${commandData.name}`);
+  if (!client[clientPath]) {
+    console.warn(`⚠️ Groq client not found at client.${clientPath}`);
+    console.log("Attempting to initialize Groq client");
 
-      const tools = [];
-
-      // Check if command has subcommands in the subcommands object
-      if (command.subcommands) {
-        Object.entries(command.subcommands).forEach(
-          ([subcommandName, subcommand]) => {
-            console.log(
-              `Processing subcommand from subcommands object: ${commandData.name}_${subcommandName}`
-            );
-
-            // Debug the subcommand structure
-            inspectCommandStructure(subcommand, `Subcommand ${subcommandName}`);
-
-            const parameters = {};
-            const required = [];
-
-            // Try different ways of getting options
-            let options = [];
-
-            // Check various paths where options might be stored
-            if (
-              subcommand.data &&
-              subcommand.data.options &&
-              Array.isArray(subcommand.data.options)
-            ) {
-              options = subcommand.data.options;
-              console.log(
-                `Found ${options.length} options in subcommand.data.options`
-              );
-            } else if (
-              subcommand.options &&
-              Array.isArray(subcommand.options)
-            ) {
-              options = subcommand.options;
-              console.log(
-                `Found ${options.length} options in subcommand.options`
-              );
-            } else if (
-              subcommand.data &&
-              typeof subcommand.data === "function"
-            ) {
-              // If data is a function, try to call it
-              try {
-                const builtData = subcommand.data();
-                if (
-                  builtData &&
-                  builtData.options &&
-                  Array.isArray(builtData.options)
-                ) {
-                  options = builtData.options;
-                  console.log(
-                    `Found ${options.length} options in built subcommand data`
-                  );
-                }
-              } catch (error) {
-                console.error(
-                  `Error calling subcommand.data function: ${error.message}`
-                );
-              }
-            } else if (subcommand.data && subcommand.data.toJSON) {
-              // If data has toJSON method, try to use it
-              try {
-                const jsonData = subcommand.data.toJSON();
-                if (
-                  jsonData &&
-                  jsonData.options &&
-                  Array.isArray(jsonData.options)
-                ) {
-                  options = jsonData.options;
-                  console.log(
-                    `Found ${options.length} options in subcommand.data.toJSON()`
-                  );
-                }
-              } catch (error) {
-                console.error(
-                  `Error calling subcommand.data.toJSON: ${error.message}`
-                );
-              }
-            }
-
-            // Process options if we found any
-            options.forEach((option) => {
-              // Create parameter definition
-              let paramDesc = option.description || "";
-
-              // Enhance description based on parameter type
-              if (
-                option.type === 6 ||
-                option.type === "USER" ||
-                option.name === "user"
-              ) {
-                paramDesc += " (Provide a user mention, user ID, or username)";
-              } else if (option.type === 7 || option.type === "CHANNEL") {
-                paramDesc += " (Provide a channel mention or channel name)";
-              } else if (option.type === 8 || option.type === "ROLE") {
-                paramDesc += " (Provide a role mention or role name)";
-              }
-
-              // Add min/max values for numeric options
-              if (
-                (option.type === 4 ||
-                  option.type === "INTEGER" ||
-                  option.type === 10 ||
-                  option.type === "NUMBER") &&
-                (option.minValue !== undefined ||
-                  option.maxValue !== undefined ||
-                  option.min_value !== undefined ||
-                  option.max_value !== undefined)
-              ) {
-                let rangeText = " (";
-                if (
-                  option.minValue !== undefined ||
-                  option.min_value !== undefined
-                ) {
-                  rangeText += `Min: ${
-                    option.minValue !== undefined
-                      ? option.minValue
-                      : option.min_value
-                  }`;
-                  if (
-                    option.maxValue !== undefined ||
-                    option.max_value !== undefined
-                  )
-                    rangeText += ", ";
-                }
-                if (
-                  option.maxValue !== undefined ||
-                  option.max_value !== undefined
-                ) {
-                  rangeText += `Max: ${
-                    option.maxValue !== undefined
-                      ? option.maxValue
-                      : option.max_value
-                  }`;
-                }
-                rangeText += ")";
-                paramDesc += rangeText;
-              }
-
-              // Add choices if available
-              if (option.choices && option.choices.length > 0) {
-                paramDesc += ` (Choices: ${option.choices
-                  .map((c) => `\`${c.name}\` (\`${c.value}\`)`)
-                  .join(", ")})`;
-              }
-
-              // Add parameter to properties
-              parameters[option.name] = {
-                type: getParameterType(option.type),
-                description: paramDesc,
-                ...(option.choices && {
-                  enum: option.choices.map((choice) => choice.value),
-                }),
-              };
-
-              // Add to required list if needed
-              if (option.required) {
-                required.push(option.name);
-              }
-            });
-
-            console.log(
-              `Generated properties for ${commandData.name}_${subcommandName}:`,
-              parameters
-            );
-            console.log(
-              `Required params for ${commandData.name}_${subcommandName}:`,
-              required
-            );
-
-            // Create the tool
-            tools.push({
-              type: "function",
-              function: {
-                name: `${commandData.name}_${subcommandName}`,
-                description:
-                  (subcommand.data && subcommand.data.description) ||
-                  `${subcommandName} subcommand of ${commandData.name}`,
-                parameters: {
-                  type: "object",
-                  properties: parameters,
-                  required: required,
-                },
-              },
-            });
-          }
-        );
-      }
-
-      // If no subcommands were found but the command has direct options, create a tool for the main command
-      if (tools.length === 0 && command.execute) {
-        console.log(`Creating tool for main command: ${commandData.name}`);
-
-        const parameters = {};
-        const required = [];
-        let options = [];
-
-        // Try different ways of getting options
-        if (commandData.options && Array.isArray(commandData.options)) {
-          options = commandData.options.filter((opt) => opt.type !== 1); // Filter out subcommand options
-          console.log(
-            `Found ${options.length} direct options in commandData.options`
-          );
-        } else if (command.options && Array.isArray(command.options)) {
-          options = command.options.filter((opt) => opt.type !== 1);
-          console.log(
-            `Found ${options.length} direct options in command.options`
-          );
-        } else if (typeof commandData === "function") {
-          try {
-            const builtData = commandData();
-            if (
-              builtData &&
-              builtData.options &&
-              Array.isArray(builtData.options)
-            ) {
-              options = builtData.options.filter((opt) => opt.type !== 1);
-              console.log(
-                `Found ${options.length} direct options in built command data`
-              );
-            }
-          } catch (error) {
-            console.error(
-              `Error calling commandData function: ${error.message}`
-            );
-          }
-        } else if (commandData.toJSON) {
-          try {
-            const jsonData = commandData.toJSON();
-            if (
-              jsonData &&
-              jsonData.options &&
-              Array.isArray(jsonData.options)
-            ) {
-              options = jsonData.options.filter((opt) => opt.type !== 1);
-              console.log(
-                `Found ${options.length} direct options in commandData.toJSON()`
-              );
-            }
-          } catch (error) {
-            console.error(`Error calling commandData.toJSON: ${error.message}`);
-          }
-        }
-
-        // Process options if we found any
-        options.forEach((option) => {
-          // Create parameter definition
-          let paramDesc = option.description || "";
-
-          // Enhance description based on parameter type
-          if (
-            option.type === 6 ||
-            option.type === "USER" ||
-            option.name === "user"
-          ) {
-            paramDesc += " (Provide a user mention, user ID, or username)";
-          } else if (option.type === 7 || option.type === "CHANNEL") {
-            paramDesc += " (Provide a channel mention or channel name)";
-          } else if (option.type === 8 || option.type === "ROLE") {
-            paramDesc += " (Provide a role mention or role name)";
-          }
-
-          // Add min/max values for numeric options
-          if (
-            (option.type === 4 ||
-              option.type === "INTEGER" ||
-              option.type === 10 ||
-              option.type === "NUMBER") &&
-            (option.minValue !== undefined ||
-              option.maxValue !== undefined ||
-              option.min_value !== undefined ||
-              option.max_value !== undefined)
-          ) {
-            let rangeText = " (";
-            if (
-              option.minValue !== undefined ||
-              option.min_value !== undefined
-            ) {
-              rangeText += `Min: ${
-                option.minValue !== undefined
-                  ? option.minValue
-                  : option.min_value
-              }`;
-              if (
-                option.maxValue !== undefined ||
-                option.max_value !== undefined
-              )
-                rangeText += ", ";
-            }
-            if (
-              option.maxValue !== undefined ||
-              option.max_value !== undefined
-            ) {
-              rangeText += `Max: ${
-                option.maxValue !== undefined
-                  ? option.maxValue
-                  : option.max_value
-              }`;
-            }
-            rangeText += ")";
-            paramDesc += rangeText;
-          }
-
-          // Add choices if available
-          if (option.choices && option.choices.length > 0) {
-            paramDesc += ` (Choices: ${option.choices
-              .map((c) => `\`${c.name}\` (\`${c.value}\`)`)
-              .join(", ")})`;
-          }
-
-          // Add parameter to properties
-          parameters[option.name] = {
-            type: getParameterType(option.type),
-            description: paramDesc,
-            ...(option.choices && {
-              enum: option.choices.map((choice) => choice.value),
-            }),
-          };
-
-          // Add to required list if needed
-          if (option.required) {
-            required.push(option.name);
-          }
+    try {
+      if (CONFIG.groq.apiKey) {
+        client[clientPath] = new Groq({
+          apiKey: CONFIG.groq.apiKey,
         });
-
-        console.log(
-          `Generated properties for ${commandData.name}:`,
-          parameters
-        );
-        console.log(`Required params for ${commandData.name}:`, required);
-
-        // Create the tool
-        tools.push({
-          type: "function",
-          function: {
-            name: commandData.name,
-            description:
-              commandData.description || `${commandData.name} command`,
-            parameters: {
-              type: "object",
-              properties: parameters,
-              required: required,
-            },
-          },
-        });
-      }
-
-      return tools;
-    });
-}
-
-function getParameterType(optionType) {
-  const typeMap = {
-    // Numeric types (Discord.js ApplicationCommandOptionType enum values)
-    3: "string", // STRING
-    4: "integer", // INTEGER
-    5: "boolean", // BOOLEAN
-    6: "string", // USER
-    7: "string", // CHANNEL
-    8: "string", // ROLE
-    10: "number", // NUMBER
-
-    // String types (for easier reference in code)
-    STRING: "string",
-    INTEGER: "integer",
-    BOOLEAN: "boolean",
-    USER: "string",
-    CHANNEL: "string",
-    ROLE: "string",
-    NUMBER: "number",
-
-    // Direct string values
-    string: "string",
-    integer: "integer",
-    boolean: "boolean",
-    user: "string",
-    channel: "string",
-    role: "string",
-    number: "number",
-  };
-
-  // Add special handling for options where the type is an object with a name property
-  if (typeof optionType === "object" && optionType !== null) {
-    if (optionType.name) {
-      const typeName = optionType.name.toUpperCase();
-      if (typeMap[typeName]) {
-        return typeMap[typeName];
-      }
-    }
-  }
-
-  // Log unrecognized types for debugging
-  if (!typeMap[optionType]) {
-    console.log(
-      `Unrecognized option type: ${optionType}, defaulting to string`
-    );
-  }
-
-  return typeMap[optionType] || "string";
-}
-
-async function executeToolCall(toolCall, message, processingMessage, locale) {
-  const { name, arguments: args } = toolCall.function;
-  const [commandName, ...subcommandParts] = name.split("_");
-  const subcommandName = subcommandParts.join("_");
-
-  // Add debug logging
-  console.log(`Executing tool call:`, {
-    commandName,
-    subcommandName,
-    args: JSON.stringify(args),
-    argsType: typeof args,
-    guildId: message.guild?.id || "NO_GUILD_ID", // Log guild ID for debugging
-  });
-
-  const command = message.client.commands.get(commandName);
-  if (!command) {
-    return { success: false, response: `Command "${commandName}" not found.` };
-  }
-
-  // Validate arguments
-  let validationError = null;
-
-  // Check if command requires arguments
-  const commandObject = subcommandName
-    ? command.subcommands?.[subcommandName]
-    : command;
-
-  const commandOptions = commandObject?.data?.options || [];
-
-  // Special handling for certain command types
-  // Games always require guild context
-  if (
-    commandName === "games" ||
-    commandName === "economy" ||
-    (subcommandName === "work" && commandName === "economy")
-  ) {
-    if (!message.guild?.id) {
-      return {
-        success: false,
-        response: `Error: Game and economy commands can only be used in servers, not in DMs.`,
-      };
-    }
-  }
-
-  if (commandOptions && commandOptions.length > 0) {
-    // Check for required parameters
-    const requiredParams = commandOptions
-      .filter((opt) => opt.required)
-      .map((opt) => opt.name);
-
-    // Parse args if it's a string
-    let parsedArgs = {};
-    if (typeof args === "string") {
-      try {
-        parsedArgs = JSON.parse(args);
-      } catch (e) {
-        return {
-          success: false,
-          response: `Invalid arguments format: ${e.message}. Expected a JSON object string. Arguments received: ${args}`,
-        };
-      }
-    } else if (typeof args === "object" && args !== null) {
-      parsedArgs = args;
-    }
-
-    // Detect common misuse patterns
-    if (commandName === "economy") {
-      // Check for deposit/transfer confusion
-      if (subcommandName === "deposit" && parsedArgs.receiver) {
-        return {
-          success: false,
-          response: `The deposit command doesn't take a 'receiver' parameter. If you're trying to deposit money to your bank, just use economy_deposit with an amount. If you're trying to send money to another user, use economy_transfer instead.`,
-        };
-      }
-      // Check for withdrawal/transfer confusion
-      if (subcommandName === "withdraw" && parsedArgs.receiver) {
-        return {
-          success: false,
-          response: `The withdraw command doesn't take a 'receiver' parameter. If you're trying to withdraw money from your bank, just use economy_withdraw with an amount.`,
-        };
-      }
-      // Check for transfer to "bank"
-      if (
-        subcommandName === "transfer" &&
-        parsedArgs.receiver &&
-        (parsedArgs.receiver.toLowerCase() === "bank" ||
-          parsedArgs.receiver.toLowerCase() === "my bank" ||
-          parsedArgs.receiver.toLowerCase() === '"bank"' ||
-          parsedArgs.receiver.toLowerCase() === '"my bank"')
-      ) {
-        return {
-          success: false,
-          response: `To transfer money to your bank account, use the economy_deposit command instead of economy_transfer.`,
-        };
-      }
-    }
-
-    // Check for unexpected parameters
-    const validParams = commandOptions.map((opt) => opt.name);
-    const unexpectedParams = Object.keys(parsedArgs).filter(
-      (param) => !validParams.includes(param)
-    );
-
-    if (unexpectedParams.length > 0) {
-      console.log(
-        `Unexpected parameters detected for ${name}: ${unexpectedParams.join(
-          ", "
-        )}. Allowed: ${validParams.join(", ")}. Received: ${JSON.stringify(
-          parsedArgs
-        )}`
-      );
-
-      // Remove unexpected parameters
-      unexpectedParams.forEach((param) => {
-        delete parsedArgs[param];
-      });
-
-      // Replace the args with the cleaned version
-      if (typeof args === "string") {
-        toolCall.function.arguments = JSON.stringify(parsedArgs);
+        console.log("✅ Successfully initialized Groq client");
       } else {
-        toolCall.function.arguments = parsedArgs;
+        console.error("❌ Cannot initialize Groq client: missing API key");
       }
-
-      console.log(`Cleaned parameters:`, parsedArgs);
+    } catch (error) {
+      console.error("❌ Failed to initialize Groq client:", error.message);
+      console.error("Make sure you have the 'groq-sdk' package installed");
     }
-
-    // Check for missing required parameters
-    const missingParams = requiredParams.filter((param) => !parsedArgs[param]);
-
-    if (missingParams.length > 0) {
-      return {
-        success: false,
-        response: `Missing required parameters for command ${name}: ${missingParams.join(
-          ", "
-        )}. Required: ${requiredParams.join(", ")}. Received: ${JSON.stringify(
-          parsedArgs
-        )}`,
-      };
-    }
+  } else {
+    console.log(`✅ Groq client already exists at client.${clientPath}`);
   }
 
-  try {
-    // Create a proxy for command execution that integrates with the existing command system
-    const aiCommandProxy = {
-      isChatInputCommand: () => true,
-      isCommand: () => true,
-      options: {
-        getSubcommand: () => subcommandName,
-      },
-      commandName,
-      user: message.author,
-      member: message.member,
-      guild: message.guild,
-      guildId: message.guild?.id,
-      channel: message.channel,
-      channelId: message.channel.id,
-      client: message.client,
-      locale: locale || message.guild?.preferredLocale || "en",
-      reply: async (content) => processingMessage.edit(content),
-      editReply: async (content) => processingMessage.edit(content),
-      deferReply: async () => processingMessage.edit("Processing..."),
-      followUp: async (content) => message.channel.send(content),
-      deferred: false,
-      replied: false,
-      ephemeral: false,
-    };
-
-    // Add options getters that directly use the parsed arguments
-    let parsedArgs = {};
-    if (typeof args === "string") {
-      try {
-        parsedArgs = JSON.parse(args);
-      } catch (e) {
-        console.error("Error parsing arguments:", e);
-        parsedArgs = {};
-      }
-    } else if (typeof args === "object" && args !== null) {
-      parsedArgs = args;
-    }
-
-    // Create option getters for the command
-    const optionGetters = {
-      getString: (name) => parsedArgs[name]?.toString() || null,
-      getInteger: (name) =>
-        parsedArgs[name] ? parseInt(parsedArgs[name]) : null,
-      getBoolean: (name) =>
-        parsedArgs[name] === true || parsedArgs[name] === "true",
-      getNumber: (name) =>
-        parsedArgs[name] ? parseFloat(parsedArgs[name]) : null,
-      getUser: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-
-        // Handle direct user IDs - if it's a valid snowflake
-        if (/^\d{17,19}$/.test(value)) {
-          return message.client.users.cache.get(value);
-        }
-
-        // Handle mentions
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          return message.client.users.cache.get(value.replace(/[<@!>]/g, ""));
-        }
-
-        // Try to find by username
-        return message.client.users.cache.find(
-          (u) =>
-            u.username.toLowerCase() === value.toLowerCase().replace("@", "")
-        );
-      },
-      getMember: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return message.member;
-
-        // Handle direct user IDs - if it's a valid snowflake
-        if (/^\d{17,19}$/.test(value)) {
-          return message.guild.members.cache.get(value) || message.member;
-        }
-
-        // Handle mentions
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          const userId = value.replace(/[<@!>]/g, "");
-          return message.guild.members.cache.get(userId) || message.member;
-        }
-
-        // Try to find by username as fallback
-        const memberByName = message.guild.members.cache.find(
-          (member) =>
-            member.user.username.toLowerCase() ===
-            value.toLowerCase().replace("@", "")
-        );
-
-        return memberByName || message.member;
-      },
-      getChannel: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<#") && value.endsWith(">")) {
-          return message.guild.channels.cache.get(value.replace(/[<#>]/g, ""));
-        }
-        return message.guild.channels.cache.find(
-          (c) => c.name.toLowerCase() === value.toLowerCase()
-        );
-      },
-      getRole: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<@&") && value.endsWith(">")) {
-          return message.guild.roles.cache.get(value.replace(/[<@&>]/g, ""));
-        }
-        return message.guild.roles.cache.find(
-          (r) => r.name.toLowerCase() === value.toLowerCase()
-        );
-      },
-      getAttachment: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        return message.attachments.find((a) => a.id === value);
-      },
-      getMentionable: (name) => {
-        const value = parsedArgs[name];
-        if (!value) return null;
-        if (value.startsWith("<@") && value.endsWith(">")) {
-          const id = value.replace(/[<@!>]/g, "");
-          return (
-            message.guild.members.cache.get(id) ||
-            message.guild.roles.cache.get(id) ||
-            message.client.users.cache.get(id)
-          );
-        }
-        return null;
-      },
-    };
-
-    // Add option getters to the proxy
-    aiCommandProxy.options = {
-      ...aiCommandProxy.options,
-      ...optionGetters,
-    };
-
-    // Set locale based on user or guild preferences
-    let effectiveLocale = locale || message.guild?.preferredLocale || "en";
-
-    // Normalize locale (replacing hyphens, ensuring it's a supported locale)
-    if (effectiveLocale.includes("-")) {
-      effectiveLocale = effectiveLocale.split("-")[0].toLowerCase();
-    }
-
-    // If locale is not supported, fall back to en
-    if (!["en", "ru", "uk"].includes(effectiveLocale)) {
-      console.log(
-        `Locale ${effectiveLocale} not supported, falling back to en`
-      );
-      effectiveLocale = "en";
-    }
-
-    console.log(
-      `Setting locale to ${effectiveLocale} for user ${message.author.tag}`
-    );
-    i18n.setLocale(effectiveLocale);
-
-    // Create context-specific i18n for this command
-    let response;
-
-    // Perform pre-execution validation
-    // For commands that operate on users, check if the user can be retrieved
-    const commandOptions = subcommandName
-      ? command.subcommands?.[subcommandName]?.data?.options
-      : command.data?.options;
-
-    const hasUserOption = commandOptions?.some(
-      (opt) => opt.name === "user" && (opt.type === 6 || opt.type === "USER")
-    );
-
-    if (hasUserOption) {
-      const userValue = aiCommandProxy.options.getUser("user");
-      if (!userValue) {
-        console.log("User option exists but getUser('user') returned null");
-        const rawUserValue =
-          typeof toolCall.function.arguments === "string"
-            ? JSON.parse(toolCall.function.arguments).user
-            : toolCall.function.arguments.user;
-        console.log(`Raw user value: ${rawUserValue}`);
-
-        // If this user parameter is required, return an error instead of proceeding
-        const isUserRequired = commandOptions?.some(
-          (opt) => opt.name === "user" && opt.required
-        );
-
-        if (isUserRequired) {
-          return {
-            success: false,
-            response: `Could not find a valid user with the provided value: ${rawUserValue}. Please use a valid user mention, user ID, or username.`,
-          };
-        }
-      }
-    }
-
-    // If this is a subcommand
-    if (subcommandName && command.subcommands?.[subcommandName]) {
-      // Set locale for i18n
-      i18n.setLocale(effectiveLocale);
-
-      // Register any localizations if present
-      if (command.subcommands[subcommandName].localization_strings) {
-        i18n.registerLocalizations(
-          "commands",
-          `${commandName}.${subcommandName}`,
-          command.subcommands[subcommandName].localization_strings
-        );
-      }
-
-      // Execute the subcommand
-      response = await command.subcommands[subcommandName].execute(
-        aiCommandProxy,
-        i18n
-      );
-    }
-    // Regular command without subcommands
-    else if (command.execute) {
-      // Set locale for i18n
-      i18n.setLocale(effectiveLocale);
-
-      // Register any localizations if present
-      if (command.localization_strings) {
-        i18n.registerLocalizations(
-          "commands",
-          commandName,
-          command.localization_strings
-        );
-      }
-
-      // Execute the command
-      response = await command.execute(aiCommandProxy, i18n);
-    } else {
-      return {
-        success: false,
-        response: "Command execution method not found.",
-      };
-    }
-
-    return {
-      success: true,
-      response: response || "Command executed successfully.",
-    };
-  } catch (error) {
-    console.error(`Error executing command ${name}:`, error);
-    return {
-      success: false,
-      response: `Error executing command: ${error.message}`,
-    };
-  }
+  return !!client[clientPath];
 }
 
-function splitMessage(message, maxLength = 2000) {
-  const chunks = [];
-  let currentChunk = "";
-  let inCodeBlock = false;
-  let codeBlockLanguage = "";
+// Groq model utilities are now imported from ../services/groqModels.js
 
-  const lines = message.split("\n");
-  for (const line of lines) {
-    const codeBlockMatch = line.match(/^```(\w+)?/);
-    if (codeBlockMatch) {
-      if (inCodeBlock) {
-        inCodeBlock = false;
-        currentChunk += line + "\n";
-        chunks.push(currentChunk.trim());
-        currentChunk = "";
-        continue;
-      } else {
-        inCodeBlock = true;
-        codeBlockLanguage = codeBlockMatch[1] || "";
-      }
-    }
-
-    if (currentChunk.length + line.length + 1 > maxLength) {
-      if (inCodeBlock) {
-        chunks.push(currentChunk.trim() + "\n```");
-        currentChunk = "```" + codeBlockLanguage + "\n" + line;
-      } else {
-        chunks.push(currentChunk.trim());
-        currentChunk = line;
-      }
-    } else {
-      currentChunk += (currentChunk ? "\n" : "") + line;
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk.trim());
-  }
-
-  if (inCodeBlock && !chunks[chunks.length - 1].endsWith("```")) {
-    chunks[chunks.length - 1] += "\n```";
-  }
-
-  return chunks;
-}
-
-async function sendResponse(message, processingMessage, content) {
-  const sanitizedContent = content
-    .replace(/<@[!&]?\d+>/g, "no_mention")
-    .replace(/@everyone/gi, "no_mention")
-    .replace(/@here/gi, "no_mention");
-
-  const chunks = splitMessage(sanitizedContent);
-  await processingMessage.edit(chunks[0]);
-
-  for (let i = 1; i < chunks.length; i++) {
-    await message.channel.send(chunks[i]);
-  }
-}
-
-// Main event handler
+// --- Start MessageCreate Handler Localization ---
 export default {
   name: Events.MessageCreate,
+  localization_strings: localization_strings, // Add the strings object to the export
   async execute(message) {
+    if (!message.client._groqChecked) {
+      message.client._groqChecked = true;
+      await checkAndInitGroqClient(message.client);
+    }
+
     if (message.author.bot) return;
-    if (!message.mentions.users.has(message.client.user.id)) return;
+
+    const userId = message.author.id;
+
+    console.log(
+      `Message received from ${
+        message.author.tag
+      }: "${message.content.substring(0, 50)}${
+        message.content.length > 50 ? "..." : ""
+      }"`
+    );
+
+    if (!message.mentions.users.has(message.client.user.id)) {
+      console.log("Message doesn't mention bot, ignoring");
+      return;
+    }
 
     const messageContent = message.content
-      .replace(`<@${message.client.user.id}>`, "")
+      .replace(new RegExp(`<@!?${message.client.user.id}>`, "g"), "")
       .trim();
 
-    // Determine the locale for this interaction
-    let effectiveLocale = "en"; // Default to English
+    if (!messageContent && message.attachments.size === 0) {
+      console.log("Message only contains ping, no content or attachments");
+      return;
+    }
+
+    const prefs = getUserPreferences(userId);
+    console.log(`User preferences for ${userId}:`, {
+      selectedModel: prefs.selectedModel,
+      systemPromptEnabled: prefs.systemPromptEnabled,
+      toolsEnabled: prefs.toolsEnabled,
+    });
+
+    // Determine locale early for potential messages
+    let effectiveLocale = "en";
     try {
-      // 1. Try fetching the user's saved locale from the database
       const userDbLocale = await Database.getUserLocale(
         message.guild?.id,
-        message.author.id
+        userId
       );
       if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
         effectiveLocale = userDbLocale;
-        console.log(
-          `Using saved locale for ${message.author.tag}: ${effectiveLocale}`
-        );
-      } else {
-        // 2. Fallback to guild preferred locale if user locale isn't set or invalid
-        const guildLocale = message.guild?.preferredLocale;
-        if (guildLocale) {
-          // Normalize locale (e.g., 'en-US' -> 'en')
-          const normalizedGuildLocale = guildLocale.split("-")[0].toLowerCase();
-          // Use guild locale if it's supported
-          if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
-            effectiveLocale = normalizedGuildLocale;
-            console.log(
-              `Using guild locale for ${message.author.tag}: ${effectiveLocale}`
-            );
-          }
+      } else if (message.guild?.preferredLocale) {
+        const normalizedGuildLocale = message.guild.preferredLocale
+          .split("-")[0]
+          .toLowerCase();
+        if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
+          effectiveLocale = normalizedGuildLocale;
         }
-        // 3. If neither user nor guild locale is valid/available, 'en' remains the default.
       }
     } catch (dbError) {
       console.error(
-        `Error fetching user locale for ${message.author.id}, defaulting to 'en':`,
+        `Error fetching user locale for ${userId}, defaulting to 'en':`,
         dbError
       );
-      // Keep default 'en' on database error
     }
+    // Set locale for subsequent i18n calls within this scope if needed
+    i18n.setLocale(effectiveLocale);
 
-    message.channel.sendTyping();
-    const processingMessage = await message.channel.send(
-      "Processing your request..."
-    );
+    const isVisionRequest =
+      message.attachments.size > 0 &&
+      message.attachments.first().contentType?.startsWith("image/");
 
-    try {
-      // Determine if this is a vision request based on attachments
-      const isVisionRequest = message.attachments.size > 0;
-      const modelType = isVisionRequest ? "vision" : "text";
-
-      // Initialize or update user context
-      if (!state.userContexts[message.author.id]) {
-        state.userContexts[message.author.id] = [];
-        // Add initial system context if defined
-        if (CONFIG.initialContext) {
-          state.userContexts[message.author.id].push(CONFIG.initialContext);
-        }
-      }
-
-      // Select relevant history, respecting maxContextLength
-      // Calculate how many messages to keep besides the initial context (if any)
-      const historyStartIndex = CONFIG.initialContext ? 1 : 0;
-      const historyToKeep =
-        state.userContexts[message.author.id].slice(historyStartIndex);
-      const prunedHistory = historyToKeep.slice(-CONFIG.maxContextLength); // Keep the last N messages
-
-      const initialMessages = [
-        // Add initial context back if it exists
-        ...(CONFIG.initialContext
-          ? [state.userContexts[message.author.id][0]]
-          : []),
-        ...prunedHistory, // Add the pruned history
-      ];
-
-      // Add current user message
-      if (isVisionRequest) {
-        initialMessages.push({
-          role: "user",
-          content: [
-            { type: "text", text: messageContent },
-            {
-              type: "image_url",
-              image_url: { url: message.attachments.first().url },
-            },
-          ],
-        });
-      } else {
-        initialMessages.push({ role: "user", content: messageContent });
-      }
-
-      // Only provide tools to the AI if enableTools is true and not a vision request
-      const tools =
-        isVisionRequest || !CONFIG.enableTools
-          ? []
-          : generateToolsFromCommands(message.client);
-
-      console.log(`Generated ${tools.length} tools for AI to use.`);
-      console.log(JSON.stringify(tools, null, 2));
-
-      // Get the model to use
-      const currentModel = getAvailableModel(modelType);
-      console.log(`Making API call with model: ${currentModel}`);
-
-      let response;
-      try {
-        response = await message.client.groq.chat.completions.create({
-          model: currentModel,
-          messages: initialMessages,
-          tools: tools,
-          tool_choice: tools.length > 0 ? "auto" : "none",
-        });
-      } catch (error) {
-        console.error(`API Error with model ${currentModel}:`, error);
-        throw error;
-      }
-
-      const messageResponse = response.choices[0].message;
-      const aiContent = messageResponse.content;
-      const toolCalls = messageResponse.tool_calls || [];
-
-      let finalResponse = aiContent;
-
-      // If there are tool calls, process them
-      if (toolCalls.length > 0) {
-        console.log(`AI requested ${toolCalls.length} tool calls.`);
-
-        // Process tool calls
-        for (const toolCall of toolCalls) {
-          console.log(`Executing tool: ${toolCall.function.name}`);
-
-          const { success, response: toolResponse } = await executeToolCall(
-            toolCall,
-            message,
-            processingMessage,
-            effectiveLocale
-          );
-
-          console.log(
-            `Tool ${toolCall.function.name} execution ${
-              success ? "succeeded" : "failed"
-            }. Response:`,
-            toolResponse
-          );
-
-          // Add tool result to the response
-          if (!success) {
-            finalResponse = toolResponse;
-          } else if (typeof toolResponse === "string") {
-            finalResponse = toolResponse;
-          } else {
-            finalResponse = JSON.stringify(toolResponse);
-          }
-        }
-      } else {
-        // Check if the AI tried to use a "fake" tool in text format
-        const fakeToolCall = detectFakeToolCalls(aiContent);
-        if (fakeToolCall) {
-          console.log(
-            `Detected fake tool call in AI response: ${fakeToolCall.name}`
-          );
-
-          // Create a proper tool call from the fake one
-          const properToolCall = {
-            function: {
-              name: fakeToolCall.name,
-              arguments: JSON.stringify(fakeToolCall.args),
-            },
-          };
-
-          // Execute the real tool
-          const { success, response: toolResponse } = await executeToolCall(
-            properToolCall,
-            message,
-            processingMessage,
-            effectiveLocale
-          );
-
-          console.log(
-            `Converted fake tool ${fakeToolCall.name} execution ${
-              success ? "succeeded" : "failed"
-            }. Response:`,
-            toolResponse
-          );
-
-          // Replace the fake tool text with the real response
-          // First remove the fake tool call syntax completely
-          let cleanedResponse = aiContent.replace(fakeToolCall.fullMatch, "");
-          // Then add the real tool response
-          finalResponse =
-            cleanedResponse.trim() +
-            (cleanedResponse.trim() ? "\n\n" : "") +
-            (typeof toolResponse === "string"
-              ? toolResponse
-              : JSON.stringify(toolResponse));
-
-          // Clear context when a fake tool call is detected to prevent this behavior from repeating
-          console.log("Clearing context due to fake tool call detection");
-          if (CONFIG.initialContext) {
-            state.userContexts[message.author.id] = [CONFIG.initialContext];
-          } else {
-            state.userContexts[message.author.id] = [];
-          }
-        }
-      }
-
-      // Send the final response
-      if (finalResponse) {
-        await sendResponse(message, processingMessage, finalResponse);
-
-        // Add the conversation to context for future reference
-        if (CONFIG.initialContext) {
-          state.userContexts[message.author.id] = [
-            CONFIG.initialContext,
-            { role: "user", content: messageContent },
-            { role: "assistant", content: finalResponse },
-          ];
-        } else {
-          state.userContexts[message.author.id] = [
-            { role: "user", content: messageContent },
-            { role: "assistant", content: finalResponse },
-          ];
-        }
-
-        // Trim history if needed
-        const currentHistory = state.userContexts[message.author.id];
-        const historyStartIndex = CONFIG.initialContext ? 1 : 0;
-        if (
-          currentHistory.length - historyStartIndex >
-          CONFIG.maxContextLength
-        ) {
-          state.userContexts[message.author.id] = [
-            ...(CONFIG.initialContext ? [currentHistory[0]] : []),
-            ...currentHistory.slice(-CONFIG.maxContextLength),
-          ];
-        }
-      } else {
-        await sendResponse(
-          message,
-          processingMessage,
-          "I didn't have a response for that."
-        );
-      }
-    } catch (error) {
-      console.error("Error processing request:", error);
-      await sendResponse(
-        message,
-        processingMessage,
-        `An error occurred while processing your request.`
+    if (isVisionRequest) {
+      console.log(
+        `Vision request detected with attachment: ${
+          message.attachments.first().name
+        }`
       );
     }
-  },
-};
 
-// Add this helper function at the top
-function inspectCommandStructure(obj, label, maxDepth = 2) {
-  console.log(`\n======= INSPECTING: ${label} =======`);
+    if (!prefs.selectedModel) {
+      console.log(
+        `User ${userId} has no model selected. Prompting for selection.`
+      );
+      message.channel.sendTyping();
 
-  // Function to safely stringify circular structures
-  function safeStringify(obj, depth = 0) {
-    if (depth > maxDepth) return "[Max Depth Reached]";
-    if (typeof obj !== "object" || obj === null) return obj;
+      try {
+        const availableModels = await getAvailableModels(isVisionRequest);
+        console.log(`Found ${availableModels.length} available models`);
 
-    const result = {};
-    for (const key in obj) {
-      if (
-        key === "client" ||
-        key === "guild" ||
-        key === "commands" ||
-        key === "cache"
-      ) {
-        result[key] = "[Circular Reference]";
-      } else if (typeof obj[key] === "function") {
-        result[key] = "[Function]";
-      } else if (typeof obj[key] === "object" && obj[key] !== null) {
-        result[key] = safeStringify(obj[key], depth + 1);
-      } else {
-        result[key] = obj[key];
+        if (availableModels.length === 0) {
+          // Use determined locale for the reply
+          await message.reply(
+            i18n.__(
+              "events.ai.messages.noModelsFound",
+              { vision: isVisionRequest ? "vision" : "text" },
+              effectiveLocale
+            )
+          );
+          return;
+        }
+
+        // Pass locale to build components
+        const components = await buildInteractionComponents(
+          userId,
+          availableModels,
+          isVisionRequest,
+          true,
+          effectiveLocale
+        );
+
+        console.log("Sending model selection prompt");
+        // Use locale for the prompt message
+        let promptMsg = await message.reply({
+          content: i18n.__(
+            "events.ai.messages.selectModelPrompt",
+            effectiveLocale
+          ),
+          components: components,
+        });
+
+        state.pendingInteractions[userId] = message;
+        console.log(`Stored pending interaction for user ${userId}`);
+
+        const collector = promptMsg.createMessageComponentCollector({
+          filter: (i) => i.user.id === userId,
+          time: 5 * 60 * 1000,
+        });
+
+        console.log(`Created message component collector for user ${userId}`);
+
+        collector.on("collect", async (interaction) => {
+          console.log(
+            `Initial Collector: Received interaction - Type: ${interaction.componentType}, Custom ID: ${interaction.customId}, User: ${interaction.user.id}`
+          );
+
+          const customId = interaction.customId;
+
+          if (
+            interaction.isStringSelectMenu() &&
+            customId.startsWith("ai_select_model_")
+          ) {
+            console.log(
+              "Initial Collector: Handling StringSelectMenu interaction."
+            );
+            const selectedModelId = interaction.values[0];
+            console.log(
+              `Initial Collector: Raw selected value: ${selectedModelId}`
+            );
+
+            updateUserPreference(userId, "selectedModel", selectedModelId);
+            console.log(
+              `Initial Collector: User ${userId} preference updated to model: ${selectedModelId}`
+            );
+
+            const originalMessage = state.pendingInteractions[userId];
+            if (originalMessage) {
+              console.log(
+                `Initial Collector: Found pending message ${originalMessage.id}.`
+              );
+              delete state.pendingInteractions[userId];
+              collector.stop("model_selected");
+              console.log("Initial Collector: Stopped collector.");
+
+              try {
+                await interaction.deferUpdate();
+                console.log("Initial Collector: Interaction deferred.");
+
+                // Use locale for the edit message
+                await promptMsg.edit({
+                  content: i18n.__(
+                    "events.ai.messages.modelSelectedProcessing",
+                    { model: selectedModelId },
+                    effectiveLocale
+                  ),
+                  components: [],
+                });
+                console.log(
+                  `Initial Collector: Edited prompt message ${promptMsg.id}.`
+                );
+              } catch (updateError) {
+                console.error(
+                  "Initial Collector: Error deferring/editing interaction/prompt message: ",
+                  updateError
+                );
+                // Use locale for the fallback message
+                await message.channel
+                  .send(
+                    i18n.__(
+                      "events.ai.messages.modelSelectedProcessing",
+                      { model: selectedModelId },
+                      effectiveLocale
+                    )
+                  )
+                  .catch((e) =>
+                    console.error("Failed to send fallback message:", e)
+                  );
+                promptMsg = null;
+              }
+
+              const messageContent = originalMessage.content
+                .replace(
+                  new RegExp(`<@!?${originalMessage.client.user.id}>`, "g"),
+                  ""
+                )
+                .trim();
+              const isVisionRequest =
+                originalMessage.attachments.size > 0 &&
+                originalMessage.attachments
+                  .first()
+                  .contentType?.startsWith("image/");
+
+              console.log("Initial Collector: Calling processAiRequest...");
+              await processAiRequest(
+                originalMessage,
+                userId,
+                messageContent,
+                isVisionRequest,
+                promptMsg,
+                effectiveLocale // Pass locale here
+              );
+              console.log("Initial Collector: processAiRequest call finished.");
+            } else {
+              console.warn(
+                `Initial Collector: No pending message found for user ${userId} after model selection.`
+              );
+              try {
+                await interaction.update({
+                  content: i18n.__("events.ai.messages.modelSelected", {
+                    model: selectedModelId,
+                  }),
+                  components: [],
+                });
+              } catch (e) {
+                console.error(
+                  "Couldn't update interaction after model selection (no pending message)",
+                  e
+                );
+              }
+            }
+          } else {
+            console.log(
+              `Initial Collector: Interaction ${customId} is not the model select menu. Ignoring in this collector.`
+            );
+          }
+
+          // NOTE: Removed toggle and retry button logic from this initial collector.
+          // They are now handled by the collector attached in sendResponse.
+        });
+
+        collector.on("end", (collected, reason) => {
+          console.log(
+            `Collector for ${userId} ended with reason: ${reason}, collected ${collected.size} interactions`
+          );
+
+          if (
+            reason === "time" &&
+            state.pendingInteractions[userId] === message
+          ) {
+            delete state.pendingInteractions[userId];
+            if (collected.size === 0) {
+              // Use locale for the timeout message
+              promptMsg
+                .edit({
+                  content: i18n.__(
+                    "events.ai.messages.selectionTimeout",
+                    effectiveLocale
+                  ),
+                  components: [],
+                })
+                .catch((e) =>
+                  console.error("Failed to edit timeout message:", e)
+                );
+              console.log(`Pending interaction timed out for user ${userId}`);
+            }
+          }
+        });
+      } catch (error) {
+        console.error("Error during model selection process:", error);
+        // Use locale for the error message
+        await message
+          .reply(i18n.__("events.ai.messages.selectionError", effectiveLocale))
+          .catch((e) => {});
       }
-    }
-    return result;
-  }
 
-  const safeObj = safeStringify(obj);
-  console.log(JSON.stringify(safeObj, null, 2));
-  console.log(`======= END INSPECTION: ${label} =======\n`);
-}
-
-// Function to detect fake tool calls in text
-function detectFakeToolCalls(text) {
-  if (!text) return null;
-
-  // Pattern for detecting HTML-like tags with attributes
-  // This will match patterns like <command param="value" param2="value2"></command>
-  const tagPattern =
-    /<([a-zA-Z0-9_]+)([^>]*?)>(.*?)<\/\1>|<([a-zA-Z0-9_]+)([^>]*?)\/?>/g;
-
-  // Pattern for extracting attributes from matched tag
-  const attrPattern = /([a-zA-Z0-9_]+)=["']([^"']*)["']/g;
-
-  const matches = Array.from(text.matchAll(tagPattern));
-
-  if (matches.length === 0) return null;
-
-  // Check all matches and return the first valid one
-  for (const match of matches) {
-    // Extract the tag name - either from the opening/closing pair or self-closing tag
-    const tagName = match[1] || match[4];
-    // Extract the attributes part - either from opening/closing pair or self-closing tag
-    const attributesText = match[2] || match[5];
-    // Extract the full match
-    const fullMatch = match[0];
-
-    // Skip if this doesn't look like a command
-    if (!tagName) continue;
-
-    // Check if the tag name exists as a command or command_subcommand pattern
-    // First, get all available commands from the client.commands collection
-    const allCommands = [];
-    const validCommandPattern =
-      /(filters|economy|music|counting|emotions|images|help|ai)(_[a-zA-Z0-9_]+)?/;
-
-    // Skip common HTML tags and formatting tags that are not commands
-    const commonTags = [
-      "div",
-      "span",
-      "p",
-      "a",
-      "img",
-      "function",
-      "code",
-      "pre",
-      "b",
-      "i",
-      "u",
-      "strong",
-      "em",
-      "br",
-      "hr",
-    ];
-    if (commonTags.includes(tagName.toLowerCase())) continue;
-
-    // Only process tags that match our command pattern or are known commands
-    if (!validCommandPattern.test(tagName)) continue;
-
-    // Extract attributes as key-value pairs
-    const attributes = {};
-    let attrMatch;
-    while ((attrMatch = attrPattern.exec(attributesText)) !== null) {
-      attributes[attrMatch[1]] = attrMatch[2];
+      return; // Stop processing, wait for interaction
     }
 
     console.log(
-      `Detected potential fake tool: ${tagName} with attributes:`,
-      attributes
+      `Processing message from ${message.author.tag} with model ${prefs.selectedModel}`
     );
+    // Pass effectiveLocale to processAiRequest
+    await processAiRequest(
+      message,
+      userId,
+      messageContent,
+      isVisionRequest,
+      null,
+      effectiveLocale
+    );
+  },
+};
+// --- End MessageCreate Handler Localization ---
 
-    // Return information about the fake tool call
-    return {
-      name: tagName,
-      args: attributes,
-      fullMatch: fullMatch,
-    };
-  }
-
-  return null;
-}
+// User preferences now managed in src/state/prefs.js
+// Model capabilities and API client are imported from services/groqModels.js
