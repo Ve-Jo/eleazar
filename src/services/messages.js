@@ -10,7 +10,7 @@ import {
   updateUserPreference,
   clearUserHistory,
 } from "../state/prefs.js";
-import { getAvailableModels, getModelCapabilities } from "./groqModels.js";
+import { getAvailableModels, getModelCapabilities } from "./aiModels.js";
 import processAiRequest from "../handlers/processAiRequest.js";
 
 // Track the last message with components for each user
@@ -70,7 +70,8 @@ export async function buildInteractionComponents(
   availableModels,
   isVision = false,
   noButtons = false,
-  locale = "en"
+  locale = "en",
+  client = null
 ) {
   const prefs = getUserPreferences(userId);
   const components = [];
@@ -83,9 +84,9 @@ export async function buildInteractionComponents(
         i18n.__("events.ai.buttons.menus.modelSelect.placeholder", locale)
       );
     const opts = availableModels.slice(0, 25).map((m) => ({
-      label: m.name,
-      value: m.id,
-      default: m.id === prefs.selectedModel,
+      label: m.name.length > 100 ? m.name.substring(0, 97) + "..." : m.name,
+      value: m.name,
+      default: m.name === prefs.selectedModel,
     }));
     menu.addOptions(opts);
     components.push(new ActionRowBuilder().addComponents(menu));
@@ -101,25 +102,37 @@ export async function buildInteractionComponents(
       )
       .setStyle(prefs.systemPromptEnabled ? 1 : 2);
 
+    let toolsDisabled = false;
     let actualTools = prefs.toolsEnabled;
     let toolsLabel = actualTools
       ? i18n.__("events.ai.buttons.systemPrompt.tools.on", locale)
       : i18n.__("events.ai.buttons.systemPrompt.tools.off", locale);
     let toolsStyle = prefs.toolsEnabled ? 1 : 2;
-    let toolsDisabled = false;
 
-    if (prefs.selectedModel) {
-      const cap = await getModelCapabilities(prefs.selectedModel);
-      if (prefs.toolsEnabled && !cap.supportsTools) {
-        actualTools = false;
-        toolsLabel = i18n.__(
-          "events.ai.buttons.systemPrompt.tools.offModel",
-          locale
+    // Only check model capabilities if we have both a selected model and client
+    if (prefs.selectedModel && client) {
+      try {
+        const cap = await getModelCapabilities(client, prefs.selectedModel);
+        if (prefs.toolsEnabled && !cap.tools) {
+          actualTools = false;
+          toolsLabel = i18n.__(
+            "events.ai.buttons.systemPrompt.tools.offModel",
+            locale
+          );
+          toolsStyle = 2;
+          toolsDisabled = true;
+        }
+      } catch (error) {
+        console.warn(
+          `Could not check capabilities for ${prefs.selectedModel}:`,
+          error.message
         );
-        toolsStyle = 2;
-        toolsDisabled = true;
+        // Don't change button state if we can't check capabilities
       }
+    } else {
+      console.log("Skipping capability check (no client or model)");
     }
+
     const toolsBtn = new ButtonBuilder()
       .setCustomId(`ai_toggle_tools_${userId}`)
       .setLabel(toolsLabel)
@@ -236,13 +249,17 @@ export async function sendResponse(
       const isVisionRequest =
         message.attachments.size > 0 &&
         message.attachments.first().contentType?.startsWith("image/");
-      const models = await getAvailableModels(isVisionRequest);
+      const models = await getAvailableModels(
+        message.client,
+        isVisionRequest ? "vision" : null
+      );
       const newComponents = await buildInteractionComponents(
         userId,
         models,
         isVisionRequest,
         false,
-        locale
+        locale,
+        message.client
       );
       // Update original message with new components
       await interaction.update({ components: newComponents });

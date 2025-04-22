@@ -13,36 +13,12 @@ import fetch from "node-fetch";
 import { Groq } from "groq-sdk";
 import CONFIG from "../config/aiConfig.js";
 import i18n from "../utils/newI18n.js";
-import {
-  state,
-  isModelRateLimited,
-  setModelRateLimit,
-} from "../state/state.js";
-import {
-  fetchGroqModels,
-  extractModelSize,
-  getAvailableModels,
-  getAvailableModel,
-  updateModelCooldown,
-  getModelCapabilities,
-  getApiClientForModel,
-} from "../services/groqModels.js";
-import {
-  generateToolsFromCommands,
-  getParameterType,
-} from "../services/tools.js";
-import {
-  splitMessage,
-  buildInteractionComponents,
-  sendResponse,
-} from "../services/messages.js";
+import { state } from "../state/state.js";
+import { buildInteractionComponents } from "../services/messages.js";
 import processAiRequest from "../handlers/processAiRequest.js";
-import {
-  getUserPreferences,
-  updateUserPreference,
-  clearUserHistory,
-  addConversationToHistory,
-} from "../state/prefs.js";
+import { getUserPreferences, updateUserPreference } from "../state/prefs.js";
+import OpenAI from "openai";
+import { getAvailableModels } from "../services/aiModels.js"; // Updated import path
 
 // --- Start Localization Definitions ---
 const localization_strings = {
@@ -272,9 +248,24 @@ function validateEnvironment() {
     isValid = false;
   }
 
-  if (!isValid) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.warn(
+      "⚠️ Missing OPENROUTER_API_KEY environment variable. OpenRouter models will not be available."
+    );
+  }
+
+  if (missingVars.length > 0 && !process.env.OPENROUTER_API_KEY) {
     console.error(
-      `❌ AI module cannot function without: ${missingVars.join(", ")}`
+      `❌ AI module cannot function without at least one API key: ${missingVars.join(
+        ", "
+      )} or OPENROUTER_API_KEY`
+    );
+    isValid = false;
+  } else if (missingVars.length > 0) {
+    console.log(
+      `⚠️ AI module running with missing optional keys: ${missingVars.join(
+        ", "
+      )}. Some providers may be unavailable.`
     );
   } else {
     console.log("✅ AI module environment variables validated");
@@ -312,6 +303,42 @@ async function checkAndInitGroqClient(client) {
   return !!client[clientPath];
 }
 
+async function checkAndInitOpenRouterClient(client) {
+  const clientPath = CONFIG.openrouter.clientPath;
+  const apiKey = CONFIG.openrouter.apiKey;
+  const baseURL = CONFIG.openrouter.baseURL;
+
+  if (!apiKey) {
+    console.log(
+      "ℹ️ OpenRouter API key not configured, skipping client initialization."
+    );
+    return false;
+  }
+
+  if (!client[clientPath]) {
+    console.warn(`⚠️ OpenRouter client not found at client.${clientPath}`);
+    console.log("Attempting to initialize OpenRouter client");
+
+    try {
+      client[clientPath] = new OpenAI({
+        apiKey: apiKey,
+        baseURL: baseURL,
+      });
+      console.log("✅ Successfully initialized OpenRouter client");
+    } catch (error) {
+      console.error(
+        "❌ Failed to initialize OpenRouter client:",
+        error.message
+      );
+      console.error("Make sure you have the 'openai' package installed");
+    }
+  } else {
+    console.log(`✅ OpenRouter client already exists at client.${clientPath}`);
+  }
+
+  return !!client[clientPath];
+}
+
 // Groq model utilities are now imported from ../services/groqModels.js
 
 // --- Start MessageCreate Handler Localization ---
@@ -319,9 +346,14 @@ export default {
   name: Events.MessageCreate,
   localization_strings: localization_strings, // Add the strings object to the export
   async execute(message) {
-    if (!message.client._groqChecked) {
-      message.client._groqChecked = true;
-      await checkAndInitGroqClient(message.client);
+    if (!message.client._aiClientsChecked) {
+      message.client._aiClientsChecked = true;
+      if (CONFIG.groq.apiKey) {
+        await checkAndInitGroqClient(message.client);
+      }
+      if (CONFIG.openrouter.apiKey) {
+        await checkAndInitOpenRouterClient(message.client);
+      }
     }
 
     if (message.author.bot) return;
@@ -402,7 +434,11 @@ export default {
       message.channel.sendTyping();
 
       try {
-        const availableModels = await getAvailableModels(isVisionRequest);
+        const client = message.client; // Get client object
+        const availableModels = await getAvailableModels(
+          client,
+          isVisionRequest ? "vision" : null
+        );
         console.log(`Found ${availableModels.length} available models`);
 
         if (availableModels.length === 0) {
@@ -417,13 +453,14 @@ export default {
           return;
         }
 
-        // Pass locale to build components
+        // Pass client to buildInteractionComponents
         const components = await buildInteractionComponents(
           userId,
           availableModels,
           isVisionRequest,
           true,
-          effectiveLocale
+          effectiveLocale,
+          message.client // Pass client parameter
         );
 
         console.log("Sending model selection prompt");

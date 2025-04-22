@@ -10,13 +10,17 @@ import {
   getApiClientForModel,
   getModelCapabilities,
   getAvailableModels,
-} from "../services/groqModels.js";
+  updateModelCooldown,
+} from "../services/aiModels.js";
 import { generateToolsFromCommands } from "../services/tools.js";
 import {
   buildInteractionComponents,
   sendResponse,
 } from "../services/messages.js";
 import { executeToolCall } from "../services/toolExecutor.js";
+
+// Cache for models that don't support tools
+const modelToolSupportCache = new Map();
 
 // Helper function to detect if AI is trying to use a "fake" tool in text format
 function detectFakeToolCalls(content) {
@@ -153,10 +157,12 @@ export default async function processAiRequest(
   // Provider and capabilities check
   let provider;
   let capabilities;
+  let apiClientInfo;
+
   try {
-    const apiClientInfo = await getApiClientForModel(prefs.selectedModel);
-    provider = apiClientInfo.provider;
-    capabilities = await getModelCapabilities(prefs.selectedModel);
+    apiClientInfo = await getApiClientForModel(client, prefs.selectedModel);
+    const { modelId, provider } = apiClientInfo;
+    capabilities = await getModelCapabilities(client, prefs.selectedModel);
     console.log(`Model capabilities for ${prefs.selectedModel}:`, capabilities);
   } catch (error) {
     console.error(
@@ -178,13 +184,14 @@ export default async function processAiRequest(
     console.log(
       `Vision request blocked for non-vision model ${prefs.selectedModel}.`
     );
-    const visionModels = await getAvailableModels(true);
+    const visionModels = await getAvailableModels(client, "vision");
     const comps = await buildInteractionComponents(
       userId,
       visionModels,
       true,
       false,
-      effectiveLocale
+      effectiveLocale,
+      client
     );
     // Send prompt with vision model selector
     channel.sendTyping();
@@ -260,6 +267,57 @@ export default async function processAiRequest(
   try {
     // Build conversation context
     let apiMessages = [...prefs.messageHistory];
+
+    // Apply provider-specific context limitations
+    if (apiClientInfo.provider === "openrouter") {
+      // Limit OpenRouter to 4 message pairs (8 total messages including both user and assistant)
+      console.log("Using reduced context length for OpenRouter provider");
+      const maxOpenRouterMessagePairs = 2; // 2 pairs = 4 messages (2 user + 2 assistant)
+
+      // If we have more messages than the limit, trim them
+      if (apiMessages.length > maxOpenRouterMessagePairs * 2) {
+        console.log(
+          `Trimming OpenRouter context from ${apiMessages.length} to ${
+            maxOpenRouterMessagePairs * 2
+          } messages`
+        );
+        // Keep only the most recent message pairs, always in pairs to maintain conversation flow
+        // Skip system message if it exists (it's handled separately below)
+        const systemMessage = apiMessages.find((m) => m.role === "system");
+        const nonSystemMessages = apiMessages.filter(
+          (m) => m.role !== "system"
+        );
+
+        // Take only the most recent messages up to the limit
+        apiMessages = nonSystemMessages.slice(-maxOpenRouterMessagePairs * 2);
+
+        // Add back system message if it existed
+        if (systemMessage) {
+          apiMessages.unshift(systemMessage);
+        }
+      }
+    } else {
+      // Groq and other providers use the default context length from CONFIG
+      const maxContextPairs = CONFIG.maxContextLength || 4;
+      if (apiMessages.length > maxContextPairs * 2) {
+        console.log(
+          `Trimming context from ${apiMessages.length} to ${
+            maxContextPairs * 2
+          } messages (standard)`
+        );
+        // Similar trimming logic but with the standard limit
+        const systemMessage = apiMessages.find((m) => m.role === "system");
+        const nonSystemMessages = apiMessages.filter(
+          (m) => m.role !== "system"
+        );
+        apiMessages = nonSystemMessages.slice(-maxContextPairs * 2);
+        if (systemMessage) {
+          apiMessages.unshift(systemMessage);
+        }
+      }
+    }
+
+    // Handle system prompt
     if (prefs.systemPromptEnabled && CONFIG.initialSystemContext) {
       apiMessages = apiMessages.filter((m) => m.role !== "system");
       apiMessages.unshift({
@@ -269,6 +327,7 @@ export default async function processAiRequest(
     } else {
       apiMessages = apiMessages.filter((m) => m.role !== "system");
     }
+
     const userMsg = { role: "user", content: null };
     if (isVisionRequest && message.attachments.size > 0) {
       const attachment = message.attachments.first();
@@ -286,22 +345,78 @@ export default async function processAiRequest(
     apiMessages.push(userMsg);
 
     // Generate tools
-    const baseTools = generateToolsFromCommands(
-      client,
-      prefs.toolsEnabled && !isVisionRequest
-    );
+    let shouldUseTools =
+      prefs.toolsEnabled && !isVisionRequest && capabilities.tools;
 
-    // Call API
-    const { client: apiClient } = await getApiClientForModel(
-      prefs.selectedModel
-    );
-    const payload = {
-      model: prefs.selectedModel,
-      messages: apiMessages,
-      tools: baseTools,
-      tool_choice: baseTools.length ? "auto" : undefined,
-    };
-    const responseData = await apiClient.chat.completions.create(payload);
+    // Check if this model is known to not support tools from previous requests
+    const modelToolSupportKey = `${apiClientInfo.provider}/${apiClientInfo.modelId}`;
+    if (
+      shouldUseTools &&
+      modelToolSupportCache.has(modelToolSupportKey) &&
+      !modelToolSupportCache.get(modelToolSupportKey)
+    ) {
+      console.log(
+        `Model ${prefs.selectedModel} is known to not support tools, disabling tools for this request`
+      );
+      shouldUseTools = false;
+    }
+
+    const baseTools = shouldUseTools ? generateToolsFromCommands(client) : [];
+
+    // Call API with retry logic for tool support
+    const { client: apiClient, modelId, provider } = apiClientInfo;
+
+    async function makeApiRequest(withTools = true) {
+      const payload = {
+        model: modelId,
+        messages: apiMessages,
+        tools: withTools && baseTools.length ? baseTools : undefined,
+        tool_choice: withTools && baseTools.length ? "auto" : undefined,
+      };
+
+      console.log(
+        `Making ${provider} API request ${withTools ? "with" : "without"} tools`
+      );
+      return await apiClient.chat.completions.create(payload);
+    }
+
+    let responseData;
+    try {
+      // Try first with tools if they should be used
+      if (shouldUseTools && baseTools.length) {
+        try {
+          responseData = await makeApiRequest(true);
+          // If successful, update cache to indicate tools are supported
+          modelToolSupportCache.set(modelToolSupportKey, true);
+        } catch (toolError) {
+          // Check if this is a "no tool support" error from OpenRouter
+          if (
+            provider === "openrouter" &&
+            toolError.status === 404 &&
+            toolError.error?.message?.includes(
+              "No endpoints found that support tool use"
+            )
+          ) {
+            console.log(
+              `Model ${prefs.selectedModel} doesn't support tools, retrying without tools`
+            );
+            // Cache this for future requests
+            modelToolSupportCache.set(modelToolSupportKey, false);
+            // Retry without tools
+            responseData = await makeApiRequest(false);
+          } else {
+            // Not a tool support error, rethrow
+            throw toolError;
+          }
+        }
+      } else {
+        // Tools not requested or not available, make standard request
+        responseData = await makeApiRequest(false);
+      }
+    } catch (error) {
+      console.error(`API request error:`, error);
+      throw error; // Rethrow to be caught by outer catch
+    }
 
     // Process response
     const aiMsg = responseData.choices[0].message;
@@ -419,13 +534,17 @@ export default async function processAiRequest(
 
     // Send final response
     addConversationToHistory(userId, messageContent, finalText);
-    const models = await getAvailableModels(isVisionRequest);
+    const models = await getAvailableModels(
+      client,
+      isVisionRequest ? "vision" : null
+    );
     const comps = await buildInteractionComponents(
       userId,
       models,
       isVisionRequest,
       false,
-      effectiveLocale
+      effectiveLocale,
+      client
     );
     await sendResponse(message, procMsg, finalText, comps, effectiveLocale);
   } catch (error) {
