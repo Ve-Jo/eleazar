@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import i18n from "./newI18n.js"; // Import i18n instance
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +24,26 @@ export async function loadEvents(client) {
       // Force a fresh import by adding a timestamp to bypass Node's module cache
       const event = await import(`${filePath}`);
 
+      // --- Start Localization Registration ---
+      if (event.default.localization_strings) {
+        const eventName = path.basename(file, ".js"); // e.g., "ai"
+        console.log(`Registering localizations for event: ${eventName}`);
+        // Pass the whole strings object defined in the event file
+        // Use registerLocalizations as it correctly handles the final save loop
+        // Change save to false, we will save explicitly after the loop
+        i18n.registerLocalizations(
+          "events",
+          eventName,
+          event.default.localization_strings,
+          false
+        );
+      } else {
+        console.log(
+          `No localizations found for event: ${path.basename(file, ".js")}`
+        );
+      }
+      // --- End Localization Registration ---
+
       if (event.default.once) {
         client.once(event.default.name, (...args) =>
           event.default.execute(...args)
@@ -38,4 +59,9 @@ export async function loadEvents(client) {
       console.error("Error loading event file:", filePath, error);
     }
   }
+
+  // --- Explicitly save all translations after loading all events ---
+  console.log("Saving all translations after event loading...");
+  i18n.saveAllTranslations();
+  console.log("All translations saved.");
 }
