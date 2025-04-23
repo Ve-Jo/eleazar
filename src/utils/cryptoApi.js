@@ -1,64 +1,154 @@
-import fetch from "node-fetch";
+import axios from "axios";
+import dotenv from "dotenv";
 
-const BYBIT_API_URL = "https://api.bybit.com"; // Or use testnet: https://api-testnet.bybit.com
+// Load environment variables
+dotenv.config();
+
+// API configurations
+const CMC_API_URL = "https://pro-api.coinmarketcap.com/v1";
+const CMC_API_KEY = process.env.COINMARKETCAP_API_KEY || "";
+const COINGECKO_API_URL = "https://api.coingecko.com/api/v3";
+
+// Symbol mapping from Bybit format to other APIs
+const SYMBOL_MAPPING = {
+  BTCUSDT: { cmc: "BTC", gecko: "bitcoin" },
+  ETHUSDT: { cmc: "ETH", gecko: "ethereum" },
+  SOLUSDT: { cmc: "SOL", gecko: "solana" },
+  DOGEUSDT: { cmc: "DOGE", gecko: "dogecoin" },
+  ADAUSDT: { cmc: "ADA", gecko: "cardano" },
+  XRPUSDT: { cmc: "XRP", gecko: "ripple" },
+  AVAXUSDT: { cmc: "AVAX", gecko: "avalanche-2" },
+  DOTUSDT: { cmc: "DOT", gecko: "polkadot" },
+  MATICUSDT: { cmc: "MATIC", gecko: "matic-network" },
+  BNBUSDT: { cmc: "BNB", gecko: "binancecoin" },
+  APTUSDT: { cmc: "APT", gecko: "aptos" },
+  // Add more mappings as needed
+};
+
+// Cache for symbol to ID mapping
+let symbolToIdCache = {};
 
 /**
- * Fetches the latest ticker information for given symbols from Bybit.
- * @param {string[]} symbols - Array of symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
+ * Initialize the symbol to ID mapping cache
+ * @returns {Promise<void>}
+ */
+export async function initializeSymbolMapping() {
+  if (!CMC_API_KEY) {
+    console.warn(
+      "[cryptoApi] CoinMarketCap API key not found in environment variables."
+    );
+    return;
+  }
+
+  try {
+    const response = await axios.get(`${CMC_API_URL}/cryptocurrency/map`, {
+      headers: {
+        "X-CMC_PRO_API_KEY": CMC_API_KEY,
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = response.data.data;
+    symbolToIdCache = data.reduce((acc, coin) => {
+      acc[coin.symbol] = coin.id;
+      return acc;
+    }, {});
+
+    console.log("[cryptoApi] Symbol mapping initialized successfully");
+  } catch (error) {
+    console.error("[cryptoApi] Error initializing symbol mapping:", error);
+  }
+}
+
+/**
+ * Get CoinMarketCap ID for a symbol
+ * @param {string} symbol - Symbol in Bybit format (e.g., 'BTCUSDT')
+ * @returns {number|null} CoinMarketCap ID or null if not found
+ */
+function getSymbolId(symbol) {
+  const cmcSymbol = SYMBOL_MAPPING[symbol]?.cmc;
+  if (!cmcSymbol) return null;
+
+  return symbolToIdCache[cmcSymbol] || null;
+}
+
+/**
+ * Fetches the latest ticker information for given symbols using CoinMarketCap.
+ * @param {string[]} symbols - Array of symbols in Bybit format (e.g., ['BTCUSDT', 'ETHUSDT'])
  * @returns {Promise<object|null>} Object mapping symbol to its ticker data, or null on error.
- *                                  Ticker data includes lastPrice, markPrice, etc.
  */
 export async function getTickers(symbols = []) {
   if (!symbols || symbols.length === 0) {
     return {};
   }
 
-  // Bybit v5 API uses a single endpoint for multiple tickers via 'symbol' query param
-  // However, it seems the 'tickers' endpoint is better suited for getting multiple symbols' last price efficiently.
-  // We'll fetch all linear tickers and filter. Alternatively, fetch one by one if the list is usually small.
-  const url = `${BYBIT_API_URL}/v5/market/tickers?category=linear`; // Linear USDT perpetuals
+  if (!CMC_API_KEY) {
+    console.error(
+      "[cryptoApi] CoinMarketCap API key not found in environment variables."
+    );
+    return null;
+  }
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `HTTP error! status: ${response.status} ${await response.text()}`
-      );
-    }
-    const data = await response.json();
+    // Map Bybit symbols to CoinMarketCap symbols
+    const cmcSymbols = symbols
+      .map((symbol) => SYMBOL_MAPPING[symbol]?.cmc)
+      .filter((symbol) => symbol); // Filter out undefined mappings
 
-    if (data.retCode !== 0) {
-      throw new Error(
-        `Bybit API error: ${data.retMsg} (Code: ${data.retCode})`
+    if (cmcSymbols.length === 0) {
+      console.warn(
+        "[cryptoApi] No valid symbol mappings found for CoinMarketCap"
       );
+      return {};
     }
 
+    // Get quotes from CoinMarketCap
+    const url = `${CMC_API_URL}/cryptocurrency/quotes/latest`;
+    const response = await axios.get(url, {
+      headers: {
+        "X-CMC_PRO_API_KEY": CMC_API_KEY,
+      },
+      params: {
+        symbol: cmcSymbols.join(","),
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = response.data.data;
     const results = {};
-    const symbolSet = new Set(symbols); // For efficient lookup
 
-    if (data.result && data.result.list) {
-      data.result.list.forEach((ticker) => {
-        if (symbolSet.has(ticker.symbol)) {
-          results[ticker.symbol] = {
-            symbol: ticker.symbol,
-            lastPrice: parseFloat(ticker.lastPrice),
-            markPrice: parseFloat(ticker.markPrice), // Mark price is often used for PnL in futures
-            // Add other relevant fields
-            highPrice24h: parseFloat(ticker.highPrice24h),
-            lowPrice24h: parseFloat(ticker.lowPrice24h),
-            price24hPcnt: parseFloat(ticker.price24hPcnt), // 24h change percentage
-            volume24h: parseFloat(ticker.volume24h || 0), // 24h trading volume
-            turnover24h: parseFloat(ticker.turnover24h || 0), // 24h turnover in USD
-          };
-        }
-      });
-    }
+    // Convert CoinMarketCap response to match the expected format from Bybit
+    symbols.forEach((symbol) => {
+      const cmcSymbol = SYMBOL_MAPPING[symbol]?.cmc;
+      if (cmcSymbol && data[cmcSymbol]) {
+        const coinData = data[cmcSymbol];
+        const quote = coinData.quote.USD;
+
+        results[symbol] = {
+          symbol: symbol,
+          lastPrice: quote.price,
+          markPrice: quote.price, // Using price as mark price
+          highPrice24h:
+            quote.price * (1 + Math.max(0, quote.percent_change_24h / 100)), // Estimated high
+          lowPrice24h:
+            quote.price * (1 - Math.max(0, -quote.percent_change_24h / 100)), // Estimated low
+          price24hPcnt: quote.percent_change_24h / 100, // Convert to decimal
+          volume24h: quote.volume_24h,
+          turnover24h: quote.volume_24h, // Using volume as turnover
+        };
+      }
+    });
 
     // Check if all requested symbols were found
     for (const symbol of symbols) {
-      if (!results[symbol]) {
+      if (!results[symbol] && SYMBOL_MAPPING[symbol]) {
         console.warn(`[cryptoApi] Ticker data not found for symbol: ${symbol}`);
-        // Optionally try fetching individually as a fallback, but might be slow
       }
     }
 
@@ -70,52 +160,94 @@ export async function getTickers(symbols = []) {
 }
 
 /**
- * Fetches historical K-line (candlestick) data for a symbol.
- * @param {string} symbol - The trading symbol (e.g., 'BTCUSDT').
+ * Fetches historical K-line (candlestick) data for a symbol using CoinGecko (free API).
+ * @param {string} symbol - The trading symbol in Bybit format (e.g., 'BTCUSDT').
  * @param {string} interval - Candlestick interval (e.g., '1', '5', '15', '60', 'D').
- * @param {number} limit - Number of candles to fetch (max 1000 for Bybit v5).
+ * @param {number} limit - Number of candles to fetch.
  * @returns {Promise<Array<object>|null>} Array of candles or null on error.
- *                                       Each candle: [timestamp, open, high, low, close, volume, turnover]
  */
 export async function getKline(symbol, interval = "15", limit = 100) {
-  const url = `${BYBIT_API_URL}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
-
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `HTTP error! status: ${response.status} ${await response.text()}`
-      );
-    }
-    const data = await response.json();
+    const geckoId = SYMBOL_MAPPING[symbol]?.gecko;
 
-    if (data.retCode !== 0) {
-      throw new Error(
-        `Bybit API error: ${data.retMsg} (Code: ${data.retCode})`
+    if (!geckoId) {
+      console.warn(
+        `[cryptoApi] No CoinGecko mapping found for symbol: ${symbol}`
       );
+      return null;
     }
 
-    if (data.result && data.result.list) {
-      // Convert string values to numbers
-      return data.result.list
-        .map((k) => [
-          parseInt(k[0]), // timestamp
-          parseFloat(k[1]), // open
-          parseFloat(k[2]), // high
-          parseFloat(k[3]), // low
-          parseFloat(k[4]), // close
-          parseFloat(k[5]), // volume
-          parseFloat(k[6]), // turnover
-        ])
-        .reverse(); // Bybit returns newest first, reverse to get oldest first
+    // Convert Bybit interval to CoinGecko days parameter
+    let days = 1;
+    if (interval === "D") {
+      days = limit;
     } else {
-      console.warn(`[cryptoApi] No K-line data returned for ${symbol}`);
+      // Calculate days based on interval (in minutes) and limit
+      const intervalMinutes = interval === "1" ? 1 : parseInt(interval);
+      days = Math.ceil((intervalMinutes * limit) / (24 * 60));
+      // Ensure reasonable range
+      days = Math.max(1, Math.min(days, 90));
+    }
+
+    // Get market chart data from CoinGecko
+    const url = `${COINGECKO_API_URL}/coins/${geckoId}/market_chart`;
+    const response = await axios.get(url, {
+      params: {
+        vs_currency: "usd",
+        days: days,
+        interval: days > 30 ? "daily" : undefined, // For longer periods, daily is enforced
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const { prices, total_volumes } = response.data;
+
+    if (!prices || prices.length === 0) {
+      console.warn(`[cryptoApi] No historical data returned for ${symbol}`);
       return [];
     }
+
+    // Resample the data to match the requested interval
+    // This is a simplified approach; for production, use a more sophisticated resampling method
+    const sampleRate = Math.max(1, Math.floor(prices.length / limit));
+
+    // Convert CoinGecko format to match expected Bybit format
+    const candles = [];
+    for (let i = 0; i < prices.length; i += sampleRate) {
+      if (candles.length >= limit) break;
+
+      const timestamp = prices[i][0]; // Timestamp in ms
+      const close = prices[i][1]; // Price at this timestamp
+
+      // For volume, find the corresponding entry in total_volumes
+      const volumeEntry = total_volumes.find((v) => v[0] === timestamp);
+      const volume = volumeEntry ? volumeEntry[1] : 0;
+
+      // For OHLC, we only have close prices in this simplified approach
+      // In a real implementation, you would need to aggregate the data properly
+      candles.push([
+        timestamp,
+        close, // Using close as open (simplified)
+        close, // Using close as high (simplified)
+        close, // Using close as low (simplified)
+        close,
+        volume,
+        volume, // Using volume as turnover (simplified)
+      ]);
+    }
+
+    return candles;
   } catch (error) {
     console.error(`[cryptoApi] Error fetching K-line for ${symbol}:`, error);
+    // If CoinGecko fails, we could try other free alternatives here
     return null;
   }
 }
+
+// Call initializeSymbolMapping when the module is loaded
+initializeSymbolMapping();
 
 // Add more functions as needed (e.g., getOrderbook, placeOrder simulation if complex)
