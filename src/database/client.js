@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client"; // Added Prisma
 import { createClient } from "redis"; // Use official redis client
 
 export function serializeWithBigInt(data) {
@@ -4754,6 +4754,136 @@ class Database {
     }
     return false;
   }
+
+  // --- Crypto Game Methods ---
+
+  /**
+   * Creates a new crypto position for a user.
+   * @param {string} guildId
+   * @param {string} userId
+   * @param {object} positionData - { symbol, direction, entryPrice, quantity, leverage, takeProfitPrice, stopLossPrice }
+   * @returns {Promise<object>} The created position.
+   */
+  async createCryptoPosition(guildId, userId, positionData) {
+    await this.ensureUser(guildId, userId); // Ensure user exists
+    const {
+      symbol,
+      direction,
+      entryPrice,
+      quantity,
+      leverage,
+      takeProfitPrice,
+      stopLossPrice,
+    } = positionData;
+
+    // Use Decimal for Prisma
+    const entryPriceDecimal = new Prisma.Decimal(entryPrice);
+    const quantityDecimal = new Prisma.Decimal(quantity);
+    const takeProfitPriceDecimal = takeProfitPrice
+      ? new Prisma.Decimal(takeProfitPrice)
+      : null;
+    const stopLossPriceDecimal = stopLossPrice
+      ? new Prisma.Decimal(stopLossPrice)
+      : null;
+
+    return this.client.cryptoPosition.create({
+      data: {
+        userId,
+        guildId,
+        symbol,
+        direction,
+        entryPrice: entryPriceDecimal,
+        quantity: quantityDecimal,
+        leverage,
+        takeProfitPrice: takeProfitPriceDecimal,
+        stopLossPrice: stopLossPriceDecimal,
+        // user relation is implicit via userId/guildId
+      },
+    });
+  }
+
+  /**
+   * Fetches all active crypto positions for a user in a guild.
+   * @param {string} guildId
+   * @param {string} userId
+   * @returns {Promise<Array<object>>} Array of positions.
+   */
+  async getUserCryptoPositions(guildId, userId) {
+    return this.client.cryptoPosition.findMany({
+      where: {
+        userId,
+        guildId,
+      },
+      orderBy: {
+        createdAt: "asc", // Or sort by symbol, etc.
+      },
+    });
+  }
+
+  /**
+   * Fetches a specific crypto position by its ID.
+   * @param {string} positionId
+   * @returns {Promise<object|null>} The position or null if not found.
+   */
+  async getCryptoPositionById(positionId) {
+    return this.client.cryptoPosition.findUnique({
+      where: { id: positionId },
+    });
+  }
+
+  /**
+   * Updates a specific crypto position.
+   * @param {string} positionId
+   * @param {object} updateData - Fields to update (e.g., { takeProfitPrice, stopLossPrice })
+   * @returns {Promise<object>} The updated position.
+   */
+  async updateCryptoPosition(positionId, updateData) {
+    // Convert numbers to Decimal where necessary
+    const updates = { ...updateData };
+    if (updates.takeProfitPrice !== undefined) {
+      updates.takeProfitPrice = updates.takeProfitPrice
+        ? new Prisma.Decimal(updates.takeProfitPrice)
+        : null;
+    }
+    if (updates.stopLossPrice !== undefined) {
+      updates.stopLossPrice = updates.stopLossPrice
+        ? new Prisma.Decimal(updates.stopLossPrice)
+        : null;
+    }
+    if (updates.entryPrice !== undefined) {
+      updates.entryPrice = new Prisma.Decimal(updates.entryPrice);
+    }
+    if (updates.quantity !== undefined) {
+      updates.quantity = new Prisma.Decimal(updates.quantity);
+    }
+
+    return this.client.cryptoPosition.update({
+      where: { id: positionId },
+      data: updates,
+    });
+  }
+
+  /**
+   * Deletes a specific crypto position by its ID.
+   * @param {string} positionId
+   * @returns {Promise<object>} The deleted position data.
+   */
+  async deleteCryptoPosition(positionId) {
+    return this.client.cryptoPosition.delete({
+      where: { id: positionId },
+    });
+  }
+
+  /**
+   * Fetches all active crypto positions across all users/guilds.
+   * Use with caution, potentially large dataset.
+   * @returns {Promise<Array<object>>} Array of all active positions.
+   */
+  async getAllActiveCryptoPositions() {
+    return this.client.cryptoPosition.findMany();
+  }
+
+  // --- End Crypto Game Methods ---
 }
 
 // Export the Database class instance without initializing

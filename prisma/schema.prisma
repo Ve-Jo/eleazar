@@ -32,6 +32,7 @@ model User {
   VoiceSession VoiceSession?
   crates    Crate[]    // Add relation to Crates
   legacyGameData LegacyGameData[] // Add relation to LegacyGameData
+  cryptoPositions CryptoPosition[] // Add relation to CryptoPosition
 
   // Make the primary key a composite of guildId and id
   @@id([guildId, id])
@@ -93,6 +94,9 @@ model Statistics {
   xpStats      Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
   gameXpStats  Json    @default("{\"snake\": 0, \"2048\": 0}") @map("game_xp_stats")
   interactionStats Json @default("{\"commands\":{}, \"buttons\":{}, \"selectMenus\":{}, \"modals\":{}}") @map("interaction_stats")
+
+  // Add disclaimer flag
+  crypto2DisclaimerSeen Boolean @default(false) @map("crypto2_disclaimer_seen")
 
   // Relations
   user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
@@ -215,4 +219,25 @@ model LegacyGameData {
   @@unique([userId, guildId, gameId]) // Ensure unique data per user, guild, and game
   @@index([gameId])
   @@map("legacy_game_data")
+}
+
+model CryptoPosition {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  guildId         String   @map("guild_id")
+  symbol          String   // e.g., "BTCUSDT"
+  direction       String   // "LONG" or "SHORT"
+  entryPrice      Decimal  @db.Decimal(20, 8) @map("entry_price")
+  quantity        Decimal  @db.Decimal(20, 8) // Amount of the coin
+  leverage        Int
+  takeProfitPrice Decimal? @db.Decimal(20, 8) @map("take_profit_price")
+  stopLossPrice   Decimal? @db.Decimal(20, 8) @map("stop_loss_price")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations - reference the composite key
+  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+
+  @@index([userId, guildId])
+  @@index([symbol])
+  @@map("crypto_positions")
 }
