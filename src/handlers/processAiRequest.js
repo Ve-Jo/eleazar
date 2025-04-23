@@ -445,6 +445,17 @@ export default async function processAiRequest(
     }
 
     // Process response
+    if (
+      !responseData ||
+      !responseData.choices ||
+      responseData.choices.length === 0
+    ) {
+      console.error("Invalid API response format:", responseData);
+      throw new Error(
+        "Invalid response from AI provider. The model may be experiencing issues."
+      );
+    }
+
     const aiMsg = responseData.choices[0].message;
     let finalText = aiMsg.content?.trim() || "";
     const toolCalls = aiMsg.tool_calls || [];
