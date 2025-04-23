@@ -123,7 +123,16 @@
         "noGamesAvailable": "No games are currently available.",
         "gameNotFound": "The selected game was not found.",
         "standardGamesCategory": "Standard Games",
-        "riskyGamesCategory": "Risky Games"
+        "riskyGamesCategory": "Risky Games",
+        "options": {
+          "game": {
+            "choices": {
+              "crypto2": {
+                "name": "Crypto Futures"
+              }
+            }
+          }
+        }
       },
       "imageError": "Error generating image",
       "userNotFound": "User not found",
@@ -870,6 +879,20 @@
       "transcription": {
         "success": "Transcription of voice message:\n\n{text}",
         "failed": "Sorry, I couldn't transcribe that voice message."
+      }
+    },
+    "ready": {
+      "crypto": {
+        "notifications": {
+          "liquidation": "⚠️ Liquidation Alert! Your {direction} position for {symbol} was automatically closed due to reaching -100% PnL.",
+          "takeProfit": "✅ Take Profit Triggered! Your {direction} position for {symbol} was closed at {price} with a profit of {profit} 💵",
+          "stopLoss": "🛑 Stop Loss Triggered! Your {direction} position for {symbol} was closed at {price} with a loss of {loss} 💵",
+          "direction": {
+            "long": "LONG",
+            "short": "SHORT"
+          },
+          "monitorStarted": "Crypto position monitoring service started"
+        }
       }
     }
   }
