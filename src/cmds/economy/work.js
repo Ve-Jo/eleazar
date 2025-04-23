@@ -46,6 +46,10 @@ export default {
             {
               name: "tower",
               value: "tower",
+            },
+            {
+              name: "Crypto 2.0",
+              value: "crypto2",
             }
           )
       );
@@ -73,6 +77,15 @@ export default {
         description: {
           ru: "Выберите конкретную игру для прямого запуска",
           uk: "Виберіть конкретну гру для прямого запуску",
+        },
+        choices: {
+          crypto2: {
+            name: {
+              en: "Crypto 2.0",
+              ru: "Крипто 2.0",
+              uk: "Кріпто 2.0",
+            },
+          },
         },
       },
     },
