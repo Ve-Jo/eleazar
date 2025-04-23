@@ -72,6 +72,20 @@ function detectFakeToolCalls(content) {
   return null;
 }
 
+// Function to remove content between <think> tags
+function removeThinkTags(content) {
+  if (!content) return content;
+
+  // Remove <think>...</think> tags (case insensitive and across multiple lines)
+  let cleanedContent = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+
+  // Also try with space between < and think in case of formatting variations
+  cleanedContent = cleanedContent.replace(/< think>[\s\S]*?<\/ think>/gi, "");
+
+  // Remove any leading/trailing whitespace that may be left after tag removal
+  return cleanedContent.trim();
+}
+
 // Split response into chunks if needed
 function splitMessage(message, maxLength = 2000) {
   const chunks = [];
@@ -460,6 +474,9 @@ export default async function processAiRequest(
     let finalText = aiMsg.content?.trim() || "";
     const toolCalls = aiMsg.tool_calls || [];
 
+    // Remove any <think> tags from the response
+    finalText = removeThinkTags(finalText);
+
     if (!finalText && !toolCalls.length)
       finalText = i18n.__("events.ai.messages.noTextResponse", effectiveLocale);
 
@@ -502,7 +519,7 @@ export default async function processAiRequest(
                 effectiveLocale
               );
 
-          finalText += `\n\n${prefix}\n${response || ""}`;
+          finalText += `\n\n${prefix}\n${removeThinkTags(response) || ""}`;
         }
       }
     } else if (toolCalls.length && !prefs.toolsEnabled) {
@@ -562,7 +579,7 @@ export default async function processAiRequest(
           finalText =
             cleanedResponse.trim() +
             (cleanedResponse.trim() ? "\n\n" : "") +
-            `${prefix}\n${response || ""}`;
+            `${prefix}\n${removeThinkTags(response) || ""}`;
         } else {
           finalText = cleanedResponse.trim();
         }

@@ -139,16 +139,18 @@ export async function buildInteractionComponents(
       i18n.__("events.ai.buttons.systemPrompt.tools.on") || "Tools: ON";
     let toolsStyle = prefs.toolsEnabled ? 1 : 2; // 1 for primary, 2 for secondary
     let toolsDisabled = false;
+    let modelSupportsTools = true; // Track if the model supports tools
 
-    // First check user preference
+    // First check user preference for label and style
     if (!prefs.toolsEnabled) {
-      toolsDisabled = true;
-      console.log("Tools disabled by user preference");
       toolsLabel =
         i18n.__("events.ai.buttons.systemPrompt.tools.off") || "Tools: OFF";
+      toolsStyle = 2; // Secondary style when off
     }
+
     // Then check if model details are available
-    else if (!selectedModelDetails) {
+    if (!selectedModelDetails) {
+      modelSupportsTools = false;
       toolsDisabled = true;
       console.log(
         `No model details available for ${prefs.selectedModel}, disabling tools`
@@ -162,27 +164,26 @@ export async function buildInteractionComponents(
       // Check the global cache first (most up-to-date)
       const cacheKey = `${selectedModelDetails.provider}/${selectedModelDetails.id}`;
       if (state.modelToolSupportCache.has(cacheKey)) {
-        const supportsTools = state.modelToolSupportCache.get(cacheKey);
-        toolsDisabled = !supportsTools;
-        console.log(
-          `Tools support from cache for ${prefs.selectedModel}: ${supportsTools}, disabled: ${toolsDisabled}`
-        );
-        if (toolsDisabled) {
+        modelSupportsTools = state.modelToolSupportCache.get(cacheKey);
+        if (!modelSupportsTools) {
+          toolsDisabled = true;
+          console.log(
+            `Tools not supported for ${prefs.selectedModel} (from cache), disabling button`
+          );
           toolsLabel =
             i18n.__("events.ai.buttons.systemPrompt.tools.offModel", locale) ||
             "Tools: OFF (Model)";
         } else {
-          // Tools are supported (by default if not specified otherwise)
           console.log(
-            `Tools assumed supported for ${prefs.selectedModel} (no cache or explicit capability)`
+            `Tools supported for ${prefs.selectedModel} (from cache), button ${
+              prefs.toolsEnabled ? "ON" : "OFF"
+            } based on user preference`
           );
-          toolsLabel =
-            i18n.__("events.ai.buttons.systemPrompt.tools.on", locale) ||
-            "Tools: ON";
         }
       }
       // Fall back to capabilities if not in cache
       else if (!selectedModelDetails.capabilities?.tools) {
+        modelSupportsTools = false;
         toolsDisabled = true;
         console.log(
           `Tools not supported in capabilities for ${prefs.selectedModel}, disabling`
@@ -194,14 +195,15 @@ export async function buildInteractionComponents(
     }
 
     console.log(
-      `Final tools button state - Disabled: ${toolsDisabled}, Label: ${
-        toolsLabel || "unknown"
-      }`
+      `Final tools button state - Disabled: ${toolsDisabled}, Model Supports: ${modelSupportsTools}, User Preference: ${
+        prefs.toolsEnabled
+      }, Label: ${toolsLabel || "unknown"}`
     );
 
     // Make sure we have a valid string for the button label
     if (!toolsLabel || typeof toolsLabel !== "string") {
-      toolsLabel = toolsDisabled ? "Tools: OFF" : "Tools: ON";
+      toolsLabel =
+        prefs.toolsEnabled && modelSupportsTools ? "Tools: ON" : "Tools: OFF";
       console.log(`Using fallback tools label: ${toolsLabel}`);
     }
 
@@ -344,6 +346,8 @@ export async function sendResponse(
           const newVisionRequest =
             message.attachments.size > 0 &&
             message.attachments.first().contentType?.startsWith("image/");
+          // Stop the collector only when selecting a new model, as we'll process a new AI request
+          collector.stop();
           await processAiRequest(
             message,
             userId,
@@ -353,7 +357,6 @@ export async function sendResponse(
             locale
           );
         }
-        collector.stop(); // Stop after processing to prevent duplicates
       } catch (error) {
         if (error.code === 10062) {
           // Unknown interaction
