@@ -5,7 +5,12 @@ import {
   updateUserPreference,
   addConversationToHistory,
 } from "../state/prefs.js";
-import { isModelRateLimited, setModelRateLimit } from "../state/state.js";
+import {
+  isModelRateLimited,
+  setModelRateLimit,
+  state,
+  markModelAsNotSupportingTools,
+} from "../state/state.js";
 import {
   getApiClientForModel,
   getModelCapabilities,
@@ -18,9 +23,6 @@ import {
   sendResponse,
 } from "../services/messages.js";
 import { executeToolCall } from "../services/toolExecutor.js";
-
-// Cache for models that don't support tools
-const modelToolSupportCache = new Map();
 
 // Helper function to detect if AI is trying to use a "fake" tool in text format
 function detectFakeToolCalls(content) {
@@ -270,28 +272,18 @@ export default async function processAiRequest(
 
     // Apply provider-specific context limitations
     if (apiClientInfo.provider === "openrouter") {
-      // Limit OpenRouter to 4 message pairs (8 total messages including both user and assistant)
-      console.log("Using reduced context length for OpenRouter provider");
-      const maxOpenRouterMessagePairs = 2; // 2 pairs = 4 messages (2 user + 2 assistant)
-
-      // If we have more messages than the limit, trim them
+      const maxOpenRouterMessagePairs = 4; // Updated to 4 pairs as per user request
       if (apiMessages.length > maxOpenRouterMessagePairs * 2) {
         console.log(
           `Trimming OpenRouter context from ${apiMessages.length} to ${
             maxOpenRouterMessagePairs * 2
           } messages`
         );
-        // Keep only the most recent message pairs, always in pairs to maintain conversation flow
-        // Skip system message if it exists (it's handled separately below)
         const systemMessage = apiMessages.find((m) => m.role === "system");
         const nonSystemMessages = apiMessages.filter(
           (m) => m.role !== "system"
         );
-
-        // Take only the most recent messages up to the limit
         apiMessages = nonSystemMessages.slice(-maxOpenRouterMessagePairs * 2);
-
-        // Add back system message if it existed
         if (systemMessage) {
           apiMessages.unshift(systemMessage);
         }
@@ -345,15 +337,27 @@ export default async function processAiRequest(
     apiMessages.push(userMsg);
 
     // Generate tools
+    console.log(
+      `Tools enabled in preferences for user ${userId}:`,
+      prefs.toolsEnabled
+    );
     let shouldUseTools =
       prefs.toolsEnabled && !isVisionRequest && capabilities.tools;
+    const modelToolSupportKey = `${apiClientInfo.provider}/${apiClientInfo.modelId}`;
+    const baseTools = shouldUseTools
+      ? generateToolsFromCommands(client, prefs.toolsEnabled)
+      : [];
+    if (capabilities.tools && !shouldUseTools) {
+      console.warn(
+        `Tools are supported by the model but disabled for user ${userId}. Consider enabling them.`
+      );
+    }
 
     // Check if this model is known to not support tools from previous requests
-    const modelToolSupportKey = `${apiClientInfo.provider}/${apiClientInfo.modelId}`;
     if (
       shouldUseTools &&
-      modelToolSupportCache.has(modelToolSupportKey) &&
-      !modelToolSupportCache.get(modelToolSupportKey)
+      state.modelToolSupportCache.has(modelToolSupportKey) &&
+      !state.modelToolSupportCache.get(modelToolSupportKey)
     ) {
       console.log(
         `Model ${prefs.selectedModel} is known to not support tools, disabling tools for this request`
@@ -361,23 +365,33 @@ export default async function processAiRequest(
       shouldUseTools = false;
     }
 
-    const baseTools = shouldUseTools ? generateToolsFromCommands(client) : [];
-
     // Call API with retry logic for tool support
     const { client: apiClient, modelId, provider } = apiClientInfo;
 
     async function makeApiRequest(withTools = true) {
+      const effectiveShouldUseTools =
+        capabilities.tools &&
+        prefs.toolsEnabled &&
+        withTools &&
+        baseTools.length;
       const payload = {
         model: modelId,
         messages: apiMessages,
-        tools: withTools && baseTools.length ? baseTools : undefined,
-        tool_choice: withTools && baseTools.length ? "auto" : undefined,
+        tools: effectiveShouldUseTools ? baseTools : undefined,
+        tool_choice: effectiveShouldUseTools ? "auto" : undefined,
       };
-
       console.log(
-        `Making ${provider} API request ${withTools ? "with" : "without"} tools`
+        `Final tools decision: Using tools? ${effectiveShouldUseTools}`
       );
-      return await apiClient.chat.completions.create(payload);
+      console.log(
+        `Making ${provider} API request ${
+          effectiveShouldUseTools ? "with" : "without"
+        } tools`
+      );
+      const response = await apiClient.chat.completions.create(payload);
+      // Mark in the response whether tools were disabled
+      response._toolsDisabled = !effectiveShouldUseTools;
+      return response;
     }
 
     let responseData;
@@ -387,21 +401,23 @@ export default async function processAiRequest(
         try {
           responseData = await makeApiRequest(true);
           // If successful, update cache to indicate tools are supported
-          modelToolSupportCache.set(modelToolSupportKey, true);
+          state.modelToolSupportCache.set(modelToolSupportKey, true);
         } catch (toolError) {
           // Check if this is a "no tool support" error from OpenRouter
           if (
             provider === "openrouter" &&
-            toolError.status === 404 &&
-            toolError.error?.message?.includes(
-              "No endpoints found that support tool use"
-            )
+            ((toolError.status === 404 &&
+              toolError.error?.message?.includes(
+                "No endpoints found that support tool use"
+              )) ||
+              (toolError.error?.message?.includes("tool") &&
+                toolError.error?.message?.includes("support")))
           ) {
             console.log(
               `Model ${prefs.selectedModel} doesn't support tools, retrying without tools`
             );
-            // Cache this for future requests
-            modelToolSupportCache.set(modelToolSupportKey, false);
+            // Use the helper function instead of directly setting cache
+            markModelAsNotSupportingTools(modelToolSupportKey);
             // Retry without tools
             responseData = await makeApiRequest(false);
           } else {
@@ -416,6 +432,16 @@ export default async function processAiRequest(
     } catch (error) {
       console.error(`API request error:`, error);
       throw error; // Rethrow to be caught by outer catch
+    }
+
+    // After the try-catch block for responseData, add code to update cache for fallback cases
+    if (shouldUseTools && baseTools.length && responseData._toolsDisabled) {
+      // If we initially tried with tools but ended up using a request without tools
+      console.warn(
+        `Model ${prefs.selectedModel} failed with tools but succeeded without. Marking as not supporting tools.`
+      );
+      // Use the helper function instead of directly setting cache
+      markModelAsNotSupportingTools(modelToolSupportKey);
     }
 
     // Process response

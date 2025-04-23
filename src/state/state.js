@@ -11,6 +11,8 @@ export const state = {
   pendingInteractions: {},
   groqClient: null,
   modelRateLimits: {},
+  modelToolSupportCache: new Map(), // Cache for tool support status
+  modelsWithoutTools: new Set(), // Set of model IDs known not to support tools
 };
 
 export function isModelRateLimited(modelId) {
@@ -26,4 +28,14 @@ export function isModelRateLimited(modelId) {
 
 export function setModelRateLimit(modelId, durationMs = 60000) {
   state.modelRateLimits[modelId] = Date.now() + durationMs;
+}
+
+export function markModelAsNotSupportingTools(modelId) {
+  state.modelsWithoutTools.add(modelId);
+  state.modelToolSupportCache.set(modelId, false);
+  console.log(`Added ${modelId} to list of models without tool support`);
+}
+
+export function isModelWithoutTools(modelId) {
+  return state.modelsWithoutTools.has(modelId);
 }

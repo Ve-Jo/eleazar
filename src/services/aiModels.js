@@ -2,7 +2,7 @@ import { Groq } from "groq-sdk";
 import OpenAI from "openai";
 import fetch from "node-fetch";
 import CONFIG from "../config/aiConfig.js";
-import { state } from "../state/state.js";
+import { state, isModelWithoutTools } from "../state/state.js";
 
 // --- Model Cache ---
 let cachedModels = null; // { groq: [], openrouter: [] }
@@ -279,6 +279,23 @@ async function getModelDetails(client, prefixedModelId) {
     if (parts.length === 2) {
       const [provider, id] = parts;
       return allCombined.find((m) => m.provider === provider && m.id === id);
+    }
+  } else {
+    // Check the global cache for tool support
+    const cacheKey = `${model.provider}/${model.id}`;
+    if (state.modelToolSupportCache.has(cacheKey)) {
+      model.capabilities.tools = state.modelToolSupportCache.get(cacheKey);
+      console.log(
+        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
+      );
+    }
+    // Check against known list of models without tools
+    else if (state.modelsWithoutTools.has(model.id)) {
+      model.capabilities.tools = false;
+      state.modelToolSupportCache.set(cacheKey, false);
+      console.log(
+        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
+      );
     }
   }
   return model;

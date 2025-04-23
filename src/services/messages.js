@@ -10,7 +10,12 @@ import {
   updateUserPreference,
   clearUserHistory,
 } from "../state/prefs.js";
-import { getAvailableModels, getModelCapabilities } from "./aiModels.js";
+import { state } from "../state/state.js";
+import {
+  getAvailableModels,
+  getModelCapabilities,
+  getModelDetails,
+} from "./aiModels.js";
 import processAiRequest from "../handlers/processAiRequest.js";
 
 // Track the last message with components for each user
@@ -74,14 +79,42 @@ export async function buildInteractionComponents(
   client = null
 ) {
   const prefs = getUserPreferences(userId);
+  let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2; // Default
+  let selectedModelDetails = null;
+  if (prefs.selectedModel && client) {
+    try {
+      selectedModelDetails = await getModelDetails(client, prefs.selectedModel);
+      if (selectedModelDetails) {
+        console.log(
+          `Model details for ${prefs.selectedModel}:`,
+          selectedModelDetails
+        );
+        if (selectedModelDetails.provider === "openrouter") {
+          effectiveMaxContext = 4 * 2; // 4 pairs for OpenRouter
+        }
+      } else {
+        console.log(
+          `No selected model details available for ${prefs.selectedModel}, disabling tools button`
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Error getting model details for context adjustment:",
+        error
+      );
+      selectedModelDetails = null; // Ensure it's null on error to avoid disabling tools incorrectly
+    }
+  }
   const components = [];
 
   // Model select menu
   if (availableModels?.length) {
+    i18n.setLocale(locale);
+
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`ai_select_model_${userId}`)
       .setPlaceholder(
-        i18n.__("events.ai.buttons.menus.modelSelect.placeholder", locale)
+        i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
       );
     const opts = availableModels.slice(0, 25).map((m) => ({
       label: m.name.length > 100 ? m.name.substring(0, 97) + "..." : m.name,
@@ -97,40 +130,79 @@ export async function buildInteractionComponents(
       .setCustomId(`ai_toggle_context_${userId}`)
       .setLabel(
         prefs.systemPromptEnabled
-          ? i18n.__("events.ai.buttons.systemPrompt.on", locale)
-          : i18n.__("events.ai.buttons.systemPrompt.off", locale)
+          ? i18n.__("events.ai.buttons.systemPrompt.on")
+          : i18n.__("events.ai.buttons.systemPrompt.off")
       )
       .setStyle(prefs.systemPromptEnabled ? 1 : 2);
 
+    let toolsLabel =
+      i18n.__("events.ai.buttons.systemPrompt.tools.on") || "Tools: ON";
+    let toolsStyle = prefs.toolsEnabled ? 1 : 2; // 1 for primary, 2 for secondary
     let toolsDisabled = false;
-    let actualTools = prefs.toolsEnabled;
-    let toolsLabel = actualTools
-      ? i18n.__("events.ai.buttons.systemPrompt.tools.on", locale)
-      : i18n.__("events.ai.buttons.systemPrompt.tools.off", locale);
-    let toolsStyle = prefs.toolsEnabled ? 1 : 2;
 
-    // Only check model capabilities if we have both a selected model and client
-    if (prefs.selectedModel && client) {
-      try {
-        const cap = await getModelCapabilities(client, prefs.selectedModel);
-        if (prefs.toolsEnabled && !cap.tools) {
-          actualTools = false;
-          toolsLabel = i18n.__(
-            "events.ai.buttons.systemPrompt.tools.offModel",
-            locale
-          );
-          toolsStyle = 2;
-          toolsDisabled = true;
-        }
-      } catch (error) {
-        console.warn(
-          `Could not check capabilities for ${prefs.selectedModel}:`,
-          error.message
+    // First check user preference
+    if (!prefs.toolsEnabled) {
+      toolsDisabled = true;
+      console.log("Tools disabled by user preference");
+      toolsLabel =
+        i18n.__("events.ai.buttons.systemPrompt.tools.off") || "Tools: OFF";
+    }
+    // Then check if model details are available
+    else if (!selectedModelDetails) {
+      toolsDisabled = true;
+      console.log(
+        `No model details available for ${prefs.selectedModel}, disabling tools`
+      );
+      toolsLabel =
+        i18n.__("events.ai.buttons.systemPrompt.tools.offModel", locale) ||
+        "Tools: OFF (Model)";
+    }
+    // Check the model's capabilities and cache
+    else {
+      // Check the global cache first (most up-to-date)
+      const cacheKey = `${selectedModelDetails.provider}/${selectedModelDetails.id}`;
+      if (state.modelToolSupportCache.has(cacheKey)) {
+        const supportsTools = state.modelToolSupportCache.get(cacheKey);
+        toolsDisabled = !supportsTools;
+        console.log(
+          `Tools support from cache for ${prefs.selectedModel}: ${supportsTools}, disabled: ${toolsDisabled}`
         );
-        // Don't change button state if we can't check capabilities
+        if (toolsDisabled) {
+          toolsLabel =
+            i18n.__("events.ai.buttons.systemPrompt.tools.offModel", locale) ||
+            "Tools: OFF (Model)";
+        } else {
+          // Tools are supported (by default if not specified otherwise)
+          console.log(
+            `Tools assumed supported for ${prefs.selectedModel} (no cache or explicit capability)`
+          );
+          toolsLabel =
+            i18n.__("events.ai.buttons.systemPrompt.tools.on", locale) ||
+            "Tools: ON";
+        }
       }
-    } else {
-      console.log("Skipping capability check (no client or model)");
+      // Fall back to capabilities if not in cache
+      else if (!selectedModelDetails.capabilities?.tools) {
+        toolsDisabled = true;
+        console.log(
+          `Tools not supported in capabilities for ${prefs.selectedModel}, disabling`
+        );
+        toolsLabel =
+          i18n.__("events.ai.buttons.systemPrompt.tools.offModel", locale) ||
+          "Tools: OFF (Model)";
+      }
+    }
+
+    console.log(
+      `Final tools button state - Disabled: ${toolsDisabled}, Label: ${
+        toolsLabel || "unknown"
+      }`
+    );
+
+    // Make sure we have a valid string for the button label
+    if (!toolsLabel || typeof toolsLabel !== "string") {
+      toolsLabel = toolsDisabled ? "Tools: OFF" : "Tools: ON";
+      console.log(`Using fallback tools label: ${toolsLabel}`);
     }
 
     const toolsBtn = new ButtonBuilder()
@@ -140,15 +212,13 @@ export async function buildInteractionComponents(
       .setDisabled(toolsDisabled);
 
     const current = prefs.messageHistory.length;
-    const max = (CONFIG.maxContextLength || 4) * 2;
     const clearBtn = new ButtonBuilder()
       .setCustomId(`ai_clear_context_${userId}`)
       .setLabel(
-        i18n.__(
-          "events.ai.buttons.systemPrompt.clearContext",
-          { current, max },
-          locale
-        )
+        i18n.__("events.ai.buttons.systemPrompt.clearContext", {
+          current,
+          max: effectiveMaxContext,
+        })
       )
       .setStyle(4)
       .setDisabled(current === 0);
@@ -168,6 +238,8 @@ export async function sendResponse(
   components = [],
   locale = "en"
 ) {
+  i18n.setLocale(locale);
+
   const userId = message.author.id;
   const sanitized = content
     .replace(
@@ -184,16 +256,12 @@ export async function sendResponse(
   let finalMsg;
 
   // Remove components from previous message if it exists
-  const previousMsg = lastUserComponentMessages.get(userId);
-  if (previousMsg && previousMsg.editable) {
-    try {
-      await previousMsg.edit({ components: [] });
-    } catch (error) {
-      console.error(
-        "Failed to remove components from previous message:",
-        error
-      );
-    }
+  if (
+    lastUserComponentMessages.has(userId) &&
+    lastUserComponentMessages.get(userId).collector
+  ) {
+    lastUserComponentMessages.get(userId).collector.stop();
+    lastUserComponentMessages.delete(userId);
   }
 
   try {
@@ -220,85 +288,90 @@ export async function sendResponse(
       time: 15 * 60 * 1000,
     });
     collector.on("collect", async (interaction) => {
-      const [_, action, subaction, id] = interaction.customId.split("_");
-      // Only handle interactions for this user
-      if (id !== userId) return;
-      // Handle button interactions
-      if (interaction.isButton()) {
-        if (action === "toggle" && subaction === "context") {
-          const prefs = getUserPreferences(userId);
-          updateUserPreference(
-            userId,
-            "systemPromptEnabled",
-            !prefs.systemPromptEnabled
-          );
-        } else if (action === "toggle" && subaction === "tools") {
-          const prefs = getUserPreferences(userId);
-          updateUserPreference(userId, "toolsEnabled", !prefs.toolsEnabled);
-        } else if (action === "clear" && subaction === "context") {
-          clearUserHistory(userId);
+      try {
+        const [_, action, subaction, id] = interaction.customId.split("_");
+        // Only handle interactions for this user
+        if (id !== userId) return;
+        // Handle button interactions
+        if (interaction.isButton()) {
+          if (action === "toggle" && subaction === "context") {
+            const prefs = getUserPreferences(userId);
+            updateUserPreference(
+              userId,
+              "systemPromptEnabled",
+              !prefs.systemPromptEnabled
+            );
+          } else if (action === "toggle" && subaction === "tools") {
+            const prefs = getUserPreferences(userId);
+            updateUserPreference(userId, "toolsEnabled", !prefs.toolsEnabled);
+          } else if (action === "clear" && subaction === "context") {
+            clearUserHistory(userId);
+          }
+        } else if (interaction.isStringSelectMenu()) {
+          // Handle model select menu
+          if (action === "select" && subaction === "model") {
+            const selectedModel = interaction.values[0];
+            updateUserPreference(userId, "selectedModel", selectedModel);
+          }
         }
-      } else if (interaction.isStringSelectMenu()) {
-        // Handle model select menu
-        if (action === "select" && subaction === "model") {
-          const selectedModel = interaction.values[0];
-          updateUserPreference(userId, "selectedModel", selectedModel);
-        }
-      }
-      // Rebuild components to reflect updated preferences
-      const isVisionRequest =
-        message.attachments.size > 0 &&
-        message.attachments.first().contentType?.startsWith("image/");
-      const models = await getAvailableModels(
-        message.client,
-        isVisionRequest ? "vision" : null
-      );
-      const newComponents = await buildInteractionComponents(
-        userId,
-        models,
-        isVisionRequest,
-        false,
-        locale,
-        message.client
-      );
-      // Update original message with new components
-      await interaction.update({ components: newComponents });
-      // If the user just selected a new model, retry the AI request with that model
-      if (
-        interaction.isStringSelectMenu() &&
-        action === "select" &&
-        subaction === "model"
-      ) {
-        const messageContent = message.content
-          .replace(new RegExp(`<@!?${message.client.user.id}>`, "g"), "")
-          .trim();
-        const newVisionRequest =
+        // Rebuild components to reflect updated preferences
+        const isVisionRequest =
           message.attachments.size > 0 &&
           message.attachments.first().contentType?.startsWith("image/");
-        await processAiRequest(
-          message,
-          userId,
-          messageContent,
-          newVisionRequest,
-          finalMsg,
-          locale
+        const models = await getAvailableModels(
+          message.client,
+          isVisionRequest ? "vision" : null
         );
+        const newComponents = await buildInteractionComponents(
+          userId,
+          models,
+          isVisionRequest,
+          false,
+          locale,
+          message.client
+        );
+        // Update original message with new components
+        await interaction.update({ components: newComponents });
+        // If the user just selected a new model, retry the AI request with that model
+        if (
+          interaction.isStringSelectMenu() &&
+          action === "select" &&
+          subaction === "model"
+        ) {
+          const messageContent = message.content
+            .replace(new RegExp(`<@!?${message.client.user.id}>`, "g"), "")
+            .trim();
+          const newVisionRequest =
+            message.attachments.size > 0 &&
+            message.attachments.first().contentType?.startsWith("image/");
+          await processAiRequest(
+            message,
+            userId,
+            messageContent,
+            newVisionRequest,
+            finalMsg,
+            locale
+          );
+        }
+        collector.stop(); // Stop after processing to prevent duplicates
+      } catch (error) {
+        if (error.code === 10062) {
+          // Unknown interaction
+          console.error("Unknown interaction error:", error);
+          await interaction
+            .reply({
+              content: "Interaction expired, please try again.",
+              ephemeral: true,
+            })
+            .catch(() => {});
+        } else {
+          console.error("Error in collector:", error);
+        }
       }
     });
 
     collector.on("end", () => {
-      // When the collector ends, check if this is still the latest message with components
-      if (lastUserComponentMessages.get(userId) === finalMsg) {
-        // If it is and it's still editable, remove the components
-        if (finalMsg.editable) {
-          finalMsg.edit({ components: [] }).catch((error) => {
-            console.error(
-              "Failed to remove components after collector end:",
-              error
-            );
-          });
-        }
-      }
+      lastUserComponentMessages.delete(userId); // Ensure cleanup on end
     });
   }
 }
