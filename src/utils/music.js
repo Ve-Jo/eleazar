@@ -6,8 +6,19 @@ import { dirname, join } from "path";
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Function to check if youtube-dl is installed
+async function checkYoutubeDl() {
+  try {
+    execSync("which yt-dlp", { stdio: "ignore" });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
 
 // Utility function to safely get avatar URLs
 function getAvatarUrl(user) {
@@ -35,13 +46,6 @@ function getAvatarUrl(user) {
 }
 
 const LAVALINK_SERVERS = [
-  {
-    id: "INZEWORLD.COM (DE)",
-    authorization: "saher.inzeworld.com",
-    host: "lava.inzeworld.com",
-    port: 3128,
-    secure: false,
-  },
   /*{
     id: "localhost",
     host: "127.0.0.1",
@@ -64,10 +68,10 @@ const LAVALINK_SERVERS = [
     secure: false,
   },
   {
-    id: "ChalresNaig Node",
-    authorization: "NAIGLAVA-dash.techbyte.host",
-    host: "lavahatry4.techbyte.host",
-    port: 3000,
+    id: "FUGAYT",
+    host: "dnode2.astrast.host",
+    port: 9869,
+    authorization: "https://discord.gg/8M2bAHZaQH",
     secure: false,
   },
   {
@@ -75,27 +79,6 @@ const LAVALINK_SERVERS = [
     authorization: "saher.inzeworld.com",
     host: "lava.inzeworld.com",
     port: 3128,
-    secure: false,
-  },
-  {
-    id: "lavalink4",
-    host: "lavalink4.lightsout.in",
-    port: 40069,
-    authorization: "LightsoutOwnsElves",
-    secure: false,
-  },
-  {
-    id: "Muzykant v4 SSL",
-    authorization: "https://discord.gg/v6sdrD9kPh",
-    host: "lavalink_v4.muzykant.xyz",
-    port: 443,
-    secure: true,
-  },
-  {
-    id: "jirayu",
-    host: "lavalink.jirayu.net",
-    port: 13592,
-    authorization: "youshallnotpass",
     secure: false,
   },
   // Add more servers here
@@ -574,15 +557,35 @@ async function init(client) {
         defaultSearchPlatform: "ytmsearch",
         volumeDecrementer: 0.75,
         minAutoPlayMs: 10_000,
+        // Extended options for better stability
+        useUnresolvedData: true, // Allow using unresolved data when track resolving fails
+        ytOptions: {
+          fetchTimeout: 7000, // Increase fetch timeout for YouTube
+          maxRetries: 3, // Allow up to 3 retries for YouTube sources
+          fallbackOnFail: true, // Fall back to another source if YouTube fails
+        },
         onDisconnect: {
           autoReconnect: true,
           destroyPlayer: false,
+          // Try more aggressively to reconnect
+          maxReconnectAttempts: 5,
+          reconnectTimeout: 3000,
         },
         onEmptyQueue: {
           destroyAfterMs: 30_000,
           autoPlayFunction: async (player) => {
             try {
               console.log("Autoplay triggered from onEmptyQueue");
+              // Get the autoplay status directly from player storage
+              const autoplayEnabled = player.get("autoplay_enabled");
+              console.log(`CURRENT AUTOPLAY STATUS: ${autoplayEnabled}`);
+
+              // If autoplay is not explicitly enabled, don't proceed
+              if (autoplayEnabled !== true) {
+                console.log("Autoplay is disabled, returning");
+                return null;
+              }
+
               const lastPlayedTrack = player.get("lastPlayedTrack");
 
               if (!lastPlayedTrack) {
@@ -775,6 +778,13 @@ async function init(client) {
     }, 2000); // 2 second debounce
 
     client.lavalink.on("trackStart", async (player, track) => {
+      // Add this at the beginning of the event
+      if (track) {
+        // Store the original track source in case we need it for recovery
+        player.set("lastTrackSource", track.info?.sourceName || "unknown");
+        player.set("lastTrackUri", track.info?.uri || null);
+      }
+
       console.log("Track started, storing track info");
       player.set("lastPlayedTrack", track);
       debouncedSavePlayer(player);
@@ -788,7 +798,43 @@ async function init(client) {
           eventModule?.default &&
           typeof eventModule.default.execute === "function"
         ) {
-          await eventModule.default.execute(client, player, track);
+          // Add debug logging to help diagnose message issues
+          console.log(`Executing trackStart event for guild ${player.guildId}`);
+          try {
+            await eventModule.default.execute(client, player, track);
+            console.log(
+              `Successfully executed trackStart for ${player.guildId}`
+            );
+          } catch (trackStartError) {
+            console.error(
+              "Error in trackStart event execution:",
+              trackStartError
+            );
+
+            // Try to get the text channel for recovery
+            if (player.textChannelId) {
+              try {
+                const channel = await client.channels.fetch(
+                  player.textChannelId
+                );
+                if (channel && channel.isText?.()) {
+                  console.log(
+                    `Found text channel ${player.textChannelId} for recovery`
+                  );
+                  // Just log the error, no message for now to avoid cascading issues
+                }
+              } catch (channelError) {
+                console.error(
+                  "Could not fetch text channel for recovery:",
+                  channelError
+                );
+              }
+            }
+          }
+        } else {
+          console.log(
+            "No trackStart event module found or it has an invalid structure"
+          );
         }
       } catch (error) {
         console.error("Error executing trackStart event:", error);
@@ -852,6 +898,12 @@ async function init(client) {
 
         // Use debounced save instead of immediate save
         debouncedSavePlayer(player);
+
+        // Make sure autoplay status is properly stored
+        if (player.get("autoplay_enabled") === undefined) {
+          // Default to false if not set
+          player.set("autoplay_enabled", false);
+        }
 
         // Rest of existing playerUpdate code...
         if (player?.queue?.current) {
@@ -922,6 +974,9 @@ async function init(client) {
 
             // Only try to connect if not already in voice
             if (!guild.members.me.voice.channelId) {
+              console.log(
+                `Attempting to reconnect to voice in guild ${guildId}`
+              );
               await player.connect().catch((err) => {
                 console.error("Error connecting to voice:", err);
               });
@@ -936,7 +991,7 @@ async function init(client) {
           }
         }
 
-        // Check if player is playing and has a current track
+        // Enhanced check for player state
         if (player.queue?.current && !player.playing && !player.paused) {
           console.log(
             "Player has current track but not playing, attempting to play..."
@@ -956,11 +1011,21 @@ async function init(client) {
             "Player has tracks in queue but no current track, playing next track"
           );
           try {
+            // Access the first track directly without removing it from the queue
             const nextTrack = player.queue.tracks[0];
-            await player.play(nextTrack).catch((err) => {
-              console.error("Error playing next track:", err);
-            });
-            console.log("Started playing next track from queue");
+
+            // Only play if we have a valid track
+            if (nextTrack) {
+              console.log(
+                `Playing next track: ${nextTrack.title || "Unknown title"}`
+              );
+              await player.play(nextTrack).catch((err) => {
+                console.error("Error playing next track:", err);
+              });
+              console.log("Started playing next track from queue");
+            } else {
+              console.log("Next track invalid or undefined");
+            }
           } catch (error) {
             console.error("Failed to play next track:", error);
           }
@@ -1015,31 +1080,228 @@ async function init(client) {
       }
     }
 
-    // Handle track errors
+    // Create a multi-source search function to find a track across different platforms
+    async function findAlternativeTrack(
+      player,
+      searchQuery,
+      originalSource = "youtube"
+    ) {
+      console.log(`Searching for "${searchQuery}" across multiple platforms`);
+
+      // Try different sources in order of preference
+      // Skip the original source that failed
+      const sources = [
+        "scsearch",
+        "dzsearch",
+        "deezer",
+        "soundcloud",
+        "ytmsearch",
+      ].filter((source) => !source.includes(originalSource));
+
+      for (const source of sources) {
+        try {
+          console.log(`Trying search with source: ${source}`);
+          const results = await player
+            .search({
+              query: searchQuery,
+              source: source,
+            })
+            .catch(() => null);
+
+          if (results?.tracks?.length > 0) {
+            console.log(
+              `Found ${results.tracks.length} tracks using ${source}`
+            );
+            return results.tracks[0];
+          }
+        } catch (error) {
+          console.error(`Error searching with ${source}:`, error);
+        }
+      }
+
+      return null;
+    }
+
     client.lavalink.on("trackError", async (player, track, payload) => {
       console.error("Track error occurred:", {
         guild: player.guildId,
         track: track?.title || "Unknown",
         error: payload?.error || payload?.exception?.message || "Unknown error",
+        details: payload,
       });
 
-      // If error is connection-related, try to recover
-      if (
-        payload?.error?.includes?.("connection") ||
-        payload?.error?.includes?.("timeout") ||
-        payload?.exception?.message?.includes?.("connection") ||
-        payload?.exception?.message?.includes?.("timeout")
-      ) {
+      // Check if this is a YouTube extraction error
+      const isYoutubeError =
+        payload?.exception?.cause?.includes?.("/s/player/") ||
+        payload?.exception?.cause?.includes?.("player_ias.vflset") ||
+        (track?.info?.sourceName === "youtube" &&
+          payload?.exception?.message?.includes("broke when playing"));
+
+      if (isYoutubeError) {
+        console.log(
+          "Detected YouTube extraction error, attempting to search using alternative source"
+        );
+
         try {
-          // Try to restart the track
-          if (track) {
-            await player
-              .play(track)
-              .catch((e) => console.error("Error restarting track:", e));
+          // Get the track title and artist if available
+          const searchQuery = track?.info?.author
+            ? `${track.info.title} ${track.info.author}`
+            : track?.info?.title || track?.title;
+
+          if (!searchQuery) {
+            console.error(
+              "Cannot perform alternative search: No track title available"
+            );
             return;
+          }
+
+          console.log(
+            `Searching for alternative to YouTube track: "${searchQuery}"`
+          );
+
+          // Try to find a track across multiple platforms
+          const alternativeTrack = await findAlternativeTrack(
+            player,
+            searchQuery,
+            track?.info?.sourceName || "youtube"
+          );
+
+          // If we found an alternative, play it
+          if (alternativeTrack) {
+            console.log(
+              `Found alternative track: ${alternativeTrack.title} from ${
+                alternativeTrack.info?.sourceName || "unknown source"
+              }`
+            );
+
+            // Copy over requester data
+            if (track?.requester) {
+              alternativeTrack.requester = track.requester;
+            }
+
+            try {
+              // Stop current track if playing
+              if (player.playing) {
+                await player.stop();
+              }
+
+              // Clear the current track and add new track to queue
+              player.queue.current = null;
+              await player.queue.add(alternativeTrack);
+
+              // Play the track
+              await player.play().catch((error) => {
+                console.error("Failed to play alternative track:", error);
+                throw error; // Rethrow to trigger backup method
+              });
+
+              console.log("Successfully started playing alternative track");
+              return;
+            } catch (playError) {
+              console.error(
+                "Error playing alternative track, trying direct method:",
+                playError
+              );
+
+              // Try REST API as last resort
+              try {
+                if (alternativeTrack?.encoded) {
+                  await player.node.rest.updatePlayer({
+                    guildId: player.guildId,
+                    data: {
+                      encodedTrack: alternativeTrack.encoded,
+                    },
+                  });
+                  console.log("Used REST API to play track directly");
+                  return;
+                }
+              } catch (restError) {
+                console.error("REST play attempt failed:", restError);
+              }
+            }
+          }
+
+          // Original SoundCloud search - keep as fallback
+          const results = await player
+            .search({
+              query: searchQuery,
+              source: "scsearch", // Use SoundCloud search instead of YouTube
+            })
+            .catch((e) => {
+              console.error("Alternative search failed:", e);
+              return null;
+            });
+
+          if (results && results.tracks && results.tracks.length > 0) {
+            // Original recovery code...
+            // ... existing code ...
+          }
+        } catch (searchError) {
+          console.error("Error during alternative search:", searchError);
+        }
+      }
+
+      // Try to reconnect the player if it appears to be a connection issue
+      const connectionError = /connection|timeout|reset|refused|closed/i.test(
+        payload?.error || payload?.exception?.message || ""
+      );
+
+      if (connectionError) {
+        try {
+          console.log(
+            `Attempting to recover from connection error for guild ${player.guildId}`
+          );
+          // Check if we need to reconnect to voice
+          const guild = await client.guilds
+            .fetch(player.guildId)
+            .catch(() => null);
+          if (guild && player.voiceChannelId) {
+            // Disconnect and reconnect to reset connection
+            await player.disconnect();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await player.connect();
+
+            // Try to restart the track or play next in queue
+            if (track) {
+              console.log(
+                `Attempting to replay track: ${track.title || "Unknown"}`
+              );
+              await player
+                .play(track)
+                .catch((e) => console.error("Error restarting track:", e));
+              return;
+            } else if (player.queue.tracks.length > 0) {
+              console.log("Playing next track in queue after error");
+              await player
+                .play(player.queue.tracks[0])
+                .catch((e) => console.error("Error playing next track:", e));
+              return;
+            }
           }
         } catch (error) {
           console.error("Failed to recover from track error:", error);
+
+          // Try to switch nodes if recovery failed
+          try {
+            const currentNodeId = player.node.id;
+            const availableNodes = Array.from(
+              client.lavalink.nodeManager.nodes.values()
+            ).filter((n) => n.id !== currentNodeId && n.connected);
+
+            if (availableNodes.length > 0) {
+              console.log(
+                `Switching to alternative node for guild ${player.guildId}`
+              );
+              await player.setNode(availableNodes[0].id);
+
+              if (track) {
+                await player.play(track);
+                return;
+              }
+            }
+          } catch (nodeError) {
+            console.error("Failed to switch nodes:", nodeError);
+          }
         }
       }
 
@@ -1080,9 +1342,110 @@ async function init(client) {
     client.lavalink.on("trackStuck", async (player, track) => {
       console.log("Track stuck, saving state before handling");
       debouncedSavePlayer(player);
+
+      // Try to recover from stuck track
+      try {
+        // Try skipping to next track if available
+        if (player.queue?.tracks?.length > 0) {
+          console.log("Track stuck, attempting to skip to next track");
+          await player.stop();
+        } else if (track) {
+          // Try restarting the current track
+          console.log("Track stuck, attempting to restart from beginning");
+          await player.play(track);
+        }
+      } catch (error) {
+        console.error("Failed to recover from stuck track:", error);
+      }
     });
 
     console.log("Lavalink initialization completed successfully.");
+
+    // Set up periodic node health checks
+    const checkNodeHealth = async () => {
+      try {
+        if (!client.lavalink?.isInitialized) return;
+
+        console.log("Performing periodic Lavalink node health check");
+        const currentNodes = Array.from(
+          client.lavalink.nodeManager.nodes.values()
+        );
+
+        // No action needed if no nodes or no active players
+        if (currentNodes.length === 0) return;
+        if (client.lavalink.players.size === 0) return;
+
+        // Test all configured servers
+        const healthResults = await Promise.all(
+          LAVALINK_SERVERS.map(async (server) => {
+            const isWorking = await testServerConnection(server).catch(
+              () => false
+            );
+            return { server, isWorking };
+          })
+        );
+
+        // Get working servers
+        const workingServers = healthResults
+          .filter((result) => result.isWorking)
+          .map((result) => result.server);
+
+        if (workingServers.length === 0) {
+          console.log("No working Lavalink servers found during health check");
+          return;
+        }
+
+        // Check if current node is disconnected
+        const connectedNodes = currentNodes.filter((node) => node.connected);
+        if (connectedNodes.length === 0) {
+          console.log(
+            "All current nodes disconnected, attempting to connect to a working server"
+          );
+
+          // Try to connect to the first working server
+          const newNode = await client.lavalink.nodeManager.createNode(
+            workingServers[0]
+          );
+          console.log(`Connected to new node: ${newNode.id}`);
+
+          // Migrate all players to the new node
+          const players = Array.from(client.lavalink.players.values());
+          for (const player of players) {
+            try {
+              const currentTrack = player.queue.current;
+              const position = player.position;
+              const playing = player.playing;
+
+              await player.setNode(newNode.id);
+
+              if (currentTrack && playing) {
+                await player.play({
+                  track: currentTrack,
+                  options: { startTime: position },
+                });
+              }
+
+              console.log(`Migrated player ${player.guildId} to new node`);
+            } catch (error) {
+              console.error(
+                `Failed to migrate player ${player.guildId}:`,
+                error
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error in node health check:", error);
+      }
+    };
+
+    // Run health check every 5 minutes
+    const healthCheckInterval = setInterval(checkNodeHealth, 5 * 60 * 1000);
+
+    // Clear interval when client is destroyed
+    client.on("destroy", () => {
+      clearInterval(healthCheckInterval);
+    });
 
     // We already have raw event handler above, so we don't need the direct voice state handler
     client.on("raw", (d) => {
