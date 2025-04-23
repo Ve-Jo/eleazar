@@ -42,7 +42,7 @@
     "i18n": "^0.15.1",
     "ioredis": "^5.3.2",
     "l1-path-finder": "^1.0.0",
-    "lavalink-client": "^2.4.6",
+    "lavalink-client": "^2.5.0",
     "lodash": "^4.17.21",
     "memer.ts": "^4.2.8",
     "ms": "^2.1.3",
