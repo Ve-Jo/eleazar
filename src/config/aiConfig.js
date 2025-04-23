@@ -39,8 +39,8 @@ const CONFIG = {
         "google/gemma-3-27b-it",
         "mistralai/mistral-small-3.1-24b-instruct",
         "mistralai/pixtral-12b",
-        "microsoft/phi-3.5-mini-128k-instruct",
-        /*"microsoft/mai-ds-r1:free",
+        /*"microsoft/phi-3.5-mini-128k-instruct",
+        "microsoft/mai-ds-r1:free",
         "thudm/glm-z1-32b:free",
         "thudm/glm-4-32b:free",
         "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
@@ -53,12 +53,12 @@ const CONFIG = {
         "moonshotai/moonlight-16b-a3b-instruct:free",*/
       ],
       vision: [
-        "google/gemini-2.0-flash-001",
+        /*"google/gemini-2.0-flash-001",*/
         "minimax/minimax-01",
         "google/gemma-3-27b-it",
         "mistralai/pixtral-12b",
-        "microsoft/phi-3.5-mini-128k-instruct",
-        /*"qwen/qwen2.5-vl-32b-instruct:free",
+        /*"microsoft/phi-3.5-mini-128k-instruct",
+        "qwen/qwen2.5-vl-32b-instruct:free",
         "google/gemma-3-27b-it:free",*/
       ],
     },
