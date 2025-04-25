@@ -17,8 +17,7 @@ import {
 import { Prisma } from "@prisma/client"; // Import Prisma Decimal helper
 import Database from "../../database/client.js"; // Use the main DB
 import { generateImage } from "../../utils/imageGenerator.js";
-import { getTickers, getKline } from "../../utils/cryptoApi.js"; // Import API utilities
-import { generateCandlestickChart } from "../../utils/chartGenerator.js"; // Import the chart utility
+import { getTickers } from "../../utils/cryptoApi.js"; // Import API utilities
 
 // --- Game Metadata ---
 const game_info = {
