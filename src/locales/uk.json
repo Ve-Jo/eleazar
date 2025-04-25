@@ -201,7 +201,12 @@
         "options": {
           "game": {
             "name": "гра",
-            "description": "Виберіть конкретну гру для прямого запуску"
+            "description": "Виберіть конкретну гру для прямого запуску",
+            "choices": {
+              "crypto2": {
+                "name": "Кріпто 2.0"
+              }
+            }
           }
         },
         "specialForCategory": "Спеціально для Eleazar",
