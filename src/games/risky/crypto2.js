@@ -536,64 +536,153 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
     }
   }
 
-  // Fetch market data for top gainers/losers
-  // Get data for common cryptocurrencies
-  const commonSymbols = [
-    "BTCUSDT",
-    "ETHUSDT",
-    "BNBUSDT",
-    "XRPUSDT",
-    "ADAUSDT",
-    "DOGEUSDT",
-    "SOLUSDT",
-    "MATICUSDT",
-    "DOTUSDT",
-    "LTCUSDT",
-    "AVAXUSDT",
-    "LINKUSDT",
-    "UNIUSDT",
-    "ATOMUSDT",
-    "ETCUSDT",
-    "TONUSDT",
-    "SOLUSDT",
-  ];
+  // Fetch user avatar URL from the interaction object
+  const userAvatarURL = interaction.user.displayAvatarURL({
+    extension: "png",
+    size: 128,
+  });
 
-  const marketData = await getTickers(commonSymbols);
+  const componentData = {
+    interaction: {
+      user: {
+        id: userId,
+        // Pass the actual avatar URL
+        avatarURL: userAvatarURL,
+      },
+      guild: { id: guildId },
+    },
+    i18n: {
+      // Pass resolved translations for the keys used in Crypto2.jsx
+      balanceLabel: i18n.__("games.crypto2.common.balance"),
+      openOrdersLabel: i18n.__("games.crypto2.common.openOrders"),
+      coinLabel: i18n.__("games.crypto2.common.coin"),
+      stakeLabel: i18n.__("games.crypto2.common.stake"),
+      noOpenPositions: i18n.__("games.crypto2.common.noOpenPositions"),
+      // Add translations for the new buttons
+      closeButtonLabel: i18n.__("games.crypto2.buttonClose") || "Close",
+      averageButtonLabel: i18n.__("games.crypto2.buttonAverage") || "Average",
+      tpslButtonLabel: i18n.__("games.crypto2.buttonSetTpsl") || "TP/SL",
+      // Add any other translations Crypto2.jsx MainMenu specifically needs
+    },
+    balance: userData?.economy?.balance?.toString() ?? "0.00",
+    openPositions: positions.map((p) => {
+      const currentPrice =
+        currentPrices[p.symbol]?.markPrice ||
+        currentPrices[p.symbol]?.lastPrice;
+      const pnlPercent = calculatePnlPercent(
+        p.entryPrice,
+        currentPrice,
+        p.direction,
+        p.leverage
+      );
+      // Calculate stake value here to pass to component
+      const stakeValue = new Prisma.Decimal(p.entryPrice || 0).times(
+        new Prisma.Decimal(p.quantity || 0)
+      );
 
-  // Calculate 24h change and prepare market movers data
-  const marketMovers = { gainers: [], losers: [] };
+      // Calculate PnL amount
+      const pnlAmount = calculatePnlAmount(
+        p.entryPrice,
+        currentPrice,
+        p.quantity,
+        p.direction
+      );
 
-  if (marketData) {
-    // Create an array of coins with their price change
-    const coins = Object.values(marketData).map((ticker) => ({
-      symbol: ticker.symbol,
-      // Use price24hPcnt if available, otherwise calculate a random change for the demo
-      change: ticker.price24hPcnt
-        ? parseFloat(ticker.price24hPcnt) * 100
-        : Math.random() * 20 - 10,
-      // Add volume data
-      volume:
-        ticker.volume24h || ticker.turnover24h || Math.random() * 50000000,
-    }));
+      return {
+        id: p.id, // Pass position ID
+        symbol: p.symbol,
+        direction: p.direction,
+        entryPrice: p.entryPrice.toString(),
+        quantity: p.quantity.toString(),
+        leverage: p.leverage,
+        pnlPercent: pnlPercent.toFixed(2),
+        stakeValue: stakeValue.toFixed(2), // Pass calculated stake value
+        pnlAmount: pnlAmount.toFixed(2), // Pass calculated PnL amount
+      };
+    }),
+    viewType: "main_menu",
+  };
 
-    // Sort by change
-    const sortedCoins = [...coins].sort((a, b) => b.change - a.change);
+  const pngBuffer = await generateImage(
+    "Crypto2",
+    componentData,
+    { image: 1, emoji: 1 },
+    i18n // Pass the main i18n object here for generateImage's internal use if needed
+  );
+  const embed = new EmbedBuilder()
+    .setTitle(i18n.__("games.crypto2.mainMenuTitle"))
+    .setImage(`attachment://crypto_portfolio_${userId}.png`);
 
-    // Get top 3 gainers and losers
-    marketMovers.gainers = sortedCoins.slice(0, 3);
-    marketMovers.losers = sortedCoins.slice(-3).reverse();
-  } else {
-    // Fallback data if API fails
-    marketMovers.gainers = [
-      { symbol: "BTCUSDT", change: 4.2, volume: 23500000 },
-      { symbol: "ETHUSDT", change: 3.8, volume: 12800000 },
-      { symbol: "SOLUSDT", change: 2.7, volume: 8900000 },
-    ];
-    marketMovers.losers = [
-      { symbol: "DOGEUSDT", change: -3.5, volume: 5600000 },
-      { symbol: "XRPUSDT", change: -2.6, volume: 4200000 },
-      { symbol: "ADAUSDT", change: -1.8, volume: 3100000 },
-    ];
+  // Add first row with primary actions
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`crypto2_open_${userId}`)
+      .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`crypto2_refresh_${userId}`)
+      .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  // Only add position select if there are any positions
+  const components = [row1];
+
+  if (positions.length > 0) {
+    // Create position select menu
+    const positionSelect = new StringSelectMenuBuilder()
+      .setCustomId(`crypto2_position_select_${userId}`)
+      .setPlaceholder(
+        i18n.__("games.crypto2.selectPositionPrompt") ||
+          "Select a position to manage..."
+      )
+      .addOptions(
+        positions.map((p) => ({
+          label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
+          description: `Entry: ${p.entryPrice.toFixed(
+            2
+          )} | PnL: ${calculatePnlPercent(
+            p.entryPrice,
+            currentPrices[p.symbol]?.markPrice ||
+              currentPrices[p.symbol]?.lastPrice,
+            p.direction,
+            p.leverage
+          ).toFixed(2)}%`,
+          value: p.id,
+        }))
+      );
+
+    const row2 = new ActionRowBuilder().addComponents(positionSelect);
+    components.push(row2);
+  }
+
+  return {
+    embeds: [embed],
+    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.png` }],
+    components: components,
+  };
+}
+
+// Add a new function to generate main menu with a selected position
+async function generateMainMenuWithSelectedPosition(
+  guildId,
+  userId,
+  i18n,
+  interaction,
+  selectedPositionId
+) {
+  // This is mostly the same as generateMainMenuContent but with a selected position
+  const userData = await Database.getUser(guildId, userId, true);
+  const positions = await Database.getUserCryptoPositions(guildId, userId);
+
+  // Fetch market data for positions
+  let currentPrices = {};
+  if (positions.length > 0) {
+    const symbolsToFetch = [...new Set(positions.map((p) => p.symbol))];
+    currentPrices = await getTickers(symbolsToFetch);
+    if (currentPrices === null) {
+      throw new Error("Failed to fetch ticker data from API");
+    }
   }
 
   // Fetch user avatar URL from the interaction object
@@ -618,11 +707,10 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
       coinLabel: i18n.__("games.crypto2.common.coin"),
       stakeLabel: i18n.__("games.crypto2.common.stake"),
       noOpenPositions: i18n.__("games.crypto2.common.noOpenPositions"),
-      marketMoversLabel:
-        i18n.__("games.crypto2.common.marketMovers") || "Market Movers",
-      topGainersLabel:
-        i18n.__("games.crypto2.common.topGainers") || "Top Gainers",
-      topLosersLabel: i18n.__("games.crypto2.common.topLosers") || "Top Losers",
+      // Add translations for the new buttons
+      closeButtonLabel: i18n.__("games.crypto2.buttonClose") || "Close",
+      averageButtonLabel: i18n.__("games.crypto2.buttonAverage") || "Average",
+      tpslButtonLabel: i18n.__("games.crypto2.buttonSetTpsl") || "TP/SL",
       // Add any other translations Crypto2.jsx MainMenu specifically needs
     },
     balance: userData?.economy?.balance?.toString() ?? "0.00",
@@ -641,19 +729,28 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
         new Prisma.Decimal(p.quantity || 0)
       );
 
+      // Calculate PnL amount
+      const pnlAmount = calculatePnlAmount(
+        p.entryPrice,
+        currentPrice,
+        p.quantity,
+        p.direction
+      );
+
       return {
-        id: p.id, // Pass position ID
+        id: p.id,
         symbol: p.symbol,
         direction: p.direction,
         entryPrice: p.entryPrice.toString(),
         quantity: p.quantity.toString(),
         leverage: p.leverage,
         pnlPercent: pnlPercent.toFixed(2),
-        stakeValue: stakeValue.toFixed(2), // Pass calculated stake value
+        stakeValue: stakeValue.toFixed(2),
+        pnlAmount: pnlAmount.toFixed(2), // Add PnL amount
       };
     }),
     viewType: "main_menu",
-    marketMovers: marketMovers, // Add market movers data to component props
+    selectedPositionId: selectedPositionId,
   };
 
   const pngBuffer = await generateImage(
@@ -666,447 +763,82 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
     .setTitle(i18n.__("games.crypto2.mainMenuTitle"))
     .setImage(`attachment://crypto_portfolio_${userId}.png`);
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`crypto2_view_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonViewPositions"))
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(positions.length === 0),
+  // Add first row with primary actions
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`crypto2_open_${userId}`)
       .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
-      .setStyle(ButtonStyle.Success)
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`crypto2_refresh_${userId}`)
+      .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
+      .setStyle(ButtonStyle.Secondary)
   );
 
-  // Add coin selection dropdown row
-  const popularCoins = [
-    { symbol: "BTCUSDT", name: "Bitcoin" },
-    { symbol: "ETHUSDT", name: "Ethereum" },
-    { symbol: "SOLUSDT", name: "Solana" },
-    { symbol: "BNBUSDT", name: "Binance Coin" },
-    { symbol: "XRPUSDT", name: "Ripple" },
-    { symbol: "DOGEUSDT", name: "Dogecoin" },
-    { symbol: "ADAUSDT", name: "Cardano" },
-    { symbol: "MATICUSDT", name: "Polygon" },
-  ];
+  // Only add position select if there are any positions
+  const components = [row1];
 
-  const coinSelectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`crypto2_select_coin_${userId}`)
-    .setPlaceholder(
-      i18n.__("games.crypto2.coinPreview.selectCoinPrompt") ||
-        "Preview a coin chart..."
-    )
-    .addOptions(
-      popularCoins.map((coin) => ({
-        label: `${coin.name} (${coin.symbol.replace("USDT", "")})`,
-        value: coin.symbol,
-        // Add emoji if you have them configured
-        // emoji: coin.emoji
-      }))
+  if (positions.length > 0) {
+    // Create position select menu
+    const positionSelect = new StringSelectMenuBuilder()
+      .setCustomId(`crypto2_position_select_${userId}`)
+      .setPlaceholder(
+        i18n.__("games.crypto2.selectPositionPrompt") ||
+          "Select a position to manage..."
+      )
+      .addOptions(
+        positions.map((p) => ({
+          label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
+          description: `Entry: ${p.entryPrice.toFixed(
+            2
+          )} | PnL: ${calculatePnlPercent(
+            p.entryPrice,
+            currentPrices[p.symbol]?.markPrice ||
+              currentPrices[p.symbol]?.lastPrice,
+            p.direction,
+            p.leverage
+          ).toFixed(2)}%`,
+          value: p.id,
+          default: p.id === selectedPositionId, // Mark as selected if it matches
+        }))
+      );
+
+    const row2 = new ActionRowBuilder().addComponents(positionSelect);
+    components.push(row2);
+  }
+
+  // If a position is selected, add action buttons for it
+  if (selectedPositionId) {
+    const actionRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`crypto2_close_${selectedPositionId}`)
+        .setLabel(
+          i18n.__("games.crypto2.buttonClosePosition") || "Close Position"
+        )
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`crypto2_average_${selectedPositionId}`)
+        .setLabel(
+          i18n.__("games.crypto2.buttonAveragePosition") || "Average Position"
+        )
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`crypto2_tpsl_${selectedPositionId}`)
+        .setLabel(i18n.__("games.crypto2.buttonSetTpSl") || "Set TP/SL")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`crypto2_back_${userId}`)
+        .setLabel(i18n.__("games.crypto2.buttonBack") || "Back")
+        .setStyle(ButtonStyle.Secondary)
     );
 
-  const coinSelectRow = new ActionRowBuilder().addComponents(coinSelectMenu);
+    components.push(actionRow);
+  }
 
   return {
     embeds: [embed],
     files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.png` }],
-    components: [row, coinSelectRow],
-  };
-}
-
-// Function to generate the chart view content
-async function generateChartViewContent(
-  guildId,
-  userId,
-  positionId,
-  i18n,
-  interaction,
-  interval = "15"
-) {
-  const position = await Database.getCryptoPositionById(positionId);
-  if (!position) {
-    throw new Error(`Position ${positionId} not found.`);
-  }
-  const userData = await Database.getUser(guildId, userId, true);
-  const tickerData = await getTickers([position.symbol]);
-
-  // Fetch K-line data with the specified interval
-  const klineData = await getKline(position.symbol, interval, 100); // Use the interval parameter
-
-  if (!tickerData || !tickerData[position.symbol] || klineData === null) {
-    throw new Error(`Failed to fetch market/chart data for ${position.symbol}`);
-  }
-  const currentPrice = new Prisma.Decimal(
-    tickerData[position.symbol].markPrice ||
-      tickerData[position.symbol].lastPrice
-  );
-  const pnlPercent = calculatePnlPercent(
-    position.entryPrice, // DB Decimal
-    currentPrice, // Already Decimal
-    position.direction,
-    position.leverage
-  );
-  const pnlAmount = calculatePnlAmount(
-    position.entryPrice, // DB Decimal
-    currentPrice, // Already Decimal
-    position.quantity, // DB Decimal
-    position.direction
-  );
-
-  // --- Generate Chart Image ---
-  const chartImageURI = await generateCandlestickChart(
-    klineData,
-    position.symbol,
-    {
-      takeProfitPrice: position.takeProfitPrice?.toString() || null,
-      stopLossPrice: position.stopLossPrice?.toString() || null,
-      entryPrice: position.entryPrice.toString(),
-      direction: position.direction,
-    }
-  );
-  if (!chartImageURI) {
-    console.warn(`Failed to generate chart image for ${position.symbol}`);
-    // Proceed without chart image, component will show placeholder
-  }
-  // --- End Chart Generation ---
-
-  // Ensure we have a valid avatarURL or provide a fallback
-  let avatarURL = null;
-  if (interaction && interaction.user && interaction.user.displayAvatarURL) {
-    avatarURL = interaction.user.displayAvatarURL({
-      extension: "png",
-      size: 128,
-    });
-  }
-
-  console.log(
-    `[crypto2.js] Generating chart view with interval: "${interval}"`
-  );
-
-  const componentData = {
-    interaction: {
-      user: {
-        id: userId,
-        avatarURL:
-          avatarURL || "https://cdn.discordapp.com/embed/avatars/0.png", // Fallback avatar
-      },
-      guild: { id: guildId },
-    },
-    i18n: {
-      // Pass resolved translations needed by ChartView
-      detailsLabel: i18n.__("games.crypto2.details"),
-      entryPriceLabel: i18n.__("games.crypto2.entryPrice"),
-      currentPriceLabel: i18n.__("games.crypto2.currentPrice"),
-      quantityLabel: i18n.__("games.crypto2.quantity"),
-      pnlLabel: i18n.__("games.crypto2.pnl"),
-      leverageLabel: i18n.__("games.crypto2.leverage"),
-      takeProfitLabel: i18n.__("games.crypto2.takeProfit"),
-      stopLossLabel: i18n.__("games.crypto2.stopLoss"),
-      notSetLabel: i18n.__("games.crypto2.notSet"),
-      // chartTitleSuffix: i18n.__("games.crypto2.chartTitleSuffix") // Example if needed
-    },
-    balance: userData?.economy?.balance?.toString() ?? "0.00",
-    selectedPosition: {
-      // Pass details of the selected position as strings
-      id: position.id,
-      symbol: position.symbol,
-      direction: position.direction,
-      entryPrice: position.entryPrice.toFixed(4), // Format with more precision
-      quantity: position.quantity.toString(),
-      leverage: position.leverage,
-      takeProfitPrice: position.takeProfitPrice?.toFixed(4) || null,
-      stopLossPrice: position.stopLossPrice?.toFixed(4) || null,
-      createdAt: position.createdAt.toISOString(),
-      // Pass current calculated data as strings
-      currentPrice: currentPrice.toFixed(4), // Format with more precision
-      pnlPercent: pnlPercent.toFixed(2),
-      pnlAmount: pnlAmount.toFixed(2), // Pass calculated PnL amount
-    },
-    chartData: null, // Don't pass raw data if we have the image
-    chartImageURI: chartImageURI, // Pass base64 URI or null
-    viewType: "chart_view",
-    currentInterval: interval, // Pass the current interval to the component
-  };
-
-  const pngBuffer = await generateImage(
-    "Crypto2",
-    componentData,
-    { image: 1, emoji: 1 },
-    i18n
-  );
-  const embed = new EmbedBuilder()
-    .setTitle(
-      i18n.__("games.crypto2.chartViewTitle", {
-        symbol: position.symbol,
-      })
-    )
-    .setImage(`attachment://crypto_chart_${position.symbol}_${userId}.png`);
-
-  // Buttons for managing the position
-  const mainActionRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`crypto2_close_${positionId}_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonClosePosition"))
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_average_${positionId}_${interval}_${userId}`) // Add interval to ID
-      .setLabel(i18n.__("games.crypto2.buttonAveragePosition"))
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_tpsl_${positionId}_${interval}_${userId}`) // Add interval to ID
-      .setLabel(i18n.__("games.crypto2.buttonSetTpSl"))
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_back_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonBack"))
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  // Timeframe selection buttons
-  const timeframeRow = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`crypto2_interval_select_${positionId}_${userId}`)
-      .setPlaceholder(i18n.__("games.crypto2.timeframe.selectPlaceholder"))
-      .addOptions([
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.oneMinute"),
-          value: "1",
-          default: interval === "1",
-          emoji: "⏱️",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.fiveMinutes"),
-          value: "5",
-          default: interval === "5",
-          emoji: "⏱️",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.fifteenMinutes"),
-          value: "15",
-          default: interval === "15",
-          emoji: "⏱️",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.thirtyMinutes"),
-          value: "30",
-          default: interval === "30",
-          emoji: "⏱️",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.oneHour"),
-          value: "60",
-          default: interval === "60",
-          emoji: "🕐",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.fourHours"),
-          value: "240",
-          default: interval === "240",
-          emoji: "🕓",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.oneDay"),
-          value: "D",
-          default: interval === "D",
-          emoji: "📅",
-        },
-        {
-          label: i18n.__("games.crypto2.timeframe.intervals.oneWeek"),
-          value: "W",
-          default: interval === "W",
-          emoji: "📆",
-        },
-      ])
-  );
-
-  // Add a refresh button for 1m and 5m timeframes
-  let components = [timeframeRow, mainActionRow];
-
-  // Add refresh button for short timeframes
-  if (interval === "1" || interval === "5") {
-    const refreshRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`crypto2_refresh_${positionId}_${interval}_${userId}`)
-        .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh Chart")
-        .setEmoji("🔄")
-        .setStyle(ButtonStyle.Success)
-    );
-    components.push(refreshRow);
-  }
-
-  return {
-    embeds: [embed],
-    files: [
-      {
-        attachment: pngBuffer,
-        name: `crypto_chart_${position.symbol}_${userId}.png`,
-      },
-    ],
     components: components,
-  };
-}
-
-// Function to generate the coin preview content for a specific symbol
-async function generateCoinPreviewContent(
-  guildId,
-  userId,
-  symbol,
-  i18n,
-  interaction,
-  interval = "15" // Default interval is 15m
-) {
-  const userData = await Database.getUser(guildId, userId, true);
-  const tickerData = await getTickers([symbol]);
-
-  // Fetch K-line data with the specified interval
-  const klineData = await getKline(symbol, interval, 100);
-
-  if (!tickerData || !tickerData[symbol] || klineData === null) {
-    throw new Error(`Failed to fetch market/chart data for ${symbol}`);
-  }
-
-  const currentPrice =
-    tickerData[symbol].markPrice || tickerData[symbol].lastPrice;
-  const price24hChange = tickerData[symbol].price24hPcnt
-    ? parseFloat(tickerData[symbol].price24hPcnt) * 100
-    : 0;
-
-  // Generate the chart image
-  const chartImageURI = await generateCandlestickChart(klineData, symbol, {
-    // No position-specific options like TP/SL needed for preview
-  });
-
-  // Prepare component data for the preview
-  const componentData = {
-    interaction: {
-      user: {
-        id: userId,
-        avatarURL: interaction.user.displayAvatarURL({
-          extension: "png",
-          size: 128,
-        }),
-      },
-      guild: { id: guildId },
-    },
-    i18n: {
-      // Add translations for the preview view
-      chartTitleSuffix:
-        i18n.__("games.crypto2.common.chartTitleSuffix") || "Chart",
-      currentPriceLabel:
-        i18n.__("games.crypto2.coinPreview.currentPriceLabel") ||
-        "Current Price",
-      price24hChangeLabel:
-        i18n.__("games.crypto2.coinPreview.price24hChangeLabel") ||
-        "24h Change",
-      volumeLabel:
-        i18n.__("games.crypto2.coinPreview.volumeLabel") || "24h Volume",
-      timeframeLabel:
-        i18n.__("games.crypto2.timeframe.selectPlaceholder") ||
-        "Select Timeframe",
-      balanceLabel: i18n.__("games.crypto2.common.balance") || "Balance",
-      priceInfoLabel:
-        i18n.__("games.crypto2.coinPreview.priceInfoLabel") ||
-        "Price Information",
-      readyToTradeLabel:
-        i18n.__("games.crypto2.coinPreview.readyToTradeLabel") ||
-        "Ready to trade?",
-      longExplanation:
-        i18n.__("games.crypto2.coinPreview.longExplanation") ||
-        "Buy if you expect price to rise",
-      shortExplanation:
-        i18n.__("games.crypto2.coinPreview.shortExplanation") ||
-        "Sell if you expect price to fall",
-    },
-    viewType: "coin_preview",
-    symbol: symbol,
-    currentPrice: currentPrice.toString(),
-    price24hChange: price24hChange.toFixed(2),
-    volume24h: tickerData[symbol].volume24h?.toString() || "0",
-    chartImageURI: chartImageURI,
-    currentInterval: interval,
-    balance: userData?.economy?.balance?.toString() ?? "0.00",
-  };
-
-  // Generate the image
-  const pngBuffer = await generateImage(
-    "Crypto2",
-    componentData,
-    { image: 1, emoji: 1 },
-    i18n
-  );
-
-  // Prepare the message content
-  const embed = new EmbedBuilder()
-    .setTitle(i18n.__("games.crypto2.coinPreview.title", { symbol: symbol }))
-    .setImage(`attachment://crypto_preview_${userId}.png`);
-
-  // Create interval selection menu
-  const intervalMenu = new StringSelectMenuBuilder()
-    .setCustomId(`crypto2_interval_preview_${symbol}_${userId}`)
-    .setPlaceholder(i18n.__("games.crypto2.timeframe.selectPlaceholder"))
-    .addOptions([
-      {
-        label: i18n.__("games.crypto2.timeframe.intervals.oneMinute"),
-        value: "1",
-        default: interval === "1",
-      },
-      {
-        label: i18n.__("games.crypto2.timeframe.intervals.fiveMinutes"),
-        value: "5",
-        default: interval === "5",
-      },
-      {
-        label:
-          i18n.__("games.crypto2.timeframe.intervals.fifteenMinutes") ||
-          "15 Minutes",
-        value: "15",
-        default: interval === "15",
-      },
-      {
-        label:
-          i18n.__("games.crypto2.timeframe.intervals.thirtyMinutes") ||
-          "30 Minutes",
-        value: "30",
-        default: interval === "30",
-      },
-      {
-        label: i18n.__("games.crypto2.timeframe.intervals.oneHour"),
-        value: "60",
-        default: interval === "60",
-      },
-      {
-        label:
-          i18n.__("games.crypto2.timeframe.intervals.fourHours") || "4 Hours",
-        value: "240",
-        default: interval === "240",
-      },
-      {
-        label: i18n.__("games.crypto2.timeframe.intervals.oneDay"),
-        value: "D",
-        default: interval === "D",
-      },
-    ]);
-
-  // Create action buttons
-  const buttonsRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`crypto2_open_from_preview_${symbol}_${userId}`)
-      .setLabel(
-        i18n.__("games.crypto2.coinPreview.buttonOpenPositionFromPreview")
-      )
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_preview_back_${userId}`)
-      .setLabel(i18n.__("games.crypto2.coinPreview.buttonBackToMenu"))
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  const intervalRow = new ActionRowBuilder().addComponents(intervalMenu);
-
-  return {
-    embeds: [embed],
-    files: [{ attachment: pngBuffer, name: `crypto_preview_${userId}.png` }],
-    components: [buttonsRow, intervalRow],
   };
 }
 
@@ -1355,247 +1087,9 @@ function setupGameInteractionCollector(
           await i
             .followUp({ content: liquidationMessages, ephemeral: true })
             .catch(console.error);
-          // If the action was on a now-liquidated position, maybe force back to menu?
-          // Let's assume the subsequent DB fetch will fail or the view will update correctly.
         }
-        // --- End Liquidation Check ---
 
-        // --- Component Handlers ---
-        // Coin Selection from Main Menu
-        if (customId === `crypto2_select_coin_${userId}`) {
-          await i.deferUpdate();
-          const selectedCoin = i.values[0]; // Get selected coin symbol
-          const previewContent = await generateCoinPreviewContent(
-            guildId,
-            userId,
-            selectedCoin,
-            i18n,
-            originalInteraction
-          );
-          await message.edit(previewContent);
-        }
-        // Back to Main Menu from Coin Preview
-        else if (customId === `crypto2_preview_back_${userId}`) {
-          await i.deferUpdate();
-          const mainMenuContent = await generateMainMenuContent(
-            guildId,
-            userId,
-            i18n,
-            originalInteraction
-          );
-          await message.edit(mainMenuContent);
-        }
-        // Change Timeframe on Coin Preview
-        else if (customId.startsWith(`crypto2_interval_preview_`)) {
-          await i.deferUpdate();
-          const parts = customId.split("_");
-          const symbol = parts[3]; // Extract symbol from the customId
-          const selectedInterval = i.values[0]; // Get selected interval
-          const previewContent = await generateCoinPreviewContent(
-            guildId,
-            userId,
-            symbol,
-            i18n,
-            originalInteraction,
-            selectedInterval
-          );
-          await message.edit(previewContent);
-        }
-        // Open Position from Preview
-        else if (customId.startsWith(`crypto2_open_from_preview_`)) {
-          const parts = customId.split("_");
-          const symbol = parts[4]; // Extract symbol from the customId
-
-          // Create a modal similar to the regular open position but prefill the symbol
-          const modalSubmitId = `crypto2_open_modal_${i.id}`;
-          const modal = new ModalBuilder()
-            .setCustomId(modalSubmitId)
-            .setTitle(i18n.__("games.crypto2.openPositionModalTitle"));
-
-          const symbolInput = new TextInputBuilder()
-            .setCustomId("symbolInput")
-            .setLabel(i18n.__("games.crypto2.symbolInputLabel"))
-            .setStyle(TextInputStyle.Short)
-            .setValue(symbol) // Prefill with selected symbol
-            .setRequired(true)
-            .setMinLength(6)
-            .setMaxLength(15);
-
-          const directionInput = new TextInputBuilder()
-            .setCustomId("directionInput")
-            .setLabel(i18n.__("games.crypto2.directionInputLabel"))
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder("LONG or SHORT")
-            .setRequired(true)
-            .setMinLength(4)
-            .setMaxLength(5);
-
-          const stakeInput = new TextInputBuilder()
-            .setCustomId("stakeInput")
-            .setLabel(i18n.__("games.crypto2.stakeInputLabel"))
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g., 10.50")
-            .setRequired(true);
-
-          const leverageInput = new TextInputBuilder()
-            .setCustomId("leverageInput")
-            .setLabel(i18n.__("games.crypto2.leverageInputLabel"))
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder("e.g., 10")
-            .setValue("10")
-            .setRequired(true);
-
-          modal.addComponents(
-            new ActionRowBuilder().addComponents(symbolInput),
-            new ActionRowBuilder().addComponents(directionInput),
-            new ActionRowBuilder().addComponents(stakeInput),
-            new ActionRowBuilder().addComponents(leverageInput)
-          );
-
-          // Show the modal
-          await i.showModal(modal);
-
-          // Handle the modal submission using the existing code flow
-          i.awaitModalSubmit({
-            filter: (modalInteraction) =>
-              modalInteraction.customId === modalSubmitId &&
-              modalInteraction.user.id === userId,
-            time: modalTimeoutDuration,
-          })
-            .then(async (modalInteraction) => {
-              // Use the existing modal submission handler logic
-              // We're using the same format as the regular open position modal
-              await modalInteraction.deferReply({ ephemeral: true });
-              try {
-                // 1. Get Modal Data
-                const symbol = modalInteraction.fields
-                  .getTextInputValue("symbolInput")
-                  .toUpperCase()
-                  .trim();
-                const direction = modalInteraction.fields
-                  .getTextInputValue("directionInput")
-                  .toUpperCase()
-                  .trim();
-                const stakeString = modalInteraction.fields
-                  .getTextInputValue("stakeInput")
-                  .trim();
-                const leverageString = modalInteraction.fields
-                  .getTextInputValue("leverageInput")
-                  .trim();
-
-                // Continue with the existing validation and position opening code...
-                // This is the same code as in the regular open position handler
-                if (!/^[A-Z]+USDT$/.test(symbol)) {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInvalidSymbol")
-                  );
-                  return;
-                }
-                if (direction !== "LONG" && direction !== "SHORT") {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInvalidDirection")
-                  );
-                  return;
-                }
-                const stake = parseFloat(stakeString);
-                if (isNaN(stake) || stake <= 0) {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInvalidStake")
-                  );
-                  return;
-                }
-                const leverage = parseInt(leverageString);
-                if (isNaN(leverage) || leverage <= 0 || leverage > 100) {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInvalidLeverage")
-                  );
-                  return;
-                }
-
-                // 3. Check Balance
-                const userData = await Database.getUser(guildId, userId, true);
-                const userBalance = new Prisma.Decimal(
-                  userData?.economy?.balance ?? 0
-                );
-                const stakeDecimal = new Prisma.Decimal(stake);
-                if (userBalance.lt(stakeDecimal)) {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInsufficientBalance")
-                  );
-                  return;
-                }
-
-                // 4. Fetch Current Price
-                const tickerData = await getTickers([symbol]);
-                if (!tickerData || !tickerData[symbol]) {
-                  await modalInteraction.editReply(
-                    i18n.__("games.crypto2.errorInvalidSymbol")
-                  );
-                  return;
-                }
-
-                // 5. Open the Position (continues with existing code...)
-                // Continue with the rest of your position opening logic
-                // Just copy the existing code for this part
-
-                // After position is opened, return to main menu
-                const mainMenuContent = await generateMainMenuContent(
-                  guildId,
-                  userId,
-                  i18n,
-                  originalInteraction
-                );
-                await message.edit(mainMenuContent);
-
-                await modalInteraction.editReply(
-                  i18n.__("games.crypto2.positionOpenedSuccess", {
-                    direction,
-                    symbol,
-                    leverage,
-                  })
-                );
-              } catch (error) {
-                console.error("Error in modal submission handler:", error);
-                await modalInteraction.editReply(
-                  i18n.__("games.crypto2.errorGeneric")
-                );
-              }
-            })
-            .catch((error) => {
-              console.error("Modal timeout or error:", error);
-            });
-        } else if (customId === `crypto2_view_${userId}`) {
-          await i.deferUpdate();
-          const positions = await Database.getUserCryptoPositions(
-            guildId,
-            userId
-          );
-          if (positions.length === 0) {
-            await i.followUp({
-              content: i18n.__("games.crypto2.errorNoPositions"),
-              ephemeral: true,
-            });
-            return;
-          }
-          const selectMenu = new StringSelectMenuBuilder()
-            .setCustomId(`crypto2_selectpos_${userId}`)
-            .setPlaceholder(i18n.__("games.crypto2.selectPositionPrompt"))
-            .addOptions(
-              positions.map((p) => ({
-                label: i18n.__("games.crypto2.positionSelectLabel", {
-                  direction: p.direction,
-                  symbol: p.symbol,
-                  entryPrice: parseFloat(p.entryPrice).toFixed(2),
-                  leverage: p.leverage,
-                }),
-                value: p.id,
-              }))
-            );
-          const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-          await message.edit({
-            components: [message.components[0], selectRow],
-          });
-        } else if (customId === `crypto2_open_${userId}`) {
+        if (customId === `crypto2_open_${userId}`) {
           // --- Handle Open Position Modal ---
           const modalSubmitId = `crypto2_open_modal_${i.id}`; // Use button interaction ID for uniqueness
           const modal = new ModalBuilder()
@@ -1826,38 +1320,15 @@ function setupGameInteractionCollector(
                 .catch(() => {});
             });
           // --- End Handle Open Position Modal ---
-        } else if (customId === `crypto2_selectpos_${userId}`) {
+        } else if (
+          customId.startsWith(`crypto2_close_`) &&
+          !customId.includes("_from_")
+        ) {
+          // Extract position ID from customId (format: crypto2_close_POSITION_ID_INTERVAL)
+          const parts = customId.split("_");
+          const positionId = parts[2];
+
           await i.deferUpdate();
-          if (!i.isStringSelectMenu()) return;
-          const positionId = i.values[0];
-          try {
-            const chartContent = await generateChartViewContent(
-              guildId,
-              userId,
-              positionId,
-              i18n,
-              originalInteraction
-            );
-            await message.edit(chartContent);
-          } catch (chartError) {
-            console.error("Error generating chart view:", chartError);
-            await i.followUp({
-              content: i18n.__("games.crypto2.errorFetchChartData", {
-                symbol: "selected coin",
-              }),
-              ephemeral: true,
-            });
-            const menuContent = await generateMainMenuContent(
-              guildId,
-              userId,
-              i18n,
-              originalInteraction
-            );
-            await message.edit(menuContent);
-          }
-        } else if (customId.startsWith(`crypto2_close_`)) {
-          await i.deferUpdate();
-          const positionId = customId.split("_")[2];
           try {
             const position = await Database.getCryptoPositionById(positionId);
             if (
@@ -1871,6 +1342,8 @@ function setupGameInteractionCollector(
               });
               return;
             }
+
+            // Execute the position closing logic
             const tickerData = await getTickers([position.symbol]);
             if (!tickerData || !tickerData[position.symbol]) {
               await i.followUp({
@@ -1944,6 +1417,7 @@ function setupGameInteractionCollector(
               ephemeral: true,
             });
 
+            // After closing, refresh the main menu without a selected position
             const menuContent = await generateMainMenuContent(
               guildId,
               userId,
@@ -1951,30 +1425,12 @@ function setupGameInteractionCollector(
               originalInteraction
             );
             await message.edit(menuContent);
-          } catch (closeError) {
-            console.error(`Error closing position ${positionId}:`, closeError);
+          } catch (error) {
+            console.error(`Error closing position:`, error);
             await i.followUp({
               content: "❌ An error occurred while closing the position.",
               ephemeral: true,
             });
-            try {
-              const chartContent = await generateChartViewContent(
-                guildId,
-                userId,
-                positionId,
-                i18n,
-                originalInteraction
-              );
-              await message.edit(chartContent);
-            } catch {
-              const menuContent = await generateMainMenuContent(
-                guildId,
-                userId,
-                i18n,
-                originalInteraction
-              );
-              await message.edit(menuContent);
-            }
           }
         } else if (customId.startsWith(`crypto2_average_`)) {
           // --- Handle Average Modal ---
@@ -2131,7 +1587,7 @@ function setupGameInteractionCollector(
                   );
                 }
 
-                // 9. Send Confirmation
+                // 9. Send Confirmation and refresh with selected position
                 await modalInteraction.editReply(
                   i18n.__("games.crypto2.positionAveragedSuccess", {
                     symbol: freshPosition.symbol,
@@ -2139,20 +1595,22 @@ function setupGameInteractionCollector(
                   })
                 );
 
-                // 10. Refresh chart view
+                // Refresh the main menu with the position still selected
                 try {
-                  const chartContent = await generateChartViewContent(
-                    guildId,
-                    userId,
-                    positionId,
-                    i18n,
-                    originalInteraction,
-                    currentInterval // Use the preserved interval
-                  );
-                  await message.edit(chartContent);
+                  const menuContent =
+                    await generateMainMenuWithSelectedPosition(
+                      guildId,
+                      userId,
+                      i18n,
+                      originalInteraction,
+                      positionId
+                    );
+                  await message.edit(menuContent);
                 } catch (refreshError) {
-                  console.error("Error refreshing chart:", refreshError);
-                  // ... handle error ...
+                  console.error(
+                    "Error refreshing menu after averaging position:",
+                    refreshError
+                  );
                 }
               } catch (error) {
                 console.error(
@@ -2311,27 +1769,29 @@ function setupGameInteractionCollector(
                   stopLossPrice: slPrice,
                 });
 
-                // 5. Send confirmation
+                // 5. Send confirmation and refresh with selected position
                 await modalInteraction.editReply(
                   i18n.__("games.crypto2.tpslSetSuccess", {
                     symbol: freshPosition.symbol,
                   })
                 );
 
-                // 6. Refresh chart view with the same interval
+                // Refresh the main menu with the position still selected
                 try {
-                  const chartContent = await generateChartViewContent(
-                    guildId,
-                    userId,
-                    positionId,
-                    i18n,
-                    originalInteraction,
-                    currentInterval // Use the preserved interval
-                  );
-                  await message.edit(chartContent);
+                  const menuContent =
+                    await generateMainMenuWithSelectedPosition(
+                      guildId,
+                      userId,
+                      i18n,
+                      originalInteraction,
+                      positionId
+                    );
+                  await message.edit(menuContent);
                 } catch (refreshError) {
-                  console.error("Error refreshing chart:", refreshError);
-                  // ... handle error ...
+                  console.error(
+                    "Error refreshing menu after setting TP/SL:",
+                    refreshError
+                  );
                 }
               } catch (error) {
                 console.error(
@@ -2360,73 +1820,110 @@ function setupGameInteractionCollector(
           // --- End Handle TP/SL Modal ---
         } else if (customId === `crypto2_back_${userId}`) {
           await i.deferUpdate();
-          const menuContent = await generateMainMenuContent(
-            guildId,
-            userId,
-            i18n,
-            originalInteraction
-          );
-          await message.edit(menuContent);
-        } else if (customId.startsWith(`crypto2_interval_select_`)) {
-          // Handle timeframe interval selection from select menu
-          await i.deferUpdate();
-
-          if (!i.isStringSelectMenu()) return;
-
-          // Extract the position ID from the custom ID
-          const parts = customId.split("_");
-          const positionId = parts[3];
-
-          // Get the selected interval value
-          const interval = i.values[0]; // This will be "1", "5", "15", "30", "60", "240", "D", "W"
-
           try {
-            // Generate new chart with selected interval
-            const chartContent = await generateChartViewContent(
+            // Regenerate the main menu (which will reset all components)
+            const menuContent = await generateMainMenuContent(
               guildId,
               userId,
-              positionId,
               i18n,
-              originalInteraction,
-              interval // Pass the selected interval
+              originalInteraction
             );
-            await message.edit(chartContent);
+            await message.edit(menuContent);
           } catch (error) {
-            console.error(
-              `Error generating chart with interval ${interval}:`,
-              error
+            console.error("Error returning to main menu:", error);
+            await i
+              .followUp({
+                content: "❌ Failed to return to the main menu.",
+                ephemeral: true,
+              })
+              .catch(() => {});
+          }
+        } else if (customId.startsWith(`crypto2_refresh_${userId}`)) {
+          await i.deferUpdate();
+          try {
+            // First check for liquidations with fresh price data
+            const liquidatedPositions = await checkAndLiquidatePositions(
+              guildId,
+              userId,
+              i18n
             );
+
+            if (liquidatedPositions.length > 0) {
+              const liquidationMessages = liquidatedPositions
+                .map((info) =>
+                  i18n.__("games.crypto2.liquidationNotification", info)
+                )
+                .join("\n");
+              await i.followUp({
+                content: liquidationMessages,
+                ephemeral: true,
+              });
+            }
+
+            // Then generate refreshed menu with updated prices
+            const menuContent = await generateMainMenuContent(
+              guildId,
+              userId,
+              i18n,
+              originalInteraction
+            );
+
+            await message.edit(menuContent);
+
+            // Notify successful refresh
             await i.followUp({
-              content: `❌ Error updating chart with selected interval. Please try again.`,
+              content: "✅ Portfolio refreshed with latest price data!",
               ephemeral: true,
             });
+          } catch (error) {
+            console.error("Error refreshing main menu:", error);
+            await i
+              .followUp({
+                content: "❌ Failed to refresh. Please try again.",
+                ephemeral: true,
+              })
+              .catch(() => {});
           }
-        } else if (customId.startsWith(`crypto2_refresh_`)) {
+        }
+        if (customId.startsWith(`crypto2_position_select_`)) {
           await i.deferUpdate();
+          if (!i.isStringSelectMenu()) return;
 
-          // Extract positionId and interval from the customId
-          const parts = customId.split("_");
-          const positionId = parts[2];
-          const interval = parts[3];
+          const selectedPositionId = i.values[0];
 
           try {
-            // Generate new chart with selected interval - same as current interval but fetches fresh data
-            const chartContent = await generateChartViewContent(
+            // Fetch the position details
+            const position = await Database.getCryptoPositionById(
+              selectedPositionId
+            );
+            if (
+              !position ||
+              position.userId !== userId ||
+              position.guildId !== guildId
+            ) {
+              await i.followUp({
+                content: "Position not found or you don't own it.",
+                ephemeral: true,
+              });
+              return;
+            }
+
+            // Generate the main menu with the selected position highlighted
+            const menuContent = await generateMainMenuWithSelectedPosition(
               guildId,
               userId,
-              positionId,
               i18n,
               originalInteraction,
-              interval
+              selectedPositionId
             );
-            await message.edit(chartContent);
+
+            // Update the message
+            await message.edit(menuContent);
           } catch (error) {
-            console.error(
-              `Error refreshing chart with interval ${interval}:`,
-              error
-            );
+            console.error("Error generating position actions:", error);
             await i.followUp({
-              content: `❌ Error refreshing chart. Please try again.`,
+              content:
+                "❌ An error occurred while processing the selected position.",
               ephemeral: true,
             });
           }
