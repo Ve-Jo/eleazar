@@ -241,3 +241,23 @@ model CryptoPosition {
   @@index([symbol])
   @@map("crypto_positions")
 }
+
+// New model for Marriages
+model Marriage {
+  id        String   @id @default(cuid())
+  guildId   String   @map("guild_id")
+  userId1   String   @map("user_id1")
+  userId2   String   @map("user_id2")
+  status    String   @default("PENDING") // PENDING, MARRIED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations (optional, can use IDs directly if preferred)
+  // user1 User @relation("MarriagesAsUser1", fields: [guildId, userId1], references: [guildId, id], onDelete: Cascade)
+  // user2 User @relation("MarriagesAsUser2", fields: [guildId, userId2], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId1, userId2]) // Prevent duplicate marriages in either direction
+  @@index([guildId, userId1])
+  @@index([guildId, userId2])
+  @@index([status])
+  @@map("marriages")
+}
