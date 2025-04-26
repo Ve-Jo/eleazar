@@ -102,6 +102,15 @@ export default {
     await interaction.deferReply();
     const user = interaction.options.getMember("user") || interaction.member;
 
+    // --- Marriage Check ---
+    const marriageStatus = await Database.getMarriageStatus(
+      interaction.guild.id,
+      user.id
+    );
+    let partnerData = null;
+    let combinedBankBalance = new Prisma.Decimal(0);
+    // --- End Marriage Check ---
+
     const userData = await Database.getUser(
       interaction.guild.id,
       user.id,
@@ -115,11 +124,63 @@ export default {
       });
     }
 
+    // Calculate user's bank balance (including interest)
+    let individualBankBalance = new Prisma.Decimal(0); // Initialize
     if (userData.economy) {
-      userData.economy.bankBalance = await Database.calculateBankBalance(
-        userData
+      // Calculate and store the individual balance before potentially combining
+      individualBankBalance = new Prisma.Decimal(
+        await Database.calculateBankBalance(userData)
       );
+      userData.economy.bankBalance = individualBankBalance.toFixed(5); // Keep individual balance here for now
+      combinedBankBalance = combinedBankBalance.plus(individualBankBalance);
     }
+
+    // --- Fetch Partner Data if Married ---
+    let partnerDiscordUser = null; // Variable to store fetched Discord user
+    if (marriageStatus && marriageStatus.status === "MARRIED") {
+      partnerData = await Database.getUser(
+        interaction.guild.id,
+        marriageStatus.partnerId,
+        true // Include relations for partner
+      );
+      if (partnerData && partnerData.economy) {
+        partnerData.economy.bankBalance = await Database.calculateBankBalance(
+          partnerData
+        );
+        combinedBankBalance = combinedBankBalance.plus(
+          new Prisma.Decimal(partnerData.economy.bankBalance)
+        );
+      }
+      // Store the combined balance for the image generator
+      userData.combinedBankBalance = combinedBankBalance.toFixed(5); // Ensure 5 decimals
+      userData.individualBankBalance = individualBankBalance.toFixed(5); // Pass individual balance too
+      userData.marriageStatus = marriageStatus; // Pass status to image generator
+      // userData.partnerData = partnerData; // Pass partner DB data if needed for other things
+
+      // --- Fetch Partner's Discord User for Avatar ---
+      try {
+        partnerDiscordUser = await interaction.client.users.fetch(
+          marriageStatus.partnerId
+        );
+        // Add avatar URL to the data passed to the image generator
+        userData.partnerAvatarUrl = partnerDiscordUser?.displayAvatarURL({
+          extension: "png",
+          size: 64,
+        }); // Smaller size for the component
+        userData.partnerUsername =
+          partnerDiscordUser?.username || partnerData?.username || "Partner"; // Use Discord username if available
+      } catch (fetchError) {
+        console.error(
+          `Failed to fetch partner Discord user (${marriageStatus.partnerId}):`,
+          fetchError
+        );
+        userData.partnerAvatarUrl =
+          "https://cdn.discordapp.com/embed/avatars/0.png"; // Fallback avatar
+        userData.partnerUsername = partnerData?.username || "Partner";
+      }
+      // --- End Fetch Partner's Discord User ---
+    }
+    // --- End Fetch Partner Data ---
 
     // Fetch crypto positions if they exist
     if (!userData.crypto2) {
@@ -218,6 +279,7 @@ export default {
         returnDominant: true,
         database: {
           ...userData,
+          // partnerData: partnerData // Pass partner data if needed by image gen
         },
       },
       { image: 2, emoji: 1 },

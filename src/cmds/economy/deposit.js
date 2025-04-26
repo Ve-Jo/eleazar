@@ -5,6 +5,7 @@ import {
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
+import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
 
 export default {
   data: () => {
@@ -88,6 +89,12 @@ export default {
       ru: "Произошла ошибка при обработке депозита",
       uk: "Сталася помилка під час обробки депозиту",
     },
+    // --- Deposit DM --- //
+    partnerDepositDM: {
+      en: "🏧 Your partner {{user}} deposited {{amount}} into your shared bank balance in {{guild}}.",
+      ru: "🏧 Ваш партнер {{user}} внес {{amount}} на ваш общий банковский баланс на сервере {{guild}}.",
+      uk: "🏧 Ваш партнер {{user}} вніс {{amount}} на ваш спільний банківський баланс на сервері {{guild}}.",
+    },
   },
 
   async execute(interaction, i18n) {
@@ -97,29 +104,51 @@ export default {
     const userId = interaction.user.id;
 
     try {
-      const amount = interaction.options.getString("amount");
+      const amountStr = interaction.options.getString("amount");
+
+      // --- Marriage Check & Initial Data Fetch ---
+      const marriageStatus = await Database.getMarriageStatus(guildId, userId);
+      let partnerData = null;
+      let partnerBankBalance = new Prisma.Decimal(0);
+      // --- End Marriage Check ---
 
       // Get user data *before* the transaction
       const initialUserData = await Database.getUser(guildId, userId, true);
 
       if (!initialUserData || !initialUserData.economy) {
+        // Need economy record to get balance for depositing
         return interaction.editReply({
-          content: i18n.__("commands.economy.deposit.userNotFound"),
+          content: i18n.__("commands.economy.deposit.userNotFound"), // Or a more specific message
           ephemeral: true,
         });
       }
 
-      // Calculate deposit amount with precision
-      let amountInt = 0;
-      const userBalance = parseFloat(initialUserData.economy.balance);
+      // Fetch partner data if married (needed for display later)
+      if (marriageStatus && marriageStatus.status === "MARRIED") {
+        partnerData = await Database.getUser(
+          guildId,
+          marriageStatus.partnerId,
+          true
+        );
+        if (partnerData?.economy) {
+          // Calculate partner's balance for display later
+          partnerBankBalance = new Prisma.Decimal(
+            await Database.calculateBankBalance(partnerData)
+          );
+        }
+      }
 
-      if (amount === "all") {
-        amountInt = userBalance;
-      } else if (amount === "half") {
-        amountInt = userBalance / 2;
+      // Calculate deposit amount with precision
+      let amountToDeposit = new Prisma.Decimal(0);
+      const userBalance = new Prisma.Decimal(initialUserData.economy.balance);
+
+      if (amountStr === "all") {
+        amountToDeposit = userBalance;
+      } else if (amountStr === "half") {
+        amountToDeposit = userBalance.dividedBy(2);
       } else {
-        amountInt = parseFloat(amount);
-        if (isNaN(amountInt)) {
+        amountToDeposit = new Prisma.Decimal(amountStr);
+        if (amountToDeposit.isNaN()) {
           return interaction.editReply({
             content: i18n.__("commands.economy.deposit.invalidAmount"),
             ephemeral: true,
@@ -128,26 +157,26 @@ export default {
       }
 
       // Ensure 5 decimal precision
-      amountInt = parseFloat(amountInt.toFixed(5));
+      amountToDeposit = new Prisma.Decimal(amountToDeposit.toFixed(5));
 
       // Validate amount
-      if (userBalance < amountInt) {
+      if (userBalance.lessThan(amountToDeposit)) {
         return interaction.editReply({
           content: i18n.__("commands.economy.deposit.notEnoughMoney"),
           ephemeral: true,
         });
       }
-      if (amountInt <= 0) {
+      if (amountToDeposit.lessThanOrEqualTo(0)) {
         return interaction.editReply({
           content: i18n.__("commands.economy.deposit.amountGreaterThanZero"),
           ephemeral: true,
         });
       }
 
-      // Process deposit using transaction
+      // --- Process deposit using transaction ---
       await Database.client.$transaction(async (tx) => {
         // Calculate bank rate based on level
-        const xp = Number(initialUserData.level?.xp?.toString() || 0);
+        const xp = Number(initialUserData.Level?.xp ?? 0); // Use Level relation
         const levelInfo = Database.calculateLevel(xp);
         const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
 
@@ -158,12 +187,12 @@ export default {
         const bankRateLevel = bankRateUpgrade?.level || 1;
         const bankRateBonus = (bankRateLevel - 1) * 5; // 5% increase per level
 
-        const bankRate = baseRate + bankRateBonus;
+        const bankRate = new Prisma.Decimal(baseRate + bankRateBonus);
 
         // Get current bank balance with interest, using the transaction client
-        let currentBankBalance = 0;
+        let currentBankBalance = new Prisma.Decimal(0);
         if (initialUserData.economy) {
-          currentBankBalance = parseFloat(
+          currentBankBalance = new Prisma.Decimal(
             await Database.calculateBankBalance(initialUserData, tx)
           );
         }
@@ -177,10 +206,10 @@ export default {
             },
           },
           data: {
-            balance: { decrement: amountInt },
-            bankBalance: (currentBankBalance + amountInt).toFixed(5),
+            balance: { decrement: amountToDeposit.toFixed(5) },
+            bankBalance: currentBankBalance.plus(amountToDeposit).toFixed(5),
             bankRate: bankRate.toFixed(5),
-            bankStartTime: Date.now(),
+            bankStartTime: Date.now(), // Reset interest timer on deposit
           },
         });
 
@@ -196,28 +225,102 @@ export default {
             lastActivity: Date.now(),
           },
         });
-      });
 
-      // --- Explicitly invalidate cache AFTER transaction ---
-      const userCacheKeyFull = Database._cacheKeyUser(guildId, userId, true);
-      const userCacheKeyBasic = Database._cacheKeyUser(guildId, userId, false);
-      const statsCacheKey = Database._cacheKeyStats(guildId, userId); // Stats might be affected by balance/activity
+        // If married, update partner's last activity too, as their interest calc might change
+        if (partnerData) {
+          await tx.user.update({
+            where: {
+              guildId_id: {
+                id: partnerData.id,
+                guildId: guildId,
+              },
+            },
+            data: {
+              lastActivity: Date.now(),
+            },
+          });
+        }
+      });
+      // --- End Deposit Transaction ---
+
+      // --- Send DM if married ---
+      let partnerDmNotificationSent = true;
+      if (partnerData) {
+        // partnerData is fetched earlier if married
+        try {
+          const partnerDiscordUser = await interaction.client.users.fetch(
+            partnerData.id
+          );
+          await partnerDiscordUser.send(
+            i18n.__("commands.economy.deposit.partnerDepositDM", {
+              user: interaction.user.tag,
+              amount: amountToDeposit.toFixed(2),
+              guild: interaction.guild.name,
+            })
+          );
+        } catch (dmError) {
+          console.warn(
+            `Failed to send deposit DM to partner ${partnerData.id}:`,
+            dmError
+          );
+          partnerDmNotificationSent = false; // Track if DM failed for potential feedback
+        }
+      }
+      // --- End Send DM ---
+
+      // --- Explicitly invalidate cache AFTER transaction for BOTH users ---
+      const userKeysToDel = [
+        Database._cacheKeyUser(guildId, userId, true),
+        Database._cacheKeyUser(guildId, userId, false),
+        Database._cacheKeyStats(guildId, userId),
+      ];
+      if (partnerData) {
+        userKeysToDel.push(
+          Database._cacheKeyUser(guildId, partnerData.id, true),
+          Database._cacheKeyUser(guildId, partnerData.id, false),
+          Database._cacheKeyStats(guildId, partnerData.id)
+        );
+      }
+
       if (Database.redisClient) {
         try {
-          const keysToDel = [
-            userCacheKeyFull,
-            userCacheKeyBasic,
-            statsCacheKey,
-          ];
-          await Database.redisClient.del(keysToDel);
-          Database._logRedis("del", keysToDel.join(", "), true);
+          await Database.redisClient.del(userKeysToDel);
+          Database._logRedis("del", userKeysToDel.join(", "), true);
         } catch (err) {
-          Database._logRedis("del", keysToDel.join(", "), err);
+          Database._logRedis("del", userKeysToDel.join(", "), err);
         }
       }
 
       // Get updated user data *after* invalidating cache
       const updatedUser = await Database.getUser(guildId, userId, true);
+      // Recalculate combined balance for the image
+      let finalCombinedBank = new Prisma.Decimal(
+        updatedUser.economy?.bankBalance ?? 0
+      );
+      if (marriageStatus && marriageStatus.status === "MARRIED") {
+        // Re-fetch partner data OR use the previously fetched partnerBankBalance
+        // Re-fetching is safer if partner's interest might have changed significantly
+        const updatedPartner = await Database.getUser(
+          guildId,
+          marriageStatus.partnerId,
+          true
+        );
+        const updatedPartnerBalance = updatedPartner?.economy
+          ? new Prisma.Decimal(
+              await Database.calculateBankBalance(updatedPartner)
+            )
+          : new Prisma.Decimal(0);
+        finalCombinedBank = finalCombinedBank.plus(updatedPartnerBalance);
+
+        updatedUser.partnerData = updatedPartner; // Pass updated partner data
+        updatedUser.marriageStatus = marriageStatus;
+        updatedUser.combinedBankBalance = finalCombinedBank.toFixed(5);
+      } else {
+        // If not married, ensure combinedBankBalance reflects only user's balance
+        updatedUser.combinedBankBalance = new Prisma.Decimal(
+          updatedUser.economy?.bankBalance ?? 0
+        ).toFixed(5);
+      }
 
       // Generate deposit confirmation image
       const [buffer, dominantColor] = await generateImage(
@@ -244,11 +347,11 @@ export default {
           },
           locale: interaction.locale,
           isDeposit: true,
-          amount: amountInt,
+          amount: amountToDeposit.toNumber(),
           afterBalance: updatedUser.economy.balance,
-          afterBank: updatedUser.economy.bankBalance,
+          afterBank: updatedUser.economy.bankBalance, // Still show user's individual bank balance here
           returnDominant: true,
-          database: updatedUser,
+          database: updatedUser, // Pass updated user data (incl. combinedBankBalance etc.)
         },
         { image: 2, emoji: 1 },
         i18n

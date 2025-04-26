@@ -1,4 +1,5 @@
 import prettyMilliseconds from "pretty-ms";
+import Decimal from "decimal.js";
 
 // Helper to format price values for crypto positions
 const formatPrice = (priceStr, decimals = 2) => {
@@ -213,7 +214,12 @@ const Balance = (props) => {
     return banknotes;
   };
 
-  let { interaction, database, i18n, coloring } = props;
+  const { interaction, database, i18n, coloring } = props;
+
+  // --- Marriage Check ---
+  const isMarried = database?.marriageStatus?.status === "MARRIED";
+  const combinedBankBalanceProp = database?.combinedBankBalance;
+  // --- End Marriage Check ---
 
   /*database.crypto2 = {};
   database.crypto2.openPositions = [
@@ -256,11 +262,30 @@ const Balance = (props) => {
 
   const bankStartTime = database?.economy?.bankStartTime || 0;
   const bankRate = database?.economy?.bankRate || 0;
-  let bankBalance = database?.economy?.bankBalance || 0;
-  let walletBalance = database?.economy?.balance || 0;
+  // Use combined balance if married, otherwise use individual
+  let bankBalanceForDisplay = new Decimal(database?.economy?.bankBalance || 0);
+  const individualBankBalance = database?.individualBankBalance // Get individual balance prop
+    ? new Decimal(database.individualBankBalance)
+    : new Decimal(0);
+  // --- Use props passed from balance.js ---
+  const partnerAvatarUrl =
+    database?.partnerAvatarUrl ||
+    "https://cdn.discordapp.com/embed/avatars/0.png";
+  const partnerUsername = database?.partnerUsername || "Partner";
+  const marriageCreatedAt = database?.marriageStatus?.createdAt;
+  // --- End Use props ---
 
-  let visualwallet = walletBalance.toFixed(0).toString().length;
-  let visualbank = bankBalance.toFixed(0).toString().length;
+  if (isMarried && combinedBankBalanceProp !== undefined) {
+    bankBalanceForDisplay = new Decimal(combinedBankBalanceProp);
+  }
+  let walletBalance = new Decimal(database?.economy?.balance || 0);
+
+  // Use the potentially combined balance for visual banknote calculation
+  let visualBankBalanceAmount = bankBalanceForDisplay.toNumber();
+  let visualWalletBalanceAmount = walletBalance.toNumber();
+
+  let visualwallet = visualWalletBalanceAmount.toFixed(0).toString().length;
+  let visualbank = visualBankBalanceAmount.toFixed(0).toString().length;
 
   console.log(`visualwallet: ${visualwallet}, visualbank: ${visualbank}`);
 
@@ -364,14 +389,22 @@ const Balance = (props) => {
                 {translations.title}
               </h2>
             </div>
-            {/* Define bank container bounds */}
-            {renderBanknotes(bankBalance, 95, 161, "bars", 100, 18, {
-              left: 0,
-              top: 90,
-              right: 190 + (visualbank - 3) * 20,
-              bottom: 180,
-              padding: 5,
-            })}
+            {/* Define bank container bounds - use the amount used for visuals */}
+            {renderBanknotes(
+              visualBankBalanceAmount,
+              95,
+              161,
+              "bars",
+              100,
+              18,
+              {
+                left: 0,
+                top: 90,
+                right: 190 + (visualbank - 3) * 20,
+                bottom: 180,
+                padding: 5,
+              }
+            )}
             <div
               style={{
                 display: "flex",
@@ -426,6 +459,7 @@ const Balance = (props) => {
                       color: textColor,
                     }}
                   >
+                    {/* Use Decimal for formatting wallet */}
                     {walletBalance.toFixed(2) || "{balance}"}
                   </div>
                 </div>
@@ -475,7 +509,22 @@ const Balance = (props) => {
                       }}
                     >
                       {translations.bank.toUpperCase()}
+                      {/* Add clarification if married */}
+                      {isMarried && (
+                        <span
+                          style={{
+                            opacity: 0.7,
+                            marginLeft: "2px",
+                            marginTop: "4px",
+                            fontSize: "8px",
+                          }}
+                        >
+                          ({translations.yours}:{" "}
+                          {individualBankBalance.toFixed(2)})
+                        </span>
+                      )}
                     </div>
+                    {/* Show user's bank rate even if balance is combined */}
                     {bankStartTime > 0 && bankRate > 0 ? (
                       <div
                         style={{
@@ -491,7 +540,9 @@ const Balance = (props) => {
                           const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
                           const hourlyRate =
                             (bankRate / 100) * (MS_PER_HOUR / MS_PER_YEAR);
-                          return (bankBalance * hourlyRate).toFixed(3);
+                          return (bankBalanceForDisplay * hourlyRate).toFixed(
+                            3
+                          );
                         })()}
                         /h
                       </div>
@@ -506,14 +557,15 @@ const Balance = (props) => {
                       width: "100%",
                     }}
                   >
-                    {bankStartTime > 0 ? (
+                    {/* Display logic using bankBalanceForDisplay */}
+                    {bankStartTime > 0 || isMarried ? ( // Show detailed format if interest running OR married
                       <div style={{ display: "flex", alignItems: "baseline" }}>
                         <div style={{ display: "flex" }}>
-                          {Math.floor(bankBalance)}
+                          {Math.floor(bankBalanceForDisplay.toNumber())}
                         </div>
                         <div style={{ display: "flex" }}>.</div>
                         <div style={{ display: "flex" }}>
-                          {(bankBalance % 1)
+                          {(bankBalanceForDisplay.toNumber() % 1)
                             .toFixed(5)
                             .substring(2)
                             .split("")
@@ -533,12 +585,14 @@ const Balance = (props) => {
                       </div>
                     ) : (
                       <div style={{ display: "flex" }}>
-                        {bankBalance.toFixed(2) || "{bank}"}
+                        {/* Fallback simple format */}
+                        {bankBalanceForDisplay.toFixed(2) || "{bank}"}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
+              {/* Bank Annual Rate Display */}
               {bankStartTime > 0 && bankRate > 0 ? (
                 <div
                   style={{
@@ -547,7 +601,9 @@ const Balance = (props) => {
                       ? "rgba(255, 166, 0, 0.3)"
                       : "rgba(255, 166, 0, 1)",
                     color: coloring?.isDarkText ? "#000" : "#FFF",
-                    borderRadius: "0 10px 10px 10px",
+                    borderRadius: isMarried
+                      ? "0 10px 10px 0"
+                      : "0 10px 10px 10px",
                     padding: "5px 15px",
                     marginTop: "-5px",
                     alignItems: "center",
@@ -576,6 +632,55 @@ const Balance = (props) => {
                   </div>
                 </div>
               ) : null}
+
+              {/* NEW: Marriage Status Display */}
+              {isMarried && marriageCreatedAt && (
+                <div
+                  style={{
+                    display: "flex",
+                    backgroundColor: coloring?.isDarkText
+                      ? "rgba(255, 100, 100, 0.3)" // Light red for dark text
+                      : "rgba(200, 50, 50, 0.8)", // Darker red for light text
+                    color: coloring?.isDarkText ? "#000" : "#FFF",
+                    borderRadius:
+                      bankStartTime > 0 && bankRate > 0
+                        ? "0px 10px 10px 10px"
+                        : "10px",
+                    padding: "5px 10px", // Adjusted padding
+                    marginTop: "-5px", // Overlap slightly if annual rate exists
+                    alignItems: "center",
+                    alignSelf: "flex-start",
+                    minWidth: "150px",
+                    maxWidth: "300px",
+                    gap: "8px", // Add gap between items
+                  }}
+                >
+                  <span style={{ fontSize: "18px" }}>💍</span>
+                  {/* Use the passed avatar URL and username */}
+                  <img
+                    src={partnerAvatarUrl}
+                    alt={partnerUsername}
+                    width={18} // Smaller avatar
+                    height={18}
+                    style={{ borderRadius: "50%" }} // Circular avatar
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: "14px",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {translations.married} (
+                    {prettyMilliseconds(
+                      Date.now() - new Date(marriageCreatedAt).getTime()
+                    )}
+                    )
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div
@@ -865,6 +970,17 @@ Balance.localization_strings = {
     en: "annual",
     ru: "годовых",
     uk: "річних",
+  },
+  married: {
+    // Added translation for 'Married'
+    en: "Married",
+    ru: "В браке",
+    uk: "У шлюбі",
+  },
+  yours: {
+    en: "yours",
+    ru: "ваши",
+    uk: "ваші",
   },
   crypto: {
     en: "CRYPTO POSITIONS",
