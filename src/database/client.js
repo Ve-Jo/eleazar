@@ -4884,6 +4884,180 @@ class Database {
   }
 
   // --- End Crypto Game Methods ---
+
+  // --- Marriage Methods ---
+
+  /**
+   * Proposes marriage between two users.
+   * @param {string} guildId
+   * @param {string} userId1 - The proposer.
+   * @param {string} userId2 - The proposed user.
+   * @returns {Promise<object>} The created marriage record.
+   * @throws {Error} If either user is already married or has a pending proposal.
+   */
+  async proposeMarriage(guildId, userId1, userId2) {
+    await this.ensureUser(guildId, userId1);
+    await this.ensureUser(guildId, userId2);
+
+    // Check if either user is already involved in a marriage (pending or married)
+    const existingMarriage = await this.getMarriageStatus(guildId, userId1);
+    if (existingMarriage) {
+      throw new Error("User 1 is already married or has a pending proposal.");
+    }
+    const existingMarriage2 = await this.getMarriageStatus(guildId, userId2);
+    if (existingMarriage2) {
+      throw new Error("User 2 is already married or has a pending proposal.");
+    }
+
+    return this.client.marriage.create({
+      data: {
+        guildId,
+        userId1,
+        userId2,
+        status: "PENDING",
+      },
+    });
+  }
+
+  /**
+   * Accepts a pending marriage proposal.
+   * @param {string} guildId
+   * @param {string} userId1 - The user who proposed.
+   * @param {string} userId2 - The user accepting.
+   * @returns {Promise<object>} The updated marriage record.
+   * @throws {Error} If no matching pending proposal is found.
+   */
+  async acceptMarriage(guildId, userId1, userId2) {
+    const pendingProposal = await this.client.marriage.findUnique({
+      where: {
+        guildId_userId1_userId2: {
+          guildId,
+          userId1,
+          userId2,
+        },
+        status: "PENDING",
+      },
+    });
+
+    if (!pendingProposal) {
+      throw new Error("No pending marriage proposal found from this user.");
+    }
+
+    return this.client.marriage.update({
+      where: {
+        id: pendingProposal.id,
+      },
+      data: {
+        status: "MARRIED",
+      },
+    });
+  }
+
+  /**
+   * Rejects a pending marriage proposal.
+   * @param {string} guildId
+   * @param {string} userId1 - The user who proposed.
+   * @param {string} userId2 - The user rejecting.
+   * @returns {Promise<object>} The deleted marriage record.
+   * @throws {Error} If no matching pending proposal is found.
+   */
+  async rejectMarriage(guildId, userId1, userId2) {
+    const pendingProposal = await this.client.marriage.findUnique({
+      where: {
+        guildId_userId1_userId2: {
+          guildId,
+          userId1,
+          userId2,
+        },
+        status: "PENDING",
+      },
+    });
+
+    if (!pendingProposal) {
+      // Also check if the proposal might be in the other direction
+      const reverseProposal = await this.client.marriage.findUnique({
+        where: {
+          guildId_userId1_userId2: {
+            guildId,
+            userId1: userId2, // Check reverse
+            userId2: userId1,
+          },
+          status: "PENDING",
+        },
+      });
+      if (!reverseProposal) {
+        throw new Error(
+          "No pending marriage proposal found involving these users."
+        );
+      }
+      // If found in reverse, delete that one
+      return this.client.marriage.delete({ where: { id: reverseProposal.id } });
+    }
+
+    // If found in the primary direction, delete it
+    return this.client.marriage.delete({ where: { id: pendingProposal.id } });
+  }
+
+  /**
+   * Checks the marriage status of a user.
+   * @param {string} guildId
+   * @param {string} userId
+   * @returns {Promise<object|null>} Returns { partnerId, status } or null if not married/pending.
+   */
+  async getMarriageStatus(guildId, userId) {
+    const marriage = await this.client.marriage.findFirst({
+      where: {
+        guildId,
+        OR: [{ userId1: userId }, { userId2: userId }],
+        // status: { in: ["PENDING", "MARRIED"] } // Check for both
+      },
+    });
+
+    if (!marriage) {
+      return null;
+    }
+
+    const partnerId =
+      marriage.userId1 === userId ? marriage.userId2 : marriage.userId1;
+    return {
+      partnerId,
+      status: marriage.status,
+      createdAt: marriage.createdAt,
+    };
+  }
+
+  /**
+   * Dissolves a marriage (divorce).
+   * @param {string} guildId
+   * @param {string} userId1
+   * @param {string} userId2
+   * @returns {Promise<object>} The deleted marriage record.
+   * @throws {Error} If no active marriage found between the users.
+   */
+  async dissolveMarriage(guildId, userId1, userId2) {
+    // Find the marriage record, regardless of who is userId1 or userId2
+    const marriage = await this.client.marriage.findFirst({
+      where: {
+        guildId,
+        OR: [
+          { userId1: userId1, userId2: userId2 },
+          { userId1: userId2, userId2: userId1 },
+        ],
+        status: "MARRIED",
+      },
+    });
+
+    if (!marriage) {
+      throw new Error("No active marriage found between these users.");
+    }
+
+    return this.client.marriage.delete({
+      where: {
+        id: marriage.id,
+      },
+    });
+  }
+  // --- End Marriage Methods ---
 }
 
 // Export the Database class instance without initializing
