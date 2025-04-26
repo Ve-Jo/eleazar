@@ -82,8 +82,13 @@ class CommandManager {
       );
     }
 
-    // Apply name localizations
-    if (cmd.localization_strings?.name) {
+    // Apply name localizations (Check nested structure first)
+    if (cmd.localization_strings?.command?.name) {
+      json.name_localizations = this.filterLocalizations(
+        cmd.localization_strings.command.name
+      );
+    } else if (cmd.localization_strings?.name) {
+      // Fallback to direct key
       json.name_localizations = this.filterLocalizations(
         cmd.localization_strings.name
       );
@@ -91,8 +96,13 @@ class CommandManager {
       json.name_localizations = cmd.data.name_localizations;
     }
 
-    // Apply description localizations
-    if (cmd.localization_strings?.description) {
+    // Apply description localizations (Check nested structure first)
+    if (cmd.localization_strings?.command?.description) {
+      json.description_localizations = this.filterLocalizations(
+        cmd.localization_strings.command.description
+      );
+    } else if (cmd.localization_strings?.description) {
+      // Fallback to direct key
       json.description_localizations = this.filterLocalizations(
         cmd.localization_strings.description
       );
@@ -113,47 +123,71 @@ class CommandManager {
 
   processSubcommands(json, cmd) {
     json.options.forEach((option) => {
-      if (option.type === 1 && cmd.subcommands) {
-        // Type 1 = SUB_COMMAND
-        const subcommand = cmd.subcommands[option.name];
-        if (subcommand?.localization_strings) {
-          // Register subcommand localizations with i18n
+      // Check if it's a subcommand definition (type 1)
+      if (option.type === 1) {
+        // Prioritize localizations defined directly in the main command file's structure
+        let locStrings = cmd.localization_strings?.subcommands?.[option.name];
+        let isFromMainFile = !!locStrings;
+
+        // If not found there, try finding the loaded subcommand object (for separate files)
+        let subcommandObj = null;
+        if (!locStrings && cmd.subcommands) {
+          subcommandObj = cmd.subcommands[option.name];
+          locStrings = subcommandObj?.localization_strings;
+        }
+
+        // If localization strings were found from either source, apply them
+        if (locStrings) {
+          // Register subcommand localizations with i18n (use the combined key)
+          // Ensure registration happens only once if possible, though i18n might handle overwrites
           i18n.registerLocalizations(
             "commands",
             `${cmd.data.name}.${option.name}`,
-            subcommand.localization_strings
+            locStrings // Register the found strings
           );
-          this.applySubcommandLocalizations(option, subcommand);
+
+          // Apply to the JSON structure
+          // Pass the found locStrings directly, and the original cmd/subcommandObj for context if needed
+          this.applySubcommandLocalizations(
+            option,
+            locStrings,
+            cmd,
+            subcommandObj
+          );
         }
       }
+      // TODO: Add handling for subcommand groups (type 2) if necessary
     });
   }
 
-  applySubcommandLocalizations(option, subcommand) {
-    const locStrings = subcommand.localization_strings;
+  applySubcommandLocalizations(option, locStrings, mainCmd, subcommandObj) {
+    // const locStrings = subcommand.localization_strings; // No longer needed
 
-    // Handle name localizations
-    if (locStrings.name) {
-      option.name_localizations = this.filterLocalizations(locStrings.name);
-    } else if (locStrings.command?.name) {
+    // Handle name localizations (Check nested structure first)
+    if (locStrings.command?.name) {
       option.name_localizations = this.filterLocalizations(
         locStrings.command.name
       );
+    } else if (locStrings.name) {
+      // Fallback
+      option.name_localizations = this.filterLocalizations(locStrings.name);
     }
 
-    // Handle description localizations
-    if (locStrings.description) {
-      option.description_localizations = this.filterLocalizations(
-        locStrings.description
-      );
-    } else if (locStrings.command?.description) {
+    // Handle description localizations (Check nested structure first)
+    if (locStrings.command?.description) {
       option.description_localizations = this.filterLocalizations(
         locStrings.command.description
+      );
+    } else if (locStrings.description) {
+      // Fallback
+      option.description_localizations = this.filterLocalizations(
+        locStrings.description
       );
     }
 
     // Handle subcommand options
     if (option.options?.length > 0 && locStrings.options) {
+      // Pass the correct part of locStrings
       this.processSubcommandOptions(option.options, locStrings.options);
     }
   }
