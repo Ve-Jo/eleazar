@@ -23,6 +23,7 @@ export async function loadCommands(
     "ai",
     "music",
     "counting",
+    "marriage",
   ]
 ) {
   console.log(
