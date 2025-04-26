@@ -47,7 +47,8 @@
         "error": "An error occurred while processing your deposit",
         "depositSuccess": "Successfully deposited {{amount}} to your bank account.",
         "notEnoughMoney": "You don't have enough money to deposit",
-        "imageError": "Failed to generate the image. Please try again."
+        "imageError": "Failed to generate the image. Please try again.",
+        "partnerDepositDM": "🏧 Your partner {{user}} deposited {{amount}} into your shared bank balance in {{guild}}."
       },
       "leaderboard": {
         "title": "Server Leaderboard",
@@ -109,7 +110,8 @@
         "invalidAmount": "Invalid amount",
         "noBankAccount": "You don't have a bank account",
         "error": "An error occurred while processing your withdrawal",
-        "title": "Withdraw"
+        "title": "Withdraw",
+        "partnerWithdrawDM": "🏧 Your partner {{user}} withdrew {{amount}} from your shared bank balance in {{guild}}. Your contribution to this withdrawal was {{partnerAmount}}."
       },
       "work": {
         "specialForCategory": "Specially for Eleazar",
@@ -582,6 +584,26 @@
       },
       "no_perms": "You don't have permissions to manage channels",
       "no_channel": "No counting channel is set up"
+    },
+    "marriage": {
+      "proposeSuccess": "💍 You have proposed marriage to {{user}}! He/She needs to use /marriage accept to accept.",
+      "cannotMarrySelf": "You cannot marry yourself.",
+      "cannotMarryBot": "You cannot marry a bot.",
+      "alreadyMarried": "You are already married or have a pending proposal.",
+      "targetAlreadyMarried": "{{user}} is already married or has a pending proposal.",
+      "proposalError": "An error occurred while proposing marriage.",
+      "proposalDM": "💍 You have received a marriage proposal from {{user}} in {{guild}}! Use /marriage accept or /marriage reject in that server.",
+      "cannotSendDM": "(Could not send a DM to the user.)",
+      "acceptSuccess": "💖 Congratulations! You are now married to {{user}}!",
+      "noProposalToAccept": "You do not have a pending marriage proposal from {{user}}.",
+      "acceptError": "An error occurred while accepting the marriage proposal.",
+      "rejectSuccess": "💔 You have rejected the marriage proposal from {{user}}.",
+      "noProposalToReject": "You do not have a pending marriage proposal from {{user}}.",
+      "rejectError": "An error occurred while rejecting the marriage proposal.",
+      "divorceSuccess": "💔 You have successfully divorced {{user}}.",
+      "notMarried": "You are not currently married.",
+      "divorceError": "An error occurred while processing the divorce.",
+      "divorceDM": "💔 You have been divorced from {{user}} in {{guild}}."
     }
   },
   "games": {

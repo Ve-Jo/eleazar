@@ -129,9 +129,9 @@ export default {
     },
     // --- Propose --- //
     proposeSuccess: {
-      en: "💍 You have proposed marriage to {{user}}! They need to use `/marriage accept user:{{proposer}}` to accept.",
-      ru: "💍 Вы предложили брак {{user}}! Им нужно использовать `/marriage accept user:{{proposer}}`, чтобы принять.",
-      uk: "💍 Ви запропонували шлюб {{user}}! Їм потрібно використати `/marriage accept user:{{proposer}}`, щоб прийняти.",
+      en: "💍 You have proposed marriage to {{user}}! He/She needs to use /marriage accept to accept.",
+      ru: "💍 Вы предложили брак {{user}}! Ей/ему нужно использовать /marriage accept, чтобы принять.",
+      uk: "💍 Ви запропонували шлюб {{user}}! Їй/йому потрібно використати /marriage accept, щоб прийняти.",
     },
     cannotMarrySelf: {
       en: "You cannot marry yourself.",
@@ -160,9 +160,9 @@ export default {
     },
     // --- Proposal DM --- //
     proposalDM: {
-      en: "💍 You have received a marriage proposal from {{user}} in {{guild}}! Use `/marriage accept user:{{user}}` or `/marriage reject user:{{user}}` in that server.",
-      ru: "💍 Вы получили предложение о браке от {{user}} на сервере {{guild}}! Используйте `/marriage accept user:{{user}}` или `/marriage reject user:{{user}}` на этом сервере.",
-      uk: "💍 Ви отримали пропозицію про шлюб від {{user}} на сервері {{guild}}! Використовуйте `/marriage accept user:{{user}}` або `/marriage reject user:{{user}}` на цьому сервері.",
+      en: "💍 You have received a marriage proposal from {{user}} in {{guild}}! Use /marriage accept or /marriage reject in that server.",
+      ru: "💍 Вы получили предложение о браке от {{user}} на сервере {{guild}}! Используйте /marriage accept или /marriage reject на этом сервере.",
+      uk: "💍 Ви отримали пропозицію про шлюб від {{user}} на сервері {{guild}}! Використовуйте /marriage accept або /marriage reject на цьому сервері.",
     },
     cannotSendDM: {
       en: "(Could not send a DM to the user.)",
