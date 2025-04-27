@@ -604,6 +604,144 @@
       "notMarried": "You are not currently married.",
       "divorceError": "An error occurred while processing the divorce.",
       "divorceDM": "💔 You have been divorced from {{user}} in {{guild}}."
+    },
+    "settings": {
+      "group": {
+        "name": "levelroles",
+        "description": "Configure roles awarded for reaching chat levels"
+      },
+      "add": {
+        "name": "add",
+        "description": "Assign a role to be awarded at a specific chat level",
+        "options": {
+          "role": {
+            "name": "role",
+            "description": "The role to award"
+          },
+          "level": {
+            "name": "level",
+            "description": "The chat level required to receive this role"
+          }
+        },
+        "success": "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+        "error_level_exists": "Error: Another role ({{existingRoleName}}) is already assigned to level {{level}}.",
+        "error_role_exists": "Error: Role {{roleName}} is already assigned to level {{existingLevel}}. Remove it first.",
+        "error_level_invalid": "Error: Required level must be 1 or higher.",
+        "error_role_unmanageable": "Error: I cannot assign the role {{roleName}} because it is higher than my highest role."
+      },
+      "remove": {
+        "name": "remove",
+        "description": "Remove a role reward associated with a level",
+        "options": {
+          "role": {
+            "name": "role",
+            "description": "The role reward to remove"
+          }
+        },
+        "success": "Successfully removed role reward {{roleName}}.",
+        "error_not_found": "Error: Role {{roleName}} is not configured as a level reward."
+      },
+      "list": {
+        "name": "list",
+        "description": "List all configured level role rewards",
+        "title": "Configured Level Roles",
+        "no_roles": "No level roles configured yet.",
+        "entry": "Level {{level}}: {{roleMention}}"
+      },
+      "error_permissions": "You need the Administrator permission to manage level roles.",
+      "error_generic": "An error occurred while managing level roles.",
+      "subcommands": {
+        "add": {
+          "name": "add",
+          "description": "Assign a role to be awarded at a specific chat level",
+          "options": {
+            "role": {
+              "name": "role",
+              "description": "The role to award"
+            },
+            "level": {
+              "name": "level",
+              "description": "The chat level required to receive this role"
+            }
+          },
+          "success": "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+          "error_level_exists": "Error: Another role ({{existingRoleName}}) is already assigned to level {{level}}.",
+          "error_role_exists": "Error: Role {{roleName}} is already assigned to level {{existingLevel}}. Remove it first.",
+          "error_level_invalid": "Error: Required level must be 1 or higher.",
+          "error_role_unmanageable": "Error: I cannot assign the role {{roleName}} because it is higher than my highest role."
+        },
+        "remove": {
+          "name": "remove",
+          "description": "Remove a role reward associated with a level",
+          "options": {
+            "role": {
+              "name": "role",
+              "description": "The role reward to remove"
+            }
+          },
+          "success": "Successfully removed role reward {{roleName}}.",
+          "error_not_found": "Error: Role {{roleName}} is not configured as a level reward."
+        },
+        "list": {
+          "name": "list",
+          "description": "List all configured level role rewards",
+          "title": "Configured Level Roles",
+          "no_roles": "No level roles configured yet.",
+          "entry": "Level {{level}}: {{roleMention}}"
+        },
+        "levelroles": {
+          "name": "levelroles",
+          "description": "Configure roles awarded for reaching chat levels",
+          "list": {
+            "name": "list",
+            "description": "List all configured level role rewards",
+            "title": "Configured Level Roles",
+            "no_roles": "No level roles configured yet.",
+            "entry": "Level {{level}}: {{roleMention}}"
+          },
+          "add": {
+            "name": "add",
+            "description": "Assign a role to be awarded at a specific chat level",
+            "options": {
+              "role": {
+                "name": "role",
+                "description": "The role to award"
+              },
+              "level": {
+                "name": "level",
+                "description": "The chat level required to receive this role"
+              }
+            },
+            "success": "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+            "error_level_exists": "Error: Another role ({{existingRoleName}}) is already assigned to level {{level}}.",
+            "error_role_exists": "Error: Role {{roleName}} is already assigned to level {{existingLevel}}. Remove it first.",
+            "error_level_invalid": "Error: Required level must be 1 or higher.",
+            "error_role_unmanageable": "Error: I cannot assign the role {{roleName}} because it is higher than my highest role."
+          },
+          "remove": {
+            "name": "remove",
+            "description": "Remove a role reward associated with a level",
+            "options": {
+              "role": {
+                "name": "role",
+                "description": "The role reward to remove"
+              }
+            },
+            "success": "Successfully removed role reward {{roleName}}.",
+            "error_not_found": "Error: Role {{roleName}} is not configured as a level reward."
+          }
+        }
+      },
+      "command": {
+        "name": "settings",
+        "description": "Configure bot settings (level roles, etc.)"
+      },
+      "subcommand_groups": {
+        "levelroles": {
+          "name": "levelroles",
+          "description": "Configure roles awarded for reaching chat levels"
+        }
+      }
     }
   },
   "games": {
