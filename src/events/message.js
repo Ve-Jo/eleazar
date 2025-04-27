@@ -272,6 +272,95 @@ export default {
           "chat"
         );
 
+        // --- Handle Level Roles --- //
+        if (xpResult.levelUp && xpResult.assignedRole) {
+          try {
+            const member = message.member;
+            if (!member) {
+              console.warn(
+                `Could not find member ${author.id} in guild ${guild.id} for role assignment.`
+              );
+            } else {
+              // Check bot permissions
+              const botMember = await guild.members.fetchMe();
+              if (!botMember.permissions.has("ManageRoles")) {
+                console.warn(
+                  `Bot lacks ManageRoles permission in guild ${guild.id} to assign level roles.`
+                );
+              } else {
+                // Add the new role
+                const roleToAdd = await guild.roles
+                  .fetch(xpResult.assignedRole)
+                  .catch(() => null);
+                if (roleToAdd) {
+                  if (
+                    botMember.roles.highest.comparePositionTo(roleToAdd) > 0
+                  ) {
+                    // Check hierarchy
+                    await member.roles.add(roleToAdd, "Level up reward");
+                    console.log(
+                      `Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag}`
+                    );
+                  } else {
+                    console.warn(
+                      `Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag} due to role hierarchy.`
+                    );
+                  }
+                } else {
+                  console.warn(
+                    `Level role ID ${xpResult.assignedRole} not found in guild ${guild.id}.`
+                  );
+                }
+
+                // Remove lower level roles
+                if (xpResult.removedRoles && xpResult.removedRoles.length > 0) {
+                  const rolesToRemove = [];
+                  for (const roleIdToRemove of xpResult.removedRoles) {
+                    if (roleIdToRemove === xpResult.assignedRole) continue; // Don't remove the role we just added
+                    const roleToRemove = await guild.roles
+                      .fetch(roleIdToRemove)
+                      .catch(() => null);
+                    if (
+                      roleToRemove &&
+                      member.roles.cache.has(roleToRemove.id)
+                    ) {
+                      if (
+                        botMember.roles.highest.comparePositionTo(
+                          roleToRemove
+                        ) > 0
+                      ) {
+                        // Check hierarchy
+                        rolesToRemove.push(roleToRemove);
+                      } else {
+                        console.warn(
+                          `Cannot remove role ${roleToRemove.name} (${roleToRemove.id}) from ${author.tag} due to role hierarchy.`
+                        );
+                      }
+                    }
+                  }
+                  if (rolesToRemove.length > 0) {
+                    await member.roles.remove(
+                      rolesToRemove,
+                      "Level up role update"
+                    );
+                    console.log(
+                      `Removed roles ${rolesToRemove
+                        .map((r) => `${r.name} (${r.id})`)
+                        .join(", ")} from ${author.tag}`
+                    );
+                  }
+                }
+              }
+            }
+          } catch (roleError) {
+            console.error(
+              `Error managing level roles for ${author.tag} in guild ${guild.id}:`,
+              roleError
+            );
+          }
+        }
+        // --- End Level Roles --- //
+
         // Handle level-up notification if user leveled up
         if (xpResult.levelUp) {
           await handleLevelUp(

@@ -27,11 +27,39 @@ export async function handleLevelUp(
           userId: member.id,
           displayName: member.displayName,
           preferredLocale: member.preferredLocale,
+          levelUpType: type,
+          level: levelUpInfo.newLevel,
         },
         null,
         2
       )
     );
+
+    // Handle level role assignment if applicable
+    if (levelUpInfo.assignedRole) {
+      try {
+        // Add the new role
+        await member.roles.add(levelUpInfo.assignedRole);
+        console.log(
+          `Added role ${levelUpInfo.assignedRole} to ${member.displayName} for ${type} level ${levelUpInfo.newLevel}`
+        );
+
+        // Remove any lower level roles if specified
+        if (levelUpInfo.removedRoles && levelUpInfo.removedRoles.length > 0) {
+          await member.roles.remove(levelUpInfo.removedRoles);
+          console.log(
+            `Removed roles ${levelUpInfo.removedRoles.join(", ")} from ${
+              member.displayName
+            }`
+          );
+        }
+      } catch (roleError) {
+        console.error(
+          `Error assigning level roles to ${member.displayName}:`,
+          roleError
+        );
+      }
+    }
 
     let userLocale = "en";
 

@@ -1,5 +1,6 @@
 import { Events } from "discord.js";
 import Database from "../database/client.js";
+import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 export default {
   name: Events.VoiceStateUpdate,
@@ -59,16 +60,99 @@ export default {
           console.log(
             `[Voice XP] Found active session for ${member.user.tag}, processing XP`
           );
-          const { timeSpent, xpAmount } = await Database.calculateAndAddVoiceXP(
-            guildId,
-            userId,
-            session
-          );
+          const { timeSpent, xpAmount, levelUp } =
+            await Database.calculateAndAddVoiceXP(guildId, userId, session);
           console.log(
             `[Voice XP] Session ended: ${
               timeSpent / 1000
             }s, earned ${xpAmount} XP`
           );
+
+          // Handle level-up notification if user leveled up
+          if (levelUp) {
+            const channel = oldState.channel;
+
+            // Handle level roles if applicable
+            if (levelUp.assignedRole) {
+              try {
+                // Check bot permissions
+                const botMember = await guild.members.fetchMe();
+                if (!botMember.permissions.has("ManageRoles")) {
+                  console.warn(
+                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`
+                  );
+                } else {
+                  // Add the new role
+                  const roleToAdd = await guild.roles
+                    .fetch(levelUp.assignedRole)
+                    .catch(() => null);
+                  if (roleToAdd) {
+                    if (
+                      botMember.roles.highest.comparePositionTo(roleToAdd) > 0
+                    ) {
+                      // Check hierarchy
+                      await member.roles.add(
+                        roleToAdd,
+                        "Voice level up reward"
+                      );
+                      console.log(
+                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`
+                      );
+
+                      // Remove any lower level roles if specified
+                      if (
+                        levelUp.removedRoles &&
+                        levelUp.removedRoles.length > 0
+                      ) {
+                        for (const roleId of levelUp.removedRoles) {
+                          const roleToRemove = await guild.roles
+                            .fetch(roleId)
+                            .catch(() => null);
+                          if (
+                            roleToRemove &&
+                            botMember.roles.highest.comparePositionTo(
+                              roleToRemove
+                            ) > 0
+                          ) {
+                            await member.roles.remove(
+                              roleToRemove,
+                              "Replaced by higher level role"
+                            );
+                            console.log(
+                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`
+                            );
+                          }
+                        }
+                      }
+                    } else {
+                      console.warn(
+                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`
+                      );
+                    }
+                  } else {
+                    console.warn(
+                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`
+                    );
+                  }
+                }
+              } catch (roleError) {
+                console.error(
+                  `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
+                  roleError
+                );
+              }
+            }
+
+            await handleLevelUp(
+              member.client,
+              guildId,
+              userId,
+              levelUp,
+              "voice",
+              channel
+            );
+          }
+
           await Database.removeVoiceSession(guildId, userId);
         } else {
           console.log(
@@ -93,16 +177,97 @@ export default {
           console.log(
             `[Voice XP] Found active session during channel switch for ${member.user.tag}`
           );
-          const { timeSpent, xpAmount } = await Database.calculateAndAddVoiceXP(
-            guildId,
-            userId,
-            session
-          );
+          const { timeSpent, xpAmount, levelUp } =
+            await Database.calculateAndAddVoiceXP(guildId, userId, session);
           console.log(
             `[Voice XP] Channel switch: ${
               timeSpent / 1000
             }s in previous channel, earned ${xpAmount} XP`
           );
+
+          // Handle level-up notification if user leveled up
+          if (levelUp) {
+            // Handle level roles if applicable
+            if (levelUp.assignedRole) {
+              try {
+                // Check bot permissions
+                const botMember = await guild.members.fetchMe();
+                if (!botMember.permissions.has("ManageRoles")) {
+                  console.warn(
+                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`
+                  );
+                } else {
+                  // Add the new role
+                  const roleToAdd = await guild.roles
+                    .fetch(levelUp.assignedRole)
+                    .catch(() => null);
+                  if (roleToAdd) {
+                    if (
+                      botMember.roles.highest.comparePositionTo(roleToAdd) > 0
+                    ) {
+                      // Check hierarchy
+                      await member.roles.add(
+                        roleToAdd,
+                        "Voice level up reward"
+                      );
+                      console.log(
+                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`
+                      );
+
+                      // Remove any lower level roles if specified
+                      if (
+                        levelUp.removedRoles &&
+                        levelUp.removedRoles.length > 0
+                      ) {
+                        for (const roleId of levelUp.removedRoles) {
+                          const roleToRemove = await guild.roles
+                            .fetch(roleId)
+                            .catch(() => null);
+                          if (
+                            roleToRemove &&
+                            botMember.roles.highest.comparePositionTo(
+                              roleToRemove
+                            ) > 0
+                          ) {
+                            await member.roles.remove(
+                              roleToRemove,
+                              "Replaced by higher level role"
+                            );
+                            console.log(
+                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`
+                            );
+                          }
+                        }
+                      }
+                    } else {
+                      console.warn(
+                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`
+                      );
+                    }
+                  } else {
+                    console.warn(
+                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`
+                    );
+                  }
+                }
+              } catch (roleError) {
+                console.error(
+                  `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
+                  roleError
+                );
+              }
+            }
+
+            await handleLevelUp(
+              member.client,
+              guildId,
+              userId,
+              levelUp,
+              "voice",
+              oldChannel
+            );
+          }
+
           // Remove the old session before potentially creating a new one
           await Database.removeVoiceSession(guildId, userId);
         }
