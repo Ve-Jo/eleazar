@@ -3016,7 +3016,52 @@ class Database {
       });
 
       // Check for level up
-      const levelUp = this.checkLevelUp(currentXp, updatedLevel.xp);
+      const levelUpInfo = this.checkLevelUp(currentXp, updatedLevel.xp);
+
+      // --- Handle Level Role Assignment --- //
+      let assignedRole = null;
+      let removedRoles = [];
+      if (levelUpInfo) {
+        try {
+          const guild = await prisma.guild.findUnique({
+            where: { id: guildId },
+            select: { id: true },
+          }); // Ensure guild exists
+          if (guild) {
+            // This check might be redundant if ensureGuild runs before, but good practice
+            // Fetch all level roles for this guild
+            const allLevelRoles = await this.getLevelRoles(guildId);
+            const eligibleRole = allLevelRoles.find(
+              (lr) => lr.requiredLevel <= levelUpInfo.newLevel
+            );
+            const highestEligibleRole = allLevelRoles
+              .filter((lr) => lr.requiredLevel <= levelUpInfo.newLevel)
+              .sort((a, b) => b.requiredLevel - a.requiredLevel)[0]; // Get the highest eligible role
+
+            if (highestEligibleRole) {
+              assignedRole = highestEligibleRole.roleId;
+
+              // Find roles to remove (lower level roles from our system)
+              removedRoles = allLevelRoles
+                .filter(
+                  (lr) => lr.requiredLevel < highestEligibleRole.requiredLevel
+                )
+                .map((lr) => lr.roleId);
+            }
+          }
+        } catch (roleError) {
+          console.error(
+            `Error fetching/determining level roles for ${userId} in ${guildId}:`,
+            roleError
+          );
+          // Don't prevent XP gain, just log the role error
+        }
+
+        // Add role information to levelUpInfo for the handler to use
+        levelUpInfo.assignedRole = assignedRole;
+        levelUpInfo.removedRoles = removedRoles;
+      }
+      // --- End Level Role Assignment --- //
 
       // Check if stats record exists
       const existingStats = await prisma.statistics.findUnique({
@@ -3064,7 +3109,8 @@ class Database {
         });
       }
 
-      return { level: updatedLevel, stats, levelUp, type: "chat" };
+      // Always return "chat" as the type, regardless of the input type
+      return { level: updatedLevel, stats, levelUp: levelUpInfo, type: "chat" };
     });
   }
 
@@ -3127,6 +3173,47 @@ class Database {
 
       // Check for level up
       const levelUp = this.checkLevelUp(currentGameXp, level.gameXp);
+
+      // --- Handle Level Role Assignment --- //
+      let assignedRole = null;
+      let removedRoles = [];
+      if (levelUp) {
+        try {
+          const guild = await prisma.guild.findUnique({
+            where: { id: guildId },
+            select: { id: true },
+          }); // Ensure guild exists
+          if (guild) {
+            // Fetch all level roles for this guild
+            const allLevelRoles = await this.getLevelRoles(guildId);
+            const highestEligibleRole = allLevelRoles
+              .filter((lr) => lr.requiredLevel <= levelUp.newLevel)
+              .sort((a, b) => b.requiredLevel - a.requiredLevel)[0]; // Get the highest eligible role
+
+            if (highestEligibleRole) {
+              assignedRole = highestEligibleRole.roleId;
+
+              // Find roles to remove (lower level roles from our system)
+              removedRoles = allLevelRoles
+                .filter(
+                  (lr) => lr.requiredLevel < highestEligibleRole.requiredLevel
+                )
+                .map((lr) => lr.roleId);
+            }
+          }
+        } catch (roleError) {
+          console.error(
+            `Error fetching/determining level roles for ${userId} in ${guildId}:`,
+            roleError
+          );
+          // Don't prevent XP gain, just log the role error
+        }
+
+        // Add role information to levelUp for the handler to use
+        levelUp.assignedRole = assignedRole;
+        levelUp.removedRoles = removedRoles;
+      }
+      // --- End Level Role Assignment --- //
 
       // Check if stats record exists
       const existingStats = await prisma.statistics.findUnique({
@@ -4492,7 +4579,8 @@ class Database {
     const xpAmount = Math.floor((timeSpent / 60000) * xpPerMinute);
 
     if (xpAmount > 0) {
-      await this.addXP(guildId, userId, xpAmount, "voice");
+      // Use type "chat" to ensure voice XP contributes to the same level as chat XP
+      const xpResult = await this.addXP(guildId, userId, xpAmount, "voice");
 
       // Update voice time in statistics
       await this.client.statistics.update({
@@ -4505,9 +4593,11 @@ class Database {
           },
         },
       });
+
+      return { timeSpent, xpAmount, levelUp: xpResult.levelUp };
     }
 
-    return { timeSpent, xpAmount };
+    return { timeSpent, xpAmount: 0, levelUp: null };
   }
 
   // --- Cache Key Helper Methods ---
@@ -5058,6 +5148,114 @@ class Database {
     });
   }
   // --- End Marriage Methods ---
+
+  // #region Level Roles
+  async getLevelRoles(guildId) {
+    return this.client.levelRole.findMany({
+      where: { guildId },
+      orderBy: { requiredLevel: "asc" },
+    });
+  }
+
+  async getEligibleLevelRole(guildId, currentLevel) {
+    // Find the highest level role the user meets the requirements for
+    return this.client.levelRole.findFirst({
+      where: {
+        guildId,
+        requiredLevel: {
+          lte: currentLevel, // Less than or equal to current level
+        },
+      },
+      orderBy: {
+        requiredLevel: "desc", // Get the highest eligible level
+      },
+    });
+  }
+
+  async getNextLevelRole(guildId, currentLevel) {
+    // Find the next role the user can achieve
+    return this.client.levelRole.findFirst({
+      where: {
+        guildId,
+        requiredLevel: {
+          gt: currentLevel, // Greater than current level
+        },
+      },
+      orderBy: {
+        requiredLevel: "asc", // Get the lowest next level
+      },
+    });
+  }
+
+  async addLevelRole(guildId, roleId, requiredLevel) {
+    // Validate level
+    if (requiredLevel < 1) {
+      throw new Error("Required level must be at least 1.");
+    }
+
+    // Use transaction to ensure uniqueness constraints are handled
+    return this.client.$transaction(async (tx) => {
+      // Check if a role already exists for this level
+      const existingRoleForLevel = await tx.levelRole.findUnique({
+        where: { guildId_requiredLevel: { guildId, requiredLevel } },
+      });
+      if (existingRoleForLevel && existingRoleForLevel.roleId !== roleId) {
+        throw new Error(
+          `A different role (${existingRoleForLevel.roleId}) is already assigned to level ${requiredLevel}.`
+        );
+      }
+
+      // Check if this specific role is already assigned to a different level
+      const existingLevelForRole = await tx.levelRole.findUnique({
+        where: { guildId_roleId: { guildId, roleId } },
+      });
+      if (
+        existingLevelForRole &&
+        existingLevelForRole.requiredLevel !== requiredLevel
+      ) {
+        throw new Error(
+          `This role (${roleId}) is already assigned to level ${existingLevelForRole.requiredLevel}. Remove it first.`
+        );
+      }
+
+      // Upsert the level role
+      const result = await tx.levelRole.upsert({
+        where: { guildId_roleId: { guildId, roleId } }, // Use roleId unique constraint for upsert
+        create: { guildId, roleId, requiredLevel },
+        update: { requiredLevel }, // Update the level if the role already exists
+      });
+
+      // --- Invalidate Guild Cache (if level roles affect guild settings/display) ---
+      // We might cache getLevelRoles results later, but for now, maybe just invalidate the main guild cache?
+      // Consider if a more specific cache key is needed later.
+      // const cacheKey = this._cacheKeyGuild(guildId);
+      // if (this.redisClient) {
+      //   try {
+      //     await this._redisDel(cacheKey);
+      //     this._logRedis('del', cacheKey, true);
+      //   } catch (err) {
+      //     this._logRedis('del', cacheKey, err);
+      //   }
+      // }
+
+      return result;
+    });
+  }
+
+  async removeLevelRole(guildId, roleId) {
+    const result = await this.client.levelRole.deleteMany({
+      where: { guildId, roleId },
+    });
+
+    // --- Invalidate Cache --- (Similar logic as addLevelRole)
+
+    // Check if any role was actually deleted
+    if (result.count === 0) {
+      throw new Error(`Level role with ID ${roleId} not found for this guild.`);
+    }
+    return result;
+  }
+  // #endregion Level Roles
 }
 
 // Export the Database class instance without initializing
