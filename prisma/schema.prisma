@@ -261,3 +261,17 @@ model Marriage {
   @@index([status])
   @@map("marriages")
 }
+
+// New model for Level-based Role Rewards
+model LevelRole {
+  id            String @id @default(cuid())
+  guildId       String @map("guild_id")
+  roleId        String @map("role_id") // The Discord Role ID
+  requiredLevel Int    @map("required_level") // The chat level required to obtain the role
+  // type          String @default("CHAT") // Future: Could be "CHAT", "GAME", "VOICE"
+
+  @@unique([guildId, roleId]) // Ensure a role isn't added twice per guild
+  @@unique([guildId, requiredLevel]) // Ensure only one role per level per guild (simplifies logic)
+  @@index([guildId])
+  @@map("level_roles")
+}
