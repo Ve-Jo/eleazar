@@ -189,6 +189,7 @@ const Level2 = (props) => {
     seasonEnds = Date.now() + 1000 * 60 * 60 * 24 * 7,
     seasonNumber = 1,
     i18n,
+    nextLevelRole,
   } = props;
 
   // Ensure all numeric values are actually numbers
@@ -297,6 +298,38 @@ const Level2 = (props) => {
         width={256}
         height={256}
       />
+      {/* Display Next Level Role Reward */}
+      {nextLevelRole && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "10px",
+            left: "10px",
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            padding: "3px 8px",
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            fontSize: "14px",
+            fontFamily: "Inter500",
+          }}
+        >
+          <div
+            style={{
+              width: "10px",
+              height: "10px",
+              borderRadius: "50%",
+              backgroundColor: nextLevelRole.color || "#ffffff", // Use role color or white default
+              marginRight: "5px",
+              border: "1px solid rgba(255, 255, 255, 0.5)",
+            }}
+          />
+          <span>
+            {translations.nextRole}: {nextLevelRole.name} (Lvl{" "}
+            {nextLevelRole.requiredLevel})
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -321,6 +354,11 @@ Level2.localization_strings = {
     ru: "Чат",
     en: "Chat",
     uk: "Чат",
+  },
+  nextRole: {
+    ru: "След. роль",
+    en: "Next Role",
+    uk: "Наст. роль",
   },
 };
 

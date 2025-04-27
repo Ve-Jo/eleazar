@@ -119,6 +119,34 @@ export default {
         seasons?.seasonEnds || Date.now() + 7 * 24 * 60 * 60 * 1000;
       const seasonNumber = seasons?.seasonNumber || 1;
 
+      // --- Fetch Level Role Info --- //
+      let nextLevelRoleInfo = null;
+      try {
+        const nextRoleData = await Database.getNextLevelRole(
+          interaction.guild.id,
+          chatLevelInfo.level
+        );
+        if (nextRoleData) {
+          const role = await interaction.guild.roles
+            .fetch(nextRoleData.roleId)
+            .catch(() => null);
+          if (role) {
+            nextLevelRoleInfo = {
+              name: role.name,
+              color: role.hexColor,
+              requiredLevel: nextRoleData.requiredLevel,
+            };
+          }
+        }
+      } catch (err) {
+        console.error(
+          `Error fetching next level role for guild ${interaction.guild.id}:`,
+          err
+        );
+        // Continue without role info if fetch fails
+      }
+      // --- End Level Role Info --- //
+
       // Generate level card image
       const [buffer, dominantColor] = await generateImage(
         "Level2",
@@ -153,6 +181,7 @@ export default {
           seasonXP: seasonXp,
           seasonEnds: Number(seasonEnds),
           seasonNumber: Number(seasonNumber),
+          nextLevelRole: nextLevelRoleInfo,
         },
         { image: 2, emoji: 1 },
         i18n
