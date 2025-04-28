@@ -18,7 +18,7 @@
         "rewardIntro": "You opened a {{crate}} crate and received:\n",
         "rewardCoins": "• {{amount}} coins\n",
         "rewardXp": "• {{amount}} XP\n",
-        "rewardDiscount": "• {{amount}}% discount on {{type}} upgrade\n",
+        "rewardDiscount": "• {{amount}}% discount\n",
         "rewardCooldown": "• {{time}} cooldown reduction for {{type}}\n"
       },
       "crime": {
@@ -308,7 +308,8 @@
         "cannotSelectSelf": "You cannot select yourself",
         "cannotSelectBot": "You cannot select a bot",
         "returnEmotion": "Return the emotion",
-        "onlyTargetUserCanRespond": "Only the target user can respond"
+        "onlyTargetUserCanRespond": "Only the target user can respond",
+        "next": "Next"
       }
     },
     "filters": {
@@ -354,7 +355,11 @@
         "error": "An error occurred while setting the banner",
         "invalidImage": "Please provide a valid image file",
         "imageTooLarge": "The image file is too large (max 8MB)",
-        "bannerPreview": "Banner Preview"
+        "bannerPreview": "Banner Preview",
+        "modalTitle": "Set Banner",
+        "modalUrlLabel": "Banner URL",
+        "invalidUrl": "Please provide a valid URL",
+        "invalidImageType": "Please provide a valid image type"
       },
       "sfw": {
         "notFound": "Image not found"
