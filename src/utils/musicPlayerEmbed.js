@@ -1,6 +1,8 @@
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, MessageFlags } from "discord.js";
 import i18n from "./newI18n.js";
 import { generateImage } from "./imageGenerator.js";
+import { ComponentBuilder } from "./componentConverter.js";
+import { createMusicButtons } from "./musicButtons.js";
 
 // Define localization strings
 const localization_strings = {
@@ -85,6 +87,9 @@ export async function createOrUpdateMusicPlayerEmbed(
   player,
   oldEmbed = null
 ) {
+  console.log(
+    `[MusicPlayerEmbed] Starting generation for track: ${track?.info?.title}`
+  );
   let locale = track.requester?.locale || "en";
   if (locale.includes("-")) {
     locale = locale.split("-")[0];
@@ -122,112 +127,118 @@ export async function createOrUpdateMusicPlayerEmbed(
 
   // Only generate a new image if more than 5 seconds have passed or if it's the first generation
   if (!lastGeneratedImage || timeSinceLastGeneration > 10000) {
-    // Generate the music player image
-    lastGeneratedImage = await generateImage(
-      "MusicPlayer",
-      {
-        interaction: {
-          user: {
-            id: track.requester?.id || "unknown",
-            username:
-              track.requester?.username || i18n.__("music.player.noTitle"),
-            displayName:
-              track.requester?.displayName || i18n.__("music.player.noTitle"),
-            avatarURL: getAvatarUrl(track.requester),
-            locale: track.requester?.locale || "en",
+    console.log(`[MusicPlayerEmbed] Generating new image...`);
+    try {
+      const buffer = await generateImage(
+        "MusicPlayer",
+        {
+          interaction: {
+            user: {
+              id: track.requester?.id || "unknown",
+              username:
+                track.requester?.username || i18n.__("music.player.noTitle"),
+              displayName:
+                track.requester?.displayName || i18n.__("music.player.noTitle"),
+              avatarURL: getAvatarUrl(track.requester),
+              locale: track.requester?.locale || "en",
+            },
           },
-        },
-        currentSong: {
-          title: track.info.title || i18n.__("music.player.noTitle"),
-          artist: track.info.author || i18n.__("music.player.noArtist"),
-          thumbnail: track.info.artworkUrl,
-          addedBy: track.requester?.username || i18n.__("music.player.noTitle"),
-          addedByAvatar: getAvatarUrl(track.requester),
+          currentSong: {
+            title: track.info.title || i18n.__("music.player.noTitle"),
+            artist: track.info.author || i18n.__("music.player.noArtist"),
+            thumbnail: track.info.artworkUrl,
+            addedBy:
+              track.requester?.username || i18n.__("music.player.noTitle"),
+            addedByAvatar: getAvatarUrl(track.requester),
+            duration: track.info.duration,
+            user: {
+              id: track.requester?.id || "unknown",
+              username:
+                track.requester?.username || i18n.__("music.player.noTitle"),
+              displayName:
+                track.requester?.displayName || i18n.__("music.player.noTitle"),
+              avatarURL: getAvatarUrl(track.requester),
+            },
+          },
+          locale: track.requester?.locale || "en",
+          previousSong: previousSong
+            ? {
+                title:
+                  previousSong.info.title || i18n.__("music.player.noTitle"),
+                duration: previousSong.info.duration,
+                thumbnail: previousSong.info.artworkUrl,
+                user: {
+                  id: previousSong.requester?.id || "unknown",
+                  username:
+                    previousSong.requester?.username ||
+                    i18n.__("music.player.noTitle"),
+                  displayName:
+                    previousSong.requester?.displayName ||
+                    i18n.__("music.player.noTitle"),
+                  avatarURL: getAvatarUrl(previousSong.requester),
+                },
+              }
+            : undefined,
+          nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
+            title: t.info.title || i18n.__("music.player.noTitle"),
+            duration: t.info.duration,
+            thumbnail: t.info.artworkUrl,
+            user: {
+              id: t.requester?.id || "unknown",
+              username:
+                t.requester?.username || i18n.__("music.player.noTitle"),
+              displayName:
+                t.requester?.displayName || i18n.__("music.player.noTitle"),
+              avatarURL: getAvatarUrl(t.requester),
+            },
+          })),
+          queueLength: player.queue.tracks.length,
+          currentTime: player.position,
           duration: track.info.duration,
-          user: {
-            id: track.requester?.id || "unknown",
-            username:
-              track.requester?.username || i18n.__("music.player.noTitle"),
-            displayName:
-              track.requester?.displayName || i18n.__("music.player.noTitle"),
-            avatarURL: getAvatarUrl(track.requester),
-          },
+          userAvatar: getAvatarUrl(track.requester),
         },
-        locale: track.requester?.locale || "en",
-        previousSong: previousSong
-          ? {
-              title: previousSong.info.title || i18n.__("music.player.noTitle"),
-              duration: previousSong.info.duration,
-              thumbnail: previousSong.info.artworkUrl,
-              user: {
-                id: previousSong.requester?.id || "unknown",
-                username:
-                  previousSong.requester?.username ||
-                  i18n.__("music.player.noTitle"),
-                displayName:
-                  previousSong.requester?.displayName ||
-                  i18n.__("music.player.noTitle"),
-                avatarURL: getAvatarUrl(previousSong.requester),
-              },
-            }
-          : undefined,
-        nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
-          title: t.info.title || i18n.__("music.player.noTitle"),
-          duration: t.info.duration,
-          thumbnail: t.info.artworkUrl,
-          user: {
-            id: t.requester?.id || "unknown",
-            username: t.requester?.username || i18n.__("music.player.noTitle"),
-            displayName:
-              t.requester?.displayName || i18n.__("music.player.noTitle"),
-            avatarURL: getAvatarUrl(t.requester),
-          },
-        })),
-        queueLength: player.queue.tracks.length,
-        currentTime: player.position,
-        duration: track.info.duration,
-        userAvatar: getAvatarUrl(track.requester),
-      },
-      { image: 1, emoji: 1 },
-      i18n
-    );
-    lastGeneratedImageTimestamp = currentTime;
+        { image: 1, emoji: 1 },
+        i18n
+      );
+      console.log(`[MusicPlayerEmbed] Image generation successful.`);
+      lastGeneratedImage = { buffer };
+      lastGeneratedImageTimestamp = currentTime;
+    } catch (genError) {
+      console.error(`[MusicPlayerEmbed] Error during generateImage:`, genError);
+      throw genError;
+    }
+  } else {
+    console.log(`[MusicPlayerEmbed] Using cached image.`);
   }
 
-  const attachment = new AttachmentBuilder(lastGeneratedImage, {
+  const attachment = new AttachmentBuilder(lastGeneratedImage.buffer, {
     name: `musicplayer.${
-      lastGeneratedImage[0] === 0x47 &&
-      lastGeneratedImage[1] === 0x49 &&
-      lastGeneratedImage[2] === 0x46
+      lastGeneratedImage.buffer[0] === 0x47 &&
+      lastGeneratedImage.buffer[1] === 0x49 &&
+      lastGeneratedImage.buffer[2] === 0x46
         ? "gif"
         : "png"
     }`,
   });
 
-  const embedBase = oldEmbed ? EmbedBuilder.from(oldEmbed) : new EmbedBuilder();
+  // Create the main component using ComponentBuilder
+  const musicPlayerComponent = new ComponentBuilder()
+    .addText(i18n.__("music.player.title"), "header3")
+    .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
+    // Add the generated image
+    .addImage(`attachment://${attachment.name}`)
+    // Add the music control buttons
+    .addActionRow(createMusicButtons(player));
 
-  const embed = embedBase
-    .setColor(process.env.EMBED_COLOR)
-    .setImage("attachment://musicplayer.png")
-    .setFooter({
-      text: i18n.__("music.player.footerText", {
-        author: track.requester?.username || i18n.__("music.player.noTitle"),
-      }),
-      iconURL: getAvatarUrl(track.requester),
-    })
-    .setTimestamp();
-
-  // You can add additional fields if needed, but most information will be in the image now
-  /*if (player.queue.tracks && player.queue.tracks.length > 5) {
-    embed.addFields({
-      name: i18n.__("music.additionalTracks"),
-      value: i18n.__("music.andMoreTracks", {
-        count: player.queue.tracks.length - 5,
-      }),
-    });
-  }*/
-
-  return { embed, attachment };
+  console.log(
+    `[MusicPlayerEmbed] Finished generation for track: ${track?.info?.title}`
+  );
+  // Return the structure expected for interaction replies/edits
+  return {
+    components: [musicPlayerComponent.build()],
+    files: [attachment],
+    flags: MessageFlags.IsComponentsV2,
+  };
 }
 
 function formatTime(ms) {

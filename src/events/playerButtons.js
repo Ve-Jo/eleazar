@@ -1,6 +1,6 @@
 import { Events } from "discord.js";
 import i18n from "../utils/newI18n.js";
-import { createMusicButtons } from "../utils/musicButtons.js";
+import { createOrUpdateMusicPlayerEmbed } from "../utils/musicPlayerEmbed.js";
 
 // Register required localizations for the button handler
 const localization_strings = {
@@ -77,11 +77,15 @@ export default {
     if (!interaction.isButton()) return;
 
     if (interaction.customId.startsWith("music_")) {
-      let option = interaction.customId.split("_")[1];
-      let player = interaction.client.lavalink.players.get(
+      const option = interaction.customId.split("_")[1];
+      const player = interaction.client.lavalink.getPlayer(
         interaction.guild.id
       );
-      if (!player) return;
+
+      if (!player) {
+        return;
+      }
+
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.reply({
           content: i18n.__("music.notInVoiceChannel"),
@@ -93,151 +97,125 @@ export default {
         i18n.setLocale(interaction.user.locale);
       }
 
+      await interaction.deferUpdate();
+
       try {
+        let interactionResponseContent = null;
+
         switch (option) {
           case "loop": {
             const modes = ["off", "track", "queue"];
             const currentIndex = modes.indexOf(player.repeatMode);
             const newMode = modes[(currentIndex + 1) % modes.length];
-
-            // Force trigger repeat mode update event
             player.repeatMode = newMode;
-            // Explicitly emit the event
             player.emit("playerRepeatModeUpdate", player, newMode);
-
+            interactionResponseContent = i18n.__("music.loopApplied", {
+              type: newMode,
+            });
             break;
           }
           case "pause": {
             if (player.paused) {
               await player.resume();
-              // Let playerResume event handle the state saving
+              interactionResponseContent = i18n.__("music.pauseResumed");
             } else {
               await player.pause();
-              // Let playerPause event handle the state saving
+              interactionResponseContent = i18n.__("music.pauseApplied");
             }
             break;
           }
           case "skip": {
             try {
               await player.skip();
-              // Let trackEnd event handle the state saving
+              interactionResponseContent = i18n.__("music.skipApplied");
             } catch (error) {
-              let autoplay = player.get("autoplay_enabled");
-              if (autoplay && player.queue.current) {
-                await player.seek(player.queue.current.info.duration);
-                // Let playerSeek event handle the state saving
-              } else {
-                return interaction.reply({
-                  content: i18n.__("music.skippingSongError"),
-                  ephemeral: true,
-                });
-              }
+              console.error("Skip error:", error);
+              interactionResponseContent = i18n.__("music.skippingSongError", {
+                error: error.message,
+              });
             }
             break;
           }
           case "previous": {
-            if (player.queue.previous.length === 0) {
-              return interaction.reply({
-                content: i18n.__("music.previous.noPreviousSongs"),
-                ephemeral: true,
-              });
-            }
-            const previousTrack =
-              player.queue.previous[player.queue.previous.length - 1];
-            await player.queue.add(previousTrack, 0);
-            // Let trackAdd event handle the state saving
-
-            await interaction.reply(
-              `<@${interaction.user.id}> ` +
-                i18n.__("music.previous.addedPreviousToQueue", {
-                  title: previousTrack.info.title,
-                })
-            );
-
-            if (!player.playing) {
-              await player.play();
-              // Let trackStart event handle the state saving
+            if (!player.queue.previous || player.queue.previous.length === 0) {
+              interactionResponseContent = i18n.__(
+                "music.previous.noPreviousSongs"
+              );
+            } else {
+              const previousTrack = player.queue.previous[0];
+              player.queue.tracks.unshift(previousTrack);
+              player.queue.previous.shift();
+              await player.skip();
+              interactionResponseContent = i18n.__(
+                "music.previous.addedPreviousToQueue",
+                { title: previousTrack.info.title }
+              );
             }
             break;
           }
           case "autoplay": {
             const newState = !player.get("autoplay_enabled");
-            // Set the state
             player.set("autoplay_enabled", newState);
-            // Trigger player update through Lavalink client
             interaction.client.lavalink.emit("playerUpdate", {
               guildId: player.guildId,
               state: player.state,
             });
-
-            await interaction
-              .reply({
-                content:
-                  `<@${interaction.user.id}> ` +
-                  i18n.__("music.autoplay.autoplayApplied", {
-                    state: newState
-                      ? i18n.__("music.buttons.on")
-                      : i18n.__("music.buttons.off"),
-                  }),
-              })
-              .then((int) => setTimeout(() => int.delete(), 5000));
+            interactionResponseContent = i18n.__(
+              "music.autoplay.autoplayApplied",
+              {
+                state: newState
+                  ? i18n.__("music.buttons.on")
+                  : i18n.__("music.buttons.off"),
+              }
+            );
             break;
           }
         }
 
-        let updatedButtons;
-        try {
-          updatedButtons = createMusicButtons(player);
-        } catch (error) {
-          console.error(error);
-          return interaction.reply({
-            content: i18n.__("music.errorOccurred", { error: error.message }),
+        if (player.queue.current) {
+          const updatedPlayerData = await createOrUpdateMusicPlayerEmbed(
+            player.queue.current,
+            player
+          );
+
+          await interaction.message
+            .edit(updatedPlayerData)
+            .catch((editError) => {
+              console.error(
+                "Failed to edit music player message after button interaction:",
+                editError
+              );
+              if (editError.code === 10008) {
+                interaction.client.musicMessageMap?.delete(interaction.guildId);
+              }
+            });
+        } else {
+          try {
+            await interaction.message.delete();
+            interaction.client.musicMessageMap?.delete(interaction.guildId);
+          } catch (deleteError) {
+            console.error(
+              "Failed to delete music message when queue became empty:",
+              deleteError
+            );
+          }
+        }
+
+        if (interactionResponseContent) {
+          await interaction.followUp({
+            content: interactionResponseContent,
             ephemeral: true,
           });
         }
-
-        try {
-          await interaction.message.edit({ components: [updatedButtons] });
-        } catch (error) {
-          console.error("Failed to update message:", error);
-          // If we can't update the message, we'll try to send a new one
-          try {
-            await interaction.channel.send({ components: [updatedButtons] });
-          } catch (sendError) {
-            console.error("Failed to send new message:", sendError);
-          }
-        }
-
-        if (option !== "autoplay" && option !== "previous") {
-          const replyContent =
-            option === "pause"
-              ? i18n.__(
-                  player.paused ? "music.pauseApplied" : "music.pauseResumed"
-                )
-              : option === "loop"
-              ? i18n.__("music.loopApplied", { type: player.repeatMode })
-              : option === "skip"
-              ? i18n.__("music.skipApplied")
-              : i18n.__(`music.${option}Applied`);
-
-          try {
-            await interaction.reply({
-              content: `<@${interaction.user.id}> ${replyContent}`,
-              ephemeral: true,
-            });
-          } catch (replyError) {
-            console.error("Failed to reply to interaction:", replyError);
-          }
-        }
       } catch (error) {
-        console.error(error);
+        console.error("Error processing music button interaction:", error);
         try {
-          await interaction.reply({
+          await interaction.followUp({
             content: i18n.__("music.errorOccurred", { error: error.message }),
             ephemeral: true,
           });
         } catch (replyError) {
-          console.error("Failed to send error message:", replyError);
+          console.error("Failed to send error follow-up:", replyError);
         }
       }
     }

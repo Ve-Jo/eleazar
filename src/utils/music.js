@@ -61,19 +61,20 @@ const LAVALINK_SERVERS = [
     secure: true,
   },*/
   {
-    id: "Embotic",
-    host: "46.202.82.164",
-    port: 1027,
-    authorization: "jmlitelavalink",
-    secure: false,
-  },
-  {
     id: "FUGAYT",
     host: "dnode2.astrast.host",
     port: 9869,
     authorization: "https://discord.gg/8M2bAHZaQH",
     secure: false,
   },
+  {
+    id: "Embotic",
+    host: "46.202.82.164",
+    port: 1027,
+    authorization: "jmlitelavalink",
+    secure: false,
+  },
+
   {
     id: "INZEWORLD.COM (DE)",
     authorization: "saher.inzeworld.com",

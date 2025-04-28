@@ -74,6 +74,9 @@ const client = new Client({
   }),
 });
 
+// Initialize the map to store music player messages
+client.musicMessageMap = new Map();
+
 setInterval(
   () => {
     const now = Date.now();

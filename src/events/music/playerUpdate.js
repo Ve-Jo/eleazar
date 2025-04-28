@@ -1,5 +1,6 @@
 import { createMusicButtons } from "../../utils/musicButtons.js";
 import i18n from "../../utils/newI18n.js";
+import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
 
 // Define localization strings
 const localization_strings = {
@@ -94,22 +95,21 @@ export default {
   name: "playerUpdate",
   async execute(client, player) {
     try {
-      // Set locale based on player's current track requester
       const locale = player?.queue?.current?.requester?.locale || "en";
       i18n.setLocale(locale);
 
-      // Skip if player is not valid or has no current track
       if (!player || !player.queue?.current) {
         return;
       }
 
-      // Skip if no message exists to update
-      if (!player.nowPlayingMessage) {
+      // Get the message reference from the map instead of player.nowPlayingMessage
+      const existingMessage = client.musicMessageMap.get(player.guildId);
+      if (!existingMessage) {
         console.log(i18n.__("music.update.noMessage"));
         return;
       }
 
-      // Skip if player is not playing and not paused (inactive)
+      // Check if player is active
       if (!player.playing && !player.paused) {
         return;
       }
@@ -118,11 +118,9 @@ export default {
       const now = Date.now();
       const lastUpdate = player.get("lastMessageUpdate") || 0;
       if (now - lastUpdate < 10000) {
-        // Skip if less than 10 seconds since last update
         return;
       }
 
-      // If we're already updating, don't start another update
       if (player.get("isUpdatingMessage")) {
         return;
       }
@@ -133,32 +131,30 @@ export default {
       try {
         const track = player.queue.current;
 
-        // Skip update if track info is missing
         if (!track?.info) {
           console.log(i18n.__("music.update.trackInfoMissing"));
           player.set("isUpdatingMessage", false);
           return;
         }
 
-        // Get the message channel
-        const channel = await client.channels
-          .fetch(player.nowPlayingMessage.channelId)
-          .catch(() => null);
+        // Fetch the channel from the existing message
+        const channel = existingMessage.channel;
         if (!channel) {
           console.log(i18n.__("music.update.channelNotFound"));
+          client.musicMessageMap.delete(player.guildId); // Clean up map if channel is gone
           player.set("isUpdatingMessage", false);
           return;
         }
 
-        // Try to fetch the message to verify it exists
+        // Fetch the message to ensure it still exists
         let message;
         try {
           message = await channel.messages
-            .fetch(player.nowPlayingMessage.messageId)
+            .fetch(existingMessage.id)
             .catch(() => null);
           if (!message) {
             console.log(i18n.__("music.update.messageNotFound"));
-            player.nowPlayingMessage = null;
+            client.musicMessageMap.delete(player.guildId); // Clean up map
             player.set("isUpdatingMessage", false);
             return;
           }
@@ -167,50 +163,26 @@ export default {
             i18n.__("music.update.messageDeleted") + ":",
             error.message
           );
-          player.nowPlayingMessage = null;
+          client.musicMessageMap.delete(player.guildId); // Clean up map
           player.set("isUpdatingMessage", false);
           return;
         }
 
-        // Import necessary modules
-        const { createOrUpdateMusicPlayerEmbed } = await import(
-          "../../utils/musicPlayerEmbed.js"
-        );
-
-        // Create the requester object
-        const requester = track.requester || {
-          id: client.user.id,
-          username: client.user.username,
-          displayName: client.user.username,
-          avatarURL: client.user.displayAvatarURL(),
-        };
-
-        // Get avatar URL safely
-        const avatarURL = getAvatarUrl(requester);
-
-        // Use createOrUpdateMusicPlayerEmbed instead of generating the image directly
-        const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
+        // Generate the updated message data using the ComponentBuilder function
+        const updatedPlayerData = await createOrUpdateMusicPlayerEmbed(
           track,
-          player,
-          null
+          player
         );
 
-        // Create updated buttons
-        const updatedButtons = createMusicButtons
-          ? createMusicButtons(player)
-          : null;
-
-        // Update the message
-        await message
-          .edit({
-            embeds: [embed],
-            files: [attachment],
-            ...(updatedButtons ? { components: [updatedButtons] } : {}),
-          })
-          .catch((error) => {
-            console.error(i18n.__("music.update.updateError") + ":", error);
-            player.nowPlayingMessage = null;
-          });
+        // Edit the message with the new component data
+        await message.edit(updatedPlayerData).catch((error) => {
+          console.error(i18n.__("music.update.updateError") + ":", error);
+          // If editing fails (e.g., message deleted), remove from map
+          if (error.code === 10008) {
+            // Unknown Message
+            client.musicMessageMap.delete(player.guildId);
+          }
+        });
       } catch (error) {
         console.error(i18n.__("music.update.errorInHandler") + ":", error);
       } finally {
