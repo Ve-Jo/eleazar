@@ -5,8 +5,10 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  MessageFlags,
 } from "discord.js";
 import HMFull from "hmfull";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 const negativeEmotions = Object.fromEntries(
   [
@@ -216,118 +218,147 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    const emotion = interaction.options.getString("emotion");
-    const targetUser = interaction.options.getUser("user");
+    await interaction.deferReply();
+    const { guild, user } = interaction;
+    const targetUser = interaction.options.getUser("user") || user;
+    const emotionType = interaction.options.getString("emotion");
 
-    if (targetUser.id === interaction.user.id) {
-      return interaction.reply({
-        content: i18n.__("commands.emotions.negative.cannotSelectSelf"),
-        ephemeral: true,
-      });
-    }
+    async function getEmotionData() {
+      try {
+        const sources = [
+          HMFull.HMtai.sfw,
+          HMFull.Nekos.sfw,
+          HMFull.NekoBot.sfw,
+          HMFull.NekoLove.sfw,
+        ];
 
-    if (targetUser.bot) {
-      return interaction.reply({
-        content: i18n.__("commands.emotions.negative.cannotSelectBot"),
-        ephemeral: true,
-      });
-    }
-
-    async function getValidImageUrl() {
-      const sources = [
-        HMFull.HMtai.sfw,
-        HMFull.Nekos.sfw,
-        HMFull.NekoBot.sfw,
-        HMFull.NekoLove.sfw,
-      ];
-
-      for (let attempts = 0; attempts < 3; attempts++) {
-        for (const source of sources) {
-          if (Object.keys(source).includes(emotion)) {
-            let imageUrl = await source[emotion]();
-            if (typeof imageUrl === "object" && imageUrl.url) {
-              imageUrl = imageUrl.url;
-            }
-            if (
-              imageUrl &&
-              typeof imageUrl === "string" &&
-              imageUrl.startsWith("http")
-            ) {
-              return imageUrl;
+        for (let attempts = 0; attempts < 3; attempts++) {
+          for (const source of sources) {
+            if (Object.keys(source).includes(emotionType)) {
+              let imageUrl = await source[emotionType]();
+              if (typeof imageUrl === "object" && imageUrl.url) {
+                imageUrl = imageUrl.url;
+              }
+              if (
+                imageUrl &&
+                typeof imageUrl === "string" &&
+                imageUrl.startsWith("http")
+              ) {
+                return {
+                  image: imageUrl,
+                  category: emotionType,
+                  emotion: i18n.__(
+                    `commands.emotions.negative.${emotionType}.title`
+                  ),
+                };
+              }
             }
           }
         }
-      }
-      return null;
-    }
-
-    async function createEmbed() {
-      const imageUrl = await getValidImageUrl();
-
-      if (!imageUrl) {
+        return null;
+      } catch (error) {
+        console.error(`Error fetching ${emotionType} image:`, error);
         return null;
       }
+    }
 
-      return new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTitle(i18n.__(`commands.emotions.negative.${emotion}.title`))
-        .setDescription(
-          i18n.__(`commands.emotions.negative.${emotion}.description`, {
-            user: interaction.user.id,
-            targetUser: targetUser.id,
-          })
+    let emotionData = await getEmotionData();
+
+    const generateEmotionMessage = async (options = {}) => {
+      const { disableInteractions = false } = options;
+
+      // Validate fetched data
+      if (!emotionData || !emotionData.image) {
+        console.warn("Invalid or missing image URL for emotion:", emotionType);
+        emotionData = await getEmotionData(); // Retry fetch
+        if (!emotionData || !emotionData.image) {
+          return {
+            // Return error state object
+            content: i18n.__("commands.emotions.negative.imageNotFound"),
+            components: [],
+            ephemeral: true,
+          };
+        }
+      }
+
+      // Use ComponentBuilder directly with the fetched image URL
+      const emotionComponent = new ComponentBuilder()
+        .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
+        .addText(
+          i18n.__(
+            `commands.emotions.negative.${emotionData.category}.description`,
+            {
+              user: user.id,
+              targetUser: targetUser.id,
+            }
+          ) ||
+            i18n.__(`commands.emotions.negative.${emotionData.category}.title`),
+          "header3"
         )
-        .setImage(imageUrl)
-        .setFooter({
-          text: interaction.user.displayName,
-          iconURL: interaction.user.displayAvatarURL(),
-        });
-    }
+        .addImage(emotionData.image)
+        .addTimestamp(interaction.locale);
 
-    const initialEmbed = await createEmbed();
-
-    if (!initialEmbed) {
-      return interaction.reply({
-        content: i18n.__("commands.emotions.negative.imageNotFound"),
-        ephemeral: true,
-      });
-    }
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("retry")
+      // Define action row (button) but don't add it yet
+      const nextButton = new ButtonBuilder()
+        .setCustomId("next_emotion")
         .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary)
-    );
+        .setStyle(ButtonStyle.Primary);
 
-    const response = await interaction.reply({
-      embeds: [initialEmbed],
-      components: [row],
-    });
+      const buttonRow = new ActionRowBuilder().addComponents(nextButton);
 
-    const collector = response.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
-      componentType: ComponentType.Button,
-      idle: 60000,
+      // Conditionally add the button row
+      if (!disableInteractions) {
+        emotionComponent.addActionRow(buttonRow);
+      }
+
+      return {
+        // Return success state object
+        components: [emotionComponent.build()],
+        flags: MessageFlags.IsComponentsV2,
+      };
+    };
+
+    let initialMessageData = await generateEmotionMessage();
+    if (initialMessageData.content) {
+      // Check if generate returned an error state
+      return interaction.editReply(initialMessageData);
+    }
+    const message = await interaction.editReply(initialMessageData);
+
+    const collector = message.createMessageComponentCollector({
+      filter: (i) => i.user.id === user.id,
+      time: 60000, // 1 minute
     });
 
     collector.on("collect", async (i) => {
-      if (i.customId === "retry") {
-        const newEmbed = await createEmbed();
-        if (newEmbed) {
-          await i.update({ embeds: [newEmbed], components: [row] });
+      if (i.customId === "next_emotion") {
+        await i.deferUpdate();
+        emotionData = await getEmotionData();
+        const newMessageData = await generateEmotionMessage();
+        if (newMessageData.content) {
+          // Check for error on refetch
+          await i.followUp({ ...newMessageData, ephemeral: true });
         } else {
-          await i.reply({
-            content: i18n.__("commands.emotions.negative.imageNotFound"),
-            ephemeral: true,
-          });
+          await i.editReply(newMessageData);
         }
       }
     });
 
-    collector.on("end", () => {
-      row.components[0].setDisabled(true);
-      interaction.editReply({ components: [row] }).catch(console.error);
+    collector.on("end", async () => {
+      if (message.editable) {
+        try {
+          const finalMessageData = await generateEmotionMessage({
+            disableInteractions: true,
+          });
+          if (!finalMessageData.content) {
+            // Check for error before final edit
+            await message.edit(finalMessageData);
+          }
+        } catch (error) {
+          console.error("Error updating components on end:", error);
+          await message.edit({ components: [] }).catch(() => {}); // Fallback
+        }
+      }
     });
   },
 };

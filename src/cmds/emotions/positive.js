@@ -5,8 +5,10 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  MessageFlags,
 } from "discord.js";
 import HMFull from "hmfull";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -207,30 +209,20 @@ export default {
       ru: "Только пользователь может ответить",
       uk: "Тільки користувач може відповісти",
     },
+    next: {
+      en: "Next",
+      ru: "Следующая",
+      uk: "Наступна",
+    },
   },
 
   async execute(interaction, i18n) {
-    const emotion = interaction.options.getString("emotion");
-    const targetUser = interaction.options.getUser("user");
-
-    // Handle invalid user selections
-    if (targetUser.id === interaction.user.id) {
-      return interaction.reply({
-        content: i18n.__("commands.emotions.positive.cannotSelectSelf"),
-        ephemeral: true,
-      });
-    }
-
-    if (targetUser.bot) {
-      return interaction.reply({
-        content: i18n.__("commands.emotions.positive.cannotSelectBot"),
-        ephemeral: true,
-      });
-    }
-
     await interaction.deferReply();
+    const { guild, user } = interaction;
+    const targetUser = interaction.options.getUser("user") || user;
+    const emotionType = interaction.options.getString("emotion");
 
-    async function getValidImageUrl() {
+    async function getEmotionData() {
       try {
         const sources = [
           HMFull.HMtai.sfw,
@@ -241,8 +233,8 @@ export default {
 
         for (let attempts = 0; attempts < 3; attempts++) {
           for (const source of sources) {
-            if (Object.keys(source).includes(emotion)) {
-              let imageUrl = await source[emotion]();
+            if (Object.keys(source).includes(emotionType)) {
+              let imageUrl = await source[emotionType]();
               if (typeof imageUrl === "object" && imageUrl.url) {
                 imageUrl = imageUrl.url;
               }
@@ -251,88 +243,111 @@ export default {
                 typeof imageUrl === "string" &&
                 imageUrl.startsWith("http")
               ) {
-                return imageUrl;
+                return {
+                  image: imageUrl,
+                  category: emotionType,
+                  emotion: i18n.__(
+                    `commands.emotions.positive.${emotionType}.title`
+                  ),
+                };
               }
             }
           }
         }
         return null;
       } catch (error) {
-        console.error(`Error fetching ${emotion} image:`, error);
+        console.error(`Error fetching ${emotionType} image:`, error);
         return null;
       }
     }
 
-    async function createEmbed() {
-      const imageUrl = await getValidImageUrl();
+    let emotionData = await getEmotionData();
 
-      if (!imageUrl) {
-        return null;
+    const generateEmotionMessage = async (options = {}) => {
+      const { disableInteractions = false } = options;
+
+      if (!emotionData || !emotionData.image) {
+        console.warn("Invalid or missing image URL for emotion:", emotionType);
+        emotionData = await getEmotionData();
+        if (!emotionData || !emotionData.image) {
+          return {
+            content: i18n.__("commands.emotions.positive.imageNotFound"),
+            components: [],
+            ephemeral: true,
+          };
+        }
       }
 
-      // Use translations with variable replacements
-      return new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR || "#2B2D31")
-        .setTitle(i18n.__(`commands.emotions.positive.${emotion}.title`))
-        .setDescription(
-          i18n.__(`commands.emotions.positive.${emotion}.description`, {
-            user: interaction.user.id,
-            targetUser: targetUser.id,
-          })
+      const emotionComponent = new ComponentBuilder()
+        .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
+        .addText(
+          i18n.__(
+            `commands.emotions.positive.${emotionData.category}.description`,
+            {
+              user: user.id,
+              targetUser: targetUser.id,
+            }
+          ) ||
+            i18n.__(`commands.emotions.positive.${emotionData.category}.title`),
+          "header3"
         )
-        .setImage(imageUrl)
-        .setTimestamp();
-    }
+        .addImage(emotionData.image)
+        .addTimestamp(interaction.locale);
 
-    const embed = await createEmbed();
-
-    if (!embed) {
-      return interaction.editReply({
-        content: i18n.__("commands.emotions.positive.imageNotFound"),
-      });
-    }
-
-    // Create a button for the targetUser to respond
-    const buttonRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("retry")
+      const nextButton = new ButtonBuilder()
+        .setCustomId("next_emotion")
         .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary)
-    );
+        .setStyle(ButtonStyle.Primary);
 
-    const message = await interaction.editReply({
-      embeds: [embed],
-      components: [buttonRow],
-    });
+      const buttonRow = new ActionRowBuilder().addComponents(nextButton);
 
-    // Set up collector for button interaction
+      if (!disableInteractions) {
+        emotionComponent.addActionRow(buttonRow);
+      }
+
+      return {
+        components: [emotionComponent.build()],
+        flags: MessageFlags.IsComponentsV2,
+      };
+    };
+
+    let initialMessageData = await generateEmotionMessage();
+    if (initialMessageData.content) {
+      return interaction.editReply(initialMessageData);
+    }
+    const message = await interaction.editReply(initialMessageData);
+
     const collector = message.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
-      componentType: ComponentType.Button,
+      filter: (i) => i.user.id === user.id,
       time: 60000,
     });
 
     collector.on("collect", async (i) => {
-      // If the target user clicks the button
-      if (i.customId === `retry`) {
+      if (i.customId === "next_emotion") {
         await i.deferUpdate();
-
-        const newEmbed = await createEmbed();
-        if (newEmbed) {
-          await i.update({ embeds: [newEmbed], components: [buttonRow] });
+        emotionData = await getEmotionData();
+        const newMessageData = await generateEmotionMessage();
+        if (newMessageData.content) {
+          await i.followUp({ ...newMessageData, ephemeral: true });
         } else {
-          await i.reply({
-            content: i18n.__("commands.emotions.positive.imageNotFound"),
-            ephemeral: true,
-          });
+          await i.editReply(newMessageData);
         }
       }
     });
 
-    collector.on("end", () => {
-      // Remove the button when the collector ends
+    collector.on("end", async () => {
       if (message.editable) {
-        interaction.editReply({ components: [] }).catch(() => {});
+        try {
+          const finalMessageData = await generateEmotionMessage({
+            disableInteractions: true,
+          });
+          if (!finalMessageData.content) {
+            await message.edit(finalMessageData);
+          }
+        } catch (error) {
+          console.error("Error updating components on end:", error);
+          await message.edit({ components: [] }).catch(() => {});
+        }
       }
     });
   },
