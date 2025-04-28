@@ -1,9 +1,14 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
-import { EmbedBuilder, AttachmentBuilder } from "discord.js";
+import {
+  SlashCommandSubcommandBuilder,
+  AttachmentBuilder,
+  MessageFlags,
+  EmbedBuilder,
+} from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { getTickers } from "../../utils/cryptoApi.js"; // Import for getting current prices
 import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 // PnL Calculation Helper from crypto2.js
 function calculatePnlPercent(entryPrice, currentPrice, direction, leverage) {
@@ -298,18 +303,15 @@ export default {
       name: `balance.png`,
     });
 
-    let balance_embed = new EmbedBuilder()
-      .setTimestamp()
-      .setColor(dominantColor?.embedColor ?? 0x0099ff) // Default color if dominantColor is undefined
-      .setImage(`attachment://balance.png`)
-      .setAuthor({
-        name: i18n.__("commands.economy.balance.title"),
-        iconURL: user.avatarURL(),
-      });
+    const balanceBuilder = new ComponentBuilder({ dominantColor })
+      .addText(i18n.__("commands.economy.balance.title"), "header3")
+      .addImage("attachment://balance.png")
+      .addTimestamp(interaction.locale);
 
     await interaction.editReply({
-      embeds: [balance_embed],
+      components: [balanceBuilder.build()],
       files: [attachment],
+      flags: MessageFlags.IsComponentsV2,
     });
   },
 };

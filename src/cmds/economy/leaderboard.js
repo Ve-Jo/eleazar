@@ -1,17 +1,18 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import {
   generateImage,
   processImageColors,
 } from "../../utils/imageGenerator.js";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -307,17 +308,17 @@ export default {
           name: `leaderboard.png`,
         });
 
-        const embed = new EmbedBuilder()
+        // Create main container with new ComponentBuilder
+        const leaderboardComponent = new ComponentBuilder()
           .setColor(process.env.EMBED_COLOR)
-          .setAuthor({
-            name: `${i18n.__("commands.economy.leaderboard.title")} - ${
+          .addText(
+            `${i18n.__("commands.economy.leaderboard.title")} - ${
               i18n.__(`commands.economy.leaderboard.categories.${category}`) ||
               "Total Balance"
             }`,
-            iconURL: interaction.user.displayAvatarURL(),
-          })
-          .setImage(`attachment://leaderboard.png`)
-          .setTimestamp();
+            "header3"
+          )
+          .addImage("attachment://leaderboard.png");
 
         // Create navigation buttons
         const prevButton = new ButtonBuilder()
@@ -339,12 +340,8 @@ export default {
           nextDisabled: page >= currentTotalPages - 1,
         });
 
-        const buttonRow = new ActionRowBuilder().addComponents(
-          prevButton,
-          nextButton
-        );
-
-        let components = [buttonRow];
+        // Add buttons directly to leaderboardComponent
+        leaderboardComponent.addButtons(prevButton, nextButton);
 
         if (validUsers.length > 0) {
           // Create category selector without using getGroup
@@ -388,10 +385,11 @@ export default {
               },*/
             ]);
 
+          // Add category selector directly to leaderboardComponent
           const categoryRow = new ActionRowBuilder().addComponents(
             categoryMenu
           );
-          components.push(categoryRow);
+          leaderboardComponent.addActionRow(categoryRow);
 
           // Create user selector
           const selectOptions = validUsers.map((user, index) => ({
@@ -407,14 +405,15 @@ export default {
             .setPlaceholder("Select User")
             .addOptions(selectOptions);
 
+          // Add user selector directly to leaderboardComponent
           const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-          components.push(selectRow);
+          leaderboardComponent.addActionRow(selectRow);
         }
 
         return {
-          embeds: [embed],
+          components: [leaderboardComponent.build()],
           files: [attachment],
-          components,
+          flags: MessageFlags.IsComponentsV2,
         };
       }
 

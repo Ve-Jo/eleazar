@@ -1,10 +1,11 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -315,18 +316,16 @@ export default {
         name: `transfer.png`,
       });
 
-      let transfer_embed = new EmbedBuilder()
-        .setColor(dominantColor?.embedColor)
-        .setTimestamp()
-        .setImage(`attachment://transfer.png`)
-        .setAuthor({
-          name: i18n.__("commands.economy.transfer.title"),
-          iconURL: interaction.user.displayAvatarURL(),
-        });
+      const transferComponent = new ComponentBuilder()
+        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+        .addText(i18n.__("commands.economy.transfer.title"), "header3")
+        .addImage(`attachment://transfer.png`)
+        .addTimestamp(interaction.locale);
 
       await interaction.editReply({
-        embeds: [transfer_embed],
+        components: [transferComponent.build()],
         files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
       });
     } catch (error) {
       console.error("Error in transfer command:", error);

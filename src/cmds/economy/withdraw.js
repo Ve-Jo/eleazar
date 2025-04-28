@@ -1,11 +1,12 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -385,18 +386,16 @@ export default {
         name: `withdraw.png`,
       });
 
-      let withdraw_embed = new EmbedBuilder()
-        .setColor(dominantColor?.embedColor)
-        .setTimestamp()
-        .setImage(`attachment://withdraw.png`)
-        .setAuthor({
-          name: i18n.__("commands.economy.withdraw.title"),
-          iconURL: interaction.user.displayAvatarURL(),
-        });
+      const withdrawComponent = new ComponentBuilder()
+        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+        .addText(i18n.__("commands.economy.withdraw.title"), "header3")
+        .addImage(`attachment://withdraw.png`)
+        .addTimestamp(interaction.locale);
 
       await interaction.editReply({
-        embeds: [withdraw_embed],
+        components: [withdrawComponent.build()],
         files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
       });
     } catch (error) {
       console.error("Error in withdraw command:", error);

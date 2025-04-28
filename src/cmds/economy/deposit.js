@@ -1,11 +1,12 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -175,10 +176,18 @@ export default {
 
       // --- Process deposit using transaction ---
       await Database.client.$transaction(async (tx) => {
-        // Calculate bank rate based on level
-        const xp = Number(initialUserData.Level?.xp ?? 0); // Use Level relation
-        const levelInfo = Database.calculateLevel(xp);
-        const baseRate = 300 + Math.floor(levelInfo.level * 5); // Base 300% + 5% per level
+        // Calculate bank rate based on chat level AND game level
+        const chatXp = Number(initialUserData.Level?.xp ?? 0);
+        const chatLevelInfo = Database.calculateLevel(chatXp);
+
+        const gameXp = Number(initialUserData.Level?.gameXp ?? 0);
+        const gameLevelInfo = Database.calculateLevel(gameXp);
+
+        // Base 300% + 2.5% per chat level + 2.5% per game level
+        const baseRate =
+          300 +
+          (Math.floor(chatLevelInfo.level * 2.5) +
+            Math.floor(gameLevelInfo.level * 2.5));
 
         // Apply bank rate upgrade
         const bankRateUpgrade = initialUserData.upgrades.find(
@@ -357,7 +366,7 @@ export default {
         i18n
       );
 
-      // Create response embed
+      // Create response component
       if (!buffer) {
         return interaction.editReply({
           content: i18n.__("commands.economy.deposit.imageError"),
@@ -369,19 +378,17 @@ export default {
         name: `deposit.png`,
       });
 
-      const embed = new EmbedBuilder()
-        .setTimestamp()
+      const depositComponent = new ComponentBuilder()
         .setColor(dominantColor?.embedColor ?? 0x0099ff)
-        .setImage(`attachment://deposit.png`)
-        .setAuthor({
-          name: i18n.__("commands.economy.deposit.title"),
-          iconURL: interaction.user.displayAvatarURL(),
-        });
+        .addText(i18n.__("commands.economy.deposit.title"), "header3")
+        .addImage(`attachment://deposit.png`)
+        .addTimestamp(interaction.locale);
 
       // Send response
       await interaction.editReply({
-        embeds: [embed],
+        components: [depositComponent.build()],
         files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
       });
     } catch (error) {
       console.error("Error in deposit command:", error);

@@ -1,13 +1,14 @@
 import {
-  EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ComponentType,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -102,7 +103,7 @@ export default {
         const timeLeft = Math.ceil(cooldownTime / 1000);
 
         // Generate cooldown image
-        const pngBuffer = await generateImage(
+        const [pngBuffer, dominantColor] = await generateImage(
           "Cooldown",
           {
             interaction: {
@@ -128,7 +129,7 @@ export default {
             locale: interaction.locale,
             nextDaily: timeLeft * 1000,
             emoji: "🦹",
-            dominantColor: "user",
+            returnDominant: true,
           },
           { image: 2, emoji: 2 },
           i18n
@@ -138,9 +139,18 @@ export default {
           name: `crime_cooldown.png`,
         });
 
+        // Create cooldown component
+        const cooldownComponent = new ComponentBuilder({
+          dominantColor,
+        })
+          .addText(i18n.__("commands.economy.crime.title"), "header3")
+          .addText(i18n.__("commands.economy.crime.cooldown"))
+          .addImage("attachment://crime_cooldown.png");
+
         return interaction.editReply({
-          content: i18n.__("commands.economy.crime.cooldown"),
+          components: [cooldownComponent.build()],
           files: [attachment],
+          flags: MessageFlags.IsComponentsV2,
           ephemeral: true,
         });
       }
@@ -196,9 +206,15 @@ export default {
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
+      // Create a component to hold the text and the select menu
+      const selectTargetComponent = new ComponentBuilder()
+        .setColor(process.env.EMBED_COLOR) // Use default color or adjust as needed
+        .addText(i18n.__("commands.economy.crime.selectTarget"))
+        .addActionRow(row);
+
       const response = await interaction.editReply({
-        content: i18n.__("commands.economy.crime.selectTarget"),
-        components: [row],
+        components: [selectTargetComponent.build()],
+        flags: MessageFlags.IsComponentsV2, // Added flag
       });
 
       try {
@@ -419,13 +435,13 @@ export default {
           name: `crime.png`,
         });
 
-        const embed = new EmbedBuilder()
-          .setColor(success ? process.env.EMBED_COLOR : "#ff0000")
-          .setAuthor({
-            name: i18n.__("commands.economy.crime.title"),
-            iconURL: user.displayAvatarURL(),
-          })
-          .setDescription(
+        // Use ComponentBuilder instead of EmbedBuilder
+        const crimePage = new ComponentBuilder({
+          // Set appropriate color based on success
+          color: success ? process.env.EMBED_COLOR : 0xff0000,
+        })
+          .addText(i18n.__("commands.economy.crime.title"), "header3")
+          .addText(
             success
               ? i18n.__("commands.economy.crime.successTarget", {
                   amount,
@@ -433,13 +449,13 @@ export default {
                 })
               : i18n.__("commands.economy.crime.failTarget", { amount })
           )
-          .setImage(`attachment://crime.png`)
-          .setTimestamp();
+          .addImage(`attachment://crime.png`)
+          .addTimestamp(interaction.locale);
 
         return interaction.editReply({
-          embeds: [embed],
+          components: [crimePage.build()],
           files: [attachment],
-          components: [],
+          flags: MessageFlags.IsComponentsV2,
         });
       } catch (error) {
         if (error.code === "INTERACTION_COLLECTOR_ERROR") {

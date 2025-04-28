@@ -1,5 +1,5 @@
 import {
-  EmbedBuilder,
+  MessageFlags,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -14,6 +14,7 @@ import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.js";
 // Import the CratesDisplay component to access its localizations
 import CratesDisplay from "../../render-server/components/CratesDisplay.jsx";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -113,9 +114,9 @@ export default {
       uk: "• {{amount}} досвіду\n",
     },
     rewardDiscount: {
-      en: "• {{amount}}% discount on {{type}} upgrade\n",
-      ru: "• {{amount}}% скидки на улучшение {{type}}\n",
-      uk: "• {{amount}}% знижки на покращення {{type}}\n",
+      en: "• {{amount}}% discount\n",
+      ru: "• {{amount}}% скидки\n",
+      uk: "• {{amount}}% знижки\n",
     },
     rewardCooldown: {
       en: "• {{time}} cooldown reduction for {{type}}\n",
@@ -260,9 +261,15 @@ export default {
               }
             }
 
+            // Create component with the reward text
+            const rewardComponent = new ComponentBuilder()
+              .addText(rewardText)
+              .addImage("attachment://reward.png");
+
             await interaction.editReply({
-              content: rewardText,
+              components: [rewardComponent.build()],
               files: [rewardAttachment],
+              flags: MessageFlags.IsComponentsV2,
             });
 
             return;
@@ -383,7 +390,9 @@ export default {
 
       let selectedCrate = 0; // Index of currently selected crate
 
-      const generateCratesMessage = async () => {
+      const generateCratesMessage = async (options = {}) => {
+        const { disableInteractions = false } = options;
+
         const [pngBuffer, dominantColor] = await generateImage(
           "CratesDisplay",
           {
@@ -425,6 +434,17 @@ export default {
           name: `crates.png`,
         });
 
+        // Create main container with ComponentBuilder
+        const cratesComponent = new ComponentBuilder()
+          .setColor(dominantColor?.embedColor ?? 0x0099ff)
+          .addText(i18n.__("commands.economy.cases.title"), "header3")
+          .addText(
+            i18n.__("commands.economy.cases.balance", {
+              balance: Math.round(Number(userData.economy?.balance || 0)),
+            })
+          )
+          .addImage("attachment://crates.png");
+
         // Create selection menu for crates
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_crate")
@@ -454,27 +474,20 @@ export default {
           .setStyle(ButtonStyle.Success)
           .setDisabled(!cratesList[selectedCrate].available);
 
+        // Define action rows but don't add them yet
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
         const buttonRow = new ActionRowBuilder().addComponents(openButton);
 
-        const embed = new EmbedBuilder()
-          .setColor(dominantColor?.embedColor ?? 0x0099ff)
-          .setAuthor({
-            name: i18n.__("commands.economy.cases.title"),
-            iconURL: interaction.user.displayAvatarURL(),
-          })
-          .setDescription(
-            i18n.__("commands.economy.cases.balance", {
-              balance: Math.round(Number(userData.economy?.balance || 0)),
-            })
-          )
-          .setImage(`attachment://crates.png`)
-          .setTimestamp();
+        // Conditionally add interactive components
+        if (!disableInteractions) {
+          cratesComponent.addActionRow(selectRow);
+          cratesComponent.addActionRow(buttonRow);
+        }
 
         return {
-          embeds: [embed],
+          components: [cratesComponent.build()],
           files: [attachment],
-          components: [selectRow, buttonRow],
+          flags: MessageFlags.IsComponentsV2,
         };
       };
 
@@ -574,8 +587,6 @@ export default {
               .setLabel(i18n.__("commands.economy.cases.backButton"))
               .setStyle(ButtonStyle.Secondary);
 
-            const backRow = new ActionRowBuilder().addComponents(backButton);
-
             // Generate reward message text
             let rewardText = i18n.__("commands.economy.cases.rewardIntro", {
               crate: selectedCrateInfo.name,
@@ -615,11 +626,19 @@ export default {
               }
             }
 
+            // Create reward component
+            const rewardComponent = new ComponentBuilder()
+              .addText(rewardText)
+              .addImage("attachment://reward.png");
+
+            // Add back button
+            const backRow = new ActionRowBuilder().addComponents(backButton);
+            rewardComponent.addActionRow(backRow);
+
             await i.update({
-              content: rewardText,
-              embeds: [],
+              components: [rewardComponent.build()],
               files: [rewardAttachment],
-              components: [backRow],
+              flags: MessageFlags.IsComponentsV2,
             });
 
             // Create a collector just for the back button
@@ -745,9 +764,19 @@ export default {
         }
       });
 
-      collector.on("end", () => {
+      collector.on("end", async () => {
         if (message.editable) {
-          message.edit({ components: [] }).catch(() => {});
+          try {
+            // Regenerate the message without interactive components
+            const finalMessage = await generateCratesMessage({
+              disableInteractions: true,
+            });
+            await message.edit(finalMessage);
+          } catch (error) {
+            console.error("Error updating components on end:", error);
+            // Fallback: Try removing components if regeneration fails
+            await message.edit({ components: [] }).catch(() => {});
+          }
         }
       });
     } catch (error) {

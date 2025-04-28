@@ -1,11 +1,12 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import i18n from "../../utils/newI18n.js";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -199,18 +200,18 @@ export default {
         name: `level.png`,
       });
 
-      let embed = new EmbedBuilder()
-        .setTimestamp()
-        .setColor(dominantColor?.embedColor ?? 0x0099ff)
-        .setImage(`attachment://level.png`)
-        .setAuthor({
-          name: i18n.__("commands.economy.level.title"),
-          iconURL: user.avatarURL(),
-        });
+      // Use the new ComponentBuilder with automatic color handling
+      const levelComponent = new ComponentBuilder({
+        dominantColor: dominantColor,
+      })
+        .addText(i18n.__("commands.economy.level.title"), "header3")
+        .addImage("attachment://level.png")
+        .addTimestamp(interaction.locale);
 
       await interaction.editReply({
-        embeds: [embed],
+        components: [levelComponent.build()],
         files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
       });
     } catch (error) {
       console.error("Error in level command:", error);

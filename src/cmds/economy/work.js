@@ -1,16 +1,16 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandSubcommandBuilder } from "discord.js";
 import {
-  EmbedBuilder,
-  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  AttachmentBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import legacyDb from "../../database/legacyClient.js"; // Import legacy client
 import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames, getGameModule } from "../../utils/loadGames.js";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -306,7 +306,9 @@ export default {
         interaction.user.id
       );
 
-      const generateGameMessage = async () => {
+      const generateGameMessage = async (options = {}) => {
+        const { disableInteractions = false } = options;
+
         const categoryNames = Object.keys(games);
         const currentCategoryGames =
           games[categoryNames[currentCategory]]?.games_list || [];
@@ -363,14 +365,11 @@ export default {
           name: `work_games.png`,
         });
 
-        const embed = new EmbedBuilder()
+        // Create game launcher component
+        const gameLauncherComponent = new ComponentBuilder()
           .setColor(dominantColor?.embedColor)
-          .setAuthor({
-            name: i18n.__(`commands.economy.work.title`),
-            iconURL: interaction.user.displayAvatarURL(),
-          })
-          .setImage(`attachment://work_games.png`)
-          .setTimestamp();
+          .addText(i18n.__(`commands.economy.work.title`), "header3")
+          .addImage(`attachment://work_games.png`);
 
         // Create category select menu
         const selectMenu = new StringSelectMenuBuilder()
@@ -406,18 +405,29 @@ export default {
               : ButtonStyle.Success
           );
 
+        // Add components to the launcher
+        const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+        // Conditionally add interactive components
+        if (!disableInteractions) {
+          gameLauncherComponent.addActionRow(selectRow);
+        }
+
         const buttonRow = new ActionRowBuilder().addComponents(
           prevButton,
           selectButton,
           nextButton
         );
 
-        const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+        // Conditionally add interactive components
+        if (!disableInteractions) {
+          gameLauncherComponent.addActionRow(buttonRow);
+        }
 
         return {
-          embeds: [embed],
+          components: [gameLauncherComponent.build()],
           files: [attachment],
-          components: [selectRow, buttonRow],
+          flags: MessageFlags.IsComponentsV2,
         };
       };
 
@@ -538,9 +548,19 @@ export default {
         }
       });
 
-      collector.on("end", () => {
+      collector.on("end", async () => {
         if (message.editable) {
-          message.edit({ components: [] }).catch(() => {});
+          try {
+            // Regenerate the message without interactive components
+            const finalMessage = await generateGameMessage({
+              disableInteractions: true,
+            });
+            await message.edit(finalMessage);
+          } catch (error) {
+            console.error("Error updating components on end:", error);
+            // Fallback: Try removing components if regeneration fails
+            await message.edit({ components: [] }).catch(() => {});
+          }
         }
       });
     } catch (error) {

@@ -1,5 +1,5 @@
 import {
-  EmbedBuilder,
+  MessageFlags,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -12,6 +12,7 @@ import Database, { UPGRADES } from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 // Import the UpgradesDisplay component to access its localizations
 import UpgradesDisplay from "../../render-server/components/UpgradesDisplay.jsx";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -137,7 +138,9 @@ export default {
         return result[userLocale] || result.en || defaultValue;
       };
 
-      const generateShopMessage = async () => {
+      const generateShopMessage = async (options = {}) => {
+        const { disableInteractions = false } = options;
+
         // Get user data with all relations
         const userData = await Database.getUser(guild.id, user.id);
 
@@ -320,6 +323,17 @@ export default {
 
         console.log(upgradeInfo);
 
+        // Create shop component with ComponentBuilder
+        const shopComponent = new ComponentBuilder()
+          .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
+          .addText(i18n.__("commands.economy.shop.title"), "header3")
+          .addText(
+            i18n.__("commands.economy.shop.description", {
+              balance: Math.round(Number(userData.economy?.balance || 0)),
+            })
+          )
+          .addImage("attachment://shop.png");
+
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
@@ -431,30 +445,25 @@ export default {
             .setDisabled(false);
         }
 
+        // Add components to the shop component
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+        shopComponent.addActionRow(selectRow);
+
         const buttonRow = new ActionRowBuilder().addComponents(
           openButton,
           revertButton
         );
 
-        const embed = new EmbedBuilder()
-          .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
-          .setAuthor({
-            name: i18n.__("commands.economy.shop.title"),
-            iconURL: user.displayAvatarURL(),
-          })
-          .setDescription(
-            i18n.__("commands.economy.shop.description", {
-              balance: Math.round(Number(userData.economy?.balance || 0)),
-            })
-          )
-          .setImage(`attachment://shop.png`)
-          .setTimestamp();
+        // Conditionally add interactive components
+        if (!disableInteractions) {
+          shopComponent.addActionRow(selectRow);
+          shopComponent.addActionRow(buttonRow);
+        }
 
         return {
-          embeds: [embed],
+          components: [shopComponent.build()],
           files: [attachment],
-          components: [selectRow, buttonRow],
+          flags: MessageFlags.IsComponentsV2,
         };
       };
 
@@ -600,9 +609,19 @@ export default {
         }
       });
 
-      collector.on("end", () => {
+      collector.on("end", async () => {
         if (message.editable) {
-          message.edit({ components: [] }).catch(() => {});
+          try {
+            // Regenerate the message without interactive components
+            const finalMessage = await generateShopMessage({
+              disableInteractions: true,
+            });
+            await message.edit(finalMessage);
+          } catch (error) {
+            console.error("Error updating components on end:", error);
+            // Fallback: Try removing components if regeneration fails
+            await message.edit({ components: [] }).catch(() => {});
+          }
         }
       });
     } catch (error) {
