@@ -1,11 +1,14 @@
 import {
   SlashCommandSubcommandBuilder,
+  ActionRowBuilder,
   AttachmentBuilder,
+  MessageFlags,
   EmbedBuilder,
 } from "discord.js";
 import Database from "../../database/client.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import axios from "axios";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 const BANNER_LOGS = {
   guildId: "1282078106202669148",
@@ -55,23 +58,15 @@ async function makePermanentAttachment(interaction, attachment) {
     const storageMsg = await modChannel.send({
       embeds: [modEmbed],
       files: [tempAttachment],
-      components: [
-        {
-          type: 1,
-          components: [
-            {
-              type: 2,
-              style: 4,
-              label: "Remove Banner",
-              custom_id: `remove_banner:${interaction.user.id}:${interaction.guild.id}`,
-            },
-          ],
-        },
-      ],
     });
 
     // Get the permanent URL from the sent message
-    const permanentUrl = storageMsg.attachments.first().url;
+    const permanentUrl = storageMsg.attachments.first()?.url;
+    if (!permanentUrl) {
+      throw new Error(
+        "Failed to get permanent URL from storage message attachment."
+      );
+    }
 
     // Update the embed to include the image now that we have the permanent URL
     modEmbed.setImage(permanentUrl);
@@ -210,14 +205,14 @@ export default {
 
     try {
       // Validate attachment
-      if (!attachment.contentType?.startsWith("image/")) {
+      if (!attachment || !attachment.contentType?.startsWith("image/")) {
         return interaction.editReply({
           content: i18n.__("commands.images.setbanner.invalidImage"),
           ephemeral: true,
         });
       }
 
-      const MAX_SIZE = 8 * 1024 * 1024;
+      const MAX_SIZE = 8 * 1024 * 1024; // 8MB
       if (attachment.size > MAX_SIZE) {
         return interaction.editReply({
           content: i18n.__("commands.images.setbanner.imageTooLarge"),
@@ -225,109 +220,115 @@ export default {
         });
       }
 
-      // Validate the URL and ensure it's accessible
-      try {
-        const response = await axios.head(attachment.url);
-        if (!response.headers["content-type"]?.startsWith("image/")) {
-          return interaction.editReply({
-            content: i18n.__("commands.images.setbanner.invalidImage"),
-            ephemeral: true,
-          });
-        }
-      } catch (error) {
-        console.error("Error validating image URL:", error);
-        return interaction.editReply({
-          content: i18n.__("commands.images.setbanner.invalidImage"),
-          ephemeral: true,
-        });
-      }
-
-      // Upload the image to our storage
+      // Upload the image to storage
       const permanentUrl = await makePermanentAttachment(
         interaction,
         attachment
       );
 
-      // Store the banner URL in the database
-      await Database.client.user.upsert({
+      // Save the banner URL to the database
+      await Database.client.user.update({
         where: {
           guildId_id: {
-            guildId: interaction.guild.id,
             id: interaction.user.id,
+            guildId: interaction.guild.id,
           },
         },
-        update: {
-          bannerUrl: permanentUrl,
-        },
-        create: {
-          guildId: interaction.guild.id,
-          id: interaction.user.id,
+        data: {
           bannerUrl: permanentUrl,
         },
       });
 
-      const userData = await Database.getUser(
+      // --- Explicitly invalidate cache AFTER update ---
+      const userCacheKeyFull = Database._cacheKeyUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
-
-      // Create a preview of the banner using the image generator
-      const [previewBuffer, dominantColor] = await generateImage(
-        "Balance",
-        {
-          interaction: {
-            user: {
-              id: interaction.user.id,
-              username: interaction.user.username,
-              displayName: interaction.user.displayName,
-              avatarURL: interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-            guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
-                extension: "png",
-                size: 1024,
-              }),
-            },
-          },
-          bannerUrl: permanentUrl,
-          locale: interaction.locale,
-          returnDominant: true,
-          database: {
-            ...userData,
-          },
-        },
-        { image: 2, emoji: 1 },
-        i18n
+      const userCacheKeyBasic = Database._cacheKeyUser(
+        interaction.guild.id,
+        interaction.user.id,
+        false
       );
-
-      if (!previewBuffer) {
-        throw new Error("Failed to generate banner preview");
+      if (Database.redisClient) {
+        try {
+          const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
+          await Database.redisClient.del(keysToDel);
+          Database._logRedis("del", keysToDel.join(", "), true);
+        } catch (err) {
+          Database._logRedis("del", keysToDel.join(", "), err);
+        }
       }
 
-      const previewAttachment = new AttachmentBuilder(previewBuffer, {
-        name: "banner_preview.png",
-      });
+      // --- Generate preview --- (Optional, but good UX)
+      try {
+        const userData = await Database.getUser(
+          interaction.guild.id,
+          interaction.user.id,
+          true
+        );
 
-      const embed = new EmbedBuilder()
-        .setColor(dominantColor?.embedColor ?? 0x0099ff)
-        .setTimestamp()
-        .setImage("attachment://banner_preview.png")
-        .setAuthor({
-          name: i18n.__("commands.images.setbanner.title"),
-          iconURL: interaction.user.displayAvatarURL(),
+        const [previewBuffer, dominantColor] = await generateImage(
+          "Balance",
+          {
+            interaction: {
+              user: {
+                id: interaction.user.id,
+                username: interaction.user.username,
+                displayName: interaction.user.displayName,
+                avatarURL: interaction.user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+              guild: {
+                id: interaction.guild.id,
+                name: interaction.guild.name,
+                iconURL: interaction.guild.iconURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              },
+            },
+            locale: interaction.locale,
+            database: { ...userData, bannerUrl: permanentUrl },
+            returnDominant: true,
+          },
+          { image: 2, emoji: 1 },
+          i18n
+        );
+
+        if (previewBuffer) {
+          const previewAttachment = new AttachmentBuilder(previewBuffer, {
+            name: `banner_preview.png`,
+          });
+
+          const successComponent = new ComponentBuilder()
+            .setColor(dominantColor?.embedColor ?? 0x00ff00)
+            .addText(i18n.__("commands.images.setbanner.success"), "header3")
+            .addImage(`attachment://banner_preview.png`)
+            .addTimestamp(interaction.locale);
+
+          await interaction.editReply({
+            components: [successComponent.build()],
+            files: [previewAttachment],
+            flags: MessageFlags.IsComponentsV2,
+          });
+        } else {
+          // If preview generation fails, just send text confirmation
+          await interaction.editReply({
+            content: i18n.__("commands.images.setbanner.success"),
+            components: [],
+          });
+        }
+      } catch (previewError) {
+        console.error("Error generating banner preview:", previewError);
+        // If preview fails, just send text confirmation
+        await interaction.editReply({
+          content: i18n.__("commands.images.setbanner.success"),
+          components: [],
         });
-
-      await interaction.editReply({
-        content: i18n.__("commands.images.setbanner.success"),
-        embeds: [embed],
-        files: [previewAttachment],
-      });
+      }
     } catch (error) {
       console.error("Error setting banner:", error);
       await interaction.editReply({

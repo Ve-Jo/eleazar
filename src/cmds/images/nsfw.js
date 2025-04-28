@@ -1,12 +1,14 @@
-import { SlashCommandSubcommandBuilder } from "discord.js";
 import {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  AttachmentBuilder,
+  SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import HMFull from "hmfull";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
   data: () => {
@@ -89,102 +91,137 @@ export default {
   async execute(interaction, i18n) {
     if (!interaction.channel.nsfw) {
       return interaction.reply({
-        content: i18n.__("commands.images.nsfw.nsfwChannelOnly"),
+        content: i18n.__("commands.images.nsfw.notNsfwChannel"),
         ephemeral: true,
       });
     }
 
-    const image = interaction.options.getString("image");
+    await interaction.deferReply();
+    const category = interaction.options.getString("image");
+    const { guild, user } = interaction;
 
-    async function getValidImageUrl() {
-      const sources = [
-        HMFull.HMtai.nsfw,
-        HMFull.Nekos.nsfw,
-        HMFull.NekoBot.nsfw,
-        HMFull.NekoLove.nsfw,
-      ];
+    // Restore original image fetching logic
+    async function getImageData() {
+      try {
+        const sources = [
+          HMFull.HMtai.nsfw, // Using NSFW sources
+          HMFull.Nekos.nsfw,
+          HMFull.NekoBot.nsfw,
+          HMFull.NekoLove.nsfw,
+        ];
 
-      for (let attempts = 0; attempts < 3; attempts++) {
-        for (const source of sources) {
-          if (Object.keys(source).includes(image)) {
-            let imageUrl = await source[image]();
-            if (typeof imageUrl === "object" && imageUrl.url) {
-              imageUrl = imageUrl.url;
-            }
-            if (
-              imageUrl &&
-              typeof imageUrl === "string" &&
-              imageUrl.startsWith("http")
-            ) {
-              return imageUrl;
+        for (let attempts = 0; attempts < 3; attempts++) {
+          for (const source of sources) {
+            if (Object.keys(source).includes(category)) {
+              let imageUrl = await source[category]();
+              if (typeof imageUrl === "object" && imageUrl.url) {
+                imageUrl = imageUrl.url;
+              }
+              if (
+                imageUrl &&
+                typeof imageUrl === "string" &&
+                imageUrl.startsWith("http")
+              ) {
+                return {
+                  url: imageUrl,
+                  category: category,
+                };
+              }
             }
           }
         }
-      }
-      return null;
-    }
-
-    async function createEmbed() {
-      const imageUrl = await getValidImageUrl();
-
-      if (!imageUrl) {
+        return null;
+      } catch (error) {
+        console.error(`Error fetching ${category} NSFW image:`, error);
         return null;
       }
-
-      return new EmbedBuilder()
-        .setColor(process.env.EMBED_COLOR)
-        .setTitle(`NSFW - ${image}`)
-        .setImage(imageUrl)
-        .setFooter({
-          text: interaction.user.displayName,
-          iconURL: interaction.user.displayAvatarURL(),
-        });
     }
 
-    const initialEmbed = await createEmbed();
+    let imageData = await getImageData();
 
-    if (!initialEmbed) {
-      return interaction.reply({
-        content: i18n.__("commands.images.nsfw.notFound"),
-        ephemeral: true,
-      });
-    }
+    const generateImageMessage = async (options = {}) => {
+      const { disableInteractions = false } = options;
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("retry")
+      // Validate fetched data
+      if (!imageData || !imageData.url) {
+        console.warn("Invalid or missing image URL for nsfw image:", category);
+        imageData = await getImageData(); // Retry fetch
+        if (!imageData || !imageData.url) {
+          return {
+            content: i18n.__("commands.images.nsfw.notFound"),
+            components: [],
+            ephemeral: true,
+          };
+        }
+      }
+
+      // Use ComponentBuilder directly with the fetched image URL
+      const imageComponent = new ComponentBuilder()
+        .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
+        .addText(
+          imageData.category || i18n.__("commands.images.nsfw.title"), // Use category as title
+          "header3"
+        )
+        .addImage(imageData.url) // Use direct URL
+        .addTimestamp(interaction.locale);
+
+      // Define action row (button) but don't add it yet
+      const nextButton = new ButtonBuilder()
+        .setCustomId("next_image")
         .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary)
-    );
+        .setStyle(ButtonStyle.Primary);
 
-    const response = await interaction.reply({
-      embeds: [initialEmbed],
-      components: [row],
-    });
+      const buttonRow = new ActionRowBuilder().addComponents(nextButton);
 
-    const collector = response.createMessageComponentCollector({
-      filter: (i) => i.user.id === interaction.user.id,
-      componentType: ComponentType.Button,
-      idle: 60000,
+      // Conditionally add the button row
+      if (!disableInteractions) {
+        imageComponent.addActionRow(buttonRow);
+      }
+
+      return {
+        components: [imageComponent.build()],
+        flags: MessageFlags.IsComponentsV2,
+      };
+    };
+
+    let initialMessageData = await generateImageMessage();
+    if (initialMessageData.content) {
+      return interaction.editReply(initialMessageData);
+    }
+    const message = await interaction.editReply(initialMessageData);
+
+    const collector = message.createMessageComponentCollector({
+      filter: (i) => i.user.id === user.id,
+      time: 60000,
     });
 
     collector.on("collect", async (i) => {
-      if (i.customId === "retry") {
-        const newEmbed = await createEmbed();
-        if (newEmbed) {
-          await i.update({ embeds: [newEmbed], components: [row] });
+      if (i.customId === "next_image") {
+        await i.deferUpdate();
+        imageData = await getImageData();
+        const newMessageData = await generateImageMessage();
+        if (newMessageData.content) {
+          await i.followUp({ ...newMessageData, ephemeral: true });
         } else {
-          await i.reply({
-            content: i18n.__("commands.images.nsfw.notFound"),
-            ephemeral: true,
-          });
+          await i.editReply(newMessageData);
         }
       }
     });
 
-    collector.on("end", () => {
-      row.components[0].setDisabled(true);
-      interaction.editReply({ components: [row] }).catch(console.error);
+    collector.on("end", async () => {
+      if (message.editable) {
+        try {
+          const finalMessageData = await generateImageMessage({
+            disableInteractions: true,
+          });
+          if (!finalMessageData.content) {
+            await message.edit(finalMessageData);
+          }
+        } catch (error) {
+          console.error("Error updating components on end:", error);
+          await message.edit({ components: [] }).catch(() => {});
+        }
+      }
     });
   },
 };

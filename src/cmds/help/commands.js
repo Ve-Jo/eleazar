@@ -1,15 +1,16 @@
 import {
   AttachmentBuilder,
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
   SlashCommandSubcommandBuilder,
+  MessageFlags,
 } from "discord.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
+import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -517,7 +518,7 @@ export default {
     );
 
     const generateCommandImage = async () => {
-      const pngBuffer = await generateImage(
+      const [pngBuffer, dominantColor] = await generateImage(
         "SettingsDisplay",
         {
           interaction: {
@@ -545,6 +546,7 @@ export default {
           visibleCount,
           height: 700,
           width: 600,
+          returnDominant: true,
           maxSettingsHided: 4,
           maxSettingsHidedWidth: 450,
         },
@@ -562,115 +564,90 @@ export default {
         }`,
       });
 
-      return attachment;
+      return [attachment, dominantColor];
     };
 
-    const updateMessage = async () => {
-      const attachment = await generateCommandImage();
+    const updateMessage = async (options = {}) => {
+      const { disableInteractions = false } = options;
+      const [attachment, dominantColor] = await generateCommandImage();
 
-      const embed = new EmbedBuilder()
-        .setTimestamp()
-        .setColor(process.env.EMBED_COLOR)
-        .setImage("attachment://commands.png")
-        .setAuthor({
-          name: getTranslation("commands.help.commands.title"),
-          iconURL: interaction.user.avatarURL(),
-        });
+      // Create the component using ComponentBuilder
+      const commandComponent = new ComponentBuilder({ dominantColor })
+        .addText(getTranslation("commands.help.commands.title"), "header3")
+        .addImage("attachment://commands.png");
 
-      return { embeds: [embed], files: [attachment] };
-    };
+      // Only add interactive components if not disabled
+      if (!disableInteractions) {
+        // Add category menu
+        const categoryMenu = new StringSelectMenuBuilder()
+          .setCustomId("category")
+          .setPlaceholder(
+            getTranslation("commands.help.commands.categoryMenu.placeholder")
+          )
+          .addOptions(
+            Array.from(categories)
+              .filter(
+                (category) =>
+                  typeof category === "string" && category.trim() !== ""
+              )
+              .map((category) => ({
+                label: category || "Unknown Category",
+                value: category,
+                default: category === currentCategory,
+              }))
+          );
 
-    const createCategoryMenu = () => {
-      const categoriesArray = Array.from(categories)
-        .filter(
-          (category) => typeof category === "string" && category.trim() !== ""
-        )
-        .map((category) => ({
-          label: category || "Unknown Category",
-          value: category,
-        }));
+        const categoryRow = new ActionRowBuilder().addComponents(categoryMenu);
+        commandComponent.addActionRow(categoryRow);
 
-      // Ensure we always have at least one option
-      if (categoriesArray.length === 0) {
-        categoriesArray.push({
-          label: "General",
-          value: "General",
-        });
-      }
+        // Add subcommand menu
+        // Get all command indexes for this category from our map
+        const commandIndexes = processedCategories.get(currentCategory) || [];
 
-      return new StringSelectMenuBuilder()
-        .setCustomId("category")
-        .setPlaceholder(
-          getTranslation("commands.help.commands.categoryMenu.placeholder")
-        )
-        .addOptions(categoriesArray);
-    };
+        // Map indexes to actual command objects
+        const categoryCommands = commandIndexes.map((index) => commands[index]);
 
-    const createSubcommandMenu = () => {
-      // Use our tracked currentCategory instead of inferring from highlightedPosition
-      console.log(
-        `[help.commands] Creating subcommand menu for category: ${currentCategory}`
-      );
-
-      // Get all command indexes for this category from our map
-      const commandIndexes = processedCategories.get(currentCategory) || [];
-      console.log(
-        `[help.commands] Found ${commandIndexes.length} commands for category ${currentCategory}`
-      );
-
-      // Make sure the highlightedPosition is within the current category
-      // If not, update it to the first command in the current category
-      const isHighlightedInCurrentCategory =
-        commandIndexes.includes(highlightedPosition);
-      if (!isHighlightedInCurrentCategory && commandIndexes.length > 0) {
-        console.log(
-          `[help.commands] Highlighted position is not in current category. Updating.`
-        );
-        highlightedPosition = commandIndexes[0];
-      }
-
-      // Map indexes to actual command objects
-      const categoryCommands = commandIndexes.map((index) => commands[index]);
-
-      let options = categoryCommands
-        .filter((cmd) => cmd && cmd.title && typeof cmd.title === "string")
-        .map((cmd, index) => {
-          console.log(`[help.commands] Adding menu option: ${cmd.title}`);
-          return {
+        let options = categoryCommands
+          .filter((cmd) => cmd && cmd.title && typeof cmd.title === "string")
+          .map((cmd, index) => ({
             label: cmd.title || `Command ${index}`,
             value: commandIndexes[index].toString(),
-          };
-        });
+            default: commandIndexes[index] === highlightedPosition,
+          }));
 
-      console.log(`[help.commands] Created ${options.length} menu options`);
+        // Ensure we always have at least one option
+        if (options.length === 0) {
+          options = [
+            {
+              label: getTranslation(
+                "commands.help.commands.noCommandsAvailable"
+              ),
+              value: "none",
+            },
+          ];
+        }
 
-      // Ensure we always have at least one option
-      if (options.length === 0) {
-        options = [
-          {
-            label: getTranslation(
-              "commands.help.commands.subcommandMenu.noCommandsAvailable"
-            ),
-            value: "none",
-          },
-        ];
+        const subcommandMenu = new StringSelectMenuBuilder()
+          .setCustomId("subcommand")
+          .setPlaceholder(
+            getTranslation("commands.help.commands.subcommandMenu.placeholder")
+          )
+          .addOptions(options);
+
+        const subcommandRow = new ActionRowBuilder().addComponents(
+          subcommandMenu
+        );
+        commandComponent.addActionRow(subcommandRow);
       }
 
-      return new StringSelectMenuBuilder()
-        .setCustomId("subcommand")
-        .setPlaceholder(
-          getTranslation("commands.help.commands.subcommandMenu.placeholder")
-        )
-        .addOptions(options);
+      return {
+        components: [commandComponent.build()],
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      };
     };
 
-    const row2 = new ActionRowBuilder().addComponents(createCategoryMenu());
-    const row3 = new ActionRowBuilder().addComponents(createSubcommandMenu());
-
-    const response = await interaction.editReply({
-      ...(await updateMessage()),
-      components: [row2, row3],
-    });
+    const response = await interaction.editReply(await updateMessage());
 
     const collector = response.createMessageComponentCollector({
       time: 5 * 60 * 1000,
@@ -680,7 +657,7 @@ export default {
       if (i.user.id !== interaction.user.id) {
         await i.reply({
           content: getTranslation(
-            "commands.help.commands.subcommandMenu.youCannotUseThisMenu"
+            "commands.help.commands.youCannotUseThisMenu"
           ),
           ephemeral: true,
         });
@@ -710,15 +687,8 @@ export default {
             `[help.commands] Setting highlightedPosition to ${highlightedPosition}`
           );
 
-          // Recreate the subcommand menu with the new category
-          const row3 = new ActionRowBuilder().addComponents(
-            createSubcommandMenu()
-          );
-
-          await i.editReply({
-            ...(await updateMessage()),
-            components: [row2, row3],
-          });
+          // Update the message with new menus
+          await i.editReply(await updateMessage());
         }
       } else if (i.customId === "subcommand") {
         // Skip if the "none" option is selected
@@ -742,29 +712,27 @@ export default {
             `[help.commands] Ensuring currentCategory is set to: ${currentCategory}`
           );
 
-          // Always recreate the subcommand menu to ensure it maintains the current category
-          const row3 = new ActionRowBuilder().addComponents(
-            createSubcommandMenu()
-          );
-
-          await i.editReply({
-            ...(await updateMessage()),
-            components: [row2, row3],
-          });
+          // Update the message with new menus
+          await i.editReply(await updateMessage());
         }
       }
     });
 
     collector.on("end", async () => {
       try {
-        const fetchedMessage = await interaction.fetchReply();
-        if (fetchedMessage) {
-          await interaction.editReply({
-            components: [],
-          });
-        }
+        // Update the message with disabled interactions
+        const finalMessage = await updateMessage({
+          disableInteractions: true,
+        });
+        await interaction.editReply(finalMessage);
       } catch (error) {
         console.error("Error updating message after collector ended:", error);
+        // Fallback: Try removing components if regeneration fails
+        await interaction
+          .editReply({
+            components: [],
+          })
+          .catch(() => {});
       }
     });
   },
