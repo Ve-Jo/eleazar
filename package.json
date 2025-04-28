@@ -26,7 +26,7 @@
     "crypto": "^1.0.1",
     "date-fns": "2.30.0",
     "deepinfra": "^2.0.2",
-    "discord.js": "^14.16.1",
+    "discord.js": "^14.19.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "filesize": "^10.1.6",
