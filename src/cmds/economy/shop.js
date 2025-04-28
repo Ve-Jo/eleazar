@@ -447,8 +447,6 @@ export default {
 
         // Add components to the shop component
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
-        shopComponent.addActionRow(selectRow);
-
         const buttonRow = new ActionRowBuilder().addComponents(
           openButton,
           revertButton
@@ -574,7 +572,10 @@ export default {
               type
             );
 
-            // Show success message
+            // First, acknowledge the interaction with an update
+            await i.deferUpdate();
+
+            // Now we can use followUp
             await i.followUp({
               content: i18n.__("commands.economy.shop.revertSuccess", {
                 type: upgradeName,
@@ -585,7 +586,7 @@ export default {
             });
 
             // Show updated shop with new upgrade level
-            await i.update(await generateShopMessage());
+            await i.editReply(await generateShopMessage());
           } catch (error) {
             if (error.message.startsWith("Cooldown active:")) {
               const cooldownTime = parseInt(error.message.split(":")[1].trim());
