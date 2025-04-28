@@ -111,7 +111,7 @@ export default {
 
       const baseEarning =
         state.score *
-        0.01 * // Base earning
+        0.005 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + Math.min(timeInMinutes, 5) / 5); // Time multiplier that caps at 2x for 5+ minutes
 
@@ -122,26 +122,33 @@ export default {
     };
 
     // Create game controls
-    const buttons = [
-      new ButtonBuilder()
-        .setCustomId("up")
-        .setLabel("↑")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("left")
-        .setLabel("←")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("right")
-        .setLabel("→")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("down")
-        .setLabel("↓")
-        .setStyle(ButtonStyle.Primary),
-    ];
+    const stopButton = new ButtonBuilder()
+      .setCustomId("stop")
+      .setLabel("🛑")
+      .setStyle(ButtonStyle.Danger);
+    const upButton = new ButtonBuilder()
+      .setCustomId("up")
+      .setLabel("↑")
+      .setStyle(ButtonStyle.Primary);
+    const leftButton = new ButtonBuilder()
+      .setCustomId("left")
+      .setLabel("←")
+      .setStyle(ButtonStyle.Primary);
+    const downButton = new ButtonBuilder()
+      .setCustomId("down")
+      .setLabel("↓")
+      .setStyle(ButtonStyle.Primary);
+    const rightButton = new ButtonBuilder()
+      .setCustomId("right")
+      .setLabel("→")
+      .setStyle(ButtonStyle.Primary);
 
-    const row = new ActionRowBuilder().addComponents(buttons);
+    const row1 = new ActionRowBuilder().addComponents(stopButton, upButton);
+    const row2 = new ActionRowBuilder().addComponents(
+      leftButton,
+      downButton,
+      rightButton
+    );
 
     try {
       // Get current stats to display high score at start
@@ -181,7 +188,7 @@ export default {
             score: currentHighScore,
           })}`,
         files: [{ attachment: buffer, name: "2048.png" }],
-        components: [row],
+        components: [row1, row2],
         fetchReply: true,
       });
 
@@ -314,6 +321,98 @@ export default {
         // Update game state timestamp
         gameInstance.updateTimestamp();
 
+        // Handle stop action separately from move actions
+        if (i.customId === "stop") {
+          // Handle game stop
+          state.gameOver = true; // Mark as game over immediately
+          state.earning = await calculateEarning(state); // Calculate final earning
+
+          const stopBoard = await generateImage(
+            "2048",
+            {
+              grid: state.grid,
+              score: state.score,
+              earning: state.earning,
+              locale: interaction.locale,
+              interaction: {
+                user: {
+                  avatarURL: interaction.user.displayAvatarURL({
+                    extension: "png",
+                    size: 1024,
+                  }),
+                },
+              },
+            },
+            { image: 1, emoji: 1 }, // Use standard image generation
+            i18n
+          );
+
+          // Calculate game XP for stop case
+          const stopTimePlayed = (Date.now() - state.startTime) / 1000;
+          const stopGameXP = Math.floor(
+            stopTimePlayed * 0.5 + state.score * 0.25
+          );
+
+          let isNewRecordStop = false;
+          // Only update database if in a guild
+          if (interaction.guildId) {
+            // Update high score
+            const stopHighScoreResult = await Database.updateGameHighScore(
+              interaction.guildId,
+              interaction.user.id,
+              "2048",
+              state.score
+            );
+            isNewRecordStop = stopHighScoreResult.isNewRecord;
+
+            // Add XP
+            if (stopGameXP > 0) {
+              const stopXpResult = await Database.addGameXP(
+                interaction.guildId,
+                interaction.user.id,
+                stopGameXP,
+                "2048"
+              );
+              if (stopXpResult.levelUp) {
+                await handleLevelUp(
+                  interaction.client,
+                  interaction.guildId,
+                  interaction.user.id,
+                  stopXpResult.levelUp,
+                  stopXpResult.type,
+                  interaction.channel
+                );
+              }
+            }
+            // Add Balance
+            if (state.earning > 0) {
+              await Database.addBalance(
+                interaction.guildId,
+                interaction.user.id,
+                state.earning
+              );
+            }
+          }
+
+          await message.edit({
+            content: `${i18n.__(`games.2048.stopped`, {
+              score: state.score,
+            })}${
+              interaction.guildId
+                ? ` (+${state.earning.toFixed(1)} 💵, +${stopGameXP} Game XP)${
+                    isNewRecordStop ? " 🏆 New High Score!" : ""
+                  }`
+                : ""
+            }`,
+            files: [{ attachment: stopBoard, name: "2048.png" }],
+            components: [],
+          });
+
+          cleanup();
+          collector.stop();
+          return;
+        }
+
         // Handle moves based on direction
         switch (i.customId) {
           case "up":
@@ -330,6 +429,7 @@ export default {
             break;
         }
 
+        // If it's a valid move, update state and generate new board
         if (moved) {
           state.moves++;
           state.earning = await calculateEarning(state);
@@ -360,7 +460,7 @@ export default {
           await message.edit({
             content: i18n.__(`games.2048.score`, { score: state.score }),
             files: [{ attachment: buffer, name: "2048.png" }],
-            components: [row],
+            components: [row1, row2],
           });
 
           if (checkGameOver(state)) {
@@ -475,7 +575,7 @@ export default {
           // For invalid moves, just update the message content
           await message.edit({
             content: i18n.__(`games.2048.invalidMove`),
-            components: [row],
+            components: [row1, row2],
           });
         }
       });
@@ -543,6 +643,11 @@ export default {
       en: "This game is not for you!",
       ru: "Эта игра не для вас!",
       uk: "Ця гра не для вас!",
+    },
+    stopped: {
+      en: "Game stopped! Final Score: {{score}}",
+      ru: "Игра остановлена! Финальный счет: {{score}}",
+      uk: "Гру зупинено! Фінальний рахунок: {{score}}",
     },
     error: {
       en: "There was an error starting the game. Please try again.",

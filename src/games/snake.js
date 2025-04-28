@@ -91,7 +91,7 @@ export default {
 
       const earning =
         state.score *
-        0.01 * // Base earning
+        0.03 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + Math.min(timeInMinutes, 5) / 5); // Time multiplier that caps at 2x for 5+ minutes
 
@@ -127,26 +127,33 @@ export default {
     };
 
     // Create game controls
-    const buttons = [
-      new ButtonBuilder()
-        .setCustomId("up")
-        .setLabel("↑")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("left")
-        .setLabel("←")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("right")
-        .setLabel("→")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("down")
-        .setLabel("↓")
-        .setStyle(ButtonStyle.Primary),
-    ];
+    const stopButton = new ButtonBuilder()
+      .setCustomId("stop")
+      .setLabel("🛑")
+      .setStyle(ButtonStyle.Danger);
+    const upButton = new ButtonBuilder()
+      .setCustomId("up")
+      .setLabel("↑")
+      .setStyle(ButtonStyle.Primary);
+    const leftButton = new ButtonBuilder()
+      .setCustomId("left")
+      .setLabel("←")
+      .setStyle(ButtonStyle.Primary);
+    const downButton = new ButtonBuilder()
+      .setCustomId("down")
+      .setLabel("↓")
+      .setStyle(ButtonStyle.Primary);
+    const rightButton = new ButtonBuilder()
+      .setCustomId("right")
+      .setLabel("→")
+      .setStyle(ButtonStyle.Primary);
 
-    const row = new ActionRowBuilder().addComponents(buttons);
+    const row1 = new ActionRowBuilder().addComponents(stopButton, upButton);
+    const row2 = new ActionRowBuilder().addComponents(
+      leftButton,
+      downButton,
+      rightButton
+    );
 
     try {
       // Get current stats to display high score at start
@@ -174,7 +181,7 @@ export default {
             score: currentHighScore,
           })}`,
         files: [{ attachment: buffer, name: "snake.png" }],
-        components: [row],
+        components: [row1, row2],
         fetchReply: true,
       });
 
@@ -305,6 +312,7 @@ export default {
         const state = gameInstance.state;
         const prevDirection = state.direction;
         let validMove = true;
+        let stopped = false;
 
         // Update game state timestamp
         gameInstance.updateTimestamp();
@@ -327,9 +335,17 @@ export default {
             validMove = prevDirection !== "left";
             if (validMove) state.direction = "right";
             break;
+          case "stop":
+            stopped = true;
+            state.gameOver = true; // Mark game as over
+            break;
+          default:
+            // Should not happen, but handle defensively
+            console.warn("Unknown button ID in snake game:", i.customId);
+            return;
         }
 
-        if (validMove) {
+        if (!stopped && validMove) {
           state.moves++;
           state.earning = calculateEarning(state);
 
@@ -374,31 +390,11 @@ export default {
           }
         }
 
-        // Prepare message update
-        let messageContent, messageFiles, messageComponents;
-
-        if (!state.gameOver) {
-          messageContent = validMove
-            ? i18n.__(`games.snake.score`, { score: state.score })
-            : i18n.__(`games.snake.invalidMove`);
-          messageComponents = [row];
-
-          const newBoard = await generateGameBoard(
-            state,
-            interaction.locale,
-            interaction.user.displayAvatarURL({
-              extension: "png",
-              size: 1024,
-            })
-          );
-          gameInstance.updateImageTimestamp();
-          messageFiles = [{ attachment: newBoard, name: "snake.png" }];
-        } else {
-          console.log("Game over, final score:", state.score);
-
+        if (stopped) {
+          state.earning = calculateEarning(state);
+          console.log("Game stopped by user, final score:", state.score);
           try {
-            // Generate final game over board first
-            const gameOverBoard = await generateGameBoard(
+            const stopBoard = await generateGameBoard(
               state,
               interaction.locale,
               interaction.user.displayAvatarURL({
@@ -407,46 +403,43 @@ export default {
               })
             );
 
-            // Calculate XP
-            const timePlayed = (Date.now() - state.startTime) / 1000;
-            const gameXP = Math.floor(timePlayed * 0.5 + state.score * 0.25);
+            const stopTimePlayed = (Date.now() - state.startTime) / 1000;
+            const stopGameXP = Math.floor(
+              stopTimePlayed * 0.5 + state.score * 0.25
+            );
 
-            // Only update database if in a guild
-            let isNewRecord = false;
+            let isNewRecordStop = false;
             if (interaction.guildId) {
               // Save high score first
-              const highScoreResult = await Database.updateGameHighScore(
+              const stopHighScoreResult = await Database.updateGameHighScore(
                 interaction.guildId,
                 interaction.user.id,
                 "snake",
                 state.score
               );
+              isNewRecordStop = stopHighScoreResult.isNewRecord;
 
-              isNewRecord = highScoreResult.isNewRecord;
-
-              // Only add XP if there's something to add
-              if (gameXP > 0) {
-                const xpResult = await Database.addGameXP(
+              // Add XP
+              if (stopGameXP > 0) {
+                const stopXpResult = await Database.addGameXP(
                   interaction.guildId,
                   interaction.user.id,
-                  gameXP,
+                  stopGameXP,
                   "snake"
                 );
-
-                // Handle level-up notification if the user leveled up
-                if (xpResult.levelUp) {
+                if (stopXpResult.levelUp) {
                   await handleLevelUp(
                     interaction.client,
                     interaction.guildId,
                     interaction.user.id,
-                    xpResult.levelUp,
-                    xpResult.type,
+                    stopXpResult.levelUp,
+                    stopXpResult.type,
                     interaction.channel
                   );
                 }
               }
 
-              // Only add earnings if there's something to add
+              // Add Balance
               if (state.earning > 0) {
                 await Database.addBalance(
                   interaction.guildId,
@@ -457,42 +450,72 @@ export default {
             }
 
             await message.edit({
-              content: `${i18n.__(`games.snake.gameOver`, {
+              content: `${i18n.__(`games.snake.stopped`, {
                 score: state.score,
               })}${
                 interaction.guildId
-                  ? ` (+${state.earning.toFixed(1)} 💵, +${gameXP} Game XP)${
-                      isNewRecord ? " 🏆 New High Score!" : ""
+                  ? ` (+${state.earning.toFixed(
+                      1
+                    )} 💵, +${stopGameXP} Game XP)${
+                      isNewRecordStop ? " 🏆 New High Score!" : ""
                     }`
                   : ""
               }`,
-              files: [{ attachment: gameOverBoard, name: "snake.png" }],
+              files: [{ attachment: stopBoard, name: "snake.png" }],
               components: [],
             });
 
             cleanup();
             collector.stop();
           } catch (error) {
-            console.error("Error saving game results:", error);
+            console.error("Error saving stopped game results:", error);
             await message.edit({
               content: i18n.__(`games.snake.error`),
               components: [],
             });
           }
-          return;
+          return; // Exit early as the game is stopped
         }
 
-        // Get and update the game message
+        // --- If we reach here, game continues ---
+        // These are declared earlier in the collector scope now
+        let messageContent = validMove
+          ? i18n.__(`games.snake.score`, { score: state.score })
+          : i18n.__(`games.snake.invalidMove`);
+        let messageComponents = [row1, row2];
+        let messageFiles = []; // Default empty
+
+        // Only generate a new board image if the move was valid
+        if (validMove) {
+          const newBoard = await generateGameBoard(
+            state,
+            interaction.locale,
+            interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            })
+          );
+          gameInstance.updateImageTimestamp();
+          messageFiles = [{ attachment: newBoard, name: "snake.png" }];
+        }
+
+        // Fetch and edit the message
         const gameMessage = await i.channel.messages.fetch(
           gameInstance.messageId
         );
-        await gameMessage.edit({
-          content: messageContent,
-          files: messageFiles,
-          components: messageComponents,
-        });
+        try {
+          // Edit message: Always include 'files', even if empty
+          await gameMessage.edit({
+            content: messageContent,
+            files: messageFiles, // Pass files array (empty if invalid move)
+            components: messageComponents,
+          });
+        } catch (error) {
+          console.error("Error editing snake game message during play:", error);
+        }
 
-        if (state.gameOver) {
+        if (state.gameOver && !stopped) {
+          // Check if game over from collision, not stop
           cleanup();
           collector.stop();
         }
@@ -571,6 +594,11 @@ export default {
       en: "There was an error starting the game. Please try again.",
       ru: "Произошла ошибка при запуске игры. Пожалуйста, попробуйте снова.",
       uk: "Сталася помилка при запуску гри. Будь ласка, спробуйте знову.",
+    },
+    stopped: {
+      en: "Game stopped! Final Score: {{score}}",
+      ru: "Игра остановлена! Финальный счет: {{score}}",
+      uk: "Гру зупинено! Фінальний рахунок: {{score}}",
     },
   },
 };
