@@ -753,7 +753,17 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
 
     // Return final result
     const finalBuffer = Buffer.from(pngBuffer); // Ensure it's a Buffer
-    return props.returnDominant ? [finalBuffer, props.coloring] : finalBuffer;
+    console.log(
+      ">>> DEBUG: In performActualGenerationLogic - props.returnDominant:",
+      props.returnDominant
+    );
+    console.log(
+      ">>> DEBUG: In performActualGenerationLogic - props.coloring:",
+      propsWithColoring.coloring
+    );
+    return props.returnDominant
+      ? [finalBuffer, propsWithColoring.coloring]
+      : finalBuffer;
   } catch (error) {
     console.error("Core image generation logic failed:", error);
     // Clean up potentially large objects from memory in case of error
