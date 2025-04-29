@@ -589,8 +589,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       throw new Error("Invalid component type loaded.");
     }
 
-    // --- Props/Color/Formatting/Dimension Calculation ---
-    // (This block remains largely the same as the previous version)
+    // --- Props/Color Preparation ---
     let colorProps;
     const defaultImageUrl = props.interaction?.user?.avatarURL
       ? props.interaction.user.avatarURL
@@ -624,9 +623,41 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       colorProps = getDefaultColors(); // Fallback to default if dominantColor is invalid format
     }
 
-    props = { ...props, coloring: { ...colorProps } };
+    // Create props object with coloring added - used for dimension funcs
+    const propsWithColoring = { ...props, coloring: { ...colorProps } };
+
+    // --- Dimension Calculation (using props BEFORE sanitization) ---
+    const componentWidthDef = Component.dimensions?.width;
+    const componentHeightDef = Component.dimensions?.height;
+    let calculatedWidth;
+    if (typeof componentWidthDef === "function") {
+      // Pass the pre-sanitized props to the function
+      calculatedWidth = Number(componentWidthDef(propsWithColoring));
+    } else {
+      calculatedWidth = Number(componentWidthDef);
+    }
+    let calculatedHeight;
+    if (typeof componentHeightDef === "function") {
+      // Pass the pre-sanitized props to the function
+      calculatedHeight = Number(componentHeightDef(propsWithColoring));
+    } else {
+      calculatedHeight = Number(componentHeightDef);
+    }
+    const dimensions = {
+      width:
+        !isNaN(calculatedWidth) && calculatedWidth > 0 ? calculatedWidth : 800,
+      height:
+        !isNaN(calculatedHeight) && calculatedHeight > 0
+          ? calculatedHeight
+          : 400,
+    };
+    // --- End Dimension Calculation ---
+
+    // --- Props Formatting/Sanitization (for Satori rendering) ---
+    // Now sanitize and format the props for the actual rendering
     const sanitizedProps = JSON.parse(
-      JSON.stringify(props, (_, value) =>
+      // Use propsWithColoring here so coloring info is included if needed by component
+      JSON.stringify(propsWithColoring, (_, value) =>
         typeof value === "bigint" ? Number(value) : value
       )
     );
@@ -650,32 +681,9 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
         "Locale provided but i18n instance is missing. Skipping localization."
       );
     }
+    // --- End Props Formatting/Sanitization ---
 
-    const componentWidthDef = Component.dimensions?.width;
-    const componentHeightDef = Component.dimensions?.height;
-    let calculatedWidth;
-    if (typeof componentWidthDef === "function") {
-      calculatedWidth = Number(componentWidthDef(formattedProps));
-    } else {
-      calculatedWidth = Number(componentWidthDef);
-    }
-    let calculatedHeight;
-    if (typeof componentHeightDef === "function") {
-      calculatedHeight = Number(componentHeightDef(formattedProps));
-    } else {
-      calculatedHeight = Number(componentHeightDef);
-    }
-    const dimensions = {
-      width:
-        !isNaN(calculatedWidth) && calculatedWidth > 0 ? calculatedWidth : 800,
-      height:
-        !isNaN(calculatedHeight) && calculatedHeight > 0
-          ? calculatedHeight
-          : 400,
-    };
-    // --- End Props/Color/Formatting/Dimension ---
-
-    // --- SVG Generation ---
+    // --- SVG Generation (uses dimensions and formattedProps) ---
     try {
       svg = await satori(React.createElement(Component, formattedProps), {
         width: dimensions.width,
