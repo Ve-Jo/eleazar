@@ -231,7 +231,7 @@ export default {
                     }),
                   },
                 },
-                debounce: true,
+                throttleDelay: 2000,
               },
               { image: 2, emoji: 1 },
               i18n
@@ -346,7 +346,6 @@ export default {
                   }),
                 },
               },
-              debounce: true,
             },
             { image: 1, emoji: 1 }, // Use standard image generation
             i18n
@@ -457,7 +456,7 @@ export default {
                   }),
                 },
               },
-              debounce: true,
+              throttleDelay: 2000,
             },
             { image: 1, emoji: 1 },
             i18n

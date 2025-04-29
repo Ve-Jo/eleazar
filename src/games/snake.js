@@ -121,7 +121,6 @@ export default {
               avatarURL: userAvatarURL,
             },
           },
-          debounce: true,
         },
         { image: 1, emoji: 1 },
         i18n
