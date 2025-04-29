@@ -8,24 +8,8 @@ dotenv.config();
 const CMC_API_URL = "https://pro-api.coinmarketcap.com/v1";
 const CMC_API_KEY = process.env.COINMARKETCAP_API_KEY || "";
 
-// Symbol mapping from Bybit format to other APIs
-const SYMBOL_MAPPING = {
-  BTCUSDT: { cmc: "BTC" },
-  ETHUSDT: { cmc: "ETH" },
-  SOLUSDT: { cmc: "SOL" },
-  DOGEUSDT: { cmc: "DOGE" },
-  ADAUSDT: { cmc: "ADA" },
-  XRPUSDT: { cmc: "XRP" },
-  AVAXUSDT: { cmc: "AVAX" },
-  DOTUSDT: { cmc: "DOT" },
-  MATICUSDT: { cmc: "MATIC" },
-  BNBUSDT: { cmc: "BNB" },
-  APTUSDT: { cmc: "APT" },
-  // Add more mappings as needed
-};
-
-// Cache for symbol to ID mapping
-let symbolToIdCache = {};
+// Cache for valid symbols from CMC
+let validCmcSymbols = new Set();
 
 // Price cache with expiration
 const priceCache = {
@@ -58,15 +42,23 @@ export async function initializeSymbolMapping() {
     }
 
     const data = response.data.data;
-    symbolToIdCache = data.reduce((acc, coin) => {
-      acc[coin.symbol] = coin.id;
-      return acc;
-    }, {});
+    // Store valid base symbols from CMC
+    validCmcSymbols = new Set(data.map((coin) => coin.symbol));
 
-    console.log("[cryptoApi] Symbol mapping initialized successfully");
+    console.log(
+      `[cryptoApi] Symbol mapping initialized successfully with ${validCmcSymbols.size} symbols.`
+    );
   } catch (error) {
     console.error("[cryptoApi] Error initializing symbol mapping:", error);
   }
+}
+
+/**
+ * Returns the set of valid base symbols fetched from CoinMarketCap.
+ * @returns {Set<string>} A set containing valid base cryptocurrency symbols (e.g., 'BTC', 'ETH').
+ */
+export function getValidCmcSymbols() {
+  return validCmcSymbols;
 }
 
 /**
@@ -107,26 +99,28 @@ export async function getTickers(symbols = [], forceRefresh = false) {
   }
 
   try {
-    // Map Bybit symbols to CoinMarketCap symbols
-    const cmcSymbols = symbols
-      .map((symbol) => SYMBOL_MAPPING[symbol]?.cmc)
-      .filter((symbol) => symbol); // Filter out undefined mappings
+    // Extract base symbols (e.g., BTC from BTCUSDT)
+    const baseSymbolsToQuery = [
+      ...new Set( // Use Set to avoid duplicate API calls for the same base symbol
+        symbols
+          .map((symbol) => symbol.replace(/USDT$/, "")) // Remove 'USDT' suffix
+          .filter((baseSymbol) => baseSymbol) // Ensure not empty after replace
+      ),
+    ];
 
-    if (cmcSymbols.length === 0) {
-      console.warn(
-        "[cryptoApi] No valid symbol mappings found for CoinMarketCap"
-      );
+    if (baseSymbolsToQuery.length === 0) {
+      console.warn("[cryptoApi] No valid base symbols derived from input");
       return {};
     }
 
-    // Get quotes from CoinMarketCap
+    // Get quotes from CoinMarketCap using base symbols
     const url = `${CMC_API_URL}/cryptocurrency/quotes/latest`;
     const response = await axios.get(url, {
       headers: {
         "X-CMC_PRO_API_KEY": CMC_API_KEY,
       },
       params: {
-        symbol: cmcSymbols.join(","),
+        symbol: baseSymbolsToQuery.join(","), // Use the extracted base symbols
       },
     });
 
@@ -140,15 +134,17 @@ export async function getTickers(symbols = [], forceRefresh = false) {
       fromCache: false,
     };
 
-    // Convert CoinMarketCap response to match the expected format from Bybit
-    symbols.forEach((symbol) => {
-      const cmcSymbol = SYMBOL_MAPPING[symbol]?.cmc;
-      if (cmcSymbol && data[cmcSymbol]) {
-        const coinData = data[cmcSymbol];
+    // Convert CoinMarketCap response back to the original USDT format
+    symbols.forEach((originalSymbol) => {
+      const baseSymbol = originalSymbol.replace(/USDT$/, ""); // Get base symbol again
+      if (baseSymbol && data[baseSymbol]) {
+        // Check if data exists for the base symbol
+        const coinData = data[baseSymbol];
         const quote = coinData.quote.USD;
 
-        results[symbol] = {
-          symbol: symbol,
+        results[originalSymbol] = {
+          // Use originalSymbol as the key
+          symbol: originalSymbol, // Store the original symbol
           lastPrice: quote.price,
           markPrice: quote.price, // Using price as mark price
           highPrice24h:
@@ -163,9 +159,9 @@ export async function getTickers(symbols = [], forceRefresh = false) {
       }
     });
 
-    // Check if all requested symbols were found
+    // Check if all requested symbols were found (using original symbols)
     for (const symbol of symbols) {
-      if (!results[symbol] && SYMBOL_MAPPING[symbol]) {
+      if (!results[symbol]) {
         console.warn(`[cryptoApi] Ticker data not found for symbol: ${symbol}`);
       }
     }

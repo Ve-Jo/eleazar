@@ -3,21 +3,19 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-} from "discord.js";
-import {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
-  AttachmentBuilder,
   ComponentType,
   InteractionType,
+  MessageFlags,
 } from "discord.js";
 import { Prisma } from "@prisma/client"; // Import Prisma Decimal helper
 import Database from "../../database/client.js"; // Use the main DB
 import { generateImage } from "../../utils/imageGenerator.js";
-import { getTickers } from "../../utils/cryptoApi.js"; // Import API utilities
+import { getTickers, getValidCmcSymbols } from "../../utils/cryptoApi.js"; // Import API utilities
+import { ComponentBuilder } from "../../utils/componentConverter.js"; // Import ComponentBuilder
 
 // --- Game Metadata ---
 const game_info = {
@@ -472,6 +470,32 @@ const localization_strings = {
     ru: "Назад",
     uk: "Назад",
   },
+  buttonCoinPrevPage: {
+    en: "🔼 Prev Page",
+    ru: "🔼 Пред. Стр",
+    uk: "🔼 Попер. Стор",
+  },
+  buttonCoinNextPage: {
+    en: "Next Page 🔽",
+    ru: "След. Стр 🔽",
+    uk: "Наст. Стор 🔽",
+  },
+  // New select menu options
+  selectMenuPlaceholder: {
+    en: "Select a symbol to trade...",
+    ru: "Выберите символ для торговли...",
+    uk: "Виберіть символ для торгівлі...",
+  },
+  selectMenuOptionPrev: {
+    en: "⬅️ Previous Page",
+    ru: "⬅️ Пред. Страница",
+    uk: "⬅️ Попер. Сторінка",
+  },
+  selectMenuOptionNext: {
+    en: "Next Page ➡️",
+    ru: "След. Страница ➡️",
+    uk: "Наст. Сторінка ➡️",
+  },
 };
 
 // PnL Calculation Helper
@@ -521,7 +545,13 @@ function calculatePnlAmount(entryPrice, currentPrice, quantity, direction) {
 }
 
 // Function to generate the main menu message content
-async function generateMainMenuContent(guildId, userId, i18n, interaction) {
+async function generateMainMenuContent(
+  guildId,
+  userId,
+  i18n,
+  interaction,
+  coinPage = 1
+) {
   const userData = await Database.getUser(guildId, userId, true);
   const positions = await Database.getUserCryptoPositions(guildId, userId);
 
@@ -600,6 +630,10 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
       };
     }),
     viewType: "main_menu",
+    selectedPositionId: null, // No position selected by default in main menu
+    // Add data needed for Coin Preview Selector
+    coinPage: coinPage,
+    // Total pages calculation will move to where the menu is built
   };
 
   const pngBuffer = await generateImage(
@@ -608,58 +642,98 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
     { image: 1, emoji: 1 },
     i18n // Pass the main i18n object here for generateImage's internal use if needed
   );
-  const embed = new EmbedBuilder()
-    .setTitle(i18n.__("games.crypto2.mainMenuTitle"))
-    .setImage(`attachment://crypto_portfolio_${userId}.png`);
+  const attachmentName = `crypto_portfolio_${userId}.avif`; // Use .avif
+
+  // --- Build Components using ComponentBuilder ---
+  const builder = new ComponentBuilder({ color: process.env.EMBED_COLOR })
+    .addText(i18n.__("games.crypto2.mainMenuTitle"), "header3") // Use addText for title
+    .addImage(`attachment://${attachmentName}`); // Add image
 
   // Add first row with primary actions
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`crypto2_open_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_refresh_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
-      .setStyle(ButtonStyle.Secondary)
-  );
+  const openButton = new ButtonBuilder()
+    .setCustomId(`crypto2_open_${userId}`)
+    .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
+    .setStyle(ButtonStyle.Success);
+  const refreshButton = new ButtonBuilder()
+    .setCustomId(`crypto2_refresh_${userId}`)
+    .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
+    .setStyle(ButtonStyle.Secondary);
+  const row1 = new ActionRowBuilder().addComponents(openButton, refreshButton);
+  builder.addActionRow(row1);
 
   // Only add position select if there are any positions
-  const components = [row1];
-
   if (positions.length > 0) {
-    // Create position select menu
-    const positionSelect = new StringSelectMenuBuilder()
-      .setCustomId(`crypto2_position_select_${userId}`)
-      .setPlaceholder(
-        i18n.__("games.crypto2.selectPositionPrompt") ||
-          "Select a position to manage..."
-      )
-      .addOptions(
-        positions.map((p) => ({
-          label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
-          description: `Entry: ${p.entryPrice.toFixed(
-            2
-          )} | PnL: ${calculatePnlPercent(
-            p.entryPrice,
-            currentPrices[p.symbol]?.markPrice ||
-              currentPrices[p.symbol]?.lastPrice,
-            p.direction,
-            p.leverage
-          ).toFixed(2)}%`,
-          value: p.id,
-        }))
-      );
+    const positionOptions = positions.map((p) => ({
+      label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
+      description: `Entry: ${p.entryPrice.toFixed(
+        2
+      )} | PnL: ${calculatePnlPercent(
+        p.entryPrice,
+        currentPrices[p.symbol]?.markPrice ||
+          currentPrices[p.symbol]?.lastPrice,
+        p.direction,
+        p.leverage
+      ).toFixed(2)}%`,
+      value: p.id,
+    }));
 
-    const row2 = new ActionRowBuilder().addComponents(positionSelect);
-    components.push(row2);
+    // Add string select menu directly
+    builder.addStringSelectMenu(
+      `crypto2_position_select_${userId}`,
+      i18n.__("games.crypto2.selectPositionPrompt") ||
+        "Select a position to manage...",
+      positionOptions
+    );
   }
 
-  return {
-    embeds: [embed],
-    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.avif` }],
-    components: components,
-  };
+  // --- Add Coin Preview Selector & Pagination ---
+  const allSymbols = Array.from(getValidCmcSymbols()).sort(); // Get and sort symbols
+  const symbolsPerPage = 23;
+  const totalCoinPages = Math.ceil(allSymbols.length / symbolsPerPage);
+  const startIndex = (coinPage - 1) * symbolsPerPage;
+  const endIndex = startIndex + symbolsPerPage;
+  const symbolsToShow = allSymbols.slice(startIndex, endIndex);
+
+  if (symbolsToShow.length > 0) {
+    const coinPreviewOptions = symbolsToShow.map((symbol) => ({
+      label: `${symbol}USDT`, // Display as full USDT pair
+      value: `${symbol}USDT`, // Value is the full symbol
+    }));
+
+    // Add pagination options if needed
+    if (totalCoinPages > 1) {
+      // Add "Previous Page" option if not on first page
+      if (coinPage > 1) {
+        coinPreviewOptions.unshift({
+          label:
+            i18n.__("games.crypto2.selectMenuOptionPrev") || "⬅️ Previous Page",
+          value: `prev_page_${coinPage}`,
+          description: `Go to page ${coinPage - 1}`,
+        });
+      }
+
+      // Add "Next Page" option if not on last page
+      if (coinPage < totalCoinPages) {
+        coinPreviewOptions.push({
+          label:
+            i18n.__("games.crypto2.selectMenuOptionNext") || "Next Page ➡️",
+          value: `next_page_${coinPage}`,
+          description: `Go to page ${coinPage + 1}`,
+        });
+      }
+    }
+
+    builder.addStringSelectMenu(
+      `crypto2_preview_select_${userId}_${coinPage}`, // Include page in ID
+      i18n.__("games.crypto2.selectMenuPlaceholder") ||
+        "Select a symbol to trade...",
+      coinPreviewOptions
+    );
+  }
+
+  return builder.toReplyOptions({
+    files: [{ attachment: pngBuffer, name: attachmentName }],
+  });
 }
 
 // Add a new function to generate main menu with a selected position
@@ -668,7 +742,8 @@ async function generateMainMenuWithSelectedPosition(
   userId,
   i18n,
   interaction,
-  selectedPositionId
+  selectedPositionId,
+  coinPage = 1 // Add coin page state here too
 ) {
   // This is mostly the same as generateMainMenuContent but with a selected position
   const userData = await Database.getUser(guildId, userId, true);
@@ -750,6 +825,9 @@ async function generateMainMenuWithSelectedPosition(
     }),
     viewType: "main_menu",
     selectedPositionId: selectedPositionId,
+    // Add data needed for Coin Preview Selector
+    coinPage: coinPage,
+    totalCoinPages: Math.ceil(getValidCmcSymbols().size / 25),
   };
 
   const pngBuffer = await generateImage(
@@ -758,87 +836,132 @@ async function generateMainMenuWithSelectedPosition(
     { image: 1, emoji: 1 },
     i18n // Pass the main i18n object here for generateImage's internal use if needed
   );
-  const embed = new EmbedBuilder()
-    .setTitle(i18n.__("games.crypto2.mainMenuTitle"))
-    .setImage(`attachment://crypto_portfolio_${userId}.png`);
+  const attachmentName = `crypto_portfolio_${userId}.avif`;
+
+  // --- Build Components using ComponentBuilder ---
+  const builder = new ComponentBuilder({ color: process.env.EMBED_COLOR })
+    .addText(i18n.__("games.crypto2.mainMenuTitle"), "header3")
+    .addImage(`attachment://${attachmentName}`);
 
   // Add first row with primary actions
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`crypto2_open_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`crypto2_refresh_${userId}`)
-      .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
-      .setStyle(ButtonStyle.Secondary)
+  const openButton = new ButtonBuilder()
+    .setCustomId(`crypto2_open_${userId}`)
+    .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
+    .setStyle(ButtonStyle.Success);
+  const refreshButton = new ButtonBuilder()
+    .setCustomId(`crypto2_refresh_${userId}`)
+    .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
+    .setStyle(ButtonStyle.Secondary);
+  const firstRow = new ActionRowBuilder().addComponents(
+    openButton,
+    refreshButton
   );
+  builder.addActionRow(firstRow);
 
   // Only add position select if there are any positions
-  const components = [row1];
-
   if (positions.length > 0) {
-    // Create position select menu
-    const positionSelect = new StringSelectMenuBuilder()
-      .setCustomId(`crypto2_position_select_${userId}`)
-      .setPlaceholder(
-        i18n.__("games.crypto2.selectPositionPrompt") ||
-          "Select a position to manage..."
-      )
-      .addOptions(
-        positions.map((p) => ({
-          label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
-          description: `Entry: ${p.entryPrice.toFixed(
-            2
-          )} | PnL: ${calculatePnlPercent(
-            p.entryPrice,
-            currentPrices[p.symbol]?.markPrice ||
-              currentPrices[p.symbol]?.lastPrice,
-            p.direction,
-            p.leverage
-          ).toFixed(2)}%`,
-          value: p.id,
-          default: p.id === selectedPositionId, // Mark as selected if it matches
-        }))
-      );
+    const positionOptions = positions.map((p) => ({
+      label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
+      description: `Entry: ${p.entryPrice.toFixed(
+        2
+      )} | PnL: ${calculatePnlPercent(
+        p.entryPrice,
+        currentPrices[p.symbol]?.markPrice ||
+          currentPrices[p.symbol]?.lastPrice,
+        p.direction,
+        p.leverage
+      ).toFixed(2)}%`,
+      value: p.id,
+      default: p.id === selectedPositionId, // Set default if selected
+    }));
 
-    const row2 = new ActionRowBuilder().addComponents(positionSelect);
-    components.push(row2);
+    builder.addStringSelectMenu(
+      `crypto2_position_select_${userId}`,
+      i18n.__("games.crypto2.selectPositionPrompt") ||
+        "Select a position to manage...",
+      positionOptions
+    );
   }
 
   // If a position is selected, add action buttons for it
   if (selectedPositionId) {
-    const actionRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`crypto2_close_${selectedPositionId}`)
-        .setLabel(
-          i18n.__("games.crypto2.buttonClosePosition") || "Close Position"
-        )
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(`crypto2_average_${selectedPositionId}`)
-        .setLabel(
-          i18n.__("games.crypto2.buttonAveragePosition") || "Average Position"
-        )
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`crypto2_tpsl_${selectedPositionId}`)
-        .setLabel(i18n.__("games.crypto2.buttonSetTpSl") || "Set TP/SL")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`crypto2_back_${userId}`)
-        .setLabel(i18n.__("games.crypto2.buttonBack") || "Back")
-        .setStyle(ButtonStyle.Secondary)
-    );
+    const closeButton = new ButtonBuilder()
+      .setCustomId(`crypto2_close_${selectedPositionId}`)
+      .setLabel(
+        i18n.__("games.crypto2.buttonClosePosition") || "Close Position"
+      )
+      .setStyle(ButtonStyle.Danger);
+    const averageButton = new ButtonBuilder()
+      .setCustomId(`crypto2_average_${selectedPositionId}`)
+      .setLabel(
+        i18n.__("games.crypto2.buttonAveragePosition") || "Average Position"
+      )
+      .setStyle(ButtonStyle.Primary);
+    const tpslButton = new ButtonBuilder()
+      .setCustomId(`crypto2_tpsl_${selectedPositionId}`)
+      .setLabel(i18n.__("games.crypto2.buttonSetTpSl") || "Set TP/SL")
+      .setStyle(ButtonStyle.Success);
+    const backButton = new ButtonBuilder()
+      .setCustomId(`crypto2_back_${userId}`)
+      .setLabel(i18n.__("games.crypto2.buttonBack") || "Back")
+      .setStyle(ButtonStyle.Secondary);
 
-    components.push(actionRow);
+    const actionRow = new ActionRowBuilder().addComponents(
+      closeButton,
+      averageButton,
+      tpslButton,
+      backButton
+    );
+    builder.addActionRow(actionRow);
   }
 
-  return {
-    embeds: [embed],
-    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.avif` }],
-    components: components,
-  };
+  // --- Add Coin Preview Selector & Pagination (copied from generateMainMenuContent) ---
+  const allSymbols = Array.from(getValidCmcSymbols()).sort(); // Get and sort symbols
+  const symbolsPerPage = 25;
+  const totalCoinPages = Math.ceil(allSymbols.length / symbolsPerPage);
+  const startIndex = (coinPage - 1) * symbolsPerPage;
+  const endIndex = startIndex + symbolsPerPage;
+  const symbolsToShow = allSymbols.slice(startIndex, endIndex);
+
+  if (symbolsToShow.length > 0) {
+    const coinPreviewOptions = symbolsToShow.map((symbol) => ({
+      label: `${symbol}USDT`, // Display as full USDT pair
+      value: `${symbol}USDT`, // Value is the full symbol
+      description: `Preview ${symbol} market`, // Optional description
+    }));
+
+    // Add pagination options if needed
+    if (totalCoinPages > 1) {
+      // Add "Previous Page" option if not on first page
+      if (coinPage > 1) {
+        coinPreviewOptions.unshift({
+          label:
+            i18n.__("games.crypto2.selectMenuOptionPrev") || "⬅️ Previous Page",
+          value: `prev_page_${coinPage}`,
+        });
+      }
+
+      // Add "Next Page" option if not on last page
+      if (coinPage < totalCoinPages) {
+        coinPreviewOptions.push({
+          label:
+            i18n.__("games.crypto2.selectMenuOptionNext") || "Next Page ➡️",
+          value: `next_page_${coinPage}`,
+        });
+      }
+    }
+
+    builder.addStringSelectMenu(
+      `crypto2_preview_select_${userId}_${coinPage}`, // Include page in ID
+      i18n.__("games.crypto2.selectMenuPlaceholder") ||
+        "Select a symbol to trade...",
+      coinPreviewOptions
+    );
+  }
+
+  return builder.toReplyOptions({
+    files: [{ attachment: pngBuffer, name: attachmentName }],
+  });
 }
 
 export default {
@@ -872,21 +995,24 @@ export default {
       });
 
       if (!stats.crypto2DisclaimerSeen) {
-        // Show Disclaimer Embed and Button
-        const disclaimerEmbed = new EmbedBuilder()
-          .setTitle(i18n.__("games.crypto2.disclaimerTitle"))
-          .setDescription(i18n.__("games.crypto2.disclaimerText"))
-          .setColor("#FF0000");
+        // Show Disclaimer using ComponentBuilder
+        const disclaimerBuilder = new ComponentBuilder({ color: 0xff0000 }) // Red color
+          .addText(i18n.__("games.crypto2.disclaimerTitle"), "header3")
+          .addText(i18n.__("games.crypto2.disclaimerText"));
+
         const acknowledgeButton = new ButtonBuilder()
           .setCustomId(`crypto2_ack_${userId}`)
           .setLabel("I understand and accept the risks")
           .setStyle(ButtonStyle.Success);
-        const row = new ActionRowBuilder().addComponents(acknowledgeButton);
-        const disclaimerMessage = await interaction.editReply({
-          embeds: [disclaimerEmbed],
-          components: [row],
-          fetchReply: true,
-        });
+
+        const disclaimerActionRow = new ActionRowBuilder().addComponents(
+          acknowledgeButton
+        );
+        disclaimerBuilder.addActionRow(disclaimerActionRow);
+
+        const disclaimerMessage = await interaction.editReply(
+          disclaimerBuilder.toReplyOptions({ fetchReply: true }) // Use toReplyOptions
+        );
 
         // Wait for Acknowledgment
         const buttonCollector =
@@ -912,7 +1038,8 @@ export default {
             guildId,
             userId,
             i18n,
-            interaction
+            interaction,
+            1 // Start at coin page 1
           );
           const message = await interaction.editReply(initialContent);
           setupGameInteractionCollector(
@@ -939,7 +1066,8 @@ export default {
           guildId,
           userId,
           i18n,
-          interaction
+          interaction,
+          1 // Start at coin page 1
         );
         const message = await interaction.editReply(initialContent);
         setupGameInteractionCollector(
@@ -962,9 +1090,9 @@ export default {
       try {
         await interaction.editReply({
           content: i18n.__(errorKey),
-          components: [],
+          components: [], // Clear components
           files: [],
-          embeds: [],
+          embeds: [], // Clear embeds
         });
       } catch (editError) {
         console.error(
@@ -1065,6 +1193,7 @@ function setupGameInteractionCollector(
   const modalTimeoutDuration = 5 * 60 * 1000;
 
   collector.on("collect", async (i) => {
+    let currentCoinPage = 1; // Will be determined by selected menu options
     // --- Button/Select Menu Handling ---
     if (i.type === InteractionType.MessageComponent) {
       try {
@@ -1088,7 +1217,12 @@ function setupGameInteractionCollector(
             .catch(console.error);
         }
 
-        if (customId === `crypto2_open_${userId}`) {
+        // Simplified Open Position Modal Trigger (now also handles prefill from select menu)
+        if (customId.startsWith(`crypto2_open_${userId}`)) {
+          // Extract optional symbol prefill from button ID (e.g., crypto2_open_USERID_BTCUSDT)
+          const parts = customId.split("_");
+          const prefilledSymbol = parts.length > 3 ? parts[3] : ""; // Get symbol if present
+
           // --- Handle Open Position Modal ---
           const modalSubmitId = `crypto2_open_modal_${i.id}`; // Use button interaction ID for uniqueness
           const modal = new ModalBuilder()
@@ -1103,6 +1237,13 @@ function setupGameInteractionCollector(
             .setRequired(true)
             .setMinLength(6)
             .setMaxLength(15);
+
+          // Pre-fill symbol if provided
+          if (prefilledSymbol) {
+            symbolInput.setValue(prefilledSymbol);
+          } else {
+            symbolInput.setPlaceholder("BTCUSDT");
+          }
 
           const directionInput = new TextInputBuilder()
             .setCustomId("directionInput")
@@ -1138,7 +1279,8 @@ function setupGameInteractionCollector(
           // Show the modal
           await i.showModal(modal);
 
-          // Wait for the modal submission
+          // The rest of the code remains the same...
+          // Handle modal submission (same code as in crypto2_open_ handler)
           i.awaitModalSubmit({
             filter: (modalInteraction) =>
               modalInteraction.customId === modalSubmitId &&
@@ -1146,8 +1288,7 @@ function setupGameInteractionCollector(
             time: modalTimeoutDuration,
           })
             .then(async (modalInteraction) => {
-              // Modal Submitted! Process it.
-              await modalInteraction.deferReply({ ephemeral: true }); // Defer the modal reply
+              await modalInteraction.deferReply({ ephemeral: true });
               try {
                 // 1. Get Modal Data
                 const symbol = modalInteraction.fields
@@ -1165,7 +1306,7 @@ function setupGameInteractionCollector(
                   .getTextInputValue("leverageInput")
                   .trim();
 
-                // 2. Validate Input (using modalInteraction.editReply for errors)
+                // 2. Validate Input
                 if (!/^[A-Z]+USDT$/.test(symbol)) {
                   await modalInteraction.editReply(
                     i18n.__("games.crypto2.errorInvalidSymbol")
@@ -1276,14 +1417,15 @@ function setupGameInteractionCollector(
                   })
                 );
 
-                // 9. Refresh the main menu view (edit the original message)
+                // 9. Refresh the main menu view
                 try {
                   const menuContent = await generateMainMenuContent(
                     guildId,
                     userId,
                     i18n,
-                    originalInteraction
-                  ); // Use originalInteraction context
+                    originalInteraction,
+                    1 // Start at coin page 1
+                  );
                   await message.edit(menuContent);
                 } catch (refreshError) {
                   console.error(
@@ -1299,7 +1441,7 @@ function setupGameInteractionCollector(
                 if (!modalInteraction.replied && !modalInteraction.deferred) {
                   await modalInteraction
                     .deferReply({ ephemeral: true })
-                    .catch(() => {}); // Try defer if not already
+                    .catch(() => {});
                 }
                 await modalInteraction
                   .editReply(i18n.__("games.crypto2.errorCreatingPosition"))
@@ -1307,18 +1449,14 @@ function setupGameInteractionCollector(
               }
             })
             .catch(async (err) => {
-              // Modal timed out or other error during awaitModalSubmit
               console.log(
                 `Open Position Modal timed out or failed for user ${userId}:`,
                 err.message
               );
-              // Optionally notify the user the modal timed out, using the original button interaction 'i'
-              // Cannot reply to the modalInteraction here as it might not exist or be expired
               await i
                 .followUp({ content: "Modal timed out.", ephemeral: true })
                 .catch(() => {});
             });
-          // --- End Handle Open Position Modal ---
         } else if (
           customId.startsWith(`crypto2_close_`) &&
           !customId.includes("_from_")
@@ -1421,7 +1559,8 @@ function setupGameInteractionCollector(
               guildId,
               userId,
               i18n,
-              originalInteraction
+              originalInteraction,
+              1 // Start at coin page 1
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -1602,7 +1741,8 @@ function setupGameInteractionCollector(
                       userId,
                       i18n,
                       originalInteraction,
-                      positionId
+                      positionId,
+                      1 // Start at coin page 1
                     );
                   await message.edit(menuContent);
                 } catch (refreshError) {
@@ -1783,7 +1923,8 @@ function setupGameInteractionCollector(
                       userId,
                       i18n,
                       originalInteraction,
-                      positionId
+                      positionId,
+                      1 // Start at coin page 1
                     );
                   await message.edit(menuContent);
                 } catch (refreshError) {
@@ -1825,7 +1966,8 @@ function setupGameInteractionCollector(
               guildId,
               userId,
               i18n,
-              originalInteraction
+              originalInteraction,
+              1 // Start at coin page 1
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -1864,7 +2006,8 @@ function setupGameInteractionCollector(
               guildId,
               userId,
               i18n,
-              originalInteraction
+              originalInteraction,
+              1 // Start at coin page 1
             );
 
             await message.edit(menuContent);
@@ -1913,7 +2056,8 @@ function setupGameInteractionCollector(
               userId,
               i18n,
               originalInteraction,
-              selectedPositionId
+              selectedPositionId,
+              1 // Start at coin page 1
             );
 
             // Update the message
@@ -1923,6 +2067,124 @@ function setupGameInteractionCollector(
             await i.followUp({
               content:
                 "❌ An error occurred while processing the selected position.",
+              ephemeral: true,
+            });
+          }
+        }
+        if (customId.startsWith(`crypto2_page_prev_${userId}`)) {
+          await i.deferUpdate();
+          const newPage = Math.max(1, i.values[0] - 1);
+          const menuContent = await generateMainMenuContent(
+            guildId,
+            userId,
+            i18n,
+            originalInteraction,
+            newPage
+          );
+          await message.edit(menuContent);
+        } else if (customId.startsWith(`crypto2_page_next_${userId}`)) {
+          await i.deferUpdate();
+          const totalPages = Math.ceil(getValidCmcSymbols().size / 25);
+          const newPage = Math.min(totalPages, i.values[0] + 1);
+          const menuContent = await generateMainMenuContent(
+            guildId,
+            userId,
+            i18n,
+            originalInteraction,
+            newPage
+          );
+          await message.edit(menuContent);
+        } else if (customId.startsWith(`crypto2_preview_select_`)) {
+          if (!i.isStringSelectMenu()) return;
+          const selectedValue = i.values[0];
+
+          try {
+            // Check if this is a pagination action
+            if (
+              selectedValue.startsWith("prev_page_") ||
+              selectedValue.startsWith("next_page_")
+            ) {
+              await i.deferUpdate(); // Only defer update for pagination actions
+
+              // Extract current page and determine new page
+              let newPage = 1;
+              if (selectedValue.startsWith("prev_page_")) {
+                const currentPage = parseInt(selectedValue.split("_")[2]);
+                newPage = Math.max(1, currentPage - 1);
+              } else {
+                const currentPage = parseInt(selectedValue.split("_")[2]);
+                newPage = currentPage + 1;
+              }
+
+              // Regenerate menu with new page
+              const menuContent = await generateMainMenuContent(
+                guildId,
+                userId,
+                i18n,
+                originalInteraction,
+                newPage
+              );
+              await message.edit(menuContent);
+            } else {
+              // This is a coin selection - open trading modal directly
+              // Do NOT defer the update here
+              const selectedSymbol = selectedValue;
+
+              // Create the trading modal
+              const modalSubmitId = `crypto2_open_modal_${i.id}`;
+              const modal = new ModalBuilder()
+                .setCustomId(modalSubmitId)
+                .setTitle(i18n.__("games.crypto2.openPositionModalTitle"));
+
+              const symbolInput = new TextInputBuilder()
+                .setCustomId("symbolInput")
+                .setLabel(i18n.__("games.crypto2.symbolInputLabel"))
+                .setStyle(TextInputStyle.Short)
+                .setValue(selectedSymbol) // Pre-fill with selected symbol
+                .setRequired(true)
+                .setMinLength(6)
+                .setMaxLength(15);
+
+              const directionInput = new TextInputBuilder()
+                .setCustomId("directionInput")
+                .setLabel(i18n.__("games.crypto2.directionInputLabel"))
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder("LONG or SHORT")
+                .setRequired(true)
+                .setMinLength(4)
+                .setMaxLength(5);
+
+              const stakeInput = new TextInputBuilder()
+                .setCustomId("stakeInput")
+                .setLabel(i18n.__("games.crypto2.stakeInputLabel"))
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder("e.g., 10.50")
+                .setRequired(true);
+
+              const leverageInput = new TextInputBuilder()
+                .setCustomId("leverageInput")
+                .setLabel(i18n.__("games.crypto2.leverageInputLabel"))
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder("e.g., 10")
+                .setValue("10")
+                .setRequired(true);
+
+              modal.addComponents(
+                new ActionRowBuilder().addComponents(symbolInput),
+                new ActionRowBuilder().addComponents(directionInput),
+                new ActionRowBuilder().addComponents(stakeInput),
+                new ActionRowBuilder().addComponents(leverageInput)
+              );
+
+              // Show the modal
+              await i.showModal(modal);
+
+              // The rest of the code remains the same...
+            }
+          } catch (error) {
+            console.error(`Error handling coin selection:`, error);
+            await i.followUp({
+              content: `❌ An error occurred processing your selection.`,
               ephemeral: true,
             });
           }
@@ -1951,7 +2213,8 @@ function setupGameInteractionCollector(
             guildId,
             userId,
             i18n,
-            originalInteraction
+            originalInteraction,
+            1 // Start at coin page 1
           );
           await message.edit(menuContent);
         } catch (menuError) {
