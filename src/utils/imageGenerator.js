@@ -527,7 +527,7 @@ async function cleanupTempFiles() {
 
 // --- Debounce/Queue Setup ---
 const pendingRequests = new Map();
-const DEBOUNCE_DELAY = 1000; // ms delay for debouncing requests
+const DEBOUNCE_DELAY = 900; // ms delay for debouncing requests
 
 // Generates a unique key for debouncing based on component and user
 function generateRequestKey(componentName, props) {
