@@ -136,7 +136,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime_cooldown.png`,
+          name: `crime_cooldown.avif`,
         });
 
         // Create cooldown component
@@ -145,7 +145,7 @@ export default {
         })
           .addText(i18n.__("commands.economy.crime.title"), "header3")
           .addText(i18n.__("commands.economy.crime.cooldown"))
-          .addImage("attachment://crime_cooldown.png");
+          .addImage("attachment://crime_cooldown.avif");
 
         return interaction.editReply({
           components: [cooldownComponent.build()],
@@ -380,7 +380,7 @@ export default {
             : [userData, targetData];
 
         // Generate crime result image
-        const pngBuffer = await generateImage(
+        const [pngBuffer, dominantColor] = await generateImage(
           "Crime",
           {
             interaction: {
@@ -432,7 +432,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime.png`,
+          name: `crime.avif`,
         });
 
         // Use ComponentBuilder instead of EmbedBuilder
@@ -449,7 +449,7 @@ export default {
                 })
               : i18n.__("commands.economy.crime.failTarget", { amount })
           )
-          .addImage(`attachment://crime.png`)
+          .addImage(`attachment://crime.avif`)
           .addTimestamp(interaction.locale);
 
         return interaction.editReply({

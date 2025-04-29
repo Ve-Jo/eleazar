@@ -300,13 +300,13 @@ export default {
 
         if (previewBuffer) {
           const previewAttachment = new AttachmentBuilder(previewBuffer, {
-            name: `banner_preview.png`,
+            name: `banner_preview.avif`,
           });
 
           const successComponent = new ComponentBuilder()
             .setColor(dominantColor?.embedColor ?? 0x00ff00)
             .addText(i18n.__("commands.images.setbanner.success"), "header3")
-            .addImage(`attachment://banner_preview.png`)
+            .addImage(`attachment://banner_preview.avif`)
             .addTimestamp(interaction.locale);
 
           await interaction.editReply({

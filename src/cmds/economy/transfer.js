@@ -313,13 +313,13 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `transfer.png`,
+        name: `transfer.avif`,
       });
 
       const transferComponent = new ComponentBuilder()
         .setColor(dominantColor?.embedColor ?? 0x0099ff)
         .addText(i18n.__("commands.economy.transfer.title"), "header3")
-        .addImage(`attachment://transfer.png`)
+        .addImage(`attachment://transfer.avif`)
         .addTimestamp(interaction.locale);
 
       await interaction.editReply({

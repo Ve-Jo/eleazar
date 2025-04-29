@@ -300,12 +300,12 @@ export default {
     }
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: `balance.png`,
+      name: `balance.avif`,
     });
 
     const balanceBuilder = new ComponentBuilder({ dominantColor })
       .addText(i18n.__("commands.economy.balance.title"), "header3")
-      .addImage("attachment://balance.png")
+      .addImage("attachment://balance.avif")
       .addTimestamp(interaction.locale);
 
     await interaction.editReply({

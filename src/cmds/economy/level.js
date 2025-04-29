@@ -197,7 +197,7 @@ export default {
       }
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `level.png`,
+        name: `level.avif`,
       });
 
       // Use the new ComponentBuilder with automatic color handling
@@ -205,7 +205,7 @@ export default {
         dominantColor: dominantColor,
       })
         .addText(i18n.__("commands.economy.level.title"), "header3")
-        .addImage("attachment://level.png")
+        .addImage("attachment://level.avif")
         .addTimestamp(interaction.locale);
 
       await interaction.editReply({

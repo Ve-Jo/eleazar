@@ -657,7 +657,7 @@ async function generateMainMenuContent(guildId, userId, i18n, interaction) {
 
   return {
     embeds: [embed],
-    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.png` }],
+    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.avif` }],
     components: components,
   };
 }
@@ -836,7 +836,7 @@ async function generateMainMenuWithSelectedPosition(
 
   return {
     embeds: [embed],
-    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.png` }],
+    files: [{ attachment: pngBuffer, name: `crypto_portfolio_${userId}.avif` }],
     components: components,
   };
 }

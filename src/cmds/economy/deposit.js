@@ -375,13 +375,13 @@ export default {
       }
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `deposit.png`,
+        name: `deposit.avif`,
       });
 
       const depositComponent = new ComponentBuilder()
         .setColor(dominantColor?.embedColor ?? 0x0099ff)
         .addText(i18n.__("commands.economy.deposit.title"), "header3")
-        .addImage(`attachment://deposit.png`)
+        .addImage(`attachment://deposit.avif`)
         .addTimestamp(interaction.locale);
 
       // Send response

@@ -219,7 +219,7 @@ export default {
             );
 
             const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-              name: `reward.png`,
+              name: `reward.avif`,
             });
 
             // Generate reward message text
@@ -264,7 +264,7 @@ export default {
             // Create component with the reward text
             const rewardComponent = new ComponentBuilder()
               .addText(rewardText)
-              .addImage("attachment://reward.png");
+              .addImage("attachment://reward.avif");
 
             await interaction.editReply({
               components: [rewardComponent.build()],
@@ -431,7 +431,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crates.png`,
+          name: `crates.avif`,
         });
 
         // Create main container with ComponentBuilder
@@ -443,7 +443,7 @@ export default {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
-          .addImage("attachment://crates.png");
+          .addImage("attachment://crates.avif");
 
         // Create selection menu for crates
         const selectMenu = new StringSelectMenuBuilder()
@@ -578,7 +578,7 @@ export default {
             );
 
             const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-              name: `reward.png`,
+              name: `reward.avif`,
             });
 
             // Create a button to go back to crates
@@ -629,7 +629,7 @@ export default {
             // Create reward component
             const rewardComponent = new ComponentBuilder()
               .addText(rewardText)
-              .addImage("attachment://reward.png");
+              .addImage("attachment://reward.avif");
 
             // Add back button
             const backRow = new ActionRowBuilder().addComponents(backButton);

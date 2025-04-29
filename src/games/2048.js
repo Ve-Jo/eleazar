@@ -187,7 +187,7 @@ export default {
           `\n${i18n.__(`games.2048.highScore`, {
             score: currentHighScore,
           })}`,
-        files: [{ attachment: buffer, name: "2048.png" }],
+        files: [{ attachment: buffer, name: "2048.avif" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -287,7 +287,7 @@ export default {
               })} (+${gameInstance.state.earning.toFixed(
                 1
               )} 💵, +${gameXP} Game XP)`,
-              files: [{ attachment: finalBoard, name: "2048.png" }],
+              files: [{ attachment: finalBoard, name: "2048.avif" }],
               components: [],
             });
             cleanup();
@@ -404,7 +404,7 @@ export default {
                   }`
                 : ""
             }`,
-            files: [{ attachment: stopBoard, name: "2048.png" }],
+            files: [{ attachment: stopBoard, name: "2048.avif" }],
             components: [],
           });
 
@@ -459,7 +459,7 @@ export default {
           // Update the message with new game state
           await message.edit({
             content: i18n.__(`games.2048.score`, { score: state.score }),
-            files: [{ attachment: buffer, name: "2048.png" }],
+            files: [{ attachment: buffer, name: "2048.avif" }],
             components: [row1, row2],
           });
 
@@ -555,7 +555,7 @@ export default {
                       }`
                     : ""
                 }`,
-                files: [{ attachment: finalBoard, name: "2048.png" }],
+                files: [{ attachment: finalBoard, name: "2048.avif" }],
                 components: [],
               });
 

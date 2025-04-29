@@ -383,13 +383,13 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `withdraw.png`,
+        name: `withdraw.avif`,
       });
 
       const withdrawComponent = new ComponentBuilder()
         .setColor(dominantColor?.embedColor ?? 0x0099ff)
         .addText(i18n.__("commands.economy.withdraw.title"), "header3")
-        .addImage(`attachment://withdraw.png`)
+        .addImage(`attachment://withdraw.avif`)
         .addTimestamp(interaction.locale);
 
       await interaction.editReply({

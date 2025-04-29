@@ -151,12 +151,12 @@ export async function handleLevelUp(
     }
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: `level-up-${userId}.png`,
+      name: `level-up-${userId}.avif`,
     });
 
     const embed = new EmbedBuilder()
       .setColor(isGameLevel ? 0x1db935 : 0x2196f3)
-      .setImage(`attachment://level-up-${userId}.png`)
+      .setImage(`attachment://level-up-${userId}.avif`)
       .setTimestamp();
 
     if (channelObj && channelObj.send) {

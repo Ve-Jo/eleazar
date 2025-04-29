@@ -305,7 +305,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `leaderboard.png`,
+          name: `leaderboard.avif`,
         });
 
         // Create main container with new ComponentBuilder
@@ -318,7 +318,7 @@ export default {
             }`,
             "header3"
           )
-          .addImage("attachment://leaderboard.png");
+          .addImage("attachment://leaderboard.avif");
 
         // Create navigation buttons
         const prevButton = new ButtonBuilder()

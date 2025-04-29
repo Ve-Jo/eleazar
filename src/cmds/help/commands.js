@@ -555,13 +555,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `commands.${
-          pngBuffer[0] === 0x47 &&
-          pngBuffer[1] === 0x49 &&
-          pngBuffer[2] === 0x46
-            ? "gif"
-            : "png"
-        }`,
+        name: `commands.avif`,
       });
 
       return [attachment, dominantColor];
@@ -574,7 +568,7 @@ export default {
       // Create the component using ComponentBuilder
       const commandComponent = new ComponentBuilder({ dominantColor })
         .addText(getTranslation("commands.help.commands.title"), "header3")
-        .addImage("attachment://commands.png");
+        .addImage("attachment://commands.avif");
 
       // Only add interactive components if not disabled
       if (!disableInteractions) {

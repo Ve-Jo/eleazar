@@ -180,7 +180,7 @@ export default {
           `\n${i18n.__(`games.snake.highScore`, {
             score: currentHighScore,
           })}`,
-        files: [{ attachment: buffer, name: "snake.png" }],
+        files: [{ attachment: buffer, name: "snake.avif" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -277,7 +277,7 @@ export default {
                       }`
                     : ""
                 }`,
-                files: [{ attachment: finalBoard, name: "snake.png" }],
+                files: [{ attachment: finalBoard, name: "snake.avif" }],
                 components: [],
               });
             } catch (error) {
@@ -461,7 +461,7 @@ export default {
                     }`
                   : ""
               }`,
-              files: [{ attachment: stopBoard, name: "snake.png" }],
+              files: [{ attachment: stopBoard, name: "snake.avif" }],
               components: [],
             });
 
@@ -496,7 +496,7 @@ export default {
             })
           );
           gameInstance.updateImageTimestamp();
-          messageFiles = [{ attachment: newBoard, name: "snake.png" }];
+          messageFiles = [{ attachment: newBoard, name: "snake.avif" }];
         }
 
         // Fetch and edit the message
