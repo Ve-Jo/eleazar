@@ -527,7 +527,7 @@ async function cleanupTempFiles() {
 
 // --- Debounce/Queue Setup ---
 const pendingRequests = new Map();
-const DEBOUNCE_DELAY = 800; // ms delay for debouncing requests
+const DEBOUNCE_DELAY = 500; // ms delay for debouncing requests
 
 // Generates a unique key for debouncing based on component and user
 function generateRequestKey(componentName, props) {
@@ -800,66 +800,81 @@ async function executeGeneration(key) {
 export async function generateImage(
   component,
   props = {},
-  scaling = { image: 1, emoji: 1, debug: false }, // Default scaling to 1 now?
+  scaling = { image: 1, emoji: 1, debug: false },
   i18n
 ) {
-  const componentName =
-    typeof component === "string"
-      ? component
-      : component.name || "inline-component";
-  const key = generateRequestKey(componentName, props);
+  // Check if debouncing is explicitly requested for this call
+  const shouldDebounce = props.debounce === true;
 
-  const existingRequest = pendingRequests.get(key);
+  if (shouldDebounce) {
+    // --- Debouncing Logic ---
+    const componentName =
+      typeof component === "string"
+        ? component
+        : component.name || "inline-component";
+    const key = generateRequestKey(componentName, props);
+    const existingRequest = pendingRequests.get(key);
 
-  if (existingRequest) {
-    console.log(`Debouncing image generation for key: ${key}`);
-    // Update existing pending request
-    clearTimeout(existingRequest.timeoutId); // Clear the old timer
-
-    // Update data for the pending request (important to keep it fresh)
-    existingRequest.component = component; // Update component ref
-    existingRequest.props = props; // Update props
-    existingRequest.scaling = scaling; // Update scaling
-    existingRequest.i18n = i18n; // Update i18n instance
-
-    // Schedule the execution again with the new data
-    existingRequest.timeoutId = setTimeout(
-      () => executeGeneration(key),
-      DEBOUNCE_DELAY
-    );
-
-    // Return the original promise associated with this key
-    // All callers during the debounce window get the same promise
-    return existingRequest.promise;
+    if (existingRequest) {
+      console.log(`Debouncing image generation for key: ${key}`);
+      clearTimeout(existingRequest.timeoutId);
+      existingRequest.component = component;
+      existingRequest.props = props;
+      existingRequest.scaling = scaling;
+      existingRequest.i18n = i18n;
+      existingRequest.timeoutId = setTimeout(
+        () => executeGeneration(key),
+        DEBOUNCE_DELAY
+      );
+      return existingRequest.promise;
+    } else {
+      let capturedResolve, capturedReject;
+      const promise = new Promise((resolve, reject) => {
+        capturedResolve = resolve;
+        capturedReject = reject;
+      });
+      const requestData = {
+        component,
+        props,
+        scaling,
+        i18n,
+        resolve: capturedResolve,
+        reject: capturedReject,
+        timeoutId: null,
+        promise: promise,
+      };
+      pendingRequests.set(key, requestData);
+      console.log(`Scheduling image generation for key: ${key}`);
+      requestData.timeoutId = setTimeout(
+        () => executeGeneration(key),
+        DEBOUNCE_DELAY
+      );
+      return promise;
+    }
+    // --- End Debouncing Logic ---
   } else {
-    // Create and return a new promise for this new request
-    let capturedResolve, capturedReject;
-    const promise = new Promise((resolve, reject) => {
-      capturedResolve = resolve;
-      capturedReject = reject;
-    });
-
-    // Create new pending request object
-    const requestData = {
-      component,
-      props,
-      scaling,
-      i18n,
-      resolve: capturedResolve, // Store resolve/reject for later
-      reject: capturedReject,
-      timeoutId: null, // Will be set below
-      promise: promise, // Store the promise itself
-    };
-    pendingRequests.set(key, requestData);
-
-    // Schedule the execution
-    console.log(`Scheduling image generation for key: ${key}`);
-    requestData.timeoutId = setTimeout(
-      () => executeGeneration(key),
-      DEBOUNCE_DELAY
-    );
-
-    return promise; // Return the new promise
+    // --- Immediate Execution Logic ---
+    console.log("Executing image generation immediately (no debounce).");
+    // Directly call the core generation logic without queue/delay
+    // Note: This doesn't prevent multiple simultaneous non-debounced calls for the same user,
+    // but avoids the intentional delay.
+    try {
+      const result = await performActualGenerationLogic(
+        component,
+        props,
+        scaling,
+        i18n
+      );
+      // Cleanup after immediate execution too
+      await cleanup(false);
+      return result;
+    } catch (error) {
+      console.error("Immediate image generation failed:", error);
+      // Ensure cleanup happens even on error for immediate calls
+      await cleanup(true);
+      throw error; // Re-throw the error to the caller
+    }
+    // --- End Immediate Execution Logic ---
   }
 }
 // --- End Exported generateImage Function ---
