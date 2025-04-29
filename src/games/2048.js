@@ -169,6 +169,7 @@ export default {
           locale: interaction.locale,
           interaction: {
             user: {
+              id: interaction.user.id,
               avatarURL: interaction.user.displayAvatarURL({
                 extension: "png",
                 size: 1024,
@@ -223,12 +224,14 @@ export default {
                 locale: interaction.locale,
                 interaction: {
                   user: {
+                    id: interaction.user.id,
                     avatarURL: interaction.user.displayAvatarURL({
                       extension: "png",
                       size: 1024,
                     }),
                   },
                 },
+                debounce: true,
               },
               { image: 2, emoji: 1 },
               i18n
@@ -336,12 +339,14 @@ export default {
               locale: interaction.locale,
               interaction: {
                 user: {
+                  id: interaction.user.id,
                   avatarURL: interaction.user.displayAvatarURL({
                     extension: "png",
                     size: 1024,
                   }),
                 },
               },
+              debounce: true,
             },
             { image: 1, emoji: 1 }, // Use standard image generation
             i18n
@@ -445,12 +450,14 @@ export default {
               locale: interaction.locale,
               interaction: {
                 user: {
+                  id: interaction.user.id,
                   avatarURL: interaction.user.displayAvatarURL({
                     extension: "png",
                     size: 1024,
                   }),
                 },
               },
+              debounce: true,
             },
             { image: 1, emoji: 1 },
             i18n
@@ -534,6 +541,7 @@ export default {
                   locale: interaction.locale,
                   interaction: {
                     user: {
+                      id: interaction.user.id,
                       avatarURL: interaction.user.displayAvatarURL({
                         extension: "png",
                         size: 1024,

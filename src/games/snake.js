@@ -117,9 +117,11 @@ export default {
           locale: userLocale,
           interaction: {
             user: {
+              id: interaction.user.id,
               avatarURL: userAvatarURL,
             },
           },
+          debounce: true,
         },
         { image: 1, emoji: 1 },
         i18n
