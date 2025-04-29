@@ -769,6 +769,8 @@ export async function generateImage(
       /** Set bitdepth to 8, 10 or 12 bit (optional, default 8) */
       //bitdepth?: 8 | 10 | 12 | undefined;*/
 
+      let timeToAvif = performance.now();
+
       // Use sharp for PNG conversion with optimized options
       pngBuffer = await sharp(Buffer.from(svg))
         .resize(
@@ -790,10 +792,9 @@ export async function generateImage(
           alphaQuality: 100, // Keep max alpha quality (default)
         })*/
         .avif({
-          //BEST, 16KB
-          quality: 65, // High quality
-          chromaSubsampling: "4:2:0", // Use chroma subsampling
-          effort: 2, // Max CPU effort for compression
+          quality: 70,
+          chromaSubsampling: "4:2:0",
+          effort: 0,
         })
         /*.tiff({ //NOT SUPPORTE
           quality: 100, // High quality
@@ -803,6 +804,7 @@ export async function generateImage(
         .toBuffer();
 
       console.log("PNG Buffer created via sharp:", pngBuffer.length, "bytes"); // Updated log message
+      console.log("Time to avif:", performance.now() - timeToAvif, "ms");
     } catch (sharpError) {
       console.error("Sharp PNG conversion failed:", sharpError);
       throw sharpError; // Re-throw error
