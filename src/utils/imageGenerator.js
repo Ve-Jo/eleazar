@@ -525,21 +525,30 @@ async function cleanupTempFiles() {
   }
 }
 
-export async function generateImage(
-  component,
-  props = {},
-  scaling = { image: 2, emoji: 1, debug: false },
-  i18n
-) {
-  // Removed resvg/renderedImage declarations as sharp handles output
+// --- Debounce/Queue Setup ---
+const pendingRequests = new Map();
+const DEBOUNCE_DELAY = 800; // ms delay for debouncing requests
+
+// Generates a unique key for debouncing based on component and user
+function generateRequestKey(componentName, props) {
+  const userId = props?.interaction?.user?.id || "guest";
+  // Add channelId or guildId if needed for more specific contexts
+  // const contextId = props?.interaction?.channelId || props?.interaction?.guildId || 'global';
+  return `${componentName}-${userId}`;
+}
+// --- End Debounce/Queue Setup ---
+
+// --- Core Image Generation Logic (extracted) ---
+async function performActualGenerationLogic(component, props, scaling, i18n) {
+  // This function contains the original core logic of generateImage
   let pngBuffer = null;
-  let svg = null; // Keep SVG temporarily
+  let svg = null;
 
   try {
     await ensureTempDir();
     if (!fonts) await loadFonts();
 
-    // Ensure scaling has all required properties with valid values
+    // Scaling validation (remains the same)
     scaling = {
       image: typeof scaling.image === "number" ? Math.max(1, scaling.image) : 2,
       emoji:
@@ -548,9 +557,8 @@ export async function generateImage(
           : 1,
       debug: !!scaling.debug,
     };
-    console.log("Using scaling settings:", scaling);
 
-    // --- Component Loading Logic (remains the same) ---
+    // --- Component Loading Logic ---
     let Component;
     if (typeof component === "string") {
       const componentPath = join(
@@ -561,7 +569,6 @@ export async function generateImage(
         `${component}.jsx`
       );
       try {
-        // Ensure dynamic import path is correct for your setup
         const module = await import(`file://${componentPath}`);
         Component = module.default;
         if (!Component)
@@ -574,9 +581,8 @@ export async function generateImage(
         throw new Error(`Component ${component} could not be loaded.`);
       }
     } else {
-      Component = component; // Assuming component is already loaded module/function
+      Component = component;
     }
-
     if (typeof Component !== "function" && typeof Component !== "object") {
       console.error(
         "Loaded component is not a valid React component:",
@@ -585,7 +591,8 @@ export async function generateImage(
       throw new Error("Invalid component type loaded.");
     }
 
-    // --- Color Processing Logic (uses updated processImageColors/processColors) ---
+    // --- Props/Color/Formatting/Dimension Calculation ---
+    // (This block remains largely the same as the previous version)
     let colorProps;
     const defaultImageUrl = props.interaction?.user?.avatarURL
       ? props.interaction.user.avatarURL
@@ -619,14 +626,7 @@ export async function generateImage(
       colorProps = getDefaultColors(); // Fallback to default if dominantColor is invalid format
     }
 
-    // --- Props Preparation & Formatting (Moved BEFORE dimension calculation) ---
-    // Add coloring to props before sanitizing/formatting
-    props = {
-      ...props,
-      coloring: { ...colorProps },
-    };
-
-    // Sanitize and format props first, as dimensions might depend on them
+    props = { ...props, coloring: { ...colorProps } };
     const sanitizedProps = JSON.parse(
       JSON.stringify(props, (_, value) =>
         typeof value === "bigint" ? Number(value) : value
@@ -636,16 +636,11 @@ export async function generateImage(
       ...formatValue(sanitizedProps),
       style: { display: "flex" },
     };
-
-    // Add debug flag if needed
     if (scaling.debug) {
       formattedProps.debug = scaling.debug;
-      console.log("Debug mode enabled for component rendering");
     }
-
-    // Add i18n if needed
     if (formattedProps.locale && i18n) {
-      const safeI18n = i18n; // Assume i18n is valid if passed
+      const safeI18n = i18n;
       safeI18n.setLocale(formattedProps.locale);
       formattedProps.i18n = safeI18n;
       formattedProps.t = (key) => safeI18n.__(`components.${component}.${key}`);
@@ -658,29 +653,20 @@ export async function generateImage(
       );
     }
 
-    // --- Dimension Calculation (Uses formattedProps now) ---
     const componentWidthDef = Component.dimensions?.width;
     const componentHeightDef = Component.dimensions?.height;
-
-    // Calculate width: Call function if it exists, otherwise use value or default
     let calculatedWidth;
     if (typeof componentWidthDef === "function") {
-      // Pass formattedProps to the function, as it might need database etc.
       calculatedWidth = Number(componentWidthDef(formattedProps));
     } else {
       calculatedWidth = Number(componentWidthDef);
     }
-
-    // Calculate height: Call function if it exists, otherwise use value or default
     let calculatedHeight;
     if (typeof componentHeightDef === "function") {
-      // Pass formattedProps to the function
       calculatedHeight = Number(componentHeightDef(formattedProps));
     } else {
       calculatedHeight = Number(componentHeightDef);
     }
-
-    // Final dimensions with validation and defaults
     const dimensions = {
       width:
         !isNaN(calculatedWidth) && calculatedWidth > 0 ? calculatedWidth : 800,
@@ -689,35 +675,29 @@ export async function generateImage(
           ? calculatedHeight
           : 400,
     };
+    // --- End Props/Color/Formatting/Dimension ---
 
-    // --- SVG Generation (remains the same) ---
+    // --- SVG Generation ---
     try {
-      svg = await satori(
-        React.createElement(Component, formattedProps), // Use React.createElement for safety
-        {
-          width: dimensions.width,
-          height: dimensions.height,
-          fonts,
-          debug: scaling.debug,
-          loadAdditionalAsset: async (code, segment) => {
-            if (code === "emoji")
-              return await fetchEmojiSvg(segment, scaling.emoji);
-            if (code === "image") return await loadImageAsset(segment);
-            return null; // Return null for unrecognized codes
-          },
-        }
-      );
-      console.log("SVG generation completed");
+      svg = await satori(React.createElement(Component, formattedProps), {
+        width: dimensions.width,
+        height: dimensions.height,
+        fonts,
+        debug: scaling.debug,
+        loadAdditionalAsset: async (code, segment) => {
+          if (code === "emoji")
+            return await fetchEmojiSvg(segment, scaling.emoji);
+          if (code === "image") return await loadImageAsset(segment);
+          return null;
+        },
+      });
     } catch (satoriError) {
       console.error("Satori SVG generation failed:", satoriError);
-      // Attempt fallback if it's a known recoverable error, e.g., image size
       if (satoriError.message?.includes("Image size cannot be determined")) {
-        console.warn(
-          "Image size error during Satori render, attempting fallback dimensions"
-        );
+        console.warn("Image size error, attempting fallback dimensions");
         try {
           svg = await satori(React.createElement(Component, formattedProps), {
-            width: 800, // Fallback dimensions
+            width: 800,
             height: 400,
             fonts,
             debug: scaling.debug,
@@ -730,122 +710,158 @@ export async function generateImage(
           });
         } catch (fallbackError) {
           console.error("Satori fallback render also failed:", fallbackError);
-          throw fallbackError; // Re-throw the fallback error
+          throw fallbackError;
         }
       } else {
-        throw satoriError; // Re-throw original error if not recoverable
+        throw satoriError;
       }
     }
 
-    // --- PNG Generation using Sharp ---
+    // --- Image Output Generation (e.g., AVIF) ---
     try {
       if (!svg || typeof svg !== "string") {
         throw new Error("Invalid SVG generated by satori");
       }
-
-      /*interface AvifOptions extends OutputOptions {
-        /** quality, integer 1-100 (optional, default 50) */
-      //quality?: number | undefined;
-      /** use lossless compression (optional, default false) */
-      //lossless?: boolean | undefined;
-      /** Level of CPU effort to reduce file size, between 0 (fastest) and 9 (slowest) (optional, default 4) */
-      //effort?: number | undefined;
-      /** set to '4:2:0' to use chroma subsampling, requires libvips v8.11.0 (optional, default '4:4:4') */
-      //chromaSubsampling?: string | undefined;
-      /** Set bitdepth to 8, 10 or 12 bit (optional, default 8) */
-      //bitdepth?: 8 | 10 | 12 | undefined;*/
-
-      /* interface HeifOptions extends OutputOptions {
-        /** quality, integer 1-100 (optional, default 50) */
-      //quality?: number | undefined;
-      /** compression format: av1, hevc (optional, default 'av1') */
-      //compression?: 'av1' | 'hevc' | undefined;
-      /** use lossless compression (optional, default false) */
-      //lossless?: boolean | undefined;
-      /** Level of CPU effort to reduce file size, between 0 (fastest) and 9 (slowest) (optional, default 4) */
-      //effort?: number | undefined;
-      /** set to '4:2:0' to use chroma subsampling (optional, default '4:4:4') */
-      //chromaSubsampling?: string | undefined;
-      /** Set bitdepth to 8, 10 or 12 bit (optional, default 8) */
-      //bitdepth?: 8 | 10 | 12 | undefined;*/
-
-      let timeToAvif = performance.now();
-
-      // Use sharp for PNG conversion with optimized options
       pngBuffer = await sharp(Buffer.from(svg))
         .resize(
           Math.round(dimensions.width * scaling.image),
           Math.round(dimensions.height * scaling.image)
-        ) // Apply scaling
-        /*.png({ //DEFAULT
-          compressionLevel: 9, // Max lossless compression
-          adaptiveFiltering: true, // Better compression for some images
-          palette: true, // Use palette quantization (lossy, smaller size)
-          quality: 85, // Lowered quality for palette generation (0-100)
-          effort: 10, // Max CPU effort for optimization (1-10)
-        })*/
-        /*.webp({ //NOT GREAT QUALITY, 23KB
-          quality: 70, // High quality
-          effort: 6, // Max CPU effort for compression
-          lossless: false, // Use lossy compression
-          smartSubsample: true, // Improve color detail retention
-          alphaQuality: 100, // Keep max alpha quality (default)
-        })*/
+        )
         .avif({
           quality: 70,
           chromaSubsampling: "4:2:0",
           effort: 0,
         })
-        /*.tiff({ //NOT SUPPORTE
-          quality: 100, // High quality
-          compression: "lzw", // Use LZW compression
-        })*/
-
         .toBuffer();
-
-      console.log("PNG Buffer created via sharp:", pngBuffer.length, "bytes"); // Updated log message
-      console.log("Time to avif:", performance.now() - timeToAvif, "ms");
+      console.log(
+        "AVIF Buffer created via sharp:",
+        pngBuffer?.length ?? 0,
+        "bytes"
+      );
     } catch (sharpError) {
-      console.error("Sharp PNG conversion failed:", sharpError);
-      throw sharpError; // Re-throw error
+      console.error("Sharp AVIF conversion failed:", sharpError);
+      throw sharpError;
     } finally {
-      // No Resvg resources to free here
-      svg = null; // Release SVG string memory
+      svg = null; // Release SVG memory
     }
 
-    await cleanup(false); // Perform cleanup, maybe less aggressive GC trigger
-
-    // --- Return Logic (remains the same) ---
+    // Return final result
     const finalBuffer = Buffer.from(pngBuffer); // Ensure it's a Buffer
-    console.log(
-      "Final buffer type:",
-      typeof finalBuffer,
-      "Is Buffer?",
-      Buffer.isBuffer(finalBuffer),
-      "Length:",
-      finalBuffer?.length
-    );
-
     return props.returnDominant ? [finalBuffer, props.coloring] : finalBuffer;
   } catch (error) {
-    console.error("Image generation failed:", error);
-    // Consider logging more context like component name and props (carefully, avoid logging sensitive data)
-    console.error(
-      `Component: ${
-        typeof component === "string" ? component : "Inline"
-      }, Props: ${JSON.stringify(
-        props?.interaction?.commandName ?? props?.interaction?.customId ?? "N/A"
-      )}`
-    );
+    console.error("Core image generation logic failed:", error);
     // Clean up potentially large objects from memory in case of error
     pngBuffer = null;
     svg = null;
-    props = null;
-    component = null;
-    await cleanup(true); // Force GC on error path
-    throw error; // Re-throw the error to be handled upstream
+    // Note: props/component are passed by value/reference, cleanup might not be effective here
+    // await cleanup(true); // Consider if cleanup is needed here or only in the outer function
+    throw error; // Re-throw the error to be handled by the calling function (executeGeneration)
+  }
+}
+// --- End Core Image Generation Logic ---
+
+// --- Debounced Image Generation Execution ---
+async function executeGeneration(key) {
+  const requestData = pendingRequests.get(key);
+  if (!requestData) {
+    console.warn(
+      `executeGeneration called for key ${key}, but no request data found.`
+    );
+    return; // Should not happen if logic is correct
   }
 
-  // Cleanup function for temporary files (Moved to top level)
-  // async function cleanupTempFiles() { ... }
+  // Remove from pending *before* execution to prevent race conditions if execution is slow
+  pendingRequests.delete(key);
+
+  const { component, props, scaling, i18n, resolve, reject } = requestData;
+
+  try {
+    console.log(`Executing image generation for key: ${key}`);
+    const result = await performActualGenerationLogic(
+      component,
+      props,
+      scaling,
+      i18n
+    );
+    resolve(result); // Resolve the promise with the result
+  } catch (error) {
+    // Error is already logged in performActualGenerationLogic
+    console.error(`executeGeneration caught error for key ${key}`);
+    reject(error); // Reject the promise on error
+  } finally {
+    // Ensure cleanup runs after each execution attempt (success or fail)
+    // Run cleanup less aggressively maybe?
+    await cleanup(false);
+  }
 }
+// --- End Debounced Image Generation Execution ---
+
+// --- Exported generateImage Function (Handles Queue/Debounce) ---
+export async function generateImage(
+  component,
+  props = {},
+  scaling = { image: 1, emoji: 1, debug: false }, // Default scaling to 1 now?
+  i18n
+) {
+  const componentName =
+    typeof component === "string"
+      ? component
+      : component.name || "inline-component";
+  const key = generateRequestKey(componentName, props);
+
+  const existingRequest = pendingRequests.get(key);
+
+  if (existingRequest) {
+    console.log(`Debouncing image generation for key: ${key}`);
+    // Update existing pending request
+    clearTimeout(existingRequest.timeoutId); // Clear the old timer
+
+    // Update data for the pending request (important to keep it fresh)
+    existingRequest.component = component; // Update component ref
+    existingRequest.props = props; // Update props
+    existingRequest.scaling = scaling; // Update scaling
+    existingRequest.i18n = i18n; // Update i18n instance
+
+    // Schedule the execution again with the new data
+    existingRequest.timeoutId = setTimeout(
+      () => executeGeneration(key),
+      DEBOUNCE_DELAY
+    );
+
+    // Return the original promise associated with this key
+    // All callers during the debounce window get the same promise
+    return existingRequest.promise;
+  } else {
+    // Create and return a new promise for this new request
+    let capturedResolve, capturedReject;
+    const promise = new Promise((resolve, reject) => {
+      capturedResolve = resolve;
+      capturedReject = reject;
+    });
+
+    // Create new pending request object
+    const requestData = {
+      component,
+      props,
+      scaling,
+      i18n,
+      resolve: capturedResolve, // Store resolve/reject for later
+      reject: capturedReject,
+      timeoutId: null, // Will be set below
+      promise: promise, // Store the promise itself
+    };
+    pendingRequests.set(key, requestData);
+
+    // Schedule the execution
+    console.log(`Scheduling image generation for key: ${key}`);
+    requestData.timeoutId = setTimeout(
+      () => executeGeneration(key),
+      DEBOUNCE_DELAY
+    );
+
+    return promise; // Return the new promise
+  }
+}
+// --- End Exported generateImage Function ---
+
+// Cleanup function for temporary files (Moved from generateImage)
