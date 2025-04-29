@@ -525,18 +525,16 @@ async function cleanupTempFiles() {
   }
 }
 
-// --- Debounce/Queue Setup ---
-const pendingRequests = new Map();
-const DEBOUNCE_DELAY = 900; // ms delay for debouncing requests
+// --- Throttling State Map ---
+const throttledRequests = new Map();
+const THROTTLE_INTERVAL = 2500; // Fixed throttle interval in milliseconds
+// --- End Throttling State Map ---
 
-// Generates a unique key for debouncing based on component and user
+// Generates a unique key based on component and user
 function generateRequestKey(componentName, props) {
   const userId = props?.interaction?.user?.id || "guest";
-  // Add channelId or guildId if needed for more specific contexts
-  // const contextId = props?.interaction?.channelId || props?.interaction?.guildId || 'global';
   return `${componentName}-${userId}`;
 }
-// --- End Debounce/Queue Setup ---
 
 // --- Core Image Generation Logic (extracted) ---
 async function performActualGenerationLogic(component, props, scaling, i18n) {
@@ -760,122 +758,139 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
 }
 // --- End Core Image Generation Logic ---
 
-// --- Debounced Image Generation Execution ---
-async function executeGeneration(key) {
-  const requestData = pendingRequests.get(key);
-  if (!requestData) {
+// --- Throttled Image Generation Execution ---
+async function executeThrottled(key) {
+  const state = throttledRequests.get(key);
+  if (!state || !state.isQueued) {
+    // If state is gone or somehow not queued anymore, do nothing
     console.warn(
-      `executeGeneration called for key ${key}, but no request data found.`
+      `executeThrottled called for key ${key}, but state is invalid or not queued.`
     );
-    return; // Should not happen if logic is correct
+    return;
   }
 
-  // Remove from pending *before* execution to prevent race conditions if execution is slow
-  pendingRequests.delete(key);
+  // Retrieve the promise handlers and latest arguments
+  const { resolve, reject, latestArgs } = state;
 
-  const { component, props, scaling, i18n, resolve, reject } = requestData;
+  // Reset queuing state *before* execution
+  state.isQueued = false;
+  state.promise = null;
+  state.resolve = null;
+  state.reject = null;
+  state.latestArgs = null; // Clear the stored args
+
+  if (!latestArgs) {
+    console.warn(`executeThrottled for key ${key}: No latest arguments found.`);
+    // Reject the promise if we have handlers but no args? Or resolve with null? Let's reject.
+    if (reject)
+      reject(
+        new Error(`No latest arguments found for throttled execution of ${key}`)
+      );
+    return;
+  }
+
+  const { component, props, scaling, i18n } = latestArgs;
 
   try {
-    console.log(`Executing image generation for key: ${key}`);
+    console.log(`Executing throttled image generation for key: ${key}`);
     const result = await performActualGenerationLogic(
       component,
       props,
       scaling,
       i18n
     );
-    resolve(result); // Resolve the promise with the result
+    state.lastExecuted = Date.now(); // Update last execution time on success
+    if (resolve) resolve(result);
   } catch (error) {
     // Error is already logged in performActualGenerationLogic
-    console.error(`executeGeneration caught error for key ${key}`);
-    reject(error); // Reject the promise on error
+    console.error(`executeThrottled caught error for key ${key}`);
+    if (reject) reject(error); // Reject the promise on error
   } finally {
-    // Ensure cleanup runs after each execution attempt (success or fail)
-    // Run cleanup less aggressively maybe?
+    // Optional: Check if the state still exists before cleanup?
     await cleanup(false);
   }
 }
-// --- End Debounced Image Generation Execution ---
+// --- End Throttled Image Generation Execution ---
 
-// --- Exported generateImage Function (Handles Queue/Debounce) ---
+// --- Exported generateImage Function (Always Throttled) ---
 export async function generateImage(
   component,
   props = {},
   scaling = { image: 1, emoji: 1, debug: false },
   i18n
 ) {
-  // Check if debouncing is explicitly requested for this call
-  const shouldDebounce = props.debounce === true;
+  const componentName =
+    typeof component === "string"
+      ? component
+      : component.name || "inline-component";
+  const key = generateRequestKey(componentName, props);
 
-  if (shouldDebounce) {
-    // --- Debouncing Logic ---
-    const componentName =
-      typeof component === "string"
-        ? component
-        : component.name || "inline-component";
-    const key = generateRequestKey(componentName, props);
-    const existingRequest = pendingRequests.get(key);
+  // Get or initialize throttle state
+  if (!throttledRequests.has(key)) {
+    throttledRequests.set(key, {
+      lastExecuted: 0,
+      isQueued: false,
+      latestArgs: null,
+      promise: null,
+      resolve: null,
+      reject: null,
+    });
+  }
+  const state = throttledRequests.get(key);
 
-    if (existingRequest) {
-      console.log(`Debouncing image generation for key: ${key}`);
-      clearTimeout(existingRequest.timeoutId);
-      existingRequest.component = component;
-      existingRequest.props = props;
-      existingRequest.scaling = scaling;
-      existingRequest.i18n = i18n;
-      existingRequest.timeoutId = setTimeout(
-        () => executeGeneration(key),
-        DEBOUNCE_DELAY
-      );
-      return existingRequest.promise;
-    } else {
-      let capturedResolve, capturedReject;
-      const promise = new Promise((resolve, reject) => {
-        capturedResolve = resolve;
-        capturedReject = reject;
-      });
-      const requestData = {
-        component,
-        props,
-        scaling,
-        i18n,
-        resolve: capturedResolve,
-        reject: capturedReject,
-        timeoutId: null,
-        promise: promise,
-      };
-      pendingRequests.set(key, requestData);
-      console.log(`Scheduling image generation for key: ${key}`);
-      requestData.timeoutId = setTimeout(
-        () => executeGeneration(key),
-        DEBOUNCE_DELAY
-      );
-      return promise;
-    }
-    // --- End Debouncing Logic ---
-  } else {
-    // --- Immediate Execution Logic ---
-    console.log("Executing image generation immediately (no debounce).");
-    // Directly call the core generation logic without queue/delay
-    // Note: This doesn't prevent multiple simultaneous non-debounced calls for the same user,
-    // but avoids the intentional delay.
+  const now = Date.now();
+  const elapsed = now - state.lastExecuted;
+
+  // Store the latest arguments regardless
+  state.latestArgs = { component, props, scaling, i18n };
+
+  // --- Can Execute Immediately? (Based on THROTTLE_INTERVAL) ---
+  if (elapsed >= THROTTLE_INTERVAL && !state.isQueued) {
+    console.log(
+      `Executing image generation immediately (throttle window passed) for key: ${key}`
+    );
+    state.promise = null;
+    state.resolve = null;
+    state.reject = null;
     try {
       const result = await performActualGenerationLogic(
-        component,
-        props,
-        scaling,
-        i18n
+        state.latestArgs.component,
+        state.latestArgs.props,
+        state.latestArgs.scaling,
+        state.latestArgs.i18n
       );
-      // Cleanup after immediate execution too
+      state.lastExecuted = Date.now();
+      state.latestArgs = null;
       await cleanup(false);
       return result;
     } catch (error) {
-      console.error("Immediate image generation failed:", error);
-      // Ensure cleanup happens even on error for immediate calls
+      console.error(
+        `Immediate throttled execution failed for key ${key}:`,
+        error
+      );
       await cleanup(true);
-      throw error; // Re-throw the error to the caller
+      throw error;
     }
-    // --- End Immediate Execution Logic ---
   }
+
+  // --- Need to Throttle / Queue ---
+  if (!state.isQueued) {
+    console.log(`Throttling image generation - scheduling for key: ${key}`);
+    state.isQueued = true;
+    const promise = new Promise((resolve, reject) => {
+      state.resolve = resolve;
+      state.reject = reject;
+    });
+    state.promise = promise;
+    const delay = THROTTLE_INTERVAL - elapsed;
+    setTimeout(() => executeThrottled(key), delay);
+  } else {
+    console.log(
+      `Throttling image generation - already queued for key: ${key}. Latest args updated.`
+    );
+  }
+
+  return state.promise;
 }
 // --- End Exported generateImage Function ---
 
