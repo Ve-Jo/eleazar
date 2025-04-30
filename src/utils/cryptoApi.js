@@ -17,7 +17,7 @@ let validCmcSymbolMap = new Map(); // Added: Map symbol to CMC ID
 const priceCache = {
   data: {},
   timestamps: {},
-  maxAge: 5 * 1000, // 5 seconds cache expiry
+  maxAge: 30000, // 30 seconds cache expiry (for potential future CMC use)
 };
 
 // Category cache
@@ -95,9 +95,11 @@ export async function getTickers(symbols = [], forceRefresh = false) {
 
   // CMC API Key check removed - MEXC public ticker endpoint doesn't require auth
 
+  const now = Date.now();
+
+  /* --- Cache Check Removed for MEXC ---
   // Create a cache key based on the symbols
   const cacheKey = symbols.sort().join(",");
-  const now = Date.now();
 
   // Check if we have valid cached data
   if (
@@ -118,6 +120,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
     );
     return cachedData;
   }
+  */
 
   // --- MEXC Implementation ---
   try {
@@ -184,12 +187,14 @@ export async function getTickers(symbols = [], forceRefresh = false) {
       `[cryptoApi] Processed ${symbolsFound}/${symbols.length} requested symbols from MEXC response.`
     );
 
+    /* --- Cache Write Removed for MEXC ---
     // Cache the filtered results for the specific requested symbols
     priceCache.data[cacheKey] = results;
     priceCache.timestamps[cacheKey] = now;
     console.log(
       `[cryptoApi] Cached MEXC prices for key: ${cacheKey.substring(0, 50)}...`
     );
+    */
 
     return results; // Return the filtered results
   } catch (error) {
