@@ -1,22 +1,29 @@
 import i18n from "../utils/newI18n.js";
-import { MessageFlags } from "discord.js";
+import {
+  MessageFlags,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ContainerBuilder,
+} from "discord.js";
 
 // Helper functions for creating proxy and executing commands
-function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
-  // Internal state to store the intended reply
-  let finalReplyState = {
-    content: null,
-    embeds: [],
-    files: [],
-    components: [],
-    flags: null,
-  };
-  let isV2ReplyState = false; // Track V2 state
+function createAiProxy(
+  message,
+  commandMessage, // Receive the deferred message object
+  subName,
+  parsedArgs,
+  effectiveLocale
+) {
+  let isV2ReplyState = false; // Track V2 state internally (based on LAST edit)
+  let initialReplySent = !!commandMessage; // Track if the initial reply/defer was sent (now based on passed message)
 
   const proxy = {
-    replied: false, // Indicates if reply() or editReply() was called
-    deferred: false, // Indicates if deferReply() was called
-    ephemeral: false, // Ephemeral not really possible with message replies
+    _isAiProxy: true, // Add flag to identify proxy context
+    replied: false, // User-facing replied state
+    deferred: initialReplySent, // Deferred state is true if commandMessage exists
+    ephemeral: false, // Will be set if needed during command execution
+    withheldData: null, // Store withheld legacy data for V2 edits
+    wasV2Edit: false, // Track if the last edit was a V2-only edit
     commandName: null,
     options: {
       getSubcommand: () => subName || null,
@@ -115,167 +122,393 @@ function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
     inGuild: () => !!message.guild,
     inCachedGuild: () => !!message.guild,
     inRawGuild: () => !!message.guild,
+
+    // Defer Reply: Now just sets flags, actual defer is outside.
     deferReply: async (options = {}) => {
-      if (proxy.replied) return Promise.resolve(); // Already replied
+      // If already replied/deferred (based on commandMessage existence), do nothing
+      if (proxy.replied || proxy.deferred)
+        return Promise.resolve(commandMessage);
+      // Mark as deferred and set ephemeral if needed
       proxy.deferred = true;
       proxy.ephemeral = options.ephemeral || false;
-      console.log("aiProxy: deferReply called.");
-      // We resolve immediately as no message is sent here
-      return Promise.resolve();
+      // No message sending here anymore
+      console.log(`aiProxy: deferReply called (will be handled externally)`);
+      return Promise.resolve(undefined); // Return undefined as message is handled externally
     },
+
+    // reply: If deferred (commandMessage exists), edits the placeholder. Otherwise, sends a new reply.
     reply: async (options) => {
-      // If deferred, just store the state and mark as replied.
-      if (proxy.deferred) {
-        console.log("aiProxy: reply called while deferred. Storing state.");
-        finalReplyState = {
-          content: typeof options === "string" ? options : options.content,
-          embeds: options.embeds || [],
-          files: options.files || [],
-          components: options.components || [],
-          flags: options.flags, // Store the flags
-        };
-        isV2ReplyState = finalReplyState.flags === MessageFlags.IsComponentsV2;
-        proxy.replied = true; // Mark that a reply was intended
-        return Promise.resolve(); // Resolve as no message is sent yet
+      // This logic handles editing the initial defer message
+      if (!commandMessage) {
+        console.error(
+          "aiProxy: reply called but no initial commandMessage exists (deferral failed externally)."
+        );
+        throw new Error(
+          "Cannot reply because the initial deferral message is missing."
+        );
+      }
+      if (proxy.replied) {
+        // If already replied, subsequent calls should probably be editReply, but let's warn and proceed
+        console.warn("aiProxy: reply called after already replied. Editing...");
+        return proxy.editReply(options);
       }
 
-      // --- Original immediate reply logic (less likely path now) ---
       console.log(
-        "aiProxy: reply called directly (not deferred). Sending message."
+        `aiProxy: reply attempting to edit deferred message ${commandMessage?.id}`
       );
-      if (proxy.replied) return proxy.followUp(options); // Fallback to followUp if somehow called twice
+      proxy.replied = true;
+      proxy.withheldData = null; // Reset withheld data
+      proxy.wasV2Edit = false; // Reset V2 edit flag
 
-      const replyOptions = {
-        content: typeof options === "string" ? options : options.content,
-        embeds: options.embeds || [],
-        files: options.files || [],
-        components: options.components || [],
-        allowedMentions: { repliedUser: false },
-        flags: options.flags,
-      };
-      isV2ReplyState = options.flags === MessageFlags.IsComponentsV2;
-      if (isV2ReplyState) delete replyOptions.content; // Remove content for V2
+      // Determine if incoming is V1 or V2
+      const isIncomingV2 =
+        (typeof options !== "string" &&
+          options.flags === MessageFlags.IsComponentsV2) ||
+        (typeof options !== "string" &&
+          options.components?.[0] instanceof ContainerBuilder);
+      isV2ReplyState = isIncomingV2; // Update state based on this edit
+
+      const hasContent = typeof options === "string" || options.content;
+      const hasEmbeds =
+        typeof options !== "string" && options.embeds?.length > 0;
+      const hasFiles = typeof options !== "string" && options.files?.length > 0;
+      const hasLegacyFields = hasContent || hasEmbeds || hasFiles;
+
+      let editOptions = {};
+      let withheld = {};
+
+      if (isIncomingV2 && hasLegacyFields) {
+        console.log(
+          "aiProxy: Detected V2 components with legacy fields. Separating edit."
+        );
+        proxy.wasV2Edit = true;
+        // Edit with only V2 components
+        editOptions = {
+          components:
+            typeof options !== "string" ? options.components || [] : [],
+          flags: MessageFlags.IsComponentsV2,
+          // Clear potentially conflicting fields
+          content: undefined,
+          embeds: undefined,
+          files: undefined,
+          attachments: [], // Ensure attachments are cleared explicitly for edits
+        };
+        // Withhold legacy fields
+        if (hasContent)
+          withheld.content =
+            typeof options === "string" ? options : options.content;
+        if (hasEmbeds) withheld.embeds = options.embeds;
+        if (hasFiles) withheld.files = options.files;
+        proxy.withheldData = Object.keys(withheld).length > 0 ? withheld : null;
+        console.log("aiProxy: Withheld data:", proxy.withheldData);
+      } else {
+        // Normal V1 or V2-only edit
+        editOptions = {
+          content: typeof options === "string" ? options : options.content,
+          embeds: typeof options !== "string" ? options.embeds || [] : [],
+          files: typeof options !== "string" ? options.files || [] : [],
+          components:
+            typeof options !== "string" ? options.components || [] : [],
+          flags: isIncomingV2 ? MessageFlags.IsComponentsV2 : undefined,
+          attachments: [], // Ensure attachments are cleared explicitly for edits
+          // allowedMentions is not valid for edits
+        };
+        // Clear conflicting fields if it's purely V2
+        if (isIncomingV2) {
+          editOptions.content = undefined;
+          editOptions.embeds = undefined;
+          editOptions.files = undefined;
+        }
+      }
 
       try {
-        const commandMessage = await message.reply(replyOptions);
-        proxy.replied = true;
-        // Store the state even for direct replies
-        finalReplyState = { ...replyOptions };
-        return commandMessage;
-      } catch (error) {
-        console.error("aiProxy: Error during direct reply:", error);
-        throw error; // Re-throw
-      }
-    },
-    editReply: async (options) => {
-      // If deferred, just update the stored state.
-      if (proxy.deferred) {
         console.log(
-          "aiProxy: editReply called while deferred. Updating stored state."
+          `aiProxy: Editing message ${commandMessage.id} with options:`,
+          JSON.stringify(editOptions)
         );
-        finalReplyState = {
-          content: typeof options === "string" ? options : options.content,
-          embeds: options.embeds || [],
-          files: options.files || [],
-          components: options.components || [],
-          flags: options.flags, // Store the flags
-        };
-        isV2ReplyState = finalReplyState.flags === MessageFlags.IsComponentsV2;
-        proxy.replied = true; // Mark that a reply was intended
-        return Promise.resolve(); // Resolve as no message is sent yet
+        const editedMessage = await commandMessage.edit(editOptions);
+        console.log(
+          `aiProxy: reply successfully edited message ${commandMessage.id}`
+        );
+        return editedMessage;
+      } catch (error) {
+        console.error(
+          `aiProxy: Error editing reply for message ${commandMessage.id}:`,
+          error,
+          "Edit options:",
+          editOptions
+        );
+        proxy.replied = false; // Reset replied status on error
+        proxy.wasV2Edit = false;
+        proxy.withheldData = null;
+        throw error;
       }
+    },
 
-      // --- Original edit logic (only if reply was called directly before) ---
-      console.log("aiProxy: editReply called (not deferred). Attempting edit.");
-      if (!proxy.replied) {
+    // editReply: Edits the message sent by deferReply or reply.
+    editReply: async (options) => {
+      if (!commandMessage) {
+        console.error(
+          "aiProxy: editReply called but no initial commandMessage exists (deferral failed externally)."
+        );
+        throw new Error(
+          "Cannot edit reply because the initial deferral message is missing."
+        );
+      }
+      if (!proxy.replied && !proxy.deferred) {
+        // This case should ideally not happen if deferReply is called first,
+        // but handle it defensively.
         console.warn(
-          "aiProxy: editReply called before reply. Attempting direct reply."
+          "aiProxy: editReply called before initial reply/defer. Attempting reply."
         );
-        // If edit is called before reply somehow, treat it as a reply
-        return proxy.reply(options);
+        return proxy.reply(options); // Treat it as the first reply
       }
 
-      const editOptions = {
-        content: typeof options === "string" ? options : options.content,
-        embeds: options.embeds || [],
-        files: options.files || [],
-        components: options.components || [],
-        flags: options.flags,
-      };
-      isV2ReplyState = options.flags === MessageFlags.IsComponentsV2;
-      if (isV2ReplyState) delete editOptions.content; // Remove content for V2
-
-      // We need the message object from the *direct* reply here, which isn't stored
-      // This path is problematic and less likely with the new flow.
-      // For now, we'll assume this path won't be hit often.
-      // A proper fix would require storing the message object from direct replies.
-      console.warn(
-        "aiProxy: editReply on a direct (non-deferred) reply is not fully supported."
+      console.log(
+        `aiProxy: editReply attempting to edit message ${commandMessage.id}`
       );
-      // Store the state anyway
-      finalReplyState = { ...editOptions };
-      return Promise.resolve(); // Cannot reliably edit without message object
+      proxy.replied = true; // Mark as replied if not already
+      proxy.withheldData = null; // Reset withheld data
+      proxy.wasV2Edit = false; // Reset V2 edit flag
+
+      // Determine if incoming is V1 or V2
+      const isIncomingV2 =
+        (typeof options !== "string" &&
+          options.flags === MessageFlags.IsComponentsV2) ||
+        (typeof options !== "string" &&
+          options.components?.[0] instanceof ContainerBuilder);
+      isV2ReplyState = isIncomingV2; // Update state based on this edit
+
+      const hasContent = typeof options === "string" || options.content;
+      const hasEmbeds =
+        typeof options !== "string" && options.embeds?.length > 0;
+      const hasFiles = typeof options !== "string" && options.files?.length > 0;
+      const hasLegacyFields = hasContent || hasEmbeds || hasFiles;
+
+      let editOptions = {};
+      let withheld = {};
+
+      if (isIncomingV2 && hasLegacyFields) {
+        console.log(
+          "aiProxy: Detected V2 components with legacy fields in editReply. Separating edit."
+        );
+        proxy.wasV2Edit = true;
+        // Edit with only V2 components
+        editOptions = {
+          components:
+            typeof options !== "string" ? options.components || [] : [],
+          flags: MessageFlags.IsComponentsV2,
+          // Clear potentially conflicting fields
+          content: undefined,
+          embeds: undefined,
+          files: undefined,
+          attachments: [], // Ensure attachments are cleared explicitly for edits
+        };
+        // Withhold legacy fields
+        if (hasContent)
+          withheld.content =
+            typeof options === "string" ? options : options.content;
+        if (hasEmbeds) withheld.embeds = options.embeds;
+        if (hasFiles) withheld.files = options.files;
+        proxy.withheldData = Object.keys(withheld).length > 0 ? withheld : null;
+        console.log(
+          "aiProxy: Withheld data for editReply:",
+          proxy.withheldData
+        );
+      } else {
+        // Normal V1 or V2-only edit
+        editOptions = {
+          content: typeof options === "string" ? options : options.content,
+          embeds: typeof options !== "string" ? options.embeds || [] : [],
+          files: typeof options !== "string" ? options.files || [] : [],
+          components:
+            typeof options !== "string" ? options.components || [] : [],
+          flags: isIncomingV2 ? MessageFlags.IsComponentsV2 : undefined,
+          attachments: [], // Ensure attachments are cleared explicitly for edits
+          // allowedMentions is not valid for edits
+        };
+        // Clear conflicting fields if it's purely V2
+        if (isIncomingV2) {
+          editOptions.content = undefined;
+          editOptions.embeds = undefined;
+          editOptions.files = undefined;
+        }
+      }
+
+      try {
+        console.log(
+          `aiProxy: Editing message ${commandMessage.id} with options:`,
+          JSON.stringify(editOptions)
+        );
+        const editedMessage = await commandMessage.edit(editOptions);
+        console.log(
+          `aiProxy: editReply successfully edited message ${commandMessage.id}`
+        );
+        return editedMessage;
+      } catch (error) {
+        console.error(
+          `aiProxy: Error editing reply for message ${commandMessage.id}:`,
+          error,
+          "Edit options:",
+          editOptions
+        );
+        // Don't reset replied status here, as an edit was attempted after an initial reply/defer
+        proxy.wasV2Edit = false;
+        proxy.withheldData = null;
+        throw error;
+      }
     },
+
+    // followUp: Sends a new message in the channel.
     followUp: async (options) => {
-      console.log("aiProxy: followUp called.");
-      const followUpOptions =
-        typeof options === "string" ? { content: options } : options;
-      // Ensure content is removed if V2 flag is present
-      if (followUpOptions.flags === MessageFlags.IsComponentsV2) {
-        delete followUpOptions.content;
+      // Follow-up should send a completely new message, respecting V1/V2 separation if needed internally by the caller
+      // For simplicity, we assume the caller provides a valid payload.
+      // If the caller needs to send V2 + legacy, they should call followUp twice.
+      const isIncomingV2 =
+        (typeof options !== "string" &&
+          options.flags === MessageFlags.IsComponentsV2) ||
+        (typeof options !== "string" &&
+          options.components?.[0] instanceof ContainerBuilder);
+
+      const followUpOptions = {
+        content: typeof options === "string" ? options : options.content,
+        embeds: typeof options !== "string" ? options.embeds || [] : [],
+        files: typeof options !== "string" ? options.files || [] : [],
+        components: typeof options !== "string" ? options.components || [] : [],
+        flags: isIncomingV2 ? MessageFlags.IsComponentsV2 : undefined,
+        ephemeral: options.ephemeral || proxy.ephemeral, // Inherit ephemeral state potentially
+        // Allowed mentions might be desirable here depending on use case
+        // allowedMentions: { parse: ['users', 'roles', 'everyone'] },
+      };
+
+      // Clear conflicting fields if it's purely V2
+      if (isIncomingV2) {
+        followUpOptions.content = undefined;
+        followUpOptions.embeds = undefined;
+        // Keep files for V2 followUp? API might allow this for new messages. Test needed.
+        // followUpOptions.files = undefined;
       }
-      return message.channel.send(followUpOptions);
+
+      try {
+        console.log(`aiProxy: Sending followUp`);
+        // Use message.channel.send for follow-ups, as interaction.followUp has limitations
+        // Make sure the channel object exists
+        if (!message.channel) {
+          console.error(
+            "aiProxy: Cannot send followUp, message.channel is null."
+          );
+          throw new Error("Channel not available for followUp.");
+        }
+        const sentMessage = await message.channel.send(followUpOptions);
+        console.log(`aiProxy: followUp sent message ${sentMessage?.id}`);
+        return sentMessage;
+      } catch (error) {
+        console.error("aiProxy: Error sending followUp:", error);
+        throw error;
+      }
     },
+
+    // deleteReply/fetchReply remain mostly the same, operating on commandMessage
     deleteReply: async () => {
-      console.warn(
-        "aiProxy: deleteReply is not supported in the new deferred flow."
-      );
-      return Promise.resolve();
+      if (commandMessage && commandMessage.deletable) {
+        try {
+          await commandMessage.delete();
+          console.log(`aiProxy: Deleted reply message ${commandMessage.id}`);
+          commandMessage = null; // Clear reference
+          proxy.replied = false; // Reset state
+          proxy.deferred = false;
+          initialReplySent = false;
+          return Promise.resolve();
+        } catch (error) {
+          console.error(
+            `aiProxy: Failed to delete reply message ${commandMessage?.id}:`,
+            error
+          );
+          // Don't throw, just log the error
+          return Promise.resolve();
+        }
+      } else {
+        console.warn(
+          `aiProxy: deleteReply called but no deletable message exists.`
+        );
+        return Promise.resolve();
+      }
     },
     fetchReply: async () => {
-      console.warn(
-        "aiProxy: fetchReply is not supported in the new deferred flow."
-      );
-      return Promise.resolve(null);
+      if (commandMessage) {
+        // Re-fetch to ensure the object is up-to-date
+        try {
+          commandMessage = await message.channel.messages.fetch(
+            commandMessage.id
+          );
+          console.log(`aiProxy: Fetched reply message ${commandMessage.id}`);
+          return commandMessage;
+        } catch (error) {
+          console.error(
+            `aiProxy: Failed to fetch reply message ${commandMessage?.id}:`,
+            error
+          );
+          commandMessage = null; // Clear reference if fetch fails
+          return null;
+        }
+      }
+      console.warn(`aiProxy: fetchReply called but no message exists.`);
+      return null;
     },
-    getFinalReplyContent: () => {
-      console.log(
-        "aiProxy: getFinalReplyContent called. Returning stored state:",
-        finalReplyState
-      );
-      return {
-        ...finalReplyState,
-        wasRepliedOrDeferred: proxy.replied || proxy.deferred, // Indicate if *any* reply action was taken
-        isV2: isV2ReplyState, // Return the tracked V2 state
-      };
-    },
+
+    // getFinalReplyContent is removed
   };
   return proxy;
 }
 
+// Execute Command - Executes the command, returns success/response/intendedReply
 async function executeCommand(target, aiProxy, effectiveLocale) {
   try {
-    // Execute the command. It will use the proxy's methods which now store state.
-    const response = await target.execute(aiProxy, i18n);
+    // --- Execute the actual command function ---
+    const responseFromCommand = await target.execute(aiProxy, i18n);
 
-    // Check if the command *intended* to reply (called proxy.reply/editReply/deferReply)
-    const intendedReply = aiProxy.replied || aiProxy.deferred;
+    // --- Determine the outcome based on proxy state ---
+    const commandIntendedReply = aiProxy.replied || aiProxy.deferred; // Did the command call reply/editReply or defer?
 
-    // If the command returned a value AND didn't intend to reply via proxy
-    if (response != null && !intendedReply) {
-      return { success: true, response: response, commandIntendedReply: false };
-    }
+    // Determine the text response to send back to the AI
+    let responseText = null;
+    if (!commandIntendedReply) {
+      // If the command didn't intend to reply itself, use its return value or a generic success message
+      responseText =
+        responseFromCommand != null
+          ? responseFromCommand
+          : i18n.__(
+              "events.ai.buttons.toolExec.successGeneric",
+              effectiveLocale
+            );
+    } else if (aiProxy.withheldData?.content) {
+      // If data was withheld, use that as the primary textual response
+      responseText = aiProxy.withheldData.content;
+    } else if (
+      !aiProxy.wasV2Edit &&
+      !aiProxy.withheldData?.embeds &&
+      !aiProxy.withheldData?.files
+    ) {
+      // If it was a normal reply/edit without withheld visual elements,
+      // and the command didn't return anything explicit, assume success without text output
+      responseText = responseFromCommand; // Use command return value if any
+    } // Otherwise (V2 edit or withheld visual), responseText remains null
 
-    // If the command intended to reply OR returned nothing (implicit success)
+    console.log(
+      `executeCommand: commandIntendedReply=${commandIntendedReply}, wasV2Edit=${
+        aiProxy.wasV2Edit
+      }, withheldData=${!!aiProxy.withheldData}, responseFromCommand=${responseFromCommand}, responseText=${responseText}`
+    );
+
     return {
       success: true,
-      response: intendedReply
-        ? null
-        : i18n.__("events.ai.buttons.toolExec.successGeneric", effectiveLocale), // Provide generic success only if no reply was intended *and* no response value given
-      commandIntendedReply: intendedReply,
+      response: responseText, // Textual response for AI
+      commandIntendedReply: commandIntendedReply,
+      wasV2Edit: aiProxy.wasV2Edit, // Pass V2 edit status
+      withheldData: aiProxy.withheldData, // Pass withheld data
     };
   } catch (err) {
-    console.error("Error executing command:", err);
+    console.error("Error executing command via proxy:", err);
     const msg = err.message.includes("Missing Permissions")
       ? i18n.__("events.ai.toolExec.missingPermissions", effectiveLocale)
       : i18n.__(
@@ -283,34 +516,66 @@ async function executeCommand(target, aiProxy, effectiveLocale) {
           { error: err.message },
           effectiveLocale
         );
-    // Indicate no reply was successfully prepared by the command on error
-    return { success: false, response: msg, commandIntendedReply: false };
+    return {
+      success: false,
+      response: msg,
+      commandIntendedReply: false,
+      wasV2Edit: false,
+      withheldData: null,
+    };
   }
 }
 
-// Execute a single AI tool call by proxying to your Discord commands
+// Main execution logic
 export async function executeToolCall(toolCall, message, locale) {
   console.log(`Executing tool call:`, JSON.stringify(toolCall, null, 2));
 
   const { name, arguments: args } = toolCall.function;
 
-  // Try to find command directly first without splitting
-  let command = message.client.commands.get(name);
+  // --- Refined Command/Target Finding Logic ---
+  let command = null;
+  let target = null;
   let subName = null;
+  let commandName = name; // Use full name by default
 
-  // If not found, try the split approach as fallback
-  if (!command) {
-    const [commandName, ...subParts] = name.split("_");
-    subName = subParts.join("_");
-    command = message.client.commands.get(commandName);
-    console.log(
-      `Command not found directly. Trying split: command=${commandName}, subcommand=${
-        subName || "none"
-      }`
-    );
+  const directCommand = message.client.commands.get(name);
+  if (directCommand && typeof directCommand.execute === "function") {
+    console.log(`Command found directly by full name: ${name}`);
+    target = directCommand;
+    command = directCommand;
+    const parts = name.split("_");
+    if (parts.length > 1) {
+      commandName = parts[0];
+      subName = parts.slice(1).join("_");
+    }
   } else {
-    console.log(`Command found directly: ${name}`);
+    console.log(`Command not found directly by name ${name}. Trying split.`);
+    const parts = name.split("_");
+    commandName = parts[0];
+    subName = parts.length > 1 ? parts.slice(1).join("_") : null;
+    command = message.client.commands.get(commandName);
+
+    if (command && subName) {
+      console.log(
+        `Found base command ${commandName}. Checking for subcommand ${subName}.`
+      );
+      if (
+        command.subcommands &&
+        typeof command.subcommands[subName]?.execute === "function"
+      ) {
+        target = command.subcommands[subName];
+        console.log(`Found target execute in command.subcommands.${subName}`);
+      } else {
+        console.log(
+          `Subcommand ${subName} not found or has no execute in command.subcommands.`
+        );
+      }
+    } else if (command && !subName && typeof command.execute === "function") {
+      console.log(`Using base command ${commandName}'s execute method.`);
+      target = command;
+    }
   }
+  // --- End Refined Logic ---
 
   // Determine locale
   let effectiveLocale = locale || message.guild?.preferredLocale || "en";
@@ -321,34 +586,33 @@ export async function executeToolCall(toolCall, message, locale) {
   // Parse arguments
   let parsedArgs = {};
   if (typeof args === "string") {
-    console.log(`Tool arguments provided as string: ${args}`);
     try {
       parsedArgs = JSON.parse(args);
-      console.log(`Successfully parsed arguments:`, parsedArgs);
     } catch (e) {
       console.error(`Failed to parse tool arguments:`, e);
       return {
         success: false,
         response: i18n.__(
           "events.ai.toolExec.parseError",
-          { command: name, args },
+          { command: name, args: e.message },
           effectiveLocale
         ),
-        commandReplied: false, // No reply sent
+        commandReplied: false,
         visualResponse: false,
         isV2Reply: false,
+        withheldData: null,
+        wasV2Edit: false,
       };
     }
   } else if (typeof args === "object" && args !== null) {
-    console.log(`Tool arguments provided as object:`, args);
     parsedArgs = args;
-  } else {
-    console.log(`Tool arguments has unexpected type: ${typeof args}`);
   }
 
-  // Find the command
-  if (!command) {
-    console.error(`Command not found: ${name}`);
+  // Validate Target
+  if (!target || typeof target.execute !== "function") {
+    console.error(
+      `Target execute function ultimately not found for tool: ${name}`
+    );
     return {
       success: false,
       response: i18n.__(
@@ -356,42 +620,20 @@ export async function executeToolCall(toolCall, message, locale) {
         { command: name },
         effectiveLocale
       ),
-      commandReplied: false, // No reply sent
+      commandReplied: false,
       visualResponse: false,
       isV2Reply: false,
+      withheldData: null,
+      wasV2Edit: false,
     };
   }
 
-  // Identify target execute function
-  const target = subName ? command.subcommands?.[subName] : command;
-  if (!target || !target.execute) {
-    // Check for execute method
-    console.error(
-      `Target execute function not found: ${
-        subName ? `${commandName}_${subName}` : commandName
-      }`
-    );
-    return {
-      success: false,
-      response: i18n.__(
-        "events.ai.toolExec.commandNotFound", // Or a more specific error
-        { command: name },
-        effectiveLocale
-      ),
-      commandReplied: false, // No reply sent
-      visualResponse: false,
-      isV2Reply: false,
-    };
-  }
-
-  // Properly handle data that could be a function
+  // Parameter validation
   let dataObj;
   if (typeof target.data === "function") {
     try {
       dataObj = target.data();
-      console.log("Executed data function, got:", dataObj);
     } catch (err) {
-      console.error("Error executing data function:", err);
       dataObj = {};
     }
   } else if (target.data?.toJSON) {
@@ -399,44 +641,23 @@ export async function executeToolCall(toolCall, message, locale) {
   } else {
     dataObj = target.data;
   }
-  console.log(`Command data:`, dataObj);
-
   const options = (dataObj?.options || []).filter(
     (o) => o.type !== 1 && o.type !== 2
   );
-  console.log(
-    `Command options (excluding subcommands):`,
-    options.map((o) => ({ name: o.name, type: o.type, required: !!o.required }))
-  );
-
-  // If AI passed parameters but command doesn't declare them, don't remove them
-  // This handles commands not properly defining their options
-  if (options.length === 0 && Object.keys(parsedArgs).length > 0) {
-    console.log(
-      `Command doesn't declare options but AI provided parameters. Using AI parameters directly.`
-    );
-    // No validation needed here if no options are defined
-  } else {
-    // Remove unexpected params if options are defined
+  if (options.length > 0) {
     const valid = options.map((o) => o.name);
-    const unexpectedParams = Object.keys(parsedArgs).filter(
-      (k) => !valid.includes(k)
-    );
-    if (unexpectedParams.length) {
-      console.warn(
-        `Removing unexpected parameters: ${unexpectedParams.join(", ")}`
-      );
-      Object.keys(parsedArgs).forEach((k) => {
-        if (!valid.includes(k)) delete parsedArgs[k];
-      });
-    }
-
-    // Check missing required params
+    Object.keys(parsedArgs).forEach((k) => {
+      if (!valid.includes(k)) {
+        console.warn(`Removing unexpected parameter: ${k} for tool ${name}`);
+        delete parsedArgs[k];
+      }
+    });
     const required = options.filter((o) => o.required).map((o) => o.name);
-    console.log(`Required parameters: ${required.join(", ")}`);
     const missing = required.filter((p) => !(p in parsedArgs));
     if (missing.length) {
-      console.error(`Missing required parameters: ${missing.join(", ")}`);
+      console.error(
+        `Missing required parameters for ${name}: ${missing.join(", ")}`
+      );
       return {
         success: false,
         response: i18n.__(
@@ -451,89 +672,170 @@ export async function executeToolCall(toolCall, message, locale) {
         commandReplied: false,
         visualResponse: false,
         isV2Reply: false,
+        withheldData: null,
+        wasV2Edit: false,
       };
     }
+  } else if (Object.keys(parsedArgs).length > 0) {
+    console.log(
+      `Command ${name} has no options defined, but received parameters. Using them directly.`
+    );
   }
 
-  console.log(`Final parameters after validation:`, parsedArgs);
+  // --- Defer Reply Externally ---
+  let commandMessage = null;
+  let isEphemeral = false; // Track ephemeral status for potential follow-ups
+  try {
+    // Check if the target command *might* defer (look for deferReply usage potentially, or assume all might)
+    // For now, assume deferral is standard for AI tools unless explicitly opted out.
+    // We need a way to determine if the command intends to be ephemeral *before* deferring.
+    // This might require adding metadata to the command definition.
+    // Let's assume non-ephemeral deferral for now.
+    const deferOptions = {
+      content: "⏳ Processing tool...",
+      allowedMentions: { repliedUser: false },
+      fetchReply: true, // Need the message object
+      ephemeral: false, // Default to non-ephemeral
+    };
+    console.log(`executeToolCall: Attempting deferReply for tool ${name}`);
+    commandMessage = await message.reply(deferOptions);
+    console.log(`executeToolCall: Deferred reply sent: ${commandMessage?.id}`);
+    // Check if the command *actually* intended to be ephemeral later via proxy.ephemeral
+  } catch (deferError) {
+    console.error(
+      `executeToolCall: Failed to defer reply for tool ${name}:`,
+      deferError
+    );
+    // If defer fails, we cannot proceed with the standard proxy flow
+    return {
+      success: false,
+      response: i18n.__(
+        "events.ai.toolExec.deferError",
+        { command: name, error: deferError.message },
+        effectiveLocale
+      ),
+      commandReplied: false, // Command didn't get a chance to reply
+      visualResponse: false,
+      isV2Reply: false,
+      withheldData: null,
+      wasV2Edit: false,
+    };
+  }
+  // --- End Defer Reply ---
 
-  // Create the proxy
-  const aiProxy = createAiProxy(message, subName, parsedArgs, effectiveLocale);
-  aiProxy.commandName = subName
-    ? `${command.data.name}_${subName}`
-    : command.data.name;
+  // Create the proxy, passing the deferred message
+  const aiProxy = createAiProxy(
+    message,
+    commandMessage,
+    subName,
+    parsedArgs,
+    effectiveLocale
+  );
+  aiProxy.commandName = name; // Set command name on proxy if needed
 
-  // Execute the command - this populates the proxy's internal state
+  // Execute the command - populates proxy state and performs edits/replies internally
   const execResult = await executeCommand(target, aiProxy, effectiveLocale);
 
-  // Now, get the final intended reply state from the proxy
-  const finalReplyData = aiProxy.getFinalReplyContent();
+  // Update ephemeral status if command set it
+  isEphemeral = aiProxy.ephemeral;
 
-  let finalMessage = null;
-  let sentReply = false;
-
-  // Check if the command intended to reply and prepared some content/visuals
-  if (
-    execResult.success &&
-    finalReplyData.wasRepliedOrDeferred &&
-    (finalReplyData.content ||
-      finalReplyData.embeds?.length ||
-      finalReplyData.files?.length ||
-      finalReplyData.components?.length)
-  ) {
-    // Construct the final payload to send
-    const sendOptions = {
-      content: finalReplyData.content,
-      embeds: finalReplyData.embeds,
-      files: finalReplyData.files,
-      components: finalReplyData.components,
-      allowedMentions: { repliedUser: false }, // Don't ping original user
-    };
-
-    if (finalReplyData.isV2) {
-      sendOptions.flags = MessageFlags.IsComponentsV2;
-      delete sendOptions.content; // Ensure content is removed for V2
-    }
-
+  // --- Handle Withheld Data ---
+  // If the edit was V2 and legacy data was withheld, send it via followUp
+  let followUpSent = false;
+  if (execResult.success && execResult.wasV2Edit && execResult.withheldData) {
+    console.log(
+      `executeToolCall: Sending withheld data via followUp:`,
+      execResult.withheldData
+    );
     try {
-      console.log("Sending final command reply:", sendOptions);
-      finalMessage = await message.channel.send(sendOptions);
-      sentReply = true;
-    } catch (sendError) {
-      console.error("Error sending final command reply:", sendError);
-      // If sending failed, fall back to sending the error text
+      const followUpOptions = {
+        ...execResult.withheldData, // Contains content, embeds, files
+        ephemeral: isEphemeral,
+        // We might want to suppress mentions here depending on the source
+        allowedMentions: { parse: [] },
+      };
+      await message.channel.send(followUpOptions); // Use channel.send for reliability
+      followUpSent = true;
+      console.log(`executeToolCall: Successfully sent withheld data followUp.`);
+    } catch (followUpError) {
+      console.error(
+        `executeToolCall: Error sending withheld data followUp:`,
+        followUpError
+      );
+      // If sending withheld data fails, we should probably report an error state back
+      // Overwrite the success result
       execResult.success = false;
       execResult.response = i18n.__(
-        "events.ai.buttons.toolExec.errorGeneric",
-        { error: sendError.message },
+        "events.ai.toolExec.followUpError",
+        { command: name, error: followUpError.message },
         effectiveLocale
+      );
+      // Clear withheld data as it failed to send
+      execResult.withheldData = null;
+      execResult.wasV2Edit = false; // Reset V2 flag as the follow-up failed
+    }
+  }
+  // --- End Handle Withheld Data ---
+
+  // Determine final visual/reply status
+  const commandRepliedSuccessfully =
+    execResult.success && execResult.commandIntendedReply;
+  // Visual response is true if the command replied successfully AND it wasn't a V2 edit OR if a follow-up was sent
+  const visualResponse = commandRepliedSuccessfully || followUpSent;
+  // isV2Reply is true ONLY if a V2 edit was successfully performed (and no follow-up error occurred)
+  const isV2Reply = execResult.success && execResult.wasV2Edit;
+
+  // --- Send Fallback/Error Message if Necessary ---
+  // Send an error/status message ONLY if:
+  // 1. Execution failed (execResult.success is false)
+  // 2. Execution succeeded BUT the command didn't intend to reply itself AND didn't return any specific text response.
+  //    (This avoids sending generic success if the command handled its own reply).
+  if (
+    !execResult.success ||
+    (execResult.success &&
+      !execResult.commandIntendedReply &&
+      execResult.response)
+  ) {
+    try {
+      console.log(
+        "executeToolCall: Sending fallback/error/status message:",
+        execResult.response
+      );
+      // Use followUp if the initial defer was successful, otherwise reply
+      const fallbackOptions = {
+        content: execResult.response,
+        ephemeral: isEphemeral,
+      };
+      if (commandMessage) {
+        await message.channel.send(fallbackOptions); // Use channel.send
+      } else {
+        await message.reply(fallbackOptions); // Should only happen if initial defer failed AND we somehow got here
+      }
+    } catch (fallbackError) {
+      console.error(
+        "executeToolCall: Error sending fallback/error/status message:",
+        fallbackError
       );
     }
   }
 
-  // If execution failed OR command didn't intend to reply but returned a text response
-  if (!execResult.success || (!sentReply && execResult.response)) {
-    try {
-      console.log("Sending fallback/error response:", execResult.response);
-      await message.channel.send(execResult.response);
-    } catch (fallbackError) {
-      console.error("Error sending fallback/error message:", fallbackError);
-    }
-  }
-
-  // Determine the final return value for processAiRequest
-  const visualResponse = !!(
-    finalReplyData.embeds?.length ||
-    finalReplyData.files?.length ||
-    finalReplyData.components?.length
+  console.log(
+    `executeToolCall Result: success=${execResult.success}, response=${
+      execResult.response
+    }, commandReplied=${commandRepliedSuccessfully}, visualResponse=${visualResponse}, isV2Reply=${isV2Reply}, wasV2Edit=${
+      execResult.wasV2Edit
+    }, withheldData=${!!execResult.withheldData}`
   );
 
+  // Return final status based on actual outcome
   return {
     success: execResult.success,
-    // Return null response if we sent a visual reply, otherwise return error/status text
-    response: execResult.success && sentReply ? null : execResult.response,
-    commandReplied: sentReply, // Indicate if a reply was actually sent
-    visualResponse: visualResponse && sentReply, // Visual only if successfully sent
-    isV2Reply: finalReplyData.isV2 && sentReply, // V2 only if successfully sent
+    // Only return text response to AI if command succeeded AND it wasn't a visual response OR if it failed
+    response: execResult.success && visualResponse ? null : execResult.response,
+    commandReplied: commandRepliedSuccessfully, // Did the command logic intend to and successfully reply/edit?
+    visualResponse: visualResponse, // Was there a visual element sent (original reply/edit or followUp)?
+    isV2Reply: isV2Reply, // Was the *final state* determined by a V2-component-only edit?
+    withheldData: execResult.withheldData, // Return withheld data for potential further use (e.g., logging)
+    wasV2Edit: execResult.wasV2Edit, // Explicitly return if the V2 edit path was taken
   };
 }

@@ -501,56 +501,130 @@ export default async function processAiRequest(
       console.log(`AI requested ${toolCalls.length} tool calls.`);
 
       // Process tool calls
+      // Create a placeholder for accumulating tool responses for the AI
+      let toolResponsesForApi = [];
+
       for (const toolCall of toolCalls) {
         console.log(`Executing tool: ${toolCall.function.name}`);
 
-        const { success, response, commandReplied, visualResponse, isV2Reply } =
-          await executeToolCall(toolCall, message, effectiveLocale);
+        // Execute the tool call
+        const result = await executeToolCall(
+          toolCall,
+          message,
+          effectiveLocale
+        );
 
         console.log(
           `Tool ${toolCall.function.name} execution ${
-            success ? "succeeded" : "failed"
+            result.success ? "succeeded" : "failed"
           }. ` +
-            `Replied: ${commandReplied}, Visual: ${visualResponse}, V2: ${isV2Reply}`
+            `Replied: ${result.commandReplied}, Visual: ${
+              result.visualResponse
+            }, V2Edit: ${result.wasV2Edit}, Withheld: ${!!result.withheldData}`
         );
 
-        // Track if any tool used V2 components
-        if (isV2Reply) {
-          anyToolUsedV2 = true; // Set the flag if this tool used V2
+        // Track if any tool performed a V2 edit (important for final component handling)
+        if (result.wasV2Edit) {
+          anyToolUsedV2 = true;
         }
 
-        // If the command replied with visual content OR V2 components,
-        // don't add additional text about it to the main response message
-        // to avoid confusion or overwriting V2 components.
-        if (visualResponse || isV2Reply) {
-          // If there *is* separate text from the AI after the tool ran, send it as a follow-up
-          // This prevents overwriting V2 components with a V1 edit
-          if (finalText) {
-            await message.channel.send(finalText).catch(console.error);
-            finalText = ""; // Clear the text so sendResponse doesn't send it again
+        // --- Handle Withheld Data (New Logic) ---
+        if (result.wasV2Edit && result.withheldData) {
+          console.log(
+            `Sending withheld data from ${toolCall.function.name} via channel.send:`,
+            result.withheldData
+          );
+          try {
+            const followUpOptions = {
+              ...result.withheldData, // Contains content, embeds, files
+              // Decide on ephemeral based on command's intent if possible, default false
+              // ephemeral: result.isEphemeral, // Assuming executeToolCall returns this if needed
+              allowedMentions: { parse: [] }, // Avoid accidental pings
+            };
+            await message.channel.send(followUpOptions);
+            console.log(`Successfully sent withheld data followUp.`);
+            // If withheld data included content, we *might* not want to also add the tool result below.
+            // However, the AI needs *some* response. Let's prioritize the `result.response` for the AI.
+          } catch (followUpError) {
+            console.error(
+              `Error sending withheld data followUp:`,
+              followUpError
+            );
+            // If sending the withheld data fails, append an error message for the AI
+            toolResponsesForApi.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              name: toolCall.function.name,
+              content: `[Error sending withheld visual elements: ${
+                followUpError.message
+              }]${result.response ? ` Tool response: ${result.response}` : ""}`, // Append original response if any
+            });
+            continue; // Skip normal tool response appending if follow-up failed
           }
-          // Skip adding the tool result text block below
-          continue;
+        }
+        // --- End Handle Withheld Data ---
+
+        // --- Append Tool Result for AI (Revised Logic) ---
+        // The AI needs a response for each tool call to continue generation.
+        // The `result.response` from executeToolCall is specifically formatted for this.
+        toolResponsesForApi.push({
+          tool_call_id: toolCall.id, // Use the ID from the original tool call
+          role: "tool",
+          name: toolCall.function.name,
+          // Use the response field from the result, which is null if visual or withheld, or contains text
+          content:
+            result.response || (result.success ? "OK" : "Error executing tool"), // Provide a minimal status if response is null
+        });
+
+        // --- Handle display of AI's initial text (Revised Logic) ---
+        // If the tool itself replied visually OR if it was a V2 edit (implying visual change),
+        // any pending AI text should be sent *before* the next tool call or final response.
+        if (
+          (result.commandReplied && result.visualResponse) ||
+          result.wasV2Edit
+        ) {
+          if (finalText) {
+            console.log(
+              "Sending pending AI text before next tool call or final response due to visual/V2 tool action."
+            );
+            await message.channel.send(finalText).catch(console.error);
+            finalText = ""; // Clear text, it has been sent
+          }
+        }
+      }
+
+      // --- After processing all tool calls, send the accumulated responses back to the AI ---
+      if (toolResponsesForApi.length > 0) {
+        console.log("Sending tool results back to AI:", toolResponsesForApi);
+        apiMessages.push(aiMsg); // Add the AI's message that contained the tool calls
+        apiMessages.push(...toolResponsesForApi); // Add the results
+
+        // Make a second API call with the tool results
+        console.log("Making second API call with tool results...");
+        const secondResponseData = await makeApiRequest(false); // Never use tools in the second call
+
+        if (
+          !secondResponseData ||
+          !secondResponseData.choices ||
+          secondResponseData.choices.length === 0
+        ) {
+          console.error(
+            "Invalid API response format after tool results:",
+            secondResponseData
+          );
+          throw new Error(
+            "Invalid response from AI provider after processing tools."
+          );
         }
 
-        // Add tool result to the response if it didn't already reply with visual/V2 content
-        if (!commandReplied) {
-          // Format the tool result as a block
-          const toolName = toolCall.function.name;
-          const prefix = success
-            ? i18n.__(
-                "events.ai.buttons.toolResult.successPrefix",
-                { command: toolName },
-                effectiveLocale
-              )
-            : i18n.__(
-                "events.ai.buttons.toolResult.errorPrefix",
-                { command: toolName },
-                effectiveLocale
-              );
+        const finalAiMsg = secondResponseData.choices[0].message;
+        const aiFollowUpText = finalAiMsg.content?.trim() || "";
 
-          finalText += `\n\n${prefix}\n${removeThinkTags(response) || ""}`;
-        }
+        // Combine any initial text with the follow-up text
+        finalText =
+          (finalText ? finalText + "\n\n" : "") +
+          removeThinkTags(aiFollowUpText);
+        console.log("Final text after tool processing:", finalText);
       }
     } else if (toolCalls.length && !prefs.toolsEnabled) {
       finalText += `\n\n${i18n.__(
@@ -580,7 +654,8 @@ export default async function processAiRequest(
         console.log(
           `Converted fake tool ${fakeToolCall.name} execution ${
             success ? "succeeded" : "failed"
-          }. Command replied directly: ${commandReplied}, Visual response: ${visualResponse}`
+          }` +
+            `. Command replied directly: ${commandReplied}, Visual response: ${visualResponse}`
         );
 
         // Replace the fake tool text with the real response
@@ -632,20 +707,32 @@ export default async function processAiRequest(
     );
 
     // If any tool used V2, we should not send the V1 components.
-    // We already sent any necessary follow-up text from the AI.
-    // The message state is already V2 from the tool.
+    // The message state might already be V2 from the tool.
     if (anyToolUsedV2) {
       console.log(
-        "Skipping final sendResponse with V1 components because a tool used V2."
+        "Skipping final sendResponse with V1 components because a tool performed a V2 edit."
       );
-      // Clean up the processing message if it exists and wasn't edited/deleted by the tool
-      if (procMsg) {
-        await procMsg.delete().catch(() => {}); // Try deleting instead of editing
+      // If there's remaining AI text after tool calls, send it as a plain message.
+      if (finalText) {
+        console.log(
+          "Sending final AI text as plain message after V2 tool use."
+        );
+        await message.channel.send(finalText).catch(console.error);
+      }
+      // Ensure the processing message is handled (e.g., deleted or edited minimally)
+      if (procMsg && procMsg.editable) {
+        try {
+          // Optionally edit to a simple confirmation or delete
+          // await procMsg.edit({ content: "✅ Processed.", components: [] });
+          await procMsg.delete();
+        } catch {
+          /* Ignore */
+        }
       }
     } else {
-      // Original behavior: Send the response with V1 components
-      // Only send if there is text or if no tools were called (initial response case)
+      // Original behavior: Edit the procMsg with V1 components and final AI text
       if (finalText || toolCalls.length === 0) {
+        // Send if text exists OR it's the initial non-tool response
         await sendResponse(message, procMsg, finalText, comps, effectiveLocale);
       } else if (procMsg) {
         // If only tools ran (no V2) and AI had no final text, delete processing message
