@@ -61,7 +61,8 @@
           "level": "Level"
         },
         "selectedUser": "Selected user at position {{position}}",
-        "error": "An error occurred while processing your leaderboard request"
+        "error": "An error occurred while processing your leaderboard request",
+        "noUsersOnPage": "No valid users found on this page."
       },
       "level": {
         "userNotFound": "User not found",
