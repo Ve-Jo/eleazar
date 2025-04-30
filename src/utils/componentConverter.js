@@ -86,7 +86,7 @@ export function embedToContainer(embed, options = {}) {
   // Add fields if present
   if (data.fields && data.fields.length > 0) {
     // Add separator before fields
-    container.addSeparatorComponents(new SeparatorBuilder());
+    //container.addSeparatorComponents(new SeparatorBuilder());
 
     data.fields.forEach((field, index) => {
       // Add field name as header
@@ -100,9 +100,9 @@ export function embedToContainer(embed, options = {}) {
       );
 
       // Add separator between fields (except after last field)
-      if (index < data.fields.length - 1) {
+      /*if (index < data.fields.length - 1) {
         container.addSeparatorComponents(new SeparatorBuilder());
-      }
+      }*/
     });
   }
 
@@ -121,7 +121,7 @@ export function embedToContainer(embed, options = {}) {
   // Add footer and timestamp
   if (data.footer?.text || options.includeTimestamp) {
     // Add separator
-    container.addSeparatorComponents(new SeparatorBuilder());
+    //container.addSeparatorComponents(new SeparatorBuilder());
 
     let footerText = "";
 
@@ -503,10 +503,6 @@ ${text}`;
         defaultPrefix = "Today at";
       }
       const text = `${prefix || defaultPrefix} <t:${timestamp}:t>`;
-      // Add separator before timestamp unless it's the first element
-      if (this.container.components.length > 0) {
-        this.addSeparator();
-      }
       this.container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(text)
       );
@@ -535,10 +531,6 @@ ${text}`;
    */
   addFooter(text, iconURL = null) {
     if (this.mode === "v2") {
-      // Add separator before footer unless it's the first element
-      if (this.container.components.length > 0) {
-        this.addSeparator();
-      }
       // V2 doesn't have icon URLs for footers, just text
       this.container.addTextDisplayComponents(
         new TextDisplayBuilder().setContent(text) // Typically small/italic *${text}*?
