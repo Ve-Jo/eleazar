@@ -122,6 +122,10 @@ export default {
       // Define upgradeInfo outside the generateShopMessage function
       let upgradeInfo = {};
 
+      // Determine builder mode based on execution context
+      const isAiContext = !!interaction._isAiProxy;
+      const builderMode = isAiContext ? "v1" : "v2";
+
       // Get user locale for translations
       const userLocale = i18n.getUserLocale
         ? i18n.getUserLocale()
@@ -318,21 +322,23 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `shop.avif`,
+          name: `shop_upgrades.avif`,
         });
 
         console.log(upgradeInfo);
 
-        // Create shop component with ComponentBuilder
-        const shopComponent = new ComponentBuilder()
-          .setColor(dominantColor?.embedColor || process.env.EMBED_COLOR)
-          .addText(i18n.__("commands.economy.shop.title"), "header3")
+        // Create main component with conditional mode
+        const shopComponent = new ComponentBuilder({
+          dominantColor,
+          mode: builderMode,
+        })
+          .addText(i18n.__(`commands.economy.shop.title`), "header3")
           .addText(
             i18n.__("commands.economy.shop.description", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
-          .addImage("attachment://shop.avif");
+          .addImage(`attachment://shop_upgrades.avif`);
 
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
@@ -458,16 +464,30 @@ export default {
           shopComponent.addActionRow(buttonRow);
         }
 
-        return {
-          components: [shopComponent.build()],
+        // Return the reply options using the builder's method
+        return shopComponent.toReplyOptions({
           files: [attachment],
-          flags: MessageFlags.IsComponentsV2,
-        };
+          // Set content only for V1 mode (AI context)
+          content: isAiContext
+            ? i18n.__(`commands.economy.shop.title`)
+            : undefined,
+        });
       };
 
-      const message = await interaction.editReply(await generateShopMessage());
+      // Initial message send/edit
+      const initialMessageOptions = await generateShopMessage();
+      let message;
+      if (isAiContext) {
+        // AI context: Use proxy reply
+        message = await interaction.reply(initialMessageOptions); // interaction is proxy
+        // No collector needed for AI context
+        return;
+      } else {
+        // Normal context: Edit deferred reply
+        message = await interaction.editReply(initialMessageOptions);
+      }
 
-      // Create collector for both select menu and button
+      // Create collector for buttons and select menu (only for normal context)
       const collector = message.createMessageComponentCollector({
         filter: (i) => i.user.id === user.id,
         time: 60000,
@@ -627,10 +647,22 @@ export default {
       });
     } catch (error) {
       console.error("Error in shop command:", error);
-      await interaction.editReply({
+      // Send error message
+      const errorOptions = {
         content: i18n.__("commands.economy.shop.error"),
         ephemeral: true,
-      });
+      };
+      if (!!interaction._isAiProxy) {
+        // AI context: Throw error
+        throw new Error(i18n.__("commands.economy.shop.error"));
+      } else {
+        // Normal context: Edit reply
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

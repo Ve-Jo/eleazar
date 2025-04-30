@@ -89,14 +89,23 @@ export default {
   },
 
   async execute(interaction, i18n) {
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Check NSFW channel
     if (!interaction.channel.nsfw) {
       return interaction.reply({
-        content: i18n.__("commands.images.nsfw.notNsfwChannel"),
+        content: i18n.__("commands.images.nsfw.nsfwChannelOnly"),
         ephemeral: true,
       });
     }
 
-    await interaction.deferReply();
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const category = interaction.options.getString("image");
     const { guild, user } = interaction;
 
@@ -150,14 +159,17 @@ export default {
           return {
             content: i18n.__("commands.images.nsfw.notFound"),
             components: [],
+            embeds: [], // Ensure empty arrays for V1
             ephemeral: true,
           };
         }
       }
 
       // Use ComponentBuilder directly with the fetched image URL
-      const imageComponent = new ComponentBuilder()
-        .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
+      const imageComponent = new ComponentBuilder({
+        mode: builderMode,
+        // color: process.env.EMBED_COLOR ?? 0x0099ff
+      })
         .addText(
           imageData.category || i18n.__("commands.images.nsfw.title"), // Use category as title
           "header3"
@@ -178,50 +190,69 @@ export default {
         imageComponent.addActionRow(buttonRow);
       }
 
-      return {
-        components: [imageComponent.build()],
-        flags: MessageFlags.IsComponentsV2,
-      };
+      // Return reply options using the builder
+      return imageComponent.toReplyOptions({
+        // Use the category name as string content for V1
+        content: isAiContext ? imageData.category : undefined,
+        // Ensure ephemeral for NSFW replies in normal context
+        ephemeral: !isAiContext ? true : undefined,
+      });
     };
 
     let initialMessageData = await generateImageMessage();
-    if (initialMessageData.content) {
-      return interaction.editReply(initialMessageData);
+    if (initialMessageData.content && !imageData?.url) {
+      // Check if it's an error message
+      // Handle error reply/edit based on context
+      if (isAiContext) {
+        throw new Error(initialMessageData.content);
+      } else {
+        return interaction.editReply(initialMessageData);
+      }
     }
-    const message = await interaction.editReply(initialMessageData);
 
-    const collector = message.createMessageComponentCollector({
-      filter: (i) => i.user.id === user.id,
-      time: 60000,
-    });
+    // Reply/edit based on context
+    let message;
+    if (isAiContext) {
+      message = await interaction.reply(initialMessageData);
+      // No collector for AI
+    } else {
+      message = await interaction.editReply(initialMessageData);
 
-    collector.on("collect", async (i) => {
-      if (i.customId === "next_image") {
-        await i.deferUpdate();
-        imageData = await getImageData();
-        const newMessageData = await generateImageMessage();
-        if (newMessageData.content) {
-          await i.followUp({ ...newMessageData, ephemeral: true });
-        } else {
-          await i.editReply(newMessageData);
-        }
-      }
-    });
+      // Collector only for normal context
+      const collector = message.createMessageComponentCollector({
+        filter: (i) => i.user.id === user.id,
+        time: 60000,
+      });
 
-    collector.on("end", async () => {
-      if (message.editable) {
-        try {
-          const finalMessageData = await generateImageMessage({
-            disableInteractions: true,
-          });
-          if (!finalMessageData.content) {
-            await message.edit(finalMessageData);
+      collector.on("collect", async (i) => {
+        if (i.customId === "next_image") {
+          await i.deferUpdate();
+          imageData = await getImageData(); // Fetch new image data
+          const newMessageData = await generateImageMessage();
+          if (newMessageData.content && !imageData?.url) {
+            // Check for error
+            await i.followUp({ ...newMessageData, ephemeral: true });
+          } else {
+            await i.editReply(newMessageData);
           }
-        } catch (error) {
-          console.error("Error updating components on end:", error);
-          await message.edit({ components: [] }).catch(() => {});
         }
-      }
-    });
+      });
+
+      collector.on("end", async (collected, reason) => {
+        if (reason !== "messageDelete" && message.editable) {
+          try {
+            const finalMessageData = await generateImageMessage({
+              disableInteractions: true,
+            });
+            if (!finalMessageData.content) {
+              await message.edit(finalMessageData);
+            }
+          } catch (error) {
+            console.error("Error removing components on end:", error);
+            await message.edit({ components: [] }).catch(() => {}); // Fallback
+          }
+        }
+      });
+    }
   },
 };

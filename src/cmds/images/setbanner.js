@@ -200,7 +200,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const attachment = interaction.options.getAttachment("image");
 
     try {
@@ -303,38 +311,98 @@ export default {
             name: `banner_preview.avif`,
           });
 
-          const successComponent = new ComponentBuilder()
-            .setColor(dominantColor?.embedColor ?? 0x00ff00)
-            .addText(i18n.__("commands.images.setbanner.success"), "header3")
-            .addImage(`attachment://banner_preview.avif`)
+          const successComponent = new ComponentBuilder({
+            mode: builderMode,
+            color: 0x00ff00, // Green color for success
+          })
+            .addText(i18n.__("commands.images.setbanner.title"), "header3")
+            .addText(i18n.__("commands.images.setbanner.success"))
+            .addImage(permanentUrl) // Use the permanent URL
             .addTimestamp(interaction.locale);
 
-          await interaction.editReply({
-            components: [successComponent.build()],
-            files: [previewAttachment],
-            flags: MessageFlags.IsComponentsV2,
+          // Reply/edit based on context
+          const replyOptions = successComponent.toReplyOptions({
+            content: isAiContext
+              ? `${i18n.__(
+                  "commands.images.setbanner.success"
+                )} Banner URL: ${permanentUrl}`
+              : undefined,
           });
+
+          if (isAiContext) {
+            await interaction.reply(replyOptions);
+          } else {
+            await interaction.editReply(replyOptions);
+          }
         } else {
           // If preview generation fails, just send text confirmation
-          await interaction.editReply({
-            content: i18n.__("commands.images.setbanner.success"),
-            components: [],
+          const successComponent = new ComponentBuilder({
+            mode: builderMode,
+            color: 0x00ff00, // Green color for success
+          })
+            .addText(i18n.__("commands.images.setbanner.title"), "header3")
+            .addText(i18n.__("commands.images.setbanner.success"))
+            .addTimestamp(interaction.locale);
+
+          // Reply/edit based on context
+          const replyOptions = successComponent.toReplyOptions({
+            content: isAiContext
+              ? `${i18n.__(
+                  "commands.images.setbanner.success"
+                )} Banner URL: ${permanentUrl}`
+              : undefined,
           });
+
+          if (isAiContext) {
+            await interaction.reply(replyOptions);
+          } else {
+            await interaction.editReply(replyOptions);
+          }
         }
       } catch (previewError) {
         console.error("Error generating banner preview:", previewError);
         // If preview fails, just send text confirmation
-        await interaction.editReply({
-          content: i18n.__("commands.images.setbanner.success"),
-          components: [],
+        const successComponent = new ComponentBuilder({
+          mode: builderMode,
+          color: 0x00ff00, // Green color for success
+        })
+          .addText(i18n.__("commands.images.setbanner.title"), "header3")
+          .addText(i18n.__("commands.images.setbanner.success"))
+          .addTimestamp(interaction.locale);
+
+        // Reply/edit based on context
+        const replyOptions = successComponent.toReplyOptions({
+          content: isAiContext
+            ? `${i18n.__(
+                "commands.images.setbanner.success"
+              )} Banner URL: ${permanentUrl}`
+            : undefined,
         });
+
+        if (isAiContext) {
+          await interaction.reply(replyOptions);
+        } else {
+          await interaction.editReply(replyOptions);
+        }
       }
     } catch (error) {
       console.error("Error setting banner:", error);
-      await interaction.editReply({
+      const errorOptions = {
         content: i18n.__("commands.images.setbanner.error"),
         ephemeral: true,
-      });
+        components: [],
+        embeds: [],
+        files: [],
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.images.setbanner.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

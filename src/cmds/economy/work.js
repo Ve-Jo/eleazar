@@ -147,7 +147,14 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
 
     try {
       // Explicitly set locale based on interaction
@@ -366,7 +373,10 @@ export default {
         });
 
         // Create game launcher component
-        const gameLauncherComponent = new ComponentBuilder()
+        const gameLauncherComponent = new ComponentBuilder({
+          dominantColor,
+          mode: builderMode,
+        })
           .setColor(dominantColor?.embedColor)
           .addText(i18n.__(`commands.economy.work.title`), "header3")
           .addImage(`attachment://work_games.avif`);
@@ -424,14 +434,26 @@ export default {
           gameLauncherComponent.addActionRow(buttonRow);
         }
 
-        return {
-          components: [gameLauncherComponent.build()],
+        // Return the complete reply options object using the builder
+        return gameLauncherComponent.toReplyOptions({
           files: [attachment],
-          flags: MessageFlags.IsComponentsV2,
-        };
+          // Add content only for V1 mode (AI context)
+          content: isAiContext
+            ? i18n.__(`commands.economy.work.title`)
+            : undefined,
+        });
       };
 
-      const message = await interaction.editReply(await generateGameMessage());
+      // Initial reply/edit
+      const initialMessageOptions = await generateGameMessage();
+      let message;
+      if (isAiContext) {
+        // AI Context: Use proxy reply
+        message = await interaction.reply(initialMessageOptions);
+      } else {
+        // Normal context: Edit deferred reply
+        message = await interaction.editReply(initialMessageOptions);
+      }
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
@@ -566,9 +588,23 @@ export default {
     } catch (error) {
       console.error("Error in work command:", error);
       await interaction.editReply({
-        content: i18n.__("commands.economy.error"),
+        content: i18n.__("commands.economy.work.error"), // Use specific key
         ephemeral: true,
       });
+      // Check AI context for error handling
+      const errorOptions = {
+        content: i18n.__("commands.economy.work.error"),
+        ephemeral: true,
+      };
+      if (!!interaction._isAiProxy) {
+        throw new Error(i18n.__("commands.economy.work.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

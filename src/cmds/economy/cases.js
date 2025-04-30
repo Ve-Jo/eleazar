@@ -125,7 +125,14 @@ export default {
     },
   },
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
 
     try {
       // Get user data
@@ -184,7 +191,7 @@ export default {
             );
 
             // Generate reward display
-            const [rewardBuffer] = await generateImage(
+            const [rewardBuffer, dominantColor] = await generateImage(
               "CrateRewards",
               {
                 interaction: {
@@ -222,71 +229,78 @@ export default {
               name: `reward.avif`,
             });
 
-            // Generate reward message text
-            let rewardText = i18n.__("commands.economy.cases.rewardIntro", {
-              crate: crateName,
-            });
+            // Create ComponentBuilder for reward display
+            const rewardComponent = new ComponentBuilder({
+              dominantColor,
+              mode: builderMode,
+            })
+              .addText(
+                i18n.__("commands.economy.cases.rewardIntro", {
+                  crate: crateName,
+                }),
+                "header3"
+              )
+              .addImage(`attachment://reward.avif`);
 
+            // Add details about rewards (optional for component, good for text fallback)
+            let rewardDetailsText = "";
             if (rewards.coins > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardCoins", {
-                amount: rewards.coins,
-              });
+              rewardDetailsText += i18n.__(
+                "commands.economy.cases.rewardCoins",
+                {
+                  amount: Math.round(rewards.coins),
+                }
+              );
             }
-
             if (rewards.xp > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardXp", {
-                amount: rewards.xp,
+              rewardDetailsText += i18n.__("commands.economy.cases.rewardXp", {
+                amount: Math.round(rewards.xp),
               });
             }
-
             if (rewards.discount > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardDiscount", {
-                amount: rewards.discount,
-              });
+              rewardDetailsText += i18n.__(
+                "commands.economy.cases.rewardDiscount",
+                {
+                  amount: rewards.discount,
+                }
+              );
             }
+            /*if (rewards.cooldownReductions) {
+              rewardDetailsText += i18n.__(
+                "commands.economy.cases.rewardCooldown",
+                {
+                  time: prettyMs(rewards.cooldownReductions.amount, {
+                    verbose: true,
+                  }),
+                  type: rewards.cooldownReductions.type,
+                }
+              );
+            }*/
 
-            if (Object.keys(rewards.cooldownReductions).length > 0) {
-              for (const [cooldownType, reduction] of Object.entries(
-                rewards.cooldownReductions
-              )) {
-                // Use CratesDisplay translations for cooldown types
-                const cooldownTypeName = getCrateTranslation(
-                  `cooldownTypes.${cooldownType}`,
-                  cooldownType
-                );
-                rewardText += i18n.__("commands.economy.cases.rewardCooldown", {
-                  type: cooldownTypeName,
-                  time: prettyMs(reduction, { verbose: true }),
-                });
-              }
-            }
-
-            // Create component with the reward text
-            const rewardComponent = new ComponentBuilder()
-              .addText(rewardText)
-              .addImage("attachment://reward.avif");
-
-            await interaction.editReply({
-              components: [rewardComponent.build()],
+            // Prepare reply options using the builder
+            const rewardOptions = rewardComponent.toReplyOptions({
               files: [rewardAttachment],
-              flags: MessageFlags.IsComponentsV2,
+              content: isAiContext ? rewardDetailsText : undefined,
             });
+
+            // Reply/edit based on context
+            if (isAiContext) {
+              await interaction.reply(rewardOptions);
+            } else {
+              await interaction.editReply(rewardOptions);
+            }
 
             return;
           } catch (error) {
-            if (error.message.startsWith("Cooldown active:")) {
-              await interaction.editReply({
-                content: i18n.__("commands.economy.cases.cooldownActive", {
-                  time: prettyMs(parseInt(error.message.split(":")[1].trim()), {
-                    verbose: true,
-                  }),
-                }),
-              });
+            console.error("Error opening requested case:", error);
+            const errorOptions = {
+              content: i18n.__("commands.economy.cases.error"),
+              ephemeral: true,
+            };
+            if (isAiContext) {
+              throw new Error(i18n.__("commands.economy.cases.error"));
             } else {
-              console.error("Error opening case directly:", error);
-              await interaction.editReply({
-                content: i18n.__("commands.economy.error"),
-              });
+              await interaction.editReply(errorOptions);
             }
             return;
           }
@@ -393,6 +407,15 @@ export default {
       const generateCratesMessage = async (options = {}) => {
         const { disableInteractions = false } = options;
 
+        // Get user data
+        userData = await Database.getUser(
+          interaction.guild.id,
+          interaction.user.id
+        );
+
+        // Get crate info for each type
+        const crateInfo = cratesList[selectedCrate];
+
         const [pngBuffer, dominantColor] = await generateImage(
           "CratesDisplay",
           {
@@ -434,16 +457,18 @@ export default {
           name: `crates.avif`,
         });
 
-        // Create main container with ComponentBuilder
-        const cratesComponent = new ComponentBuilder()
-          .setColor(dominantColor?.embedColor ?? 0x0099ff)
-          .addText(i18n.__("commands.economy.cases.title"), "header3")
+        // Create Crates component with conditional mode
+        const cratesComponent = new ComponentBuilder({
+          dominantColor,
+          mode: builderMode,
+        })
+          .addText(i18n.__(`commands.economy.cases.title`), "header3")
           .addText(
             i18n.__("commands.economy.cases.balance", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
-          .addImage("attachment://crates.avif");
+          .addImage(`attachment://crates.avif`);
 
         // Create selection menu for crates
         const selectMenu = new StringSelectMenuBuilder()
@@ -491,11 +516,20 @@ export default {
         };
       };
 
-      const message = await interaction.editReply(
-        await generateCratesMessage()
-      );
+      // Initial message send/edit
+      const initialMessageOptions = await generateCratesMessage();
+      let message;
+      if (isAiContext) {
+        // AI context: Use proxy reply
+        message = await interaction.reply(initialMessageOptions); // interaction is proxy
+        // No collector needed for AI context
+        return;
+      } else {
+        // Normal context: Edit deferred reply
+        message = await interaction.editReply(initialMessageOptions);
+      }
 
-      // Create collector for both select menu and button
+      // Create collector for buttons and select menu (only for normal context)
       const collector = message.createMessageComponentCollector({
         filter: (i) => i.user.id === interaction.user.id,
         time: 60000,
@@ -635,11 +669,11 @@ export default {
             const backRow = new ActionRowBuilder().addComponents(backButton);
             rewardComponent.addActionRow(backRow);
 
-            await i.update({
-              components: [rewardComponent.build()],
+            // Final reply logic for normal context
+            const rewardOptions = rewardComponent.toReplyOptions({
               files: [rewardAttachment],
-              flags: MessageFlags.IsComponentsV2,
             });
+            await i.update(rewardOptions);
 
             // Create a collector just for the back button
             const backCollector = message.createMessageComponentCollector({
@@ -739,27 +773,12 @@ export default {
               await i.update(await generateCratesMessage());
             });
           } catch (error) {
-            if (error.message.startsWith("Cooldown active:")) {
-              await i.reply({
-                content: i18n.__("commands.economy.cases.cooldownActive", {
-                  time: prettyMs(parseInt(error.message.split(":")[1].trim()), {
-                    verbose: true,
-                  }),
-                }),
-                ephemeral: true,
-              });
-            } else if (error.message === "No crates available") {
-              await i.reply({
-                content: i18n.__("commands.economy.cases.noCratesAvailable"),
-                ephemeral: true,
-              });
-            } else {
-              console.error("Error opening crate:", error);
-              await i.reply({
-                content: i18n.__("commands.economy.error"),
-                ephemeral: true,
-              });
-            }
+            console.error("Error opening crate:", error);
+            // Handle error for normal context (followUp is fine after deferUpdate)
+            await i.followUp({
+              content: i18n.__("commands.economy.cases.error"),
+              ephemeral: true,
+            });
           }
         }
       });
@@ -780,11 +799,21 @@ export default {
         }
       });
     } catch (error) {
-      console.error("Error in crates command:", error);
-      await interaction.editReply({
+      console.error("Error in cases command:", error);
+      const errorOptions = {
         content: i18n.__("commands.economy.cases.error"),
         ephemeral: true,
-      });
+      };
+      // Check AI context for error handling
+      if (!!interaction._isAiProxy) {
+        throw new Error(i18n.__("commands.economy.cases.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

@@ -84,7 +84,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const amount = interaction.options.getString("amount");
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -278,77 +286,20 @@ export default {
       });
       // --- End withdrawal transaction ---
 
-      // --- Send DM if partner's balance was affected ---
-      let partnerDmNotificationSent = true; // Assume success unless we try and fail
-      if (partnerData && partnerWithdrawAmount.greaterThan(0)) {
-        try {
-          const partnerDiscordUser = await interaction.client.users.fetch(
-            partnerData.id
-          );
-          await partnerDiscordUser.send(
-            i18n.__("commands.economy.withdraw.partnerWithdrawDM", {
-              user: interaction.user.tag,
-              amount: amountToWithdraw.toFixed(2), // Total withdrawn
-              partnerAmount: partnerWithdrawAmount.toFixed(2), // Amount taken from partner
-              guild: interaction.guild.name,
-            })
-          );
-        } catch (dmError) {
-          console.warn(
-            `Failed to send withdrawal DM to partner ${partnerData.id}:`,
-            dmError
-          );
-          partnerDmNotificationSent = false;
-        }
-      }
-      // --- End Send DM ---
-
-      // --- Explicitly invalidate cache AFTER transaction for BOTH users ---
-      const userKeysToDel = [
-        Database._cacheKeyUser(guildId, userId, true),
-        Database._cacheKeyUser(guildId, userId, false),
-        Database._cacheKeyStats(guildId, userId),
-      ];
-      if (partnerData) {
-        userKeysToDel.push(
-          Database._cacheKeyUser(guildId, partnerData.id, true),
-          Database._cacheKeyUser(guildId, partnerData.id, false),
-          Database._cacheKeyStats(guildId, partnerData.id)
-        );
-      }
-
-      if (Database.redisClient) {
-        try {
-          await Database.redisClient.del(userKeysToDel);
-          Database._logRedis("del", userKeysToDel.join(", "), true);
-        } catch (err) {
-          Database._logRedis("del", userKeysToDel.join(", "), err);
-        }
-      }
-
-      // Get updated user data (for the image)
-      const updatedUser = await Database.getUser(guildId, userId, true);
-      // Recalculate combined balance for the image based on potentially updated partner data
-      let finalCombinedBank = new Prisma.Decimal(
-        updatedUser.economy?.bankBalance ?? 0
-      );
+      // --- Send Confirmation ---
+      // Get user data *after* the transaction for the receipt
+      const finalUserData = await Database.getUser(guildId, userId, true);
       if (marriageStatus && marriageStatus.status === "MARRIED") {
-        const updatedPartner = await Database.getUser(
+        // Recalculate partner balance AFTER transaction for the receipt
+        partnerData = await Database.getUser(
           guildId,
           marriageStatus.partnerId,
           true
         );
-        finalCombinedBank = finalCombinedBank.plus(
-          new Prisma.Decimal(updatedPartner.economy?.bankBalance ?? 0)
-        );
-        updatedUser.partnerData = updatedPartner; // Pass updated partner data
-        updatedUser.marriageStatus = marriageStatus;
-        updatedUser.combinedBankBalance = finalCombinedBank.toFixed(5);
       }
 
-      // Generate the transfer image
-      const [pngBuffer, dominantColor] = await generateImage(
-        "Transfer",
+      const [buffer, dominantColor] = await generateImage(
+        "Transfer", // Use Receipt template
         {
           interaction: {
             user: {
@@ -359,7 +310,6 @@ export default {
                 extension: "png",
                 size: 1024,
               }),
-              locale: interaction.user.locale,
             },
             guild: {
               id: interaction.guild.id,
@@ -371,38 +321,87 @@ export default {
             },
           },
           locale: interaction.locale,
-          isDeposit: false,
+          database: finalUserData, // Pass final user data
+          partnerData: partnerData, // Pass final partner data if married
+          type: "withdraw",
           amount: amountToWithdraw.toNumber(), // Pass the actual withdrawn amount
-          afterBalance: updatedUser.economy.balance,
-          afterBank: updatedUser.economy.bankBalance, // Show user's bank balance
+          dominantColor: "user",
           returnDominant: true,
-          database: { ...updatedUser }, // Pass updated user data (includes combinedBankBalance etc)
         },
         { image: 2, emoji: 1 },
         i18n
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `withdraw.avif`,
+      const attachment = new AttachmentBuilder(buffer, {
+        name: `withdraw_receipt.avif`,
       });
 
-      const withdrawComponent = new ComponentBuilder()
-        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+      const receiptComponent = new ComponentBuilder({
+        dominantColor,
+        mode: builderMode,
+      })
         .addText(i18n.__("commands.economy.withdraw.title"), "header3")
-        .addImage(`attachment://withdraw.avif`)
+        .addImage("attachment://withdraw_receipt.avif")
         .addTimestamp(interaction.locale);
 
-      await interaction.editReply({
-        components: [withdrawComponent.build()],
+      const replyOptions = receiptComponent.toReplyOptions({
         files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
+        content: isAiContext
+          ? `${i18n.__(
+              "commands.economy.withdraw.title"
+            )}: ${amountToWithdraw.toFixed(2)}`
+          : undefined,
       });
+
+      // Reply/edit based on context
+      if (isAiContext) {
+        await interaction.reply(replyOptions);
+      } else {
+        await interaction.editReply(replyOptions);
+      }
+
+      // --- Send DM to Partner if needed ---
+      if (partnerData && partnerWithdrawAmount.greaterThan(0)) {
+        try {
+          const partnerDiscordUser = await interaction.client.users.fetch(
+            partnerData.id
+          );
+          if (partnerDiscordUser) {
+            await partnerDiscordUser.send({
+              content: i18n.__("commands.economy.withdraw.partnerWithdrawDM", {
+                user: interaction.user.tag,
+                amount: amountToWithdraw.toFixed(2), // Total withdrawn
+                partnerAmount: partnerWithdrawAmount.toFixed(2), // Amount taken from partner
+                guild: interaction.guild.name,
+              }),
+            });
+          }
+        } catch (dmError) {
+          console.error(
+            `Failed to send withdraw DM to partner ${partnerData.id}:`,
+            dmError
+          );
+        }
+      }
+      // --- End Send DM ---
     } catch (error) {
       console.error("Error in withdraw command:", error);
-      await interaction.editReply({
+      const errorOptions = {
         content: i18n.__("commands.economy.withdraw.error"),
         ephemeral: true,
-      });
+        components: [],
+        embeds: [],
+        files: [],
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.economy.withdraw.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

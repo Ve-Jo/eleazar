@@ -94,7 +94,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getString("amount");
 
@@ -268,9 +276,9 @@ export default {
         true
       );
 
-      // Generate the transfer image
-      const [pngBuffer, dominantColor] = await generateImage(
-        "Transfer",
+      // Generate transfer confirmation image
+      const [buffer, dominantColor] = await generateImage(
+        "Transfer", // Use Receipt template
         {
           interaction: {
             user: {
@@ -281,7 +289,15 @@ export default {
                 extension: "png",
                 size: 1024,
               }),
-              locale: interaction.user.locale,
+            },
+            recipient: {
+              id: targetUser.id,
+              username: targetUser.username,
+              displayName: targetUser.username, // Or fetch member displayname if needed
+              avatarURL: targetUser.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
             },
             guild: {
               id: interaction.guild.id,
@@ -312,27 +328,52 @@ export default {
         i18n
       );
 
-      const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `transfer.avif`,
+      const attachment = new AttachmentBuilder(buffer, {
+        name: `transfer_receipt.avif`,
       });
 
-      const transferComponent = new ComponentBuilder()
-        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+      const transferComponent = new ComponentBuilder({
+        dominantColor,
+        mode: builderMode,
+      })
         .addText(i18n.__("commands.economy.transfer.title"), "header3")
-        .addImage(`attachment://transfer.avif`)
+        .addImage("attachment://transfer_receipt.avif")
         .addTimestamp(interaction.locale);
 
-      await interaction.editReply({
-        components: [transferComponent.build()],
+      // Prepare reply options
+      const replyOptions = transferComponent.toReplyOptions({
         files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
+        content: isAiContext
+          ? `${i18n.__("commands.economy.transfer.title")}: ${amountInt.toFixed(
+              2
+            )} to ${targetUser.tag}`
+          : undefined,
       });
+
+      // Reply/edit based on context
+      if (isAiContext) {
+        await interaction.reply(replyOptions);
+      } else {
+        await interaction.editReply(replyOptions);
+      }
     } catch (error) {
-      console.error("Error in transfer command:", error);
-      await interaction.editReply({
+      console.error("Error executing transfer command:", error);
+      const errorOptions = {
         content: i18n.__("commands.economy.transfer.error"),
         ephemeral: true,
-      });
+        components: [],
+        embeds: [],
+        files: [],
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.economy.transfer.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

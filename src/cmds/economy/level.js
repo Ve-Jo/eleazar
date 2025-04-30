@@ -84,7 +84,14 @@ export default {
   },
 
   async execute(interaction) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
 
     try {
       const user = interaction.options.getMember("user") || interaction.member;
@@ -190,10 +197,15 @@ export default {
 
       if (!buffer) {
         console.error("Buffer is undefined or null");
-        return interaction.editReply({
+        const errorOptions = {
           content: i18n.__("commands.economy.level.imageError"),
           ephemeral: true,
-        });
+        };
+        if (isAiContext) {
+          throw new Error(i18n.__("commands.economy.level.imageError"));
+        } else {
+          return interaction.editReply(errorOptions);
+        }
       }
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -203,22 +215,47 @@ export default {
       // Use the new ComponentBuilder with automatic color handling
       const levelComponent = new ComponentBuilder({
         dominantColor: dominantColor,
+        mode: builderMode,
       })
         .addText(i18n.__("commands.economy.level.title"), "header3")
         .addImage("attachment://level.avif")
         .addTimestamp(interaction.locale);
 
-      await interaction.editReply({
-        components: [levelComponent.build()],
+      // Prepare the reply options using the builder
+      const replyOptions = levelComponent.toReplyOptions({
         files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
+        // Add content only for V1 mode (AI context)
+        content: isAiContext
+          ? i18n.__("commands.economy.level.title")
+          : undefined,
       });
+
+      // Adjust reply logic based on context
+      if (isAiContext) {
+        // AI Context: Use proxy's reply
+        await interaction.reply(replyOptions); // interaction is proxy
+      } else {
+        // Normal Context: Edit the original deferred reply
+        await interaction.editReply(replyOptions);
+      }
     } catch (error) {
       console.error("Error in level command:", error);
-      await interaction.editReply({
+      const errorOptions = {
         content: i18n.__("commands.economy.level.error"),
         ephemeral: true,
-      });
+        components: [], // Ensure components are cleared on error
+        embeds: [], // Ensure embeds are cleared on error
+        files: [], // Ensure files are cleared on error
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.economy.level.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

@@ -104,7 +104,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const user = interaction.options.getMember("user") || interaction.member;
 
     // --- Marriage Check ---
@@ -293,25 +301,46 @@ export default {
 
     if (!buffer) {
       console.error("Buffer is undefined or null");
-      return interaction.editReply({
+      // Use editReply for normal interaction, let proxy handle AI context reply
+      const errorOptions = {
         content: i18n.__("commands.economy.imageError"),
         ephemeral: true,
-      });
+      };
+      if (!isAiContext) {
+        return interaction.editReply(errorOptions);
+      } else {
+        // For AI context, throw error so toolExecutor reports failure
+        throw new Error(i18n.__("commands.economy.imageError"));
+      }
     }
 
     const attachment = new AttachmentBuilder(buffer, {
       name: `balance.avif`,
     });
 
-    const balanceBuilder = new ComponentBuilder({ dominantColor })
+    // Use the new ComponentBuilder
+    const balanceComponent = new ComponentBuilder({
+      dominantColor,
+      mode: builderMode, // Pass the determined mode
+    })
       .addText(i18n.__("commands.economy.balance.title"), "header3")
       .addImage("attachment://balance.avif")
       .addTimestamp(interaction.locale);
 
-    await interaction.editReply({
-      components: [balanceBuilder.build()],
+    // Prepare reply options using the builder
+    const replyOptions = balanceComponent.toReplyOptions({
       files: [attachment],
-      flags: MessageFlags.IsComponentsV2,
+      // Add content only for V1 mode (AI context)
+      content: isAiContext
+        ? i18n.__("commands.economy.balance.title")
+        : undefined,
     });
+
+    // Reply/edit based on context
+    if (isAiContext) {
+      await interaction.reply(replyOptions);
+    } else {
+      await interaction.editReply(replyOptions);
+    }
   },
 };

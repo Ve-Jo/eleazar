@@ -99,7 +99,14 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -337,7 +344,7 @@ export default {
         {
           interaction: {
             user: {
-              id: userId,
+              id: interaction.user.id,
               username: interaction.user.username,
               displayName: interaction.user.displayName,
               avatarURL: interaction.user.displayAvatarURL({
@@ -346,7 +353,7 @@ export default {
               }),
             },
             guild: {
-              id: guildId,
+              id: interaction.guild.id,
               name: interaction.guild.name,
               iconURL: interaction.guild.iconURL({
                 extension: "png",
@@ -361,41 +368,89 @@ export default {
           afterBank: updatedUser.economy.bankBalance, // Still show user's individual bank balance here
           returnDominant: true,
           database: updatedUser, // Pass updated user data (incl. combinedBankBalance etc.)
+          partnerData: partnerData, // Pass final partner data
+          type: "deposit",
+          amount: amountToDeposit.toNumber(), // Pass the actual deposited amount
+          dominantColor: "user",
+          returnDominant: true,
         },
         { image: 2, emoji: 1 },
         i18n
       );
 
-      // Create response component
-      if (!buffer) {
-        return interaction.editReply({
-          content: i18n.__("commands.economy.deposit.imageError"),
-          ephemeral: true,
-        });
-      }
-
       const attachment = new AttachmentBuilder(buffer, {
-        name: `deposit.avif`,
+        name: `deposit_receipt.avif`,
       });
 
-      const depositComponent = new ComponentBuilder()
-        .setColor(dominantColor?.embedColor ?? 0x0099ff)
+      const receiptComponent = new ComponentBuilder({
+        dominantColor,
+        mode: builderMode,
+      })
         .addText(i18n.__("commands.economy.deposit.title"), "header3")
-        .addImage(`attachment://deposit.avif`)
+        .addText(
+          i18n.__("commands.economy.deposit.depositSuccess", {
+            amount: amountToDeposit.toFixed(2),
+          })
+        )
+        .addImage("attachment://deposit_receipt.avif")
         .addTimestamp(interaction.locale);
 
-      // Send response
-      await interaction.editReply({
-        components: [depositComponent.build()],
+      const replyOptions = receiptComponent.toReplyOptions({
         files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
+        content: isAiContext
+          ? i18n.__("commands.economy.deposit.depositSuccess", {
+              amount: amountToDeposit.toFixed(2),
+            })
+          : undefined,
       });
+
+      // Reply/edit based on context
+      if (isAiContext) {
+        await interaction.reply(replyOptions);
+      } else {
+        await interaction.editReply(replyOptions);
+      }
+
+      // --- Send DM to Partner if Married ---
+      if (partnerData) {
+        try {
+          const partnerDiscordUser = await interaction.client.users.fetch(
+            partnerData.id
+          );
+          if (partnerDiscordUser) {
+            await partnerDiscordUser.send({
+              content: i18n.__("commands.economy.deposit.partnerDepositDM", {
+                user: interaction.user.tag,
+                amount: amountToDeposit.toFixed(2),
+                guild: interaction.guild.name,
+              }),
+            });
+          }
+        } catch (dmError) {
+          console.error(
+            `Failed to send deposit DM to partner ${partnerData.id}:`,
+            dmError
+          );
+        }
+      }
     } catch (error) {
       console.error("Error in deposit command:", error);
-      await interaction.editReply({
+      const errorOptions = {
         content: i18n.__("commands.economy.deposit.error"),
         ephemeral: true,
-      });
+        components: [],
+        embeds: [],
+        files: [],
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.economy.deposit.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };

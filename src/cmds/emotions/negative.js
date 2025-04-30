@@ -218,10 +218,32 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const { guild, user } = interaction;
     const targetUser = interaction.options.getUser("user") || user;
     const emotionType = interaction.options.getString("emotion");
+
+    // Prevent interaction with self or bots
+    if (targetUser.id === user.id) {
+      return interaction.editReply({
+        content: i18n.__("commands.emotions.cannotSelectSelf"),
+        ephemeral: true,
+      });
+    }
+    if (targetUser.bot) {
+      return interaction.editReply({
+        content: i18n.__("commands.emotions.cannotSelectBot"),
+        ephemeral: true,
+      });
+    }
 
     async function getEmotionData() {
       try {
@@ -262,103 +284,102 @@ export default {
       }
     }
 
-    let emotionData = await getEmotionData();
+    try {
+      // Fetch image URL
+      const emotionData = await getEmotionData();
 
-    const generateEmotionMessage = async (options = {}) => {
-      const { disableInteractions = false } = options;
-
-      // Validate fetched data
       if (!emotionData || !emotionData.image) {
-        console.warn("Invalid or missing image URL for emotion:", emotionType);
-        emotionData = await getEmotionData(); // Retry fetch
-        if (!emotionData || !emotionData.image) {
-          return {
-            // Return error state object
-            content: i18n.__("commands.emotions.negative.imageNotFound"),
-            components: [],
-            ephemeral: true,
-          };
+        const errorOptions = {
+          content: i18n.__("commands.emotions.negative.imageNotFound"),
+          ephemeral: true,
+        };
+        if (isAiContext) {
+          throw new Error(i18n.__("commands.emotions.negative.imageNotFound"));
+        } else {
+          return interaction.editReply(errorOptions);
         }
       }
 
-      // Use ComponentBuilder directly with the fetched image URL
-      const emotionComponent = new ComponentBuilder()
-        .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
-        .addText(
-          i18n.__(
-            `commands.emotions.negative.${emotionData.category}.description`,
-            {
-              user: user.id,
-              targetUser: targetUser.id,
-            }
-          ) ||
-            i18n.__(`commands.emotions.negative.${emotionData.category}.title`),
-          "header3"
-        )
+      // Create component using ComponentBuilder
+      const emotionComponent = new ComponentBuilder({
+        color: process.env.EMBED_COLOR,
+        mode: builderMode,
+      })
+        .addText(emotionData.emotion, "header3") // Use title from getEmotionData
+        .addText(emotionData.description) // Use description from getEmotionData
         .addImage(emotionData.image)
         .addTimestamp(interaction.locale);
 
-      // Define action row (button) but don't add it yet
-      const nextButton = new ButtonBuilder()
-        .setCustomId("next_emotion")
-        .setEmoji("🔄")
-        .setStyle(ButtonStyle.Primary);
+      // Prepare reply options
+      const replyOptions = emotionComponent.toReplyOptions({
+        content: isAiContext ? emotionData.emotion : undefined,
+      });
 
-      const buttonRow = new ActionRowBuilder().addComponents(nextButton);
+      // Reply/edit based on context
+      let message;
+      if (isAiContext) {
+        message = await interaction.reply(replyOptions);
+        // No collector needed for AI
+      } else {
+        message = await interaction.editReply(replyOptions);
 
-      // Conditionally add the button row
-      if (!disableInteractions) {
-        emotionComponent.addActionRow(buttonRow);
-      }
+        // Add collector for buttons (only for normal context)
+        const collector = message.createMessageComponentCollector({
+          componentType: ComponentType.Button,
+          time: 60000, // 60 seconds
+        });
 
-      return {
-        // Return success state object
-        components: [emotionComponent.build()],
-        flags: MessageFlags.IsComponentsV2,
-      };
-    };
-
-    let initialMessageData = await generateEmotionMessage();
-    if (initialMessageData.content) {
-      // Check if generate returned an error state
-      return interaction.editReply(initialMessageData);
-    }
-    const message = await interaction.editReply(initialMessageData);
-
-    const collector = message.createMessageComponentCollector({
-      filter: (i) => i.user.id === user.id,
-      time: 60000, // 1 minute
-    });
-
-    collector.on("collect", async (i) => {
-      if (i.customId === "next_emotion") {
-        await i.deferUpdate();
-        emotionData = await getEmotionData();
-        const newMessageData = await generateEmotionMessage();
-        if (newMessageData.content) {
-          // Check for error on refetch
-          await i.followUp({ ...newMessageData, ephemeral: true });
-        } else {
-          await i.editReply(newMessageData);
-        }
-      }
-    });
-
-    collector.on("end", async () => {
-      if (message.editable) {
-        try {
-          const finalMessageData = await generateEmotionMessage({
-            disableInteractions: true,
-          });
-          if (!finalMessageData.content) {
-            // Check for error before final edit
-            await message.edit(finalMessageData);
+        collector.on("collect", async (i) => {
+          if (i.customId === "next_emotion") {
+            // Only the original user can get the next image
+            if (i.user.id !== user.id) {
+              await i.reply({
+                content: "Only the command user can request the next image.",
+                ephemeral: true,
+              });
+              return;
+            }
+            await i.deferUpdate();
+            await getEmotionData(); // Fetch and display next image
           }
-        } catch (error) {
-          console.error("Error updating components on end:", error);
-          await message.edit({ components: [] }).catch(() => {}); // Fallback
+        });
+
+        collector.on("end", async (collected, reason) => {
+          if (reason !== "messageDelete" && message.editable) {
+            try {
+              const latestMessage = await message.channel.messages.fetch(
+                message.id
+              );
+              if (latestMessage.components.length > 0) {
+                await latestMessage.edit({ components: [] });
+              }
+            } catch (error) {
+              console.error(
+                "Failed to remove components on collector end:",
+                error
+              );
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error getting emotion data:", error);
+      const errorOptions = {
+        content: i18n.__("commands.emotions.negative.imageNotFound"),
+        ephemeral: true,
+        components: [],
+        embeds: [],
+        files: [],
+      };
+      if (isAiContext) {
+        throw new Error(i18n.__("commands.emotions.negative.imageNotFound"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
         }
       }
-    });
+    }
   },
 };

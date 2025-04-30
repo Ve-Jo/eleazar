@@ -42,7 +42,14 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply({ ephemeral: true });
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context, and make it ephemeral
+    if (!isAiContext) {
+      await interaction.deferReply({ ephemeral: true });
+    }
 
     try {
       // Remove the banner URL from the database
@@ -80,30 +87,51 @@ export default {
       }
 
       // Create success component (optional, but good practice)
-      const successComponent = new ComponentBuilder()
-        .setColor(0x00ff00) // Green color for success
-        .addText(i18n.__("commands.images.removebanner.success"));
+      const successComponent = new ComponentBuilder({
+        mode: builderMode,
+        color: 0x00ff00, // Green color for success
+      }).addText(i18n.__("commands.images.removebanner.success"));
 
-      await interaction.editReply({
-        // content: i18n.__("commands.images.removebanner.success"),
-        components: [successComponent.build()],
-        flags: MessageFlags.IsComponentsV2,
-        ephemeral: true,
+      // Reply/edit based on context
+      const replyOptions = successComponent.toReplyOptions({
+        ephemeral: true, // Keep ephemeral for both contexts
+        content: isAiContext
+          ? i18n.__("commands.images.removebanner.success")
+          : undefined,
       });
+
+      if (isAiContext) {
+        await interaction.reply(replyOptions);
+      } else {
+        await interaction.editReply(replyOptions);
+      }
     } catch (error) {
       console.error("Error removing banner:", error);
 
       // Create error component
-      const errorComponent = new ComponentBuilder()
-        .setColor(0xff0000) // Red color for error
-        .addText(i18n.__("commands.images.removebanner.error"));
+      const errorComponent = new ComponentBuilder({
+        mode: builderMode,
+        color: 0xff0000, // Red color for error
+      }).addText(i18n.__("commands.images.removebanner.error"));
 
-      await interaction.editReply({
-        // content: i18n.__("commands.images.removebanner.error"),
-        components: [errorComponent.build()],
-        flags: MessageFlags.IsComponentsV2,
+      const errorOptions = errorComponent.toReplyOptions({
         ephemeral: true,
+        content: isAiContext
+          ? i18n.__("commands.images.removebanner.error")
+          : undefined,
       });
+
+      if (isAiContext) {
+        // For AI, throw the error message instead of replying
+        throw new Error(i18n.__("commands.images.removebanner.error"));
+      } else {
+        // For normal interactions, edit the deferred reply
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {}); // Fallback reply
+        }
+      }
     }
   },
 };

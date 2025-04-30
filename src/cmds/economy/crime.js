@@ -75,7 +75,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    await interaction.deferReply();
+    // Determine builder mode based on execution context
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+
+    // Defer only for normal context
+    if (!isAiContext) {
+      await interaction.deferReply();
+    }
+
     const { guild, user } = interaction;
 
     try {
@@ -142,15 +150,14 @@ export default {
         // Create cooldown component
         const cooldownComponent = new ComponentBuilder({
           dominantColor,
+          mode: builderMode,
         })
           .addText(i18n.__("commands.economy.crime.title"), "header3")
           .addText(i18n.__("commands.economy.crime.cooldown"))
           .addImage("attachment://crime_cooldown.avif");
 
         return interaction.editReply({
-          components: [cooldownComponent.build()],
-          files: [attachment],
-          flags: MessageFlags.IsComponentsV2,
+          ...cooldownComponent.toReplyOptions({ files: [attachment] }),
           ephemeral: true,
         });
       }
@@ -208,14 +215,29 @@ export default {
 
       // Create a component to hold the text and the select menu
       const selectTargetComponent = new ComponentBuilder()
-        .setColor(process.env.EMBED_COLOR) // Use default color or adjust as needed
+        // .setColor(process.env.EMBED_COLOR) // Adjust color if needed
+        .setMode(builderMode) // Set mode
         .addText(i18n.__("commands.economy.crime.selectTarget"))
         .addActionRow(row);
 
-      const response = await interaction.editReply({
-        components: [selectTargetComponent.build()],
-        flags: MessageFlags.IsComponentsV2, // Added flag
-      });
+      // Reply logic based on context
+      const selectTargetOptions = selectTargetComponent.toReplyOptions();
+      let response;
+      if (isAiContext) {
+        // AI cannot select a target, return an error/message
+        console.log(
+          "AI context detected in crime.js, cannot proceed with target selection."
+        );
+        // Return a message to the AI instead of throwing an error here
+        return interaction.reply({
+          content:
+            "Crime command requires target selection and cannot be used by AI.",
+          ephemeral: true, // Maybe not needed for AI?
+        });
+      } else {
+        // Normal context: Edit the deferred reply to show the selector
+        response = await interaction.editReply(selectTargetOptions);
+      }
 
       try {
         const collection = await response.awaitMessageComponent({
@@ -432,13 +454,13 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime.avif`,
+          name: `crime_result.avif`,
         });
 
-        // Use ComponentBuilder instead of EmbedBuilder
-        const crimePage = new ComponentBuilder({
-          // Set appropriate color based on success
-          color: success ? process.env.EMBED_COLOR : 0xff0000,
+        // Create result component
+        const resultComponent = new ComponentBuilder({
+          dominantColor,
+          mode: builderMode,
         })
           .addText(i18n.__("commands.economy.crime.title"), "header3")
           .addText(
@@ -449,29 +471,40 @@ export default {
                 })
               : i18n.__("commands.economy.crime.failTarget", { amount })
           )
-          .addImage(`attachment://crime.avif`)
-          .addTimestamp(interaction.locale);
+          .addImage(`attachment://crime_result.avif`);
 
-        return interaction.editReply({
-          components: [crimePage.build()],
+        // Final reply logic for normal context (updates the message with results)
+        const resultOptions = resultComponent.toReplyOptions({
           files: [attachment],
-          flags: MessageFlags.IsComponentsV2,
         });
+        await collection.update(resultOptions);
       } catch (error) {
-        if (error.code === "INTERACTION_COLLECTOR_ERROR") {
-          return interaction.editReply({
-            content: i18n.__("commands.economy.crime.noSelection"),
-            components: [],
-          });
-        }
-        throw error;
+        // Handle timeout or other errors during target selection
+        console.error("Error during crime target selection:", error);
+        const errorOptions = {
+          content: i18n.__("commands.economy.crime.noSelection"),
+          components: [],
+          files: [],
+        };
+        // No AI context check needed here as this part is skipped for AI
+        await interaction.editReply(errorOptions).catch(() => {}); // Ignore if edit fails
       }
     } catch (error) {
       console.error("Error in crime command:", error);
-      await interaction.editReply({
+      const errorOptions = {
         content: i18n.__("commands.economy.crime.error"),
         ephemeral: true,
-      });
+      };
+      // Check AI context for error handling
+      if (!!interaction._isAiProxy) {
+        throw new Error(i18n.__("commands.economy.crime.error"));
+      } else {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions).catch(() => {});
+        } else {
+          await interaction.reply(errorOptions).catch(() => {});
+        }
+      }
     }
   },
 };
