@@ -202,7 +202,7 @@ export function createComponentReply(options = {}) {
   }
 
   return {
-    content,
+    content, // V2 normally doesn't have content, but this fn might be used generically
     components: components.length > 0 ? components : undefined,
     files,
     ephemeral,
@@ -216,9 +216,16 @@ export function createComponentReply(options = {}) {
  */
 export class ComponentBuilder {
   constructor(options = {}) {
-    this.container = new ContainerBuilder();
     this.options = options;
-    this.actionRows = [];
+    this.mode = options.mode || "v2"; // 'v1' or 'v2', default v2
+
+    if (this.mode === "v2") {
+      this.container = new ContainerBuilder();
+    } else {
+      // V1 state
+      this.embedData = { fields: [] };
+      this.v1ActionRows = [];
+    }
 
     if (options.color) {
       this.setColor(options.color);
@@ -229,14 +236,17 @@ export class ComponentBuilder {
   }
 
   /**
-   * Sets the accent color for the container
+   * Sets the accent color for the container or embed
    * @param {number|string} color - Hex color as number or string
    * @returns {ComponentBuilder} this builder for chaining
    */
   setColor(color) {
-    // Convert color to a usable format
     let formattedColor = this.formatColor(color);
-    this.container.setAccentColor(formattedColor);
+    if (this.mode === "v2") {
+      this.container.setAccentColor(formattedColor);
+    } else {
+      this.embedData.color = formattedColor;
+    }
     return this;
   }
 
@@ -288,46 +298,70 @@ export class ComponentBuilder {
    * @returns {ComponentBuilder} this builder for chaining
    */
   addHeader(title, avatarUrl = null) {
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`### ${title}`)
-    );
-
-    // Only set thumbnail accessory if avatarUrl is provided and not null/undefined
-    if (avatarUrl) {
-      try {
-        section.setThumbnailAccessory(new ThumbnailBuilder().setURL(avatarUrl));
-      } catch (error) {
-        console.error("Error setting thumbnail in header:", error);
-        // Continue without the thumbnail if there's an error
+    if (this.mode === "v2") {
+      const section = new SectionBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(`### ${title}`)
+      );
+      if (avatarUrl) {
+        try {
+          section.setThumbnailAccessory(
+            new ThumbnailBuilder().setURL(avatarUrl)
+          );
+        } catch (error) {
+          console.error("Error setting thumbnail in header:", error);
+        }
+      }
+      this.container.addSectionComponents(section);
+    } else {
+      // V1 - Set embed title and author/thumbnail
+      this.embedData.title = title;
+      if (avatarUrl) {
+        // Use author for avatar in V1 typically
+        this.embedData.author = { name: title, icon_url: avatarUrl };
+        // Or use thumbnail if more appropriate for layout, adjust title setting
+        // this.embedData.thumbnail = { url: avatarUrl };
+      } else {
+        // If no avatarUrl, just set the title as author name if it wasn't set
+        if (!this.embedData.author) {
+          this.embedData.author = { name: title };
+        }
       }
     }
-
-    this.container.addSectionComponents(section);
     return this;
   }
 
   /**
-   * Adds a section with text on left and image on right
+   * Adds a section with text on left and image on right (V2 only)
+   * In V1, adds text to description and sets thumbnail
    * @param {string} text - The text to display
    * @param {string} imageUrl - URL for the thumbnail image
    * @returns {ComponentBuilder} this builder for chaining
    */
   addTextWithThumbnail(text, imageUrl) {
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(text)
-    );
-
-    // Only set thumbnail if imageUrl is provided and not null/undefined
-    if (imageUrl) {
-      try {
-        section.setThumbnailAccessory(new ThumbnailBuilder().setURL(imageUrl));
-      } catch (error) {
-        console.error("Error setting thumbnail in text section:", error);
-        // Continue without the thumbnail if there's an error
+    if (this.mode === "v2") {
+      const section = new SectionBuilder().addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(text)
+      );
+      if (imageUrl) {
+        try {
+          section.setThumbnailAccessory(
+            new ThumbnailBuilder().setURL(imageUrl)
+          );
+        } catch (error) {
+          console.error("Error setting thumbnail in text section:", error);
+        }
+      }
+      this.container.addSectionComponents(section);
+    } else {
+      // V1 - Add text to description, set thumbnail
+      this.embedData.description =
+        (this.embedData.description || "") +
+        `
+${text}`;
+      if (imageUrl) {
+        this.embedData.thumbnail = { url: imageUrl };
       }
     }
-
-    this.container.addSectionComponents(section);
     return this;
   }
 
@@ -338,44 +372,100 @@ export class ComponentBuilder {
    * @returns {ComponentBuilder} this builder for chaining
    */
   addText(text, style = "plain") {
-    let formattedText = text;
-
-    switch (style) {
-      case "header1":
-        formattedText = `# ${text}`;
-        break;
-      case "header2":
-        formattedText = `## ${text}`;
-        break;
-      case "header3":
-        formattedText = `### ${text}`;
-        break;
-      case "italic":
-        formattedText = `*${text}*`;
-        break;
-      case "bold":
-        formattedText = `**${text}**`;
-        break;
-      // plain doesn't need formatting
+    if (this.mode === "v2") {
+      let formattedText = text;
+      switch (style) {
+        case "header1":
+          formattedText = `# ${text}`;
+          break;
+        case "header2":
+          formattedText = `## ${text}`;
+          break;
+        case "header3":
+          formattedText = `### ${text}`;
+          break;
+        case "italic":
+          formattedText = `*${text}*`;
+          break;
+        case "bold":
+          formattedText = `**${text}**`;
+          break;
+      }
+      this.container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(formattedText)
+      );
+    } else {
+      // V1 - Append to description
+      let formattedText = text;
+      switch (style) {
+        // V1 supports markdown directly in description/fields
+        case "header1":
+          formattedText = `# ${text}\n`;
+          break; // Needs newline?
+        case "header2":
+          formattedText = `## ${text}\n`;
+          break;
+        case "header3":
+          formattedText = `### ${text}\n`;
+          break;
+        case "italic":
+          formattedText = `*${text}*`;
+          break;
+        case "bold":
+          formattedText = `**${text}**`;
+          break;
+        // Add line break for 'plain' unless it's the first text added
+        default:
+          formattedText = (this.embedData.description ? "\n" : "") + text;
+          break;
+      }
+      this.embedData.description =
+        (this.embedData.description || "") + formattedText;
+      // Alternative: Add as field if needed
+      // this.embedData.fields.push({ name: '​', value: formattedText, inline: false });
     }
-
-    this.container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(formattedText)
-    );
     return this;
   }
 
   /**
-   * Adds an image or attachment to the container
-   * @param {string} url - The URL of the image or attachment reference
+   * Adds an inline field (V1 only, simulates with text in V2)
+   * @param {string} name - Field name
+   * @param {string} value - Field value
+   * @param {boolean} inline - Whether the field should be inline (default true for V1)
+   * @returns {ComponentBuilder} this builder for chaining
+   */
+  addField(name, value, inline = true) {
+    if (this.mode === "v1") {
+      this.embedData.fields.push({
+        name: name || "​",
+        value: value || "​",
+        inline,
+      });
+    } else {
+      // V2 simulation: Add name as header, value as text
+      this.addText(name, "header3"); // Use a smaller header for field names
+      this.addText(value);
+      // Note: V2 doesn't have direct inline support like V1 fields
+    }
+    return this;
+  }
+
+  /**
+   * Adds an image or attachment to the container/embed
+   * @param {string} url - The URL of the image or attachment reference (e.g., 'http://...', 'attachment://file.png')
    * @returns {ComponentBuilder} this builder for chaining
    */
   addImage(url) {
-    this.container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(url)
-      )
-    );
+    if (this.mode === "v2") {
+      this.container.addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder().setURL(url)
+        )
+      );
+    } else {
+      // V1 - Set embed image
+      this.embedData.image = { url: url };
+    }
     return this;
   }
 
@@ -384,59 +474,100 @@ export class ComponentBuilder {
    * @returns {ComponentBuilder} this builder for chaining
    */
   addSeparator() {
-    this.container.addSeparatorComponents(new SeparatorBuilder());
+    if (this.mode === "v2") {
+      this.container.addSeparatorComponents(new SeparatorBuilder());
+    } else {
+      // V1 - Add a field to simulate separator
+      // Use a non-breaking space field name/value which is common practice
+      this.embedData.fields.push({ name: "​", value: "​", inline: false });
+      // Or: this.embedData.fields.push({ name: '━━━━━━━━━━━━━━━', value: '​'});
+    }
     return this;
   }
 
   /**
-   * Adds a timestamp to the bottom of the container
-   * @param {string} locale - User locale for formatting
-   * @param {string} prefix - Optional custom prefix text
+   * Adds a timestamp to the bottom of the container/embed
+   * @param {string} locale - User locale for formatting (used for V2 prefix only)
+   * @param {string} prefix - Optional custom prefix text (used for V2 only)
    * @returns {ComponentBuilder} this builder for chaining
    */
   addTimestamp(locale, prefix = null) {
-    const timestamp = Math.floor(Date.now() / 1000);
-    let defaultPrefix;
-
-    if (locale?.startsWith("ru")) {
-      defaultPrefix = "Сегодня, в";
-    } else if (locale?.startsWith("uk")) {
-      defaultPrefix = "Сьогодні о";
+    if (this.mode === "v2") {
+      const timestamp = Math.floor(Date.now() / 1000);
+      let defaultPrefix;
+      if (locale?.startsWith("ru")) {
+        defaultPrefix = "Сегодня, в";
+      } else if (locale?.startsWith("uk")) {
+        defaultPrefix = "Сьогодні о";
+      } else {
+        defaultPrefix = "Today at";
+      }
+      const text = `${prefix || defaultPrefix} <t:${timestamp}:t>`;
+      // Add separator before timestamp unless it's the first element
+      if (this.container.components.length > 0) {
+        this.addSeparator();
+      }
+      this.container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(text)
+      );
     } else {
-      defaultPrefix = "Today at";
+      // V1 - Set embed timestamp
+      this.embedData.timestamp = new Date().toISOString();
+      // V1 timestamp is handled directly by Discord, no prefix needed in footer text
+      // If a custom prefix *was* provided, add it to the footer
+      if (prefix) {
+        // Add prefix to footer, create footer if needed
+        if (!this.embedData.footer) this.embedData.footer = { text: "" };
+        this.embedData.footer.text =
+          (this.embedData.footer.text
+            ? this.embedData.footer.text + " • "
+            : "") + prefix;
+      }
     }
-
-    const text = `${prefix || defaultPrefix} <t:${timestamp}:t>`;
-
-    this.container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(text)
-    );
     return this;
   }
 
   /**
-   * Adds a footer text to the container
+   * Adds a footer text to the container/embed
    * @param {string} text - The footer text
-   * @param {boolean} italic - Whether to format as italic
+   * @param {string} iconURL - Optional icon URL for the footer (V1 only)
    * @returns {ComponentBuilder} this builder for chaining
    */
-  addFooter(text, italic = true) {
-    this.container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(italic ? `*${text}*` : text)
-    );
+  addFooter(text, iconURL = null) {
+    if (this.mode === "v2") {
+      // Add separator before footer unless it's the first element
+      if (this.container.components.length > 0) {
+        this.addSeparator();
+      }
+      // V2 doesn't have icon URLs for footers, just text
+      this.container.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(text) // Typically small/italic *${text}*?
+      );
+    } else {
+      // V1 - Add to embed footer
+      this.embedData.footer = { text: text };
+      if (iconURL) {
+        this.embedData.footer.icon_url = iconURL;
+      }
+    }
     return this;
   }
 
   /**
-   * Add an action row with components to the container
+   * Add an action row with components to the container or V1 list
    * @param {ActionRowBuilder} actionRow - The action row to add
    * @returns {ComponentBuilder} this builder for chaining
    */
   addActionRow(actionRow) {
-    if (actionRow instanceof ActionRowBuilder) {
+    if (!(actionRow instanceof ActionRowBuilder)) {
+      console.error("Invalid ActionRowBuilder provided to addActionRow");
+      return this;
+    }
+    if (this.mode === "v2") {
       this.container.addActionRowComponents(actionRow);
     } else {
-      console.error("Invalid ActionRowBuilder provided to addActionRow");
+      // V1 - Add to V1 action row list
+      this.v1ActionRows.push(actionRow);
     }
     return this;
   }
@@ -457,8 +588,13 @@ export class ComponentBuilder {
    * @returns {ComponentBuilder} this builder for chaining
    */
   addButtons(...buttons) {
-    const actionRow = new ActionRowBuilder().addComponents(...buttons);
-    this.container.addActionRowComponents(actionRow);
+    const validButtons = buttons.filter((b) => b instanceof ButtonBuilder);
+    if (validButtons.length === 0) {
+      console.error("No valid ButtonBuilders provided to addButtons");
+      return this;
+    }
+    const actionRow = new ActionRowBuilder().addComponents(...validButtons);
+    this.addActionRow(actionRow);
     return this;
   }
 
@@ -566,49 +702,106 @@ export class ComponentBuilder {
    * Adds a string select menu to the container in a new action row
    * @param {string} customId - The custom ID for the select menu
    * @param {string} placeholder - The placeholder text for the select menu
-   * @param {Array} options - The options for the select menu
-   * @param {Object} settings - Additional settings (min/max values, disabled)
+   * @param {Array<import('discord.js').APISelectMenuOption>} options - The options for the select menu (label, value, description?, emoji?, default?)
+   * @param {Object} settings - Additional settings (minValues, maxValues, disabled)
    * @returns {ComponentBuilder} this builder for chaining
    */
   addStringSelectMenu(customId, placeholder, options, settings = {}) {
     const menu = new StringSelectMenuBuilder()
       .setCustomId(customId)
       .setPlaceholder(placeholder)
-      .addOptions(options);
+      .addOptions(options); // options should be { label, value, ... }
 
     if (settings.minValues) menu.setMinValues(settings.minValues);
     if (settings.maxValues) menu.setMaxValues(settings.maxValues);
-    if (settings.disabled) menu.setDisabled(true);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled); // Check for undefined explicitly
 
     const actionRow = new ActionRowBuilder().addComponents(menu);
-    this.container.addActionRowComponents(actionRow);
+    this.addActionRow(actionRow);
     return this;
   }
 
   /**
-   * Builds and returns the final container
-   * @returns {ContainerBuilder} The built container
+   * Builds and returns the final container (V2) or V1 data structure.
+   * DEPRECATED: Use toReplyOptions() for clarity.
+   * @returns {ContainerBuilder|Object} The built container (V2) or V1 data { embeds: [embedJson], components: [actionRowJson] }
    */
   build() {
-    return this.container;
+    console.warn(
+      "`ComponentBuilder.build()` is ambiguous with V1/V2 modes. Use `toReplyOptions()`."
+    );
+    if (this.mode === "v2") {
+      return this.container;
+    } else {
+      // Return V1 structure (or just the internal data?)
+      return {
+        embeds:
+          this.embedData.fields.length > 0 ||
+          this.embedData.description ||
+          this.embedData.title
+            ? [new EmbedBuilder(this.embedData).toJSON()]
+            : [], // Return raw embed data only if embed has content
+        components: this.v1ActionRows.map((row) => row.toJSON()), // Return raw action row data
+      };
+    }
   }
 
   /**
-   * Creates a reply object with components and files
+   * Creates a reply object suitable for interaction.reply/editReply or message.reply/edit
    * @param {Object} options - Reply options
    * @param {Array} options.files - Array of files to attach
-   * @param {string} options.content - Text content
+   * @param {string} options.content - Text content (mainly for V1, V2 usually doesn't have top-level content)
    * @param {boolean} options.ephemeral - Whether the reply should be ephemeral
-   * @returns {Object} Reply options for interaction.reply/editReply
+   * @returns {Object} Reply options object
    */
   toReplyOptions({ files, content, ephemeral } = {}) {
-    return {
-      content,
-      components: [this.build()],
-      files,
-      ephemeral,
-      flags: MessageFlags.IsComponentsV2,
-    };
+    if (this.mode === "v2") {
+      // CORRECT V2 Structure: The top-level components array should only contain the ContainerBuilder.
+      // ActionRows are added *inside* the container via addActionRowComponents.
+      const finalComponents =
+        this.container.components.length > 0 ? [this.container] : undefined;
+
+      return {
+        content: content || undefined, // Allow content for V2, though uncommon at top level
+        components: finalComponents, // Send only the container(s)
+        files,
+        ephemeral,
+        // Set V2 flag if a ContainerBuilder is actually present in the final payload
+        flags:
+          finalComponents &&
+          finalComponents.some((c) => c instanceof ContainerBuilder)
+            ? MessageFlags.IsComponentsV2
+            : undefined,
+        // Make sure attachments are cleared for edits if files are not provided again
+        attachments: files ? undefined : [],
+      };
+    } else {
+      // V1 structure
+      const finalEmbeds =
+        this.embedData &&
+        (this.embedData.fields.length > 0 ||
+          this.embedData.description ||
+          this.embedData.title ||
+          this.embedData.author ||
+          this.embedData.image ||
+          this.embedData.thumbnail ||
+          this.embedData.footer ||
+          this.embedData.timestamp)
+          ? [new EmbedBuilder(this.embedData)]
+          : [];
+
+      return {
+        content,
+        embeds: finalEmbeds, // Build embed from data only if it has content
+        components:
+          this.v1ActionRows.length > 0 ? this.v1ActionRows : undefined, // Pass V1 action rows only if present
+        files,
+        ephemeral,
+        // No flags for V1
+        // Make sure attachments are cleared for edits if files are not provided again
+        attachments: files ? undefined : [],
+      };
+    }
   }
 }
 
@@ -623,7 +816,7 @@ class ActionRowComponentBuilder {
 
   /**
    * Adds components to the action row
-   * @param {...Object} components - Components to add
+   * @param {...(ButtonBuilder|StringSelectMenuBuilder|UserSelectMenuBuilder|RoleSelectMenuBuilder|ChannelSelectMenuBuilder|MentionableSelectMenuBuilder)} components - Components to add
    * @returns {ActionRowComponentBuilder} this builder for chaining
    */
   addComponents(...components) {
@@ -637,13 +830,21 @@ class ActionRowComponentBuilder {
    * @param {string} label - The label for the button
    * @param {ButtonStyle} style - The style for the button
    * @param {string} emoji - Optional emoji for the button
+   * @param {boolean} disabled - Optional disabled state
    * @returns {ActionRowComponentBuilder} this builder for chaining
    */
-  addButton(customId, label, style = ButtonStyle.Primary, emoji = null) {
+  addButton(
+    customId,
+    label,
+    style = ButtonStyle.Primary,
+    emoji = null,
+    disabled = false
+  ) {
     const button = new ButtonBuilder()
       .setCustomId(customId)
       .setLabel(label)
-      .setStyle(style);
+      .setStyle(style)
+      .setDisabled(disabled);
 
     if (emoji) {
       button.setEmoji(emoji);
@@ -675,22 +876,123 @@ class ActionRowComponentBuilder {
   }
 
   /**
-   * Adds a select menu to the action row
+   * Adds a string select menu to the action row
    * @param {string} customId - The custom ID for the select menu
    * @param {string} placeholder - The placeholder text
+   * @param {Array<import('discord.js').APISelectMenuOption>} options - The options for the select menu
+   * @param {Object} settings - Additional settings (minValues, maxValues, disabled)
    * @returns {ActionRowComponentBuilder} this builder for chaining
    */
-  addStringSelectMenu(customId, placeholder) {
+  addStringSelectMenu(customId, placeholder, options, settings = {}) {
     const menu = new StringSelectMenuBuilder()
       .setCustomId(customId)
-      .setPlaceholder(placeholder);
+      .setPlaceholder(placeholder)
+      .addOptions(options);
+
+    if (settings.minValues) menu.setMinValues(settings.minValues);
+    if (settings.maxValues) menu.setMaxValues(settings.maxValues);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled);
 
     this.actionRow.addComponents(menu);
     return this;
   }
 
   /**
-   * Completes the action row and adds it to the parent container
+   * Adds a user select menu to the action row.
+   * @param {string} customId - The custom ID for the select menu.
+   * @param {string} placeholder - The placeholder text to display when nothing is selected.
+   * @param {Object} [settings] - Optional settings.
+   * @param {number} [settings.minValues] - The minimum number of values that must be selected.
+   * @param {number} [settings.maxValues] - The maximum number of values that can be selected.
+   * @param {boolean} [settings.disabled] - Whether the select menu is disabled.
+   * @returns {ActionRowComponentBuilder} This builder for chaining.
+   */
+  addUserSelectMenu(customId, placeholder, settings = {}) {
+    const menu = new UserSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder);
+
+    if (settings.minValues) menu.setMinValues(settings.minValues);
+    if (settings.maxValues) menu.setMaxValues(settings.maxValues);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled);
+
+    this.actionRow.addComponents(menu);
+    return this;
+  }
+
+  /**
+   * Adds a role select menu to the action row.
+   * @param {string} customId - The custom ID for the select menu.
+   * @param {string} placeholder - The placeholder text to display when nothing is selected.
+   * @param {Object} [settings] - Optional settings.
+   * @param {number} [settings.minValues] - The minimum number of values that must be selected.
+   * @param {number} [settings.maxValues] - The maximum number of values that can be selected.
+   * @param {boolean} [settings.disabled] - Whether the select menu is disabled.
+   * @returns {ActionRowComponentBuilder} This builder for chaining.
+   */
+  addRoleSelectMenu(customId, placeholder, settings = {}) {
+    const menu = new RoleSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder);
+
+    if (settings.minValues) menu.setMinValues(settings.minValues);
+    if (settings.maxValues) menu.setMaxValues(settings.maxValues);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled);
+
+    this.actionRow.addComponents(menu);
+    return this;
+  }
+
+  /**
+   * Adds a channel select menu to the action row.
+   * @param {string} customId - The custom ID for the select menu.
+   * @param {string} placeholder - The placeholder text to display when nothing is selected.
+   * @param {import('discord.js').ChannelType[]} [channelTypes] - The channel types to filter by.
+   * @param {Object} [settings] - Optional settings.
+   * @param {number} [settings.minValues] - The minimum number of values that must be selected.
+   * @param {number} [settings.maxValues] - The maximum number of values that can be selected.
+   * @param {boolean} [settings.disabled] - Whether the select menu is disabled.
+   * @returns {ActionRowComponentBuilder} This builder for chaining.
+   */
+  addChannelSelectMenu(customId, placeholder, channelTypes, settings = {}) {
+    const menu = new ChannelSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder);
+
+    if (channelTypes) menu.setChannelTypes(channelTypes);
+    if (settings.minValues) menu.setMinValues(settings.minValues);
+    if (settings.maxValues) menu.setMaxValues(settings.maxValues);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled);
+
+    this.actionRow.addComponents(menu);
+    return this;
+  }
+
+  /**
+   * Adds a mentionable (user or role) select menu to the action row.
+   * @param {string} customId - The custom ID for the select menu.
+   * @param {string} placeholder - The placeholder text to display when nothing is selected.
+   * @param {Object} [settings] - Optional settings.
+   * @param {number} [settings.minValues] - The minimum number of values that must be selected.
+   * @param {number} [settings.maxValues] - The maximum number of values that can be selected.
+   * @param {boolean} [settings.disabled] - Whether the select menu is disabled.
+   * @returns {ActionRowComponentBuilder} This builder for chaining.
+   */
+  addMentionableSelectMenu(customId, placeholder, settings = {}) {
+    const menu = new MentionableSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder);
+
+    if (settings.minValues) menu.setMinValues(settings.minValues);
+    if (settings.maxValues) menu.setMaxValues(settings.maxValues);
+    if (settings.disabled !== undefined) menu.setDisabled(settings.disabled);
+
+    this.actionRow.addComponents(menu);
+    return this;
+  }
+
+  /**
+   * Completes the action row and adds it to the parent container/builder
    * @returns {ComponentBuilder} The parent ComponentBuilder for chaining
    */
   done() {
@@ -700,54 +1002,36 @@ class ActionRowComponentBuilder {
 }
 
 /**
- * Simple function to create a container with a basic layout
+ * Simple function to create a container with a basic layout (V2 Only)
  * @param {Object} options - Container options
  * @param {string} options.title - Title to display at the top
  * @param {string} options.imageUrl - URL of the image to display
- * @param {string} options.attachmentUrl - URL reference to an attachment
- * @param {string} options.userAvatarUrl - URL of user's avatar
+ * @param {string} options.attachmentUrl - URL reference to an attachment (e.g., 'attachment://file.png')
+ * @param {string} options.userAvatarUrl - URL of user's avatar for thumbnail
+ * @param {string} options.description - Optional description text
  * @param {string} options.footerText - Text to show in the footer
  * @param {string} options.locale - User's locale for timestamp formatting
  * @param {boolean} options.includeTimestamp - Whether to include a timestamp
- * @param {number} options.color - Container accent color
+ * @param {number|string} options.color - Container accent color
  * @returns {ContainerBuilder} A pre-configured container
  */
 export function createSimpleContainer(options = {}) {
-  const container = new ContainerBuilder();
+  const builder = new ComponentBuilder({ mode: "v2", color: options.color });
 
-  if (options.color) {
-    container.setAccentColor(options.color);
+  if (options.title || options.userAvatarUrl) {
+    builder.addHeader(options.title || "", options.userAvatarUrl);
   }
 
-  // Add title with user avatar
-  if (options.title) {
-    const section = new SectionBuilder().addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`### ${options.title}`)
-    );
-
-    if (options.userAvatarUrl) {
-      section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(options.userAvatarUrl)
-      );
-    }
-
-    container.addSectionComponents(section);
+  if (options.description) {
+    builder.addText(options.description);
   }
 
-  // Add image
   if (options.imageUrl || options.attachmentUrl) {
-    const url = options.attachmentUrl || options.imageUrl;
-    container.addMediaGalleryComponents(
-      new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(url)
-      )
-    );
+    builder.addImage(options.attachmentUrl || options.imageUrl);
   }
 
-  // Add footer and timestamp
   if (options.footerText || options.includeTimestamp) {
-    let footerText = options.footerText || "";
-
+    let combinedFooter = options.footerText || "";
     if (options.includeTimestamp) {
       const timestamp = Math.floor(Date.now() / 1000);
       const prefix = options.locale?.startsWith("ru")
@@ -755,20 +1039,56 @@ export function createSimpleContainer(options = {}) {
         : options.locale?.startsWith("uk")
         ? "Сьогодні о"
         : "Today at";
-
-      if (footerText) {
-        footerText += ` • ${prefix} <t:${timestamp}:t>`;
-      } else {
-        footerText = `${prefix} <t:${timestamp}:t>`;
-      }
+      const timestampText = `${prefix} <t:${timestamp}:t>`;
+      combinedFooter = combinedFooter
+        ? `${combinedFooter} • ${timestampText}`
+        : timestampText;
     }
-
-    if (footerText) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`*${footerText}*`)
-      );
+    if (combinedFooter) {
+      builder.addFooter(combinedFooter); // Using addFooter for consistency, V2 timestamp is handled inside
     }
   }
 
-  return container;
+  // Return the built container directly from the internal state
+  return builder.container;
+}
+
+/**
+ * Simple function to create an embed with a basic layout (V1 Only)
+ * @param {Object} options - Embed options
+ * @param {string} options.title - Title to display at the top
+ * @param {string} options.imageUrl - URL of the image to display
+ * @param {string} options.attachmentUrl - URL reference to an attachment (e.g., 'attachment://file.png')
+ * @param {string} options.userAvatarUrl - URL of user's avatar for author icon
+ * @param {string} options.description - Optional description text
+ * @param {string} options.footerText - Text to show in the footer
+ * @param {string} options.footerIconUrl - Optional icon URL for the footer
+ * @param {boolean} options.includeTimestamp - Whether to include a timestamp
+ * @param {number|string} options.color - Embed color
+ * @returns {EmbedBuilder} A pre-configured embed builder
+ */
+export function createSimpleEmbed(options = {}) {
+  const builder = new ComponentBuilder({ mode: "v1", color: options.color });
+
+  if (options.title || options.userAvatarUrl) {
+    builder.addHeader(options.title || "", options.userAvatarUrl); // Uses author in V1
+  }
+
+  if (options.description) {
+    builder.addText(options.description);
+  }
+
+  if (options.imageUrl || options.attachmentUrl) {
+    builder.addImage(options.attachmentUrl || options.imageUrl);
+  }
+
+  if (options.footerText || options.includeTimestamp || options.footerIconUrl) {
+    builder.addFooter(options.footerText || "", options.footerIconUrl);
+    if (options.includeTimestamp) {
+      builder.addTimestamp(); // Adds timestamp to embedData
+    }
+  }
+
+  // Return an EmbedBuilder instance from the generated data
+  return new EmbedBuilder(builder.embedData);
 }
