@@ -200,85 +200,60 @@ const Crypto2 = (props) => {
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "center", // Align items vertically in the row
                         justifyContent: "space-between",
                         padding: "15px 20px",
                       }}
                     >
-                      {/* Coin Info */}
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <span
-                          style={{
-                            display: "flex",
-                            marginRight: "15px",
-                            fontWeight: "bold",
-                            color: "#ccc",
-                          }}
-                        >
-                          {index + 1}.
-                        </span>
-                        <span
-                          style={{
-                            display: "flex",
-                            fontWeight: "bold",
-                            fontSize: "28px",
-                          }}
-                        >
-                          {pos.symbol}
-                        </span>
-                        <span
-                          style={{
-                            display: "flex",
-                            marginLeft: "10px",
-                            fontSize: "28px",
-                          }}
-                        >
-                          {isLong ? "↑" : "↓"}
-                        </span>
-                      </div>
-
-                      {/* Stake & PnL Info */}
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-end", // Align items at the bottom
-                          textAlign: "right",
-                        }}
-                      >
-                        {/* Leverage */}
+                      {/* Left Side: Coin Info + Stake/Qty */}
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {/* Top Row: Coin Symbol and Direction */}
                         <div
                           style={{
                             display: "flex",
-                            backgroundColor: pnl >= 0 ? "#e67e22" : "#e74c3c", // Orange/Red leverage box
-                            color: "white",
-                            padding: "3px 8px",
-                            borderRadius: "8px",
-                            fontSize: "16px",
-                            fontWeight: "bold",
-                            marginRight: "15px",
-                            bottom: "10px",
-                          }}
-                        >
-                          {pos.leverage}X
-                        </div>
-                        {/* Entry Price & Stake */}
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-end",
-                            marginRight: "20px",
+                            alignItems: "center",
+                            marginBottom: "5px",
                           }}
                         >
                           <span
                             style={{
                               display: "flex",
-                              fontSize: "28px",
+                              marginRight: "15px",
                               fontWeight: "bold",
+                              color: "#ccc",
                             }}
                           >
-                            {formatPrice(pos.entryPrice)}
+                            {index + 1}.
                           </span>
+                          <span
+                            style={{
+                              display: "flex",
+                              fontWeight: "bold",
+                              fontSize: "28px",
+                            }}
+                          >
+                            {pos.symbol}
+                          </span>
+                          <span
+                            style={{
+                              display: "flex",
+                              marginLeft: "10px",
+                              fontSize: "28px",
+                            }}
+                          >
+                            {isLong ? "↑" : "↓"}
+                          </span>
+                        </div>
+                        {/* Bottom Row: Stake and Quantity */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            paddingLeft: "35px" /* Indent slightly */,
+                          }}
+                        >
+                          {/* Stake Value */}
                           <span
                             style={{
                               fontSize: "16px",
@@ -288,6 +263,80 @@ const Crypto2 = (props) => {
                             }}
                           >
                             {formatPrice(pos.stakeValue)} 💵
+                          </span>
+                          {/* Quantity */}
+                          <span
+                            style={{
+                              fontSize: "14px", // Slightly smaller font for quantity
+                              color: "#999",
+                              display: "flex",
+                              alignItems: "center",
+                              marginTop: "2px", // Small gap
+                            }}
+                          >
+                            {formatQuantity(pos.quantity)}{" "}
+                            {pos.symbol.replace("USDT", "")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Leverage, Entry/Current, PnL */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-end", // Align items at the bottom of the right side
+                          textAlign: "right",
+                        }}
+                      >
+                        {/* Leverage */}
+                        <div
+                          style={{
+                            display: "flex",
+                            backgroundColor: "#e74c3c",
+                            color: "white",
+                            padding: "3px 8px",
+                            borderRadius: "8px",
+                            fontSize: "16px",
+                            fontWeight: "bold",
+                            marginRight: "15px",
+                            marginBottom: "10px",
+                            // Align self lower if needed: alignSelf: 'center' or adjust margins
+                          }}
+                        >
+                          {pos.leverage}X
+                        </div>
+
+                        {/* Entry Price & Current Price */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            marginRight: "20px",
+                          }}
+                        >
+                          {/* Entry Price */}
+                          <span
+                            style={{
+                              display: "flex",
+                              fontSize: "28px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {formatPrice(pos.entryPrice)}
+                          </span>
+                          {/* Current Price (Placeholder) */}
+                          <span
+                            style={{
+                              fontSize: "14px", // Match quantity font size
+                              color: "#aaa",
+                              display: "flex",
+                              alignItems: "center",
+                              marginTop: "2px", // Small gap
+                            }}
+                          >
+                            {/* TODO: Pass currentPrice in props */}
+                            {formatPrice(pos.currentPrice || "N/A")}
                           </span>
                         </div>
 

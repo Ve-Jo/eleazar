@@ -890,6 +890,7 @@ async function generateMainMenu(
         pnlPercent: currentPrice ? pnlPercent.toFixed(2) : "N/A",
         stakeValue: stakeValue.toFixed(2), // Stake value doesn't depend on current price
         pnlAmount: currentPrice ? pnlAmount.toFixed(2) : "N/A", // PnL amount depends on current price
+        currentPrice: currentPrice ? currentPrice.toString() : null, // Add current price
       };
     }),
     viewType: "main_menu",

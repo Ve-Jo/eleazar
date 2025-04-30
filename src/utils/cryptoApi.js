@@ -7,6 +7,7 @@ dotenv.config();
 // API configurations
 const CMC_API_URL = "https://pro-api.coinmarketcap.com/v1";
 const CMC_API_KEY = process.env.COINMARKETCAP_API_KEY || "";
+const MEXC_API_URL = "https://api.mexc.com/api/v3"; // Added MEXC URL
 
 // Cache for valid symbols from CMC
 let validCmcSymbols = new Set();
@@ -16,7 +17,7 @@ let validCmcSymbolMap = new Map(); // Added: Map symbol to CMC ID
 const priceCache = {
   data: {},
   timestamps: {},
-  maxAge: 30 * 1000, // 30 seconds cache expiry
+  maxAge: 5 * 1000, // 5 seconds cache expiry
 };
 
 // Category cache
@@ -92,12 +93,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
     return {};
   }
 
-  if (!CMC_API_KEY) {
-    console.error(
-      "[cryptoApi] CoinMarketCap API key not found in environment variables."
-    );
-    return null;
-  }
+  // CMC API Key check removed - MEXC public ticker endpoint doesn't require auth
 
   // Create a cache key based on the symbols
   const cacheKey = symbols.sort().join(",");
@@ -114,127 +110,95 @@ export async function getTickers(symbols = [], forceRefresh = false) {
     const cachedData = priceCache.data[cacheKey];
     cachedData.timestamp = priceCache.timestamps[cacheKey];
     cachedData.fromCache = true;
-
+    console.log(
+      `[cryptoApi] Returning cached prices (MEXC) for key: ${cacheKey.substring(
+        0,
+        50
+      )}...`
+    );
     return cachedData;
   }
 
+  // --- MEXC Implementation ---
   try {
-    // Extract base symbols (e.g., BTC from BTCUSDT)
-    const baseSymbolsToQuery = [
-      ...new Set( // Use Set to avoid duplicate API calls for the same base symbol
-        symbols
-          .map((symbol) => symbol.replace(/USDT$/, "")) // Remove 'USDT' suffix
-          .filter((baseSymbol) => baseSymbol) // Ensure not empty after replace
-      ),
-    ];
-
-    if (baseSymbolsToQuery.length === 0) {
-      console.warn("[cryptoApi] No valid base symbols derived from input");
-      return {};
+    const MAX_SYMBOLS_PER_MEXC_REQUEST = 100;
+    if (symbols.length > MAX_SYMBOLS_PER_MEXC_REQUEST) {
+      console.warn(
+        `[cryptoApi] Requested ${symbols.length} symbols, but MEXC API limit is ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Only fetching the first ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Consider batching if this happens often.`
+      );
+      symbols = symbols.slice(0, MAX_SYMBOLS_PER_MEXC_REQUEST); // Trim symbols for this request
     }
 
-    // --- Batch API calls if needed ---
-    const MAX_SYMBOLS_PER_CALL = 100; // Adjust based on API limits if necessary
+    // Format symbols for the API query: URL-encoded JSON array string
+    const symbolsParam = encodeURIComponent(JSON.stringify(symbols));
+    const url = `${MEXC_API_URL}/ticker/24hr?symbols=${symbolsParam}`;
+
+    console.log(`[cryptoApi] Fetching ${symbols.length} tickers from MEXC...`);
+
+    const response = await axios.get(url); // Fetch specific tickers
+
+    if (response.status !== 200 || !Array.isArray(response.data)) {
+      console.error(
+        `[cryptoApi] MEXC API error! Status: ${
+          response.status
+        }, Data: ${JSON.stringify(response.data)}`
+      );
+      throw new Error(`MEXC API error! status: ${response.status}`);
+    }
+
+    const mexcTickers = response.data; // Response is now an array of requested tickers
+    const mexcTickerMap = new Map(
+      mexcTickers.map((ticker) => [ticker.symbol, ticker])
+    );
+
     const results = {
       timestamp: now,
       fromCache: false,
     };
-    let processingError = false; // Flag to track if any batch failed
+    let symbolsFound = 0;
 
-    for (let i = 0; i < baseSymbolsToQuery.length; i += MAX_SYMBOLS_PER_CALL) {
-      const batchSymbols = baseSymbolsToQuery.slice(
-        i,
-        i + MAX_SYMBOLS_PER_CALL
-      );
-      console.log(
-        `[cryptoApi] Fetching batch ${
-          i / MAX_SYMBOLS_PER_CALL + 1
-        } for symbols: ${batchSymbols.join(",")}`
-      );
+    // Filter and map the response for the requested symbols
+    symbols.forEach((requestedSymbol) => {
+      const tickerData = mexcTickerMap.get(requestedSymbol);
 
-      try {
-        const url = `${CMC_API_URL}/cryptocurrency/quotes/latest`;
-        const response = await axios.get(url, {
-          headers: {
-            "X-CMC_PRO_API_KEY": CMC_API_KEY,
-          },
-          params: {
-            symbol: batchSymbols.join(","), // Use the extracted base symbols
-          },
-        });
-
-        if (response.status !== 200) {
-          console.error(
-            `[cryptoApi] Batch HTTP error! Status: ${
-              response.status
-            } for symbols ${batchSymbols.join(",")}`
-          );
-          processingError = true;
-          continue; // Skip this batch
-        }
-
-        const data = response.data.data;
-
-        // Convert CoinMarketCap response back to the original USDT format for this batch
-        symbols.forEach((originalSymbol) => {
-          const baseSymbol = originalSymbol.replace(/USDT$/, ""); // Get base symbol again
-          if (batchSymbols.includes(baseSymbol) && data[baseSymbol]) {
-            // Process if in current batch and response
-            const coinData = data[baseSymbol];
-            const quote = coinData.quote.USD;
-
-            results[originalSymbol] = {
-              // Use originalSymbol as the key
-              symbol: originalSymbol, // Store the original symbol
-              lastPrice: quote.price,
-              markPrice: quote.price, // Using price as mark price
-              highPrice24h:
-                quote.price * (1 + Math.max(0, quote.percent_change_24h / 100)), // Estimated high
-              lowPrice24h:
-                quote.price *
-                (1 - Math.max(0, -quote.percent_change_24h / 100)), // Estimated low
-              price24hPcnt: quote.percent_change_24h / 100, // Convert to decimal
-              volume24h: quote.volume_24h,
-              turnover24h: quote.volume_24h, // Using volume as turnover
-              lastUpdated: quote.last_updated,
-            };
-          }
-        });
-      } catch (batchError) {
-        console.error(
-          `[cryptoApi] Error fetching batch ${
-            i / MAX_SYMBOLS_PER_CALL + 1
-          } for symbols ${batchSymbols.join(",")}:`,
-          batchError.message || batchError
-        );
-        processingError = true;
+      if (tickerData) {
+        symbolsFound++;
+        results[requestedSymbol] = {
+          symbol: tickerData.symbol,
+          lastPrice: parseFloat(tickerData.lastPrice),
+          markPrice: parseFloat(tickerData.lastPrice), // Using lastPrice as mark price
+          highPrice24h: parseFloat(tickerData.highPrice),
+          lowPrice24h: parseFloat(tickerData.lowPrice),
+          // MEXC provides priceChangePercent as a string like "0.05" for 5% - needs conversion
+          price24hPcnt: parseFloat(tickerData.priceChangePercent), // Already a decimal factor
+          volume24h: parseFloat(tickerData.volume), // Base asset volume
+          turnover24h: parseFloat(tickerData.quoteVolume), // Quote asset volume
+          lastUpdated: tickerData.closeTime, // Timestamp of 24h window close
+        };
+      } else {
+        // console.warn(`[cryptoApi] Ticker data not found in MEXC response for symbol: ${requestedSymbol}`);
       }
-    } // --- End batch loop ---
+    });
 
-    // Check if all originally requested symbols were found (using original symbols)
-    for (const symbol of symbols) {
-      if (!results[symbol]) {
-        // This might be expected if a batch failed or CMC didn't return data
-        // console.warn(`[cryptoApi] Ticker data not found or failed to fetch for symbol: ${symbol}`);
-      }
-    }
+    console.log(
+      `[cryptoApi] Processed ${symbolsFound}/${symbols.length} requested symbols from MEXC response.`
+    );
 
-    // Cache the results ONLY if there were no processing errors
-    if (!processingError) {
-      priceCache.data[cacheKey] = results;
-      priceCache.timestamps[cacheKey] = now;
-      console.log(
-        `[cryptoApi] Cached prices for key: ${cacheKey.substring(0, 50)}...`
-      );
-    } else {
-      console.warn(`[cryptoApi] Not caching prices due to processing errors.`);
-    }
+    // Cache the filtered results for the specific requested symbols
+    priceCache.data[cacheKey] = results;
+    priceCache.timestamps[cacheKey] = now;
+    console.log(
+      `[cryptoApi] Cached MEXC prices for key: ${cacheKey.substring(0, 50)}...`
+    );
 
-    return results; // Return whatever was successfully fetched
+    return results; // Return the filtered results
   } catch (error) {
-    console.error("[cryptoApi] Error fetching tickers (overall):", error);
+    console.error(
+      "[cryptoApi] Error fetching tickers from MEXC:",
+      error.message || error
+    );
 
-    // If we have stale cache data, return it as fallback with a flag
+    // If we have stale cache data for this specific key, return it as fallback
     if (priceCache.data[cacheKey]) {
       const staleData = priceCache.data[cacheKey];
       staleData.timestamp = priceCache.timestamps[cacheKey];
