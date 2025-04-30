@@ -118,6 +118,7 @@ export default {
       let highlightedPosition = null;
       let currentTotalPages = 1;
       let sortedUsers = [];
+      const fetchBufferSize = 5; // Fetch a few extra users
 
       // Determine builder mode based on execution context
       const isAiContext = !!interaction._isAiProxy;
@@ -218,11 +219,16 @@ export default {
         currentTotalPages = Math.ceil(sortedUsers.length / pageSize);
         const startIndex = page * pageSize;
         const endIndex = startIndex + pageSize;
-        const usersToDisplay = sortedUsers.slice(startIndex, endIndex);
+        // Fetch slightly more users than needed to compensate for potential fetch failures
+        const extendedEndIndex = startIndex + pageSize + fetchBufferSize;
+        const potentialUsersToDisplay = sortedUsers.slice(
+          startIndex,
+          extendedEndIndex
+        );
 
-        // Fetch member data and process colors for each user
-        const usersWithData = await Promise.all(
-          usersToDisplay.map(async (userData) => {
+        // Fetch member data and process colors for each potential user
+        const potentialUsersWithData = await Promise.all(
+          potentialUsersToDisplay.map(async (userData) => {
             try {
               const member = await guild.members.fetch(userData.id);
               const avatarURL = member.displayAvatarURL({
@@ -244,9 +250,23 @@ export default {
           })
         );
 
-        const validUsers = usersWithData.filter((user) => user !== null);
+        // Filter out failed fetches and take the first 'pageSize' valid users
+        const validUsersWithData = potentialUsersWithData.filter(
+          (user) => user !== null
+        );
+        const usersToDisplayFinal = validUsersWithData.slice(0, pageSize);
 
-        // Generate leaderboard image
+        // Find the index of the highlighted user *within the final displayed list* if they exist
+        const highlightedIndexOnPage =
+          highlightedPosition !== null
+            ? usersToDisplayFinal.findIndex(
+                (u) =>
+                  sortedUsers.findIndex((su) => su.id === u.id) + 1 ===
+                  highlightedPosition
+              )
+            : -1;
+
+        // Generate leaderboard image using the final list
         const [pngBuffer, dominantColor] = await generateImage(
           "Leaderboard",
           {
@@ -271,38 +291,45 @@ export default {
             },
             locale: interaction.locale,
             category,
-            users: validUsers.map((user, index) => ({
-              id: user.id,
-              position: startIndex + index + 1,
-              name: user.name,
-              avatarURL: user.avatarURL,
-              value: user.displayValue,
-              coloring: user.coloring,
-              // Include all relevant data for each user
-              bannerUrl: user.bannerUrl,
-              balance: Number(user.economy?.balance || 0),
-              bank: Number(user.economy?.bankBalance || 0),
-              totalBalance:
-                Number(user.economy?.balance || 0) +
-                Number(user.economy?.bankBalance || 0),
-              xp: Number(user.Level?.xp || 0),
-              level: Database.calculateLevel(Number(user.Level?.xp || 0)).level,
-              xpStats: {
-                chat: Number(user.stats?.xpStats?.chat || 0),
-                voice: Number(user.stats?.xpStats?.voice || 0),
-              },
-              gameRecords: user.stats?.gameRecords || {
-                2048: { highScore: 0 },
-                snake: { highScore: 0 },
-              },
-              seasonStats: {
-                rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
-                totalXP: Number(user.Level?.seasonXp || 0),
-              },
-            })),
+            users: usersToDisplayFinal.map((user, index) => {
+              // Use usersToDisplayFinal
+              // Calculate the original position based on the sortedUsers array
+              const originalPosition =
+                sortedUsers.findIndex((su) => su.id === user.id) + 1;
+              return {
+                id: user.id,
+                position: originalPosition, // Use original position
+                name: user.name,
+                avatarURL: user.avatarURL,
+                value: user.displayValue,
+                coloring: user.coloring,
+                // Include all relevant data for each user
+                bannerUrl: user.bannerUrl,
+                balance: Number(user.economy?.balance || 0),
+                bank: Number(user.economy?.bankBalance || 0),
+                totalBalance:
+                  Number(user.economy?.balance || 0) +
+                  Number(user.economy?.bankBalance || 0),
+                xp: Number(user.Level?.xp || 0),
+                level: Database.calculateLevel(Number(user.Level?.xp || 0))
+                  .level,
+                xpStats: {
+                  chat: Number(user.stats?.xpStats?.chat || 0),
+                  voice: Number(user.stats?.xpStats?.voice || 0),
+                },
+                gameRecords: user.stats?.gameRecords || {
+                  2048: { highScore: 0 },
+                  snake: { highScore: 0 },
+                },
+                seasonStats: {
+                  rank: sortedUsers.findIndex((u) => u.id === user.id) + 1,
+                  totalXP: Number(user.Level?.seasonXp || 0),
+                },
+              };
+            }),
             currentPage: page + 1,
             totalPages: Math.max(1, currentTotalPages),
-            highlightedPosition,
+            highlightedPosition, // Keep original highlighted position number
             pageSize,
             returnDominant: true, // Request dominant color
           },
@@ -345,7 +372,8 @@ export default {
         // Add buttons using the builder's method (works for both modes)
         leaderboardComponent.addButtons(prevButton, nextButton);
 
-        if (validUsers.length > 0) {
+        if (usersToDisplayFinal.length > 0) {
+          // Check usersToDisplayFinal
           // Create category selector
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
@@ -394,15 +422,19 @@ export default {
             .addComponents(categoryMenu)
             .done();
 
-          // Create user selector
-          const selectOptions = validUsers.map((user, index) => ({
-            label: `${startIndex + index + 1}. ${user.name.slice(0, 20)}`,
-            value: (startIndex + index + 1).toString(),
-            description: `${i18n.__(
-              // Corrected i18n call
-              `commands.economy.leaderboard.categories.${category}`
-            )}: ${user.displayValue}`.slice(0, 50),
-          }));
+          // Create user selector based on the final displayed users
+          const selectOptions = usersToDisplayFinal.map((user, index) => {
+            // Use usersToDisplayFinal
+            const originalPosition =
+              sortedUsers.findIndex((su) => su.id === user.id) + 1; // Get original position
+            return {
+              label: `${originalPosition}. ${user.name.slice(0, 20)}`, // Use original position
+              value: originalPosition.toString(), // Use original position as value
+              description: `${i18n.__(
+                `commands.economy.leaderboard.categories.${category}`
+              )}: ${user.displayValue}`.slice(0, 50),
+            };
+          });
 
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId("select_user")
@@ -460,15 +492,16 @@ export default {
           // AI context: Throw error for the proxy to handle
           throw new Error(`Leaderboard command failed: ${error.message}`);
         } else {
-          // Normal context: Edit reply with error
+          // Normal context: Try to edit the deferred reply or send a new reply
           try {
-            message = await interaction.editReply(errorOptions);
-          } catch (editError) {
-            console.error(
-              "Failed to edit reply with error message:",
-              editError
-            );
-            message = null; // Ensure message is null if edit fails
+            if (interaction.replied || interaction.deferred) {
+              await interaction.editReply(errorOptions);
+            } else {
+              // Fallback if not deferred/replied - unlikely if deferReply was called
+              await interaction.reply(errorOptions);
+            }
+          } catch (finalError) {
+            console.error("Failed to send final error message:", finalError);
           }
         }
       }
@@ -559,7 +592,8 @@ export default {
           console.log(
             `Leaderboard collector ended. Reason: ${reason}, Collected: ${collected.size}`
           );
-          if (message.editable) {
+          // Check if the message exists and is still editable before trying to edit
+          if (message && message.editable) {
             // Remove components after timeout
             message
               .edit({ components: [] })
@@ -569,6 +603,8 @@ export default {
                   e
                 )
               );
+          } else {
+            console.log("Collector ended, but message was not editable.");
           }
         });
       }
@@ -588,12 +624,16 @@ export default {
         // AI context: Rethrow the error to be caught by toolExecutor
         throw error; // Rethrow the original error
       } else {
-        // Normal context: Try to edit the deferred reply
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          // Fallback if not deferred/replied
-          await interaction.reply(errorOptions).catch(() => {});
+        // Normal context: Try to edit the deferred reply or send a new reply
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply(errorOptions);
+          } else {
+            // Fallback if not deferred/replied - unlikely if deferReply was called
+            await interaction.reply(errorOptions);
+          }
+        } catch (finalError) {
+          console.error("Failed to send final error message:", finalError);
         }
       }
     }
