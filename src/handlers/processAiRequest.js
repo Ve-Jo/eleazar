@@ -324,14 +324,29 @@ export default async function processAiRequest(
     }
 
     // Handle system prompt
-    if (prefs.systemPromptEnabled && CONFIG.initialSystemContext) {
+    const shouldDisableSysPromptForModel =
+      CONFIG.disableSystemPromptFor?.includes(prefs.selectedModel);
+
+    if (
+      prefs.systemPromptEnabled &&
+      CONFIG.initialSystemContext &&
+      !shouldDisableSysPromptForModel // Check the new config list
+    ) {
+      // Ensure only one system message exists
       apiMessages = apiMessages.filter((m) => m.role !== "system");
       apiMessages.unshift({
         role: "system",
         content: CONFIG.initialSystemContext,
       });
+      console.log(`Prepending system prompt for model: ${prefs.selectedModel}`);
     } else {
+      // Remove any existing system message if disabled by pref, config, or missing context
       apiMessages = apiMessages.filter((m) => m.role !== "system");
+      if (shouldDisableSysPromptForModel) {
+        console.log(
+          `System prompt disabled for model ${prefs.selectedModel} via config.`
+        );
+      }
     }
 
     const userMsg = { role: "user", content: null };

@@ -19,9 +19,11 @@ function extractModelSize(modelId) {
 
 // Standardizes model names for display - prefix with provider
 function formatModelName(model, provider) {
-  const size = extractModelSize(model.id);
-  const sizeStr = size ? ` (${size})` : "";
-  return `${provider}/${model.id}${sizeStr}`; // Prefix with provider
+  // Removed size extraction and suffix addition
+  // const size = extractModelSize(model.id);
+  // const sizeStr = size ? ` (${size})` : "";
+  // return `${provider}/${model.id}${sizeStr}`;
+  return `${provider}/${model.id}`; // Return only provider/id
 }
 
 // --- API Fetching Functions ---
@@ -243,26 +245,96 @@ async function fetchAllModels(client) {
   return cachedModels;
 }
 
-// Get available models, optionally filtering by capability (e.g., vision)
+// Get available models, strictly filtering based on capability request
 async function getAvailableModels(client, capabilityFilter = null) {
-  const allModels = await fetchAllModels(client);
-  let combinedModels = [...allModels.groq, ...allModels.openrouter];
+  // Restore fetching models and creating the Map
+  const allModelsData = await fetchAllModels(client);
 
-  if (capabilityFilter === "vision") {
-    combinedModels = combinedModels.filter((m) => m.capabilities.vision);
-  } else if (capabilityFilter === "text") {
-    // Optionally filter for text-only if needed later
-    // combinedModels = combinedModels.filter(m => !m.capabilities.vision);
+  const availableModelsMap = new Map();
+  [...allModelsData.groq, ...allModelsData.openrouter].forEach((model) => {
+    // Use the base name (provider/id) as the key for consistency
+    const baseName = `${model.provider}/${model.id}`;
+    availableModelsMap.set(baseName, model); // Use baseName as key
+  });
+
+  // --- TEMPORARY DEBUG LOG --- //
+  console.log(
+    "Models available in map:",
+    Array.from(availableModelsMap.keys())
+  );
+  // --- END DEBUG LOG --- //
+
+  const isVisionRequest = capabilityFilter === "vision";
+
+  let preferredModelNamesConfig = [];
+
+  let resultModels = [];
+  const addedModelNames = new Set();
+
+  let uniquePreferredModelNames = [];
+
+  if (isVisionRequest) {
+    // --- VISION REQUEST --- //
+    // Only use vision models from config
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.vision || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Filtering for VISION models based on config.");
+
+    // Remove duplicates while preserving order from the vision config list
+    uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add available models ONLY from the preferred vision list
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model && model.capabilities.vision) {
+        // Ensure it supports vision
+        resultModels.push(model);
+        addedModelNames.add(modelName); // Keep track in case needed later, but primarily for loop logic
+      }
+    }
+  } else {
+    // --- TEXT REQUEST --- //
+    // Use text models from config as the preferred list
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.text || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Prioritizing TEXT models based on config.");
+
+    // Remove duplicates while preserving order from the text config list
+    uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add available models ONLY from the preferred text list
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model) {
+        // Add if available from the text list, regardless of vision capability
+        resultModels.push(model);
+        addedModelNames.add(modelName); // Keep track
+      }
+    }
   }
 
-  // Sort or prioritize models if needed (e.g., preferred list from config)
-  // For now, just return the combined list
+  // --- TEMPORARY DEBUG LOG --- //
   console.log(
-    `Returning ${combinedModels.length} available models ${
-      capabilityFilter ? `with capability: ${capabilityFilter}` : ""
-    }`
+    "Final models being returned (sorted?):",
+    resultModels.map((m) => m.name)
   );
-  return combinedModels; // Return models with provider prefix in their 'name' but original 'id'
+  // --- END DEBUG LOG --- //
+
+  console.log(
+    `Returning ${resultModels.length} available models for ${
+      isVisionRequest ? "VISION" : "TEXT"
+    } request, ordered by config preference.`
+  );
+
+  return resultModels;
 }
 
 // Get details for a specific model by its prefixed ID (e.g., "groq/llama3-8b-8192")

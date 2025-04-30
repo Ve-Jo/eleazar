@@ -126,14 +126,33 @@ export async function buildInteractionComponents(
   }
 
   if (!noButtons) {
+    let sysPromptLabel = prefs.systemPromptEnabled
+      ? i18n.__("events.ai.buttons.systemPrompt.on")
+      : i18n.__("events.ai.buttons.systemPrompt.off");
+    let sysPromptStyle = prefs.systemPromptEnabled ? 1 : 2;
+    let sysPromptDisabled = false;
+
+    // Check if system prompt is explicitly disabled for this model in config
+    const modelIsDisabledInConfig =
+      selectedModelDetails &&
+      CONFIG.disableSystemPromptFor?.includes(
+        `${selectedModelDetails.provider}/${selectedModelDetails.id}`
+      );
+
+    if (modelIsDisabledInConfig) {
+      console.log(
+        `System prompt explicitly disabled for ${prefs.selectedModel} via config. Disabling button.`
+      );
+      sysPromptLabel = i18n.__("events.ai.buttons.systemPrompt.off");
+      sysPromptStyle = 2; // Secondary style (OFF)
+      sysPromptDisabled = true;
+    }
+
     const systemBtn = new ButtonBuilder()
       .setCustomId(`ai_toggle_context_${userId}`)
-      .setLabel(
-        prefs.systemPromptEnabled
-          ? i18n.__("events.ai.buttons.systemPrompt.on")
-          : i18n.__("events.ai.buttons.systemPrompt.off")
-      )
-      .setStyle(prefs.systemPromptEnabled ? 1 : 2);
+      .setLabel(sysPromptLabel)
+      .setStyle(sysPromptStyle)
+      .setDisabled(sysPromptDisabled);
 
     let toolsLabel =
       i18n.__("events.ai.buttons.systemPrompt.tools.on") || "Tools: ON";
@@ -348,6 +367,11 @@ export async function sendResponse(
             message.attachments.first().contentType?.startsWith("image/");
           // Stop the collector only when selecting a new model, as we'll process a new AI request
           collector.stop();
+          // Clear history before processing with the new model
+          clearUserHistory(userId);
+          console.log(
+            `Cleared history for user ${userId} due to model switch.`
+          );
           await processAiRequest(
             message,
             userId,
