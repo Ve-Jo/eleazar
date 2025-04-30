@@ -46,8 +46,8 @@ model Economy {
   id            String  @id @default(cuid())
   userId        String
   guildId       String
-  balance       Decimal @default(0) @db.Decimal(10, 5)
-  bankBalance   Decimal @default(0) @db.Decimal(10, 5)
+  balance       Decimal @default(0) @db.Decimal(30, 5)
+  bankBalance   Decimal @default(0) @db.Decimal(30, 5)
   bankRate      Decimal @default(0) @db.Decimal(10, 5)
   bankStartTime BigInt  @default(0)
   // Change from Json to Decimal
@@ -84,7 +84,7 @@ model Statistics {
   id           String  @id @default(cuid())
   userId       String  @map("user_id")
   guildId      String  @map("guild_id")
-  totalEarned  Decimal @default(0) @map("total_earned") @db.Decimal(20, 5)
+  totalEarned  Decimal @default(0) @map("total_earned") @db.Decimal(30, 5)
   messageCount Int     @default(0) @map("message_count")
   commandCount Int     @default(0) @map("command_count")
   voiceTime    BigInt  @default(0) @map("voice_time") // Added field for voice time tracking in milliseconds
@@ -227,11 +227,11 @@ model CryptoPosition {
   guildId         String   @map("guild_id")
   symbol          String   // e.g., "BTCUSDT"
   direction       String   // "LONG" or "SHORT"
-  entryPrice      Decimal  @db.Decimal(20, 8) @map("entry_price")
-  quantity        Decimal  @db.Decimal(20, 8) // Amount of the coin
+  entryPrice      Decimal  @db.Decimal(30, 8) @map("entry_price")
+  quantity        Decimal  @db.Decimal(30, 8)
   leverage        Int
-  takeProfitPrice Decimal? @db.Decimal(20, 8) @map("take_profit_price")
-  stopLossPrice   Decimal? @db.Decimal(20, 8) @map("stop_loss_price")
+  takeProfitPrice Decimal? @db.Decimal(30, 8) @map("take_profit_price")
+  stopLossPrice   Decimal? @db.Decimal(30, 8) @map("stop_loss_price")
   createdAt       DateTime @default(now()) @map("created_at")
 
   // Relations - reference the composite key
