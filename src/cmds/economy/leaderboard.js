@@ -105,6 +105,11 @@ export default {
       ru: "Произошла ошибка при обработке запроса таблицы лидеров",
       uk: "Сталася помилка під час обробки запиту таблиці лідерів",
     },
+    noUsersOnPage: {
+      en: "No valid users found on this page.",
+      ru: "На этой странице не найдено действительных пользователей.",
+      uk: "На цій сторінці не знайдено дійсних користувачів.",
+    },
   },
 
   async execute(interaction, i18n) {
@@ -266,6 +271,35 @@ export default {
               )
             : -1;
 
+        // Create navigation buttons (always needed, regardless of whether the page is empty)
+        const prevButton = new ButtonBuilder()
+          .setCustomId("prev_page")
+          .setLabel("◀")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(page <= 0);
+
+        const nextButton = new ButtonBuilder()
+          .setCustomId("next_page")
+          .setLabel("▶")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(page >= currentTotalPages - 1);
+
+        // Handle case where the page is empty after filtering, but the leaderboard isn't overall empty
+        if (usersToDisplayFinal.length === 0 && sortedUsers.length > 0) {
+          // Create a temporary builder just for the empty page message
+          const emptyPageBuilder = new ComponentBuilder({ mode: builderMode });
+          emptyPageBuilder
+            .addText(
+              i18n.__("commands.economy.leaderboard.noUsersOnPage") ||
+                "No valid users found on this page."
+            )
+            .addButtons(prevButton, nextButton); // Add the navigation buttons
+
+          return emptyPageBuilder.toReplyOptions({}); // Return simplified options
+        }
+
+        // --- Generate leaderboard image and full components ONLY if there are users to display ---
+
         // Generate leaderboard image using the final list
         const [pngBuffer, dominantColor] = await generateImage(
           "Leaderboard",
@@ -341,39 +375,21 @@ export default {
           name: `leaderboard.avif`,
         });
 
-        // Create leaderboard component builder with the correct mode
+        // Create leaderboard component builder now that we have users and the dominant color
         const leaderboardComponent = new ComponentBuilder({
-          dominantColor,
-          mode: builderMode, // Use 'v1' or 'v2' based on context
-        })
+          dominantColor, // Pass the actual dominant color from the image
+          mode: builderMode,
+        });
+
+        // Add image and title to the component builder
+        leaderboardComponent
           .addText(i18n.__(`commands.economy.leaderboard.title`), "header3")
           .addImage(`attachment://leaderboard.avif`);
 
-        // Create navigation buttons
-        const prevButton = new ButtonBuilder()
-          .setCustomId("prev_page")
-          .setLabel("◀")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(page <= 0);
-
-        const nextButton = new ButtonBuilder()
-          .setCustomId("next_page")
-          .setLabel("▶")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(page >= currentTotalPages - 1);
-
-        console.log("Button states:", {
-          page,
-          currentTotalPages,
-          prevDisabled: page <= 0,
-          nextDisabled: page >= currentTotalPages - 1,
-        });
-
-        // Add buttons using the builder's method (works for both modes)
+        // Add navigation buttons using the builder's method (already created earlier)
         leaderboardComponent.addButtons(prevButton, nextButton);
 
         if (usersToDisplayFinal.length > 0) {
-          // Check usersToDisplayFinal
           // Create category selector
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
@@ -449,6 +465,7 @@ export default {
         }
 
         // Return the complete reply options object using the builder
+        // Ensure the attachment is only included when the image was generated
         return leaderboardComponent.toReplyOptions({ files: [attachment] });
       }
 
@@ -510,7 +527,10 @@ export default {
       if (message && message.editable) {
         // Check if message exists and is editable
         const collector = message.createMessageComponentCollector({
-          filter: (i) => i.user.id === interaction.user.id,
+          // Ensure filter only works on button/select, not other components if any were added
+          filter: (i) =>
+            i.user.id === interaction.user.id &&
+            (i.isButton() || i.isStringSelectMenu()),
           time: 60000, // 60 seconds
         });
 
@@ -594,15 +614,16 @@ export default {
           );
           // Check if the message exists and is still editable before trying to edit
           if (message && message.editable) {
-            // Remove components after timeout
-            message
-              .edit({ components: [] })
-              .catch((e) =>
+            // Try to edit, catch potential errors if message deleted during collector lifetime
+            message.edit({ components: [] }).catch((e) => {
+              if (e.code !== 10008) {
+                // Ignore "Unknown Message" errors
                 console.error(
                   "Failed to remove components on collector end:",
                   e
-                )
-              );
+                );
+              }
+            });
           } else {
             console.log("Collector ended, but message was not editable.");
           }
