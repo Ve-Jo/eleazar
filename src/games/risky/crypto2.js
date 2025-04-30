@@ -9,6 +9,7 @@ import {
   StringSelectMenuBuilder,
   ComponentType,
   InteractionType,
+  MessageFlags,
 } from "discord.js";
 import { Prisma } from "@prisma/client"; // Import Prisma Decimal helper
 import Database from "../../database/client.js"; // Use the main DB
@@ -337,6 +338,12 @@ const localization_strings = {
     en: "❌ An error occurred while creating the position in the database.",
     ru: "❌ Произошла ошибка при создании позиции в базе данных.",
     uk: "❌ Виникла помилка при створенні позиції в базі даних.",
+  },
+  errorMaxMarginExceeded: {
+    // New localization key
+    en: "❌ Position size (Stake * Leverage) cannot exceed {{maxMargin}}.",
+    ru: "❌ Размер позиции (Ставка * Плечо) не может превышать {{maxMargin}}.",
+    uk: "❌ Розмір позиції (Ставка * Плече) не може перевищувати {{maxMargin}}.",
   },
   setTpslModalTitle: {
     en: "Set Take Profit / Stop Loss for {{symbol}}",
@@ -702,12 +709,19 @@ async function generateMainMenu(
   guildId,
   userId,
   i18n,
-  interaction,
+  interaction, // Can be real interaction or AI proxy
   page = 1,
   selectedPosition = null,
   selectedCategoryId = null,
-  categoryPage = 1 // New parameter for category pagination
+  categoryPage = 1
 ) {
+  // Determine mode based on interaction type
+  const isAiContext = !!interaction._isAiProxy;
+  const builderMode = isAiContext ? "v1" : "v2";
+  console.log(
+    `[generateMainMenu] isAiContext: ${isAiContext}, Builder mode set to: ${builderMode}`
+  );
+
   console.log(
     `[generateMainMenu] Received selectedPosition: ${selectedPosition}`
   ); // Log 1
@@ -717,14 +731,9 @@ async function generateMainMenu(
   // Fetch ALL categories initially
   let allCategories = [];
   try {
-    allCategories = await getCategories();
-    if (!allCategories || !Array.isArray(allCategories)) {
-      console.warn("[crypto2] Failed to load coin categories");
-      allCategories = [];
-    } else {
-      // Sort categories alphabetically by name
-      allCategories.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    allCategories =
+      (await getCategories())?.sort((a, b) => a.name.localeCompare(b.name)) ||
+      [];
   } catch (error) {
     console.error("[crypto2] Error loading categories:", error);
   }
@@ -737,42 +746,20 @@ async function generateMainMenu(
   if (selectedCategoryId) {
     try {
       const categoryData = await getCategoryCoins(selectedCategoryId);
-      if (
-        categoryData &&
-        categoryData.coins &&
-        Array.isArray(categoryData.coins)
-      ) {
-        // Extract symbols from the category
-        const categoryCoins = categoryData.coins.map((coin) => coin.symbol);
-
-        // Only add symbols that are valid from the API mapping
+      if (categoryData?.coins) {
         const validSymbols = new Set(getValidCmcSymbols());
-        filteredBaseSymbols = categoryCoins.filter((sym) =>
-          validSymbols.has(sym)
-        );
-
-        // Only fetch ticker data if we have symbols to fetch
+        filteredBaseSymbols = categoryData.coins
+          .map((c) => c.symbol)
+          .filter((sym) => validSymbols.has(sym));
         if (filteredBaseSymbols.length > 0) {
-          // Convert to USDT format and fetch prices only for this category's coins
           const symbolsToFetch = filteredBaseSymbols.map((s) => `${s}USDT`);
-          console.log(
-            `[crypto2] Fetching prices for ${filteredBaseSymbols.length} coins in selected category`
-          );
-
-          // Only fetch a reasonable number of symbols at once to avoid rate limits
-          const maxSymbolsPerRequest = 100; // Adjust based on API limits
-
-          // Fetch in smaller batches if needed
-          if (symbolsToFetch.length <= maxSymbolsPerRequest) {
-            allTickerData = (await getTickers(symbolsToFetch)) || {};
-          } else {
-            // For large categories, only fetch the first batch to avoid rate limits
-            const firstBatch = symbolsToFetch.slice(0, maxSymbolsPerRequest);
-            allTickerData = (await getTickers(firstBatch)) || {};
+          const maxSymbols = 100;
+          allTickerData =
+            (await getTickers(symbolsToFetch.slice(0, maxSymbols))) || {};
+          if (symbolsToFetch.length > maxSymbols)
             console.log(
-              `[crypto2] Category has ${symbolsToFetch.length} coins, only fetched first ${maxSymbolsPerRequest} to avoid rate limits`
+              `[crypto2] Category has ${symbolsToFetch.length} coins, only fetched first ${maxSymbols}`
             );
-          }
         }
       }
     } catch (error) {
@@ -909,14 +896,19 @@ async function generateMainMenu(
   );
   const attachmentName = `crypto_portfolio_${userId}.avif`; // Use .avif
 
-  // --- Build Components using ComponentBuilder ---
+  // --- Build Components using ComponentBuilder with MODE ---
   const builder = new ComponentBuilder({
     color: dominantColor?.embedColor ?? process.env.EMBED_COLOR,
-  })
-    .addText(i18n.__("games.crypto2.mainMenuTitle"), "header3") // Use addText for title
-    .addImage(`attachment://${attachmentName}`); // Add image
+    mode: builderMode, // Pass the determined mode
+  });
 
-  // Add first row with primary actions
+  // Use builder methods - they now adapt based on the mode
+  builder
+    .addText(i18n.__("games.crypto2.mainMenuTitle"), "header3")
+    .addImage(`attachment://${attachmentName}`);
+
+  // Add action rows (buttons/menus) - these are added to V1/V2 lists internally
+  // Row 1: Open/Refresh
   const openButton = new ButtonBuilder()
     .setCustomId(`crypto2_open_${userId}`)
     .setLabel(i18n.__("games.crypto2.buttonOpenPosition"))
@@ -925,8 +917,9 @@ async function generateMainMenu(
     .setCustomId(`crypto2_refresh_${userId}`)
     .setLabel(i18n.__("games.crypto2.buttonRefresh") || "Refresh")
     .setStyle(ButtonStyle.Secondary);
-  const row1 = new ActionRowBuilder().addComponents(openButton, refreshButton);
-  builder.addActionRow(row1);
+  builder.addActionRow(
+    new ActionRowBuilder().addComponents(openButton, refreshButton)
+  );
 
   // --- Conditional Category / Coin Selection ---
   if (selectedCategoryId) {
@@ -1111,6 +1104,18 @@ export default {
   isLegacy: false, // This is a new game
 
   async execute(interaction, i18n) {
+    // Determine mode early - needed for ComponentBuilder
+    const isAiContext = !!interaction._isAiProxy;
+    const builderMode = isAiContext ? "v1" : "v2";
+    console.log(
+      `[crypto2 execute] isAiContext: ${isAiContext}, Mode: ${builderMode}`
+    );
+
+    // If it's a real interaction, defer the reply
+    if (!!isAiContext) {
+      await interaction.deferReply();
+    } // AI Proxy deferral is handled by toolExecutor now
+
     // --- Test MEXC API Connectivity ---
     await testMexcApi(); // Add the test call here
 
@@ -1139,8 +1144,11 @@ export default {
       });
 
       if (!stats.crypto2DisclaimerSeen) {
-        // Show Disclaimer using ComponentBuilder
-        const disclaimerBuilder = new ComponentBuilder({ color: 0xff0000 }) // Red color
+        // Show Disclaimer - Use ComponentBuilder with V1 mode for proxy
+        const disclaimerBuilder = new ComponentBuilder({
+          color: 0xff0000,
+          mode: builderMode, // Pass conditional mode
+        })
           .addText(i18n.__("games.crypto2.disclaimerTitle"), "header3")
           .addText(i18n.__("games.crypto2.disclaimerText"));
 
@@ -1149,16 +1157,50 @@ export default {
           .setLabel("I understand and accept the risks")
           .setStyle(ButtonStyle.Success);
 
-        const disclaimerActionRow = new ActionRowBuilder().addComponents(
-          acknowledgeButton
-        );
-        disclaimerBuilder.addActionRow(disclaimerActionRow);
-
-        const disclaimerMessage = await interaction.editReply(
-          disclaimerBuilder.toReplyOptions({ fetchReply: true }) // Use toReplyOptions
+        disclaimerBuilder.addActionRow(
+          new ActionRowBuilder().addComponents(acknowledgeButton)
         );
 
-        // Wait for Acknowledgment
+        // Send/Edit based on mode
+        let disclaimerMessage;
+        const disclaimerOptions = disclaimerBuilder.toReplyOptions({
+          fetchReply: true,
+        });
+        if (isAiContext) {
+          // AI Context: Skip the disclaimer interaction entirely
+          console.log(
+            "[crypto2] AI context detected, skipping disclaimer interaction."
+          );
+          // Proceed directly to showing the main menu (via proxy reply)
+          try {
+            const initialContent = await generateMainMenu(
+              guildId,
+              userId,
+              i18n,
+              interaction, // Pass the proxy interaction
+              1,
+              null,
+              null,
+              1
+            );
+            await interaction.reply(initialContent); // Use proxy reply
+          } catch (error) {
+            console.error(
+              "Error generating/sending main menu in AI context (after skipping disclaimer):",
+              error
+            );
+            // Throw error to be caught by toolExecutor
+            throw new Error(i18n.__("games.crypto2.errorRender"));
+          }
+          return; // End execution for AI context here
+        } else {
+          // Real Interaction: Edit the deferred reply
+          console.log("[crypto2] Sending disclaimer via interaction.editReply");
+          disclaimerMessage = await interaction.editReply(disclaimerOptions);
+        }
+
+        // Wait for Acknowledgment (collector attaches to disclaimerMessage)
+        // ... (Collector logic remains the same, attaches to disclaimerMessage) ...
         const buttonCollector =
           disclaimerMessage.createMessageComponentCollector({
             filter: (i) =>
@@ -1167,36 +1209,52 @@ export default {
             time: 60_000,
             max: 1,
           });
-
-        let acknowledged = false;
         buttonCollector.on("collect", async (buttonInteraction) => {
-          acknowledged = true;
           await buttonInteraction.deferUpdate();
-          // Update DB flag
           await Database.client.statistics.update({
             where: { userId_guildId: { userId, guildId } },
             data: { crypto2DisclaimerSeen: true },
           });
-          // Proceed to game - Initial Main Menu Render
-          const initialContent = await generateMainMenu(
-            // Updated call
-            guildId,
-            userId,
-            i18n,
-            interaction,
-            1 // Start at coin page 1
-          );
-          const message = await interaction.editReply(initialContent);
-          setupGameInteractionCollector(
-            interaction,
-            message,
-            i18n,
-            modalSubmitOpenPositionId,
-            modalSubmitTpslId,
-            modalSubmitAverageId
-          );
-        });
 
+          // Now proceed to show the main menu
+          try {
+            const initialContent = await generateMainMenu(
+              guildId,
+              userId,
+              i18n,
+              interaction,
+              1,
+              null,
+              null,
+              1
+            );
+            let gameMessage;
+            if (isAiContext) {
+              gameMessage = await interaction.followUp(initialContent); // Send main menu as followUp
+            } else {
+              gameMessage = await interaction.editReply(initialContent); // Edit original reply
+            }
+            if (!gameMessage)
+              throw new Error("Failed to send/edit main game message.");
+            setupGameInteractionCollector(
+              interaction,
+              gameMessage,
+              i18n,
+              modalSubmitOpenPositionId,
+              modalSubmitTpslId,
+              modalSubmitAverageId
+            );
+          } catch (error) {
+            console.error(
+              "Error generating/sending main menu after disclaimer:",
+              error
+            );
+            await interaction.followUp({
+              content: i18n.__("games.crypto2.errorRender"),
+              ephemeral: true,
+            });
+          }
+        });
         buttonCollector.on("end", async (collected) => {
           if (!collected.size) {
             await interaction.followUp({
@@ -1205,17 +1263,109 @@ export default {
             });
           }
         });
+
+        // --- IMPORTANT: Need to handle proceeding AFTER acknowledgment ---
+        // The original code had the main logic inside the buttonCollector 'collect' event.
+        // This needs restructuring or careful handling if we want the function to
+        // return something to the AI *before* the user acknowledges.
+        // For now, let's assume the AI call completes *after* acknowledgment or timeout.
+        // A better approach for AI tools might be to skip the disclaimer or handle it differently.
+        // Let's modify the collector to call the main game setup *after* acknowledgment.
+
+        // --- MODIFIED Collector Logic ---
+        buttonCollector.on("collect", async (buttonInteraction) => {
+          await buttonInteraction.deferUpdate();
+          await Database.client.statistics.update({
+            where: { userId_guildId: { userId, guildId } },
+            data: { crypto2DisclaimerSeen: true },
+          });
+
+          // Now proceed to show the main menu
+          try {
+            const initialContent = await generateMainMenu(
+              guildId,
+              userId,
+              i18n,
+              interaction,
+              1,
+              null,
+              null,
+              1
+            );
+            let gameMessage;
+            if (isAiContext) {
+              gameMessage = await interaction.followUp(initialContent); // Send main menu as followUp
+            } else {
+              gameMessage = await interaction.editReply(initialContent); // Edit original reply
+            }
+            if (!gameMessage)
+              throw new Error("Failed to send/edit main game message.");
+            setupGameInteractionCollector(
+              interaction,
+              gameMessage,
+              i18n,
+              modalSubmitOpenPositionId,
+              modalSubmitTpslId,
+              modalSubmitAverageId
+            );
+          } catch (error) {
+            console.error(
+              "Error generating/sending main menu after disclaimer:",
+              error
+            );
+            await interaction.followUp({
+              content: i18n.__("games.crypto2.errorRender"),
+              ephemeral: true,
+            });
+          }
+        });
       } else {
         // Disclaimer already seen, proceed directly
         const initialContent = await generateMainMenu(
-          // Updated call
           guildId,
           userId,
           i18n,
           interaction,
-          1 // Start at coin page 1
+          1,
+          null,
+          null,
+          1
         );
-        const message = await interaction.editReply(initialContent);
+
+        let message;
+        if (isAiContext) {
+          // AI Context: Use followUp for the initial display
+          console.log(
+            "[crypto2] Sending initial UI via interaction.followUp (disclaimer seen)"
+          );
+          message = await interaction.followUp(initialContent);
+          if (!message) {
+            console.error(
+              "[crypto2] Failed to send initial game UI via followUp."
+            );
+            return;
+          }
+        } else {
+          // Real Interaction: Edit the deferred reply
+          console.log(
+            "[crypto2] Sending initial UI via interaction.editReply (disclaimer seen)"
+          );
+          message = await interaction.editReply(initialContent);
+        }
+
+        if (!message) {
+          console.error(
+            "[crypto2] Failed to obtain message object after sending initial UI (disclaimer seen)."
+          );
+          await interaction.followUp?.({
+            content:
+              i18n.__("games.crypto2.errorRender") ||
+              "Error: Failed to initialize game interface.",
+            ephemeral: true,
+          });
+          return;
+        }
+
         setupGameInteractionCollector(
           interaction,
           message,
@@ -1227,24 +1377,34 @@ export default {
       }
     } catch (error) {
       console.error("Error during crypto2 execute:", error);
-      // Edit the deferred reply with an error message
+      // Edit/FollowUp with error based on mode
       const errorKey =
         error.message === "Failed to fetch ticker data from API"
           ? "games.crypto2.errorFetchData"
           : "games.crypto2.errorRender";
-      // Check if interaction is still editable (it should be since it was deferred in work.js)
-      try {
-        await interaction.editReply({
-          content: i18n.__(errorKey),
-          components: [], // Clear components
+      const errorMessage = i18n.__(errorKey);
+
+      if (isAiContext) {
+        // AI Context: Throw the error to be handled by toolExecutor
+        console.error("[crypto2] Throwing error for AI context:", errorMessage);
+        throw new Error(errorMessage);
+      } else {
+        // Normal Interaction: Edit the deferred reply or send new reply
+        const errorOptions = {
+          content: errorMessage,
+          components: [],
           files: [],
-          embeds: [], // Clear embeds
-        });
-      } catch (editError) {
-        console.error(
-          "Failed to edit interaction reply with error:",
-          editError
-        );
+          embeds: [],
+        };
+        if (interaction.deferred || interaction.replied) {
+          await interaction
+            .editReply(errorOptions)
+            .catch((e) => console.error("Failed to edit reply with error:", e));
+        } else {
+          await interaction
+            .reply(errorOptions)
+            .catch((e) => console.error("Failed to send error reply:", e));
+        }
       }
     }
   }, // End execute
@@ -1510,12 +1670,29 @@ function setupGameInteractionCollector(
                   return;
                 }
 
+                // Declare stakeDecimal early for use in multiple checks
+                const stakeDecimal = new Prisma.Decimal(stake);
+
+                // *** ADD MAX MARGIN CHECK ***
+                const MAX_POSITION_MARGIN = 50000; // Define the maximum margin
+                const positionMargin = stakeDecimal.times(leverage);
+
+                if (positionMargin.gt(MAX_POSITION_MARGIN)) {
+                  await modalInteraction.editReply(
+                    i18n.__("games.crypto2.errorMaxMarginExceeded", {
+                      maxMargin: MAX_POSITION_MARGIN, // Pass the value for interpolation
+                    }) ||
+                      `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN}.` // Fallback
+                  );
+                  return;
+                }
+                // *** END MAX MARGIN CHECK ***
+
                 // 3. Check Balance
                 const userData = await Database.getUser(guildId, userId, true);
                 const userBalance = new Prisma.Decimal(
                   userData?.economy?.balance ?? 0
                 );
-                const stakeDecimal = new Prisma.Decimal(stake);
                 if (userBalance.lt(stakeDecimal)) {
                   await modalInteraction.editReply(
                     i18n.__("games.crypto2.errorInsufficientBalance")
@@ -2377,17 +2554,34 @@ function setupGameInteractionCollector(
                     return;
                   }
 
+                  // Declare stakeDecimalCoin early for use in multiple checks
+                  const stakeDecimalCoin = new Prisma.Decimal(stake);
+
+                  // *** ADD MAX MARGIN CHECK (Coin Select Modal) ***
+                  const MAX_POSITION_MARGIN_COIN = 50000; // Define the maximum margin
+                  const positionMarginCoin = stakeDecimalCoin.times(leverage);
+
+                  if (positionMarginCoin.gt(MAX_POSITION_MARGIN_COIN)) {
+                    await modalInteraction.editReply(
+                      i18n.__("games.crypto2.errorMaxMarginExceeded", {
+                        maxMargin: MAX_POSITION_MARGIN_COIN, // Pass the value for interpolation
+                      }) ||
+                        `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN_COIN}.` // Fallback
+                    );
+                    return;
+                  }
+                  // *** END MAX MARGIN CHECK (Coin Select Modal) ***
+
                   // 3. Check Balance
-                  const userData = await Database.getUser(
+                  const userDataCoin = await Database.getUser(
                     guildId,
                     userId,
                     true
                   );
-                  const userBalance = new Prisma.Decimal(
-                    userData?.economy?.balance ?? 0
+                  const userBalanceCoin = new Prisma.Decimal(
+                    userDataCoin?.economy?.balance ?? 0
                   );
-                  const stakeDecimal = new Prisma.Decimal(stake);
-                  if (userBalance.lt(stakeDecimal)) {
+                  if (userBalanceCoin.lt(stakeDecimalCoin)) {
                     await modalInteraction.editReply(
                       i18n.__("games.crypto2.errorInsufficientBalance") ||
                         "Insufficient balance."
@@ -2396,8 +2590,8 @@ function setupGameInteractionCollector(
                   }
 
                   // 4. Fetch Current Price
-                  const tickerData = await getTickers([symbol]);
-                  if (!tickerData || !tickerData[symbol]) {
+                  const tickerDataCoin = await getTickers([symbol]);
+                  if (!tickerDataCoin || !tickerDataCoin[symbol]) {
                     await modalInteraction.editReply(
                       i18n.__("games.crypto2.errorApiSymbolNotFound", {
                         symbol,
@@ -2405,20 +2599,22 @@ function setupGameInteractionCollector(
                     );
                     return;
                   }
-                  const entryPrice = new Prisma.Decimal(
-                    tickerData[symbol].markPrice || tickerData[symbol].lastPrice
+                  const entryPriceCoin = new Prisma.Decimal(
+                    tickerDataCoin[symbol].markPrice ||
+                      tickerDataCoin[symbol].lastPrice
                   );
 
                   // 5. Calculate Quantity
-                  const positionValue = stakeDecimal.times(leverage);
-                  const quantity = positionValue.dividedBy(entryPrice);
+                  const positionValueCoin = stakeDecimalCoin.times(leverage);
+                  const quantityCoin =
+                    positionValueCoin.dividedBy(entryPriceCoin);
 
                   // 6. Create Position in DB and Update Balance (Transaction)
                   await Database.client.$transaction(async (tx) => {
                     // a. Deduct stake from balance
                     await tx.economy.update({
                       where: { userId_guildId: { userId, guildId } },
-                      data: { balance: { decrement: stakeDecimal } },
+                      data: { balance: { decrement: stakeDecimalCoin } },
                     });
 
                     // b. Create position record
@@ -2428,8 +2624,8 @@ function setupGameInteractionCollector(
                         guildId,
                         symbol,
                         direction,
-                        entryPrice: entryPrice, // Already Decimal
-                        quantity: quantity, // Already Decimal
+                        entryPrice: entryPriceCoin, // Already Decimal
+                        quantity: quantityCoin, // Already Decimal
                         leverage,
                         // TP/SL are null by default
                       },
@@ -2438,23 +2634,23 @@ function setupGameInteractionCollector(
 
                   // 7. Invalidate User Cache (since balance changed)
                   if (Database.redisClient) {
-                    const userCacheKeyFull = Database._cacheKeyUser(
+                    const userCacheKeyFullCoin = Database._cacheKeyUser(
                       guildId,
                       userId,
                       true
                     );
-                    const userCacheKeyBasic = Database._cacheKeyUser(
+                    const userCacheKeyBasicCoin = Database._cacheKeyUser(
                       guildId,
                       userId,
                       false
                     );
                     await Database._redisDel([
-                      userCacheKeyFull,
-                      userCacheKeyBasic,
+                      userCacheKeyFullCoin,
+                      userCacheKeyBasicCoin,
                     ]);
                     Database._logRedis(
                       "del",
-                      `${userCacheKeyFull}, ${userCacheKeyBasic}`,
+                      `${userCacheKeyFullCoin}, ${userCacheKeyBasicCoin}`,
                       "Invalidated user cache on position open"
                     );
                   }
