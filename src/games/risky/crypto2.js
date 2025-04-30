@@ -1320,6 +1320,7 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
 // --- Helper function to test MEXC API connectivity ---
 async function testMexcApi() {
   try {
+    const MEXC_API_BASE_URL = "https://api.mexc.com";
     const response = await axios.get(`${MEXC_API_BASE_URL}/api/v3/time`);
     if (response.status === 200 && response.data && response.data.serverTime) {
       console.log(
