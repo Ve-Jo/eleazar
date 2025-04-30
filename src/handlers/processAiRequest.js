@@ -496,6 +496,7 @@ export default async function processAiRequest(
       finalText = i18n.__("events.ai.messages.noTextResponse", effectiveLocale);
 
     // Process tool calls if there are any and tools are enabled
+    let anyToolUsedV2 = false; // Declare flag before the loop
     if (toolCalls.length && prefs.toolsEnabled) {
       console.log(`AI requested ${toolCalls.length} tool calls.`);
 
@@ -503,22 +504,36 @@ export default async function processAiRequest(
       for (const toolCall of toolCalls) {
         console.log(`Executing tool: ${toolCall.function.name}`);
 
-        const { success, response, commandReplied, visualResponse } =
+        const { success, response, commandReplied, visualResponse, isV2Reply } =
           await executeToolCall(toolCall, message, effectiveLocale);
 
         console.log(
           `Tool ${toolCall.function.name} execution ${
             success ? "succeeded" : "failed"
-          }. Command replied directly: ${commandReplied}, Visual response: ${visualResponse}`
+          }. ` +
+            `Replied: ${commandReplied}, Visual: ${visualResponse}, V2: ${isV2Reply}`
         );
 
-        // If the command replied with visual content (embeds/attachments),
-        // don't add additional text about it to avoid confusion
-        if (visualResponse) {
+        // Track if any tool used V2 components
+        if (isV2Reply) {
+          anyToolUsedV2 = true; // Set the flag if this tool used V2
+        }
+
+        // If the command replied with visual content OR V2 components,
+        // don't add additional text about it to the main response message
+        // to avoid confusion or overwriting V2 components.
+        if (visualResponse || isV2Reply) {
+          // If there *is* separate text from the AI after the tool ran, send it as a follow-up
+          // This prevents overwriting V2 components with a V1 edit
+          if (finalText) {
+            await message.channel.send(finalText).catch(console.error);
+            finalText = ""; // Clear the text so sendResponse doesn't send it again
+          }
+          // Skip adding the tool result text block below
           continue;
         }
 
-        // Add tool result to the response if it didn't already reply with visual content
+        // Add tool result to the response if it didn't already reply with visual/V2 content
         if (!commandReplied) {
           // Format the tool result as a block
           const toolName = toolCall.function.name;
@@ -615,7 +630,28 @@ export default async function processAiRequest(
       effectiveLocale,
       client
     );
-    await sendResponse(message, procMsg, finalText, comps, effectiveLocale);
+
+    // If any tool used V2, we should not send the V1 components.
+    // We already sent any necessary follow-up text from the AI.
+    // The message state is already V2 from the tool.
+    if (anyToolUsedV2) {
+      console.log(
+        "Skipping final sendResponse with V1 components because a tool used V2."
+      );
+      // Clean up the processing message if it exists and wasn't edited/deleted by the tool
+      if (procMsg) {
+        await procMsg.delete().catch(() => {}); // Try deleting instead of editing
+      }
+    } else {
+      // Original behavior: Send the response with V1 components
+      // Only send if there is text or if no tools were called (initial response case)
+      if (finalText || toolCalls.length === 0) {
+        await sendResponse(message, procMsg, finalText, comps, effectiveLocale);
+      } else if (procMsg) {
+        // If only tools ran (no V2) and AI had no final text, delete processing message
+        await procMsg.delete().catch(() => {});
+      }
+    }
   } catch (error) {
     console.error(`Error in processAiRequest:`, error);
     const errMsg = i18n.__(

@@ -286,12 +286,29 @@ export async function sendResponse(
   }
 
   try {
-    await processingMessage.edit({ content: chunks[0] || "...", components });
+    // Ensure components are V1 Action Rows
+    const v1Components = Array.isArray(components)
+      ? components.filter(
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+        )
+      : [];
+
+    await processingMessage.edit({
+      content: chunks[0] || "...",
+      components: v1Components,
+    });
     finalMsg = processingMessage;
   } catch {
+    // Ensure components are V1 Action Rows for fallback
+    const v1Components = Array.isArray(components)
+      ? components.filter(
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+        )
+      : [];
+
     finalMsg = await message.channel.send({
       content: chunks[0] || "...",
-      components,
+      components: v1Components,
     });
   }
 
@@ -299,8 +316,15 @@ export async function sendResponse(
     await message.channel.send(chunks[i]).catch(() => {});
   }
 
+  // Also use the filtered V1 components when deciding to attach the collector
+  const finalV1Components = Array.isArray(components)
+    ? components.filter(
+        (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+      )
+    : [];
+
   // Store the new message with components
-  if (finalMsg && components.length) {
+  if (finalMsg && finalV1Components.length) {
     lastUserComponentMessages.set(userId, finalMsg);
 
     const collector = finalMsg.createMessageComponentCollector({

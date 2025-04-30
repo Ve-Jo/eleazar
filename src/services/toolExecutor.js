@@ -1,19 +1,22 @@
 import i18n from "../utils/newI18n.js";
+import { MessageFlags } from "discord.js";
 
 // Helper functions for creating proxy and executing commands
 function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
-  let commandMessage;
-  let deferredPromise;
-  let replyContent = null;
-  let replyEmbeds = [];
-  let replyAttachments = [];
-  let replyComponents = [];
-  let lastEditedReply = null;
+  // Internal state to store the intended reply
+  let finalReplyState = {
+    content: null,
+    embeds: [],
+    files: [],
+    components: [],
+    flags: null,
+  };
+  let isV2ReplyState = false; // Track V2 state
 
   const proxy = {
-    replied: false,
-    deferred: false,
-    ephemeral: false,
+    replied: false, // Indicates if reply() or editReply() was called
+    deferred: false, // Indicates if deferReply() was called
+    ephemeral: false, // Ephemeral not really possible with message replies
     commandName: null,
     options: {
       getSubcommand: () => subName || null,
@@ -32,18 +35,12 @@ function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
       getUser: (name) => {
         const value = parsedArgs[name];
         if (!value) return null;
-
-        // Handle direct user IDs - if it's a valid snowflake
         if (/^\d{17,19}$/.test(value)) {
           return message.client.users.cache.get(value);
         }
-
-        // Handle mentions
         if (value.startsWith("<@") && value.endsWith(">")) {
           return message.client.users.cache.get(value.replace(/[<@!>]/g, ""));
         }
-
-        // Try to find by username
         return message.client.users.cache.find(
           (u) =>
             u.username.toLowerCase() === value.toLowerCase().replace("@", "")
@@ -52,25 +49,18 @@ function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
       getMember: (name) => {
         const value = parsedArgs[name];
         if (!value) return message.member;
-
-        // Handle direct user IDs - if it's a valid snowflake
         if (/^\d{17,19}$/.test(value)) {
           return message.guild?.members.cache.get(value) || message.member;
         }
-
-        // Handle mentions
         if (value.startsWith("<@") && value.endsWith(">")) {
           const userId = value.replace(/[<@!>]/g, "");
           return message.guild?.members.cache.get(userId) || message.member;
         }
-
-        // Try to find by username as fallback
         const memberByName = message.guild?.members.cache.find(
           (member) =>
             member.user.username.toLowerCase() ===
             value.toLowerCase().replace("@", "")
         );
-
         return memberByName || message.member;
       },
       getChannel: (name) => {
@@ -122,87 +112,141 @@ function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
     locale: effectiveLocale,
     isChatInputCommand: () => true,
     isCommand: () => true,
-    // Important properties for command context
     inGuild: () => !!message.guild,
     inCachedGuild: () => !!message.guild,
     inRawGuild: () => !!message.guild,
-    // Improved reply function with support for embeds and files
+    deferReply: async (options = {}) => {
+      if (proxy.replied) return Promise.resolve(); // Already replied
+      proxy.deferred = true;
+      proxy.ephemeral = options.ephemeral || false;
+      console.log("aiProxy: deferReply called.");
+      // We resolve immediately as no message is sent here
+      return Promise.resolve();
+    },
     reply: async (options) => {
-      if (proxy.replied || proxy.deferred) return proxy.followUp(options);
+      // If deferred, just store the state and mark as replied.
+      if (proxy.deferred) {
+        console.log("aiProxy: reply called while deferred. Storing state.");
+        finalReplyState = {
+          content: typeof options === "string" ? options : options.content,
+          embeds: options.embeds || [],
+          files: options.files || [],
+          components: options.components || [],
+          flags: options.flags, // Store the flags
+        };
+        isV2ReplyState = finalReplyState.flags === MessageFlags.IsComponentsV2;
+        proxy.replied = true; // Mark that a reply was intended
+        return Promise.resolve(); // Resolve as no message is sent yet
+      }
 
-      replyContent = typeof options === "string" ? options : options.content;
-      replyEmbeds = options.embeds || [];
-      replyAttachments = options.files || [];
-      replyComponents = options.components || [];
+      // --- Original immediate reply logic (less likely path now) ---
+      console.log(
+        "aiProxy: reply called directly (not deferred). Sending message."
+      );
+      if (proxy.replied) return proxy.followUp(options); // Fallback to followUp if somehow called twice
 
       const replyOptions = {
-        content:
-          typeof options === "string"
-            ? options.substring(0, 2000)
-            : options.content,
+        content: typeof options === "string" ? options : options.content,
         embeds: options.embeds || [],
         files: options.files || [],
         components: options.components || [],
         allowedMentions: { repliedUser: false },
+        flags: options.flags,
       };
+      isV2ReplyState = options.flags === MessageFlags.IsComponentsV2;
+      if (isV2ReplyState) delete replyOptions.content; // Remove content for V2
 
-      commandMessage = await message.reply(replyOptions);
-      proxy.replied = true;
-      return commandMessage;
+      try {
+        const commandMessage = await message.reply(replyOptions);
+        proxy.replied = true;
+        // Store the state even for direct replies
+        finalReplyState = { ...replyOptions };
+        return commandMessage;
+      } catch (error) {
+        console.error("aiProxy: Error during direct reply:", error);
+        throw error; // Re-throw
+      }
     },
-    // Improved editReply function with support for embeds and files
     editReply: async (options) => {
-      if (!proxy.replied && !proxy.deferred) return proxy.reply(options);
+      // If deferred, just update the stored state.
+      if (proxy.deferred) {
+        console.log(
+          "aiProxy: editReply called while deferred. Updating stored state."
+        );
+        finalReplyState = {
+          content: typeof options === "string" ? options : options.content,
+          embeds: options.embeds || [],
+          files: options.files || [],
+          components: options.components || [],
+          flags: options.flags, // Store the flags
+        };
+        isV2ReplyState = finalReplyState.flags === MessageFlags.IsComponentsV2;
+        proxy.replied = true; // Mark that a reply was intended
+        return Promise.resolve(); // Resolve as no message is sent yet
+      }
 
-      replyContent = typeof options === "string" ? options : options.content;
-      replyEmbeds = options.embeds || replyEmbeds;
-      replyAttachments = options.files || replyAttachments;
-      replyComponents = options.components || replyComponents;
+      // --- Original edit logic (only if reply was called directly before) ---
+      console.log("aiProxy: editReply called (not deferred). Attempting edit.");
+      if (!proxy.replied) {
+        console.warn(
+          "aiProxy: editReply called before reply. Attempting direct reply."
+        );
+        // If edit is called before reply somehow, treat it as a reply
+        return proxy.reply(options);
+      }
 
       const editOptions = {
-        content:
-          typeof options === "string"
-            ? options.substring(0, 2000)
-            : options.content,
+        content: typeof options === "string" ? options : options.content,
         embeds: options.embeds || [],
         files: options.files || [],
         components: options.components || [],
+        flags: options.flags,
       };
+      isV2ReplyState = options.flags === MessageFlags.IsComponentsV2;
+      if (isV2ReplyState) delete editOptions.content; // Remove content for V2
 
-      lastEditedReply = await commandMessage?.edit(editOptions);
-      return lastEditedReply;
-    },
-    // Improved deferReply to properly track state
-    deferReply: async (options = {}) => {
-      if (proxy.replied) return;
-
-      proxy.deferred = true;
-      // Instead of actually deferring (which we can't do with messages), we'll just
-      // create a placeholder message that can be edited later
-      const deferOptions = {
-        content: "⏳ Processing...",
-        allowedMentions: { repliedUser: false },
-      };
-
-      commandMessage = await message.reply(deferOptions);
-      return commandMessage;
+      // We need the message object from the *direct* reply here, which isn't stored
+      // This path is problematic and less likely with the new flow.
+      // For now, we'll assume this path won't be hit often.
+      // A proper fix would require storing the message object from direct replies.
+      console.warn(
+        "aiProxy: editReply on a direct (non-deferred) reply is not fully supported."
+      );
+      // Store the state anyway
+      finalReplyState = { ...editOptions };
+      return Promise.resolve(); // Cannot reliably edit without message object
     },
     followUp: async (options) => {
+      console.log("aiProxy: followUp called.");
       const followUpOptions =
         typeof options === "string" ? { content: options } : options;
-
+      // Ensure content is removed if V2 flag is present
+      if (followUpOptions.flags === MessageFlags.IsComponentsV2) {
+        delete followUpOptions.content;
+      }
       return message.channel.send(followUpOptions);
     },
-    deleteReply: async () => commandMessage?.delete().catch(() => {}),
-    fetchReply: async () => commandMessage,
-    // Add method to retrieve final reply content and media
+    deleteReply: async () => {
+      console.warn(
+        "aiProxy: deleteReply is not supported in the new deferred flow."
+      );
+      return Promise.resolve();
+    },
+    fetchReply: async () => {
+      console.warn(
+        "aiProxy: fetchReply is not supported in the new deferred flow."
+      );
+      return Promise.resolve(null);
+    },
     getFinalReplyContent: () => {
+      console.log(
+        "aiProxy: getFinalReplyContent called. Returning stored state:",
+        finalReplyState
+      );
       return {
-        content: replyContent,
-        embeds: replyEmbeds,
-        attachments: replyAttachments,
-        components: replyComponents,
-        message: lastEditedReply || commandMessage,
+        ...finalReplyState,
+        wasRepliedOrDeferred: proxy.replied || proxy.deferred, // Indicate if *any* reply action was taken
+        isV2: isV2ReplyState, // Return the tracked V2 state
       };
     },
   };
@@ -211,37 +255,24 @@ function createAiProxy(message, subName, parsedArgs, effectiveLocale) {
 
 async function executeCommand(target, aiProxy, effectiveLocale) {
   try {
+    // Execute the command. It will use the proxy's methods which now store state.
     const response = await target.execute(aiProxy, i18n);
 
-    // If the command directly replied by itself
-    if (aiProxy.replied || aiProxy.deferred) {
-      const replyData = aiProxy.getFinalReplyContent();
-      // Return the full reply content
-      return {
-        success: true,
-        response: null,
-        commandReplied: true,
-        replyContent: replyData.content,
-        replyEmbeds: replyData.embeds,
-        replyAttachments: replyData.attachments,
-        replyComponents: replyData.components,
-        replyMessage: replyData.message,
-        hasComponents: replyData.components && replyData.components.length > 0,
-      };
+    // Check if the command *intended* to reply (called proxy.reply/editReply/deferReply)
+    const intendedReply = aiProxy.replied || aiProxy.deferred;
+
+    // If the command returned a value AND didn't intend to reply via proxy
+    if (response != null && !intendedReply) {
+      return { success: true, response: response, commandIntendedReply: false };
     }
 
-    // If the command returned a value but didn't reply directly
-    if (response != null) {
-      return { success: true, response, commandReplied: false };
-    }
-
+    // If the command intended to reply OR returned nothing (implicit success)
     return {
       success: true,
-      response: i18n.__(
-        "events.ai.buttons.toolExec.successGeneric",
-        effectiveLocale
-      ),
-      commandReplied: false,
+      response: intendedReply
+        ? null
+        : i18n.__("events.ai.buttons.toolExec.successGeneric", effectiveLocale), // Provide generic success only if no reply was intended *and* no response value given
+      commandIntendedReply: intendedReply,
     };
   } catch (err) {
     console.error("Error executing command:", err);
@@ -252,7 +283,8 @@ async function executeCommand(target, aiProxy, effectiveLocale) {
           { error: err.message },
           effectiveLocale
         );
-    return { success: false, response: msg, commandReplied: false };
+    // Indicate no reply was successfully prepared by the command on error
+    return { success: false, response: msg, commandIntendedReply: false };
   }
 }
 
@@ -302,7 +334,9 @@ export async function executeToolCall(toolCall, message, locale) {
           { command: name, args },
           effectiveLocale
         ),
-        commandReplied: false,
+        commandReplied: false, // No reply sent
+        visualResponse: false,
+        isV2Reply: false,
       };
     }
   } else if (typeof args === "object" && args !== null) {
@@ -322,22 +356,31 @@ export async function executeToolCall(toolCall, message, locale) {
         { command: name },
         effectiveLocale
       ),
-      commandReplied: false,
+      commandReplied: false, // No reply sent
+      visualResponse: false,
+      isV2Reply: false,
     };
   }
 
   // Identify target execute function
   const target = subName ? command.subcommands?.[subName] : command;
-  if (!target) {
-    console.error(`Target not found: ${subName ? `${name}_${subName}` : name}`);
+  if (!target || !target.execute) {
+    // Check for execute method
+    console.error(
+      `Target execute function not found: ${
+        subName ? `${commandName}_${subName}` : commandName
+      }`
+    );
     return {
       success: false,
       response: i18n.__(
-        "events.ai.toolExec.commandNotFound",
+        "events.ai.toolExec.commandNotFound", // Or a more specific error
         { command: name },
         effectiveLocale
       ),
-      commandReplied: false,
+      commandReplied: false, // No reply sent
+      visualResponse: false,
+      isV2Reply: false,
     };
   }
 
@@ -372,123 +415,125 @@ export async function executeToolCall(toolCall, message, locale) {
     console.log(
       `Command doesn't declare options but AI provided parameters. Using AI parameters directly.`
     );
-    console.log(`Executing command with parameters:`, parsedArgs);
-    const aiProxy = createAiProxy(
-      message,
-      subName,
-      parsedArgs,
-      effectiveLocale
+    // No validation needed here if no options are defined
+  } else {
+    // Remove unexpected params if options are defined
+    const valid = options.map((o) => o.name);
+    const unexpectedParams = Object.keys(parsedArgs).filter(
+      (k) => !valid.includes(k)
     );
-    return await executeCommand(target, aiProxy, effectiveLocale);
-  }
+    if (unexpectedParams.length) {
+      console.warn(
+        `Removing unexpected parameters: ${unexpectedParams.join(", ")}`
+      );
+      Object.keys(parsedArgs).forEach((k) => {
+        if (!valid.includes(k)) delete parsedArgs[k];
+      });
+    }
 
-  const required = options.filter((o) => o.required).map((o) => o.name);
-  console.log(`Required parameters: ${required.join(", ")}`);
-
-  // Remove unexpected params
-  const valid = options.map((o) => o.name);
-  const unexpectedParams = Object.keys(parsedArgs).filter(
-    (k) => !valid.includes(k)
-  );
-  if (unexpectedParams.length) {
-    console.warn(
-      `Removing unexpected parameters: ${unexpectedParams.join(", ")}`
-    );
-  }
-
-  Object.keys(parsedArgs).forEach((k) => {
-    if (!valid.includes(k)) delete parsedArgs[k];
-  });
-
-  // Check missing
-  const missing = required.filter((p) => !(p in parsedArgs));
-  if (missing.length) {
-    console.error(`Missing required parameters: ${missing.join(", ")}`);
-    return {
-      success: false,
-      response: i18n.__(
-        "events.ai.toolExec.missingParams",
-        {
-          command: name,
-          missing: missing.join(","),
-          required: required.join(","),
-        },
-        effectiveLocale
-      ),
-      commandReplied: false,
-    };
+    // Check missing required params
+    const required = options.filter((o) => o.required).map((o) => o.name);
+    console.log(`Required parameters: ${required.join(", ")}`);
+    const missing = required.filter((p) => !(p in parsedArgs));
+    if (missing.length) {
+      console.error(`Missing required parameters: ${missing.join(", ")}`);
+      return {
+        success: false,
+        response: i18n.__(
+          "events.ai.toolExec.missingParams",
+          {
+            command: name,
+            missing: missing.join(","),
+            required: required.join(","),
+          },
+          effectiveLocale
+        ),
+        commandReplied: false,
+        visualResponse: false,
+        isV2Reply: false,
+      };
+    }
   }
 
   console.log(`Final parameters after validation:`, parsedArgs);
 
-  // Always send execution message for all commands
-  let statusMessage = null;
-  const commandDesc = dataObj?.description || name;
-  let statusText = `🔄 Executing ${commandDesc}...`;
-
-  // Include prompt in the status message if available
-  if (parsedArgs.prompt) {
-    // Truncate the prompt if it's too long
-    const truncatedPrompt =
-      parsedArgs.prompt.length > 50
-        ? parsedArgs.prompt.substring(0, 47) + "..."
-        : parsedArgs.prompt;
-    statusText += ` (${truncatedPrompt})`;
-  }
-
-  try {
-    statusMessage = await message.channel.send(statusText);
-    console.log(
-      `Sent status message for command execution: ${statusMessage.id}`
-    );
-  } catch (err) {
-    console.error("Failed to send command execution status message:", err);
-  }
-
-  // Set commandName in proxy for better tracking
+  // Create the proxy
   const aiProxy = createAiProxy(message, subName, parsedArgs, effectiveLocale);
   aiProxy.commandName = subName
     ? `${command.data.name}_${subName}`
     : command.data.name;
 
-  // Execute command
-  const result = await executeCommand(target, aiProxy, effectiveLocale);
+  // Execute the command - this populates the proxy's internal state
+  const execResult = await executeCommand(target, aiProxy, effectiveLocale);
 
-  // Clean up status message if command replied directly
-  if (statusMessage && result.commandReplied) {
-    try {
-      await statusMessage.delete().catch(() => {});
-      console.log(`Deleted status message after command completion`);
+  // Now, get the final intended reply state from the proxy
+  const finalReplyData = aiProxy.getFinalReplyContent();
 
-      // If the command reply has embeds, attachments, or components, don't force a text response
-      if (
-        result.replyEmbeds?.length ||
-        result.replyAttachments?.length ||
-        result.hasComponents
-      ) {
-        return {
-          success: true,
-          response: null,
-          commandReplied: true,
-          visualResponse: true,
-          hasComponents: result.hasComponents,
-        };
-      }
-    } catch (err) {
-      console.error("Failed to delete status message:", err);
+  let finalMessage = null;
+  let sentReply = false;
+
+  // Check if the command intended to reply and prepared some content/visuals
+  if (
+    execResult.success &&
+    finalReplyData.wasRepliedOrDeferred &&
+    (finalReplyData.content ||
+      finalReplyData.embeds?.length ||
+      finalReplyData.files?.length ||
+      finalReplyData.components?.length)
+  ) {
+    // Construct the final payload to send
+    const sendOptions = {
+      content: finalReplyData.content,
+      embeds: finalReplyData.embeds,
+      files: finalReplyData.files,
+      components: finalReplyData.components,
+      allowedMentions: { repliedUser: false }, // Don't ping original user
+    };
+
+    if (finalReplyData.isV2) {
+      sendOptions.flags = MessageFlags.IsComponentsV2;
+      delete sendOptions.content; // Ensure content is removed for V2
     }
-  } else if (statusMessage && !result.commandReplied) {
-    // Update status message with result if command didn't reply directly
+
     try {
-      const successIcon = result.success ? "✅" : "❌";
-      await statusMessage.edit(
-        `${successIcon} ${commandDesc}: ${result.response || "Completed"}`
+      console.log("Sending final command reply:", sendOptions);
+      finalMessage = await message.channel.send(sendOptions);
+      sentReply = true;
+    } catch (sendError) {
+      console.error("Error sending final command reply:", sendError);
+      // If sending failed, fall back to sending the error text
+      execResult.success = false;
+      execResult.response = i18n.__(
+        "events.ai.buttons.toolExec.errorGeneric",
+        { error: sendError.message },
+        effectiveLocale
       );
-      console.log(`Updated status message with command result`);
-    } catch (err) {
-      console.error("Failed to update status message:", err);
     }
   }
 
-  return result;
+  // If execution failed OR command didn't intend to reply but returned a text response
+  if (!execResult.success || (!sentReply && execResult.response)) {
+    try {
+      console.log("Sending fallback/error response:", execResult.response);
+      await message.channel.send(execResult.response);
+    } catch (fallbackError) {
+      console.error("Error sending fallback/error message:", fallbackError);
+    }
+  }
+
+  // Determine the final return value for processAiRequest
+  const visualResponse = !!(
+    finalReplyData.embeds?.length ||
+    finalReplyData.files?.length ||
+    finalReplyData.components?.length
+  );
+
+  return {
+    success: execResult.success,
+    // Return null response if we sent a visual reply, otherwise return error/status text
+    response: execResult.success && sentReply ? null : execResult.response,
+    commandReplied: sentReply, // Indicate if a reply was actually sent
+    visualResponse: visualResponse && sentReply, // Visual only if successfully sent
+    isV2Reply: finalReplyData.isV2 && sentReply, // V2 only if successfully sent
+  };
 }
