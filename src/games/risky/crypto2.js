@@ -20,6 +20,7 @@ import {
   getCategoryCoins,
 } from "../../utils/cryptoApi.js"; // Import API utilities
 import { ComponentBuilder } from "../../utils/componentConverter.js"; // Import ComponentBuilder
+import axios from "axios"; // Add axios import
 
 // --- Game Metadata ---
 const game_info = {
@@ -1109,6 +1110,9 @@ export default {
   isLegacy: false, // This is a new game
 
   async execute(interaction, i18n) {
+    // --- Test MEXC API Connectivity ---
+    await testMexcApi(); // Add the test call here
+
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
     const modalSubmitOpenPositionId = `crypto2_open_modal_${interaction.id}`;
@@ -1311,6 +1315,31 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
   }
 
   return liquidatedPositionsInfo; // Return info about liquidated positions
+}
+
+// --- Helper function to test MEXC API connectivity ---
+async function testMexcApi() {
+  try {
+    const response = await axios.get(`${MEXC_API_BASE_URL}/api/v3/time`);
+    if (response.status === 200 && response.data && response.data.serverTime) {
+      console.log(
+        `[crypto2] MEXC API Test successful. Server Time: ${response.data.serverTime}`
+      );
+      return true;
+    } else {
+      console.warn(
+        `[crypto2] MEXC API Test failed. Status: ${response.status}, Data:`,
+        response.data
+      );
+      return false;
+    }
+  } catch (error) {
+    console.error(
+      "[crypto2] Error during MEXC API Test:",
+      error.message || error
+    );
+    return false;
+  }
 }
 
 // --- Refactored Game Interaction Collector Setup ---
@@ -1729,7 +1758,6 @@ function setupGameInteractionCollector(
           const parts = customId.split("_");
           const positionId = parts[2];
 
-          await i.deferUpdate();
           try {
             const position = await Database.getCryptoPositionById(positionId);
             if (
@@ -1861,7 +1889,6 @@ function setupGameInteractionCollector(
           const parts = customId.split("_");
           const positionId = parts[2];
 
-          await i.deferUpdate();
           try {
             const position = await Database.getCryptoPositionById(positionId);
             if (
@@ -2071,10 +2098,6 @@ function setupGameInteractionCollector(
             );
 
             await message.edit(menuContent);
-            await i.followUp({
-              content: i18n.__("games.crypto2.refreshed"),
-              ephemeral: true,
-            });
           } catch (error) {
             console.error(`Error refreshing menu:`, error);
             await i.followUp({

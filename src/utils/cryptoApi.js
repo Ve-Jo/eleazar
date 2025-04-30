@@ -16,7 +16,7 @@ let validCmcSymbolMap = new Map(); // Added: Map symbol to CMC ID
 const priceCache = {
   data: {},
   timestamps: {},
-  maxAge: 2 * 60 * 1000, // 2 minutes cache expiry
+  maxAge: 30 * 1000, // 30 seconds cache expiry
 };
 
 // Category cache
