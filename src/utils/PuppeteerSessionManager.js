@@ -28,11 +28,12 @@ const getSession = async (sessionId, initializationScript) => {
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-gpu", // Disable GPU acceleration entirely
       "--disable-accelerated-2d-canvas", // Disable accelerated 2D canvas
       // WebGL is needed for Three.js, even software rendering
       "--disable-web-security",
       "--enable-logging=stderr",
+      "--ignore-gpu-blacklist", // Try enabling software rendering
+      "--enable-webgl", // Explicitly enable WebGL
     ],
     env: {
       ...process.env,
