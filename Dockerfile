@@ -25,8 +25,8 @@ FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-# Install runtime dependencies for canvas and other native modules
-RUN apk add --no-cache cairo jpeg pango giflib postgresql-client chromium
+# Install runtime dependencies for canvas, chromium, and software GL rendering
+RUN apk add --no-cache cairo jpeg pango giflib postgresql-client chromium mesa-dri-gallium
 
 # Create a non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser
