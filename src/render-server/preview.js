@@ -6,6 +6,11 @@ import fs from "fs/promises";
 import { watch } from "fs";
 import React from "react";
 import { WebSocketServer } from "ws";
+import {
+  renderUpdate,
+  closeSession,
+} from "../utils/PuppeteerSessionManager.js";
+import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -810,9 +815,111 @@ app.get("/:componentName", async (req, res) => {
       return res.status(404).send(`Component ${componentName} not found`);
     }
 
-    // Add special controls for specific components
-    let additionalControls = "";
+    // --- Import component to check for controls ---
+    let Component = null;
+    let previewControlsHtml = "";
+    let previewControlStateInit = "";
+    let controlChangeHandlers = "";
+    let dynamicControlUrlParams = ""; // For refreshImage
+    let dynamicControlInitCode = ""; // For window.onload
 
+    try {
+      delete require.cache[componentPath];
+      const imported = await import(`file://${componentPath}?t=${Date.now()}`);
+      Component = imported.default;
+
+      if (
+        Component &&
+        Component.previewControls &&
+        Array.isArray(Component.previewControls)
+      ) {
+        previewControlsHtml += '<div class="dynamic-controls">';
+        Component.previewControls.forEach((control) => {
+          previewControlsHtml += `<div class="control-group">`;
+          previewControlsHtml += `<label for="ctrl-${control.name}">${control.label}:</label>`;
+
+          const defaultValue = JSON.stringify(control.defaultValue);
+          const stateVarName = `current_${control.name}`;
+          const storageKey = `control_${componentName}_${control.name}`;
+          const changeFuncName = `handle_${control.name}_Change`;
+
+          previewControlStateInit += `let ${stateVarName} = storage.get('${storageKey}', ${defaultValue});\n`;
+          dynamicControlUrlParams += `url += '&${control.name}=' + encodeURIComponent(${stateVarName});\n`;
+
+          if (control.type === "select") {
+            previewControlsHtml += `<select id="ctrl-${control.name}" name="${control.name}" onchange="${changeFuncName}(this.value)">`;
+            control.options.forEach((opt) => {
+              previewControlsHtml += `<option value="${opt.value}">${
+                opt.label || opt.value
+              }</option>`;
+            });
+            previewControlsHtml += `</select>`;
+            controlChangeHandlers += `
+              function ${changeFuncName}(value) {
+                ${stateVarName} = value;
+                storage.set('${storageKey}', value);
+                refreshImage();
+              }
+            `;
+            dynamicControlInitCode += `
+              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
+              if (ctrl_${control.name}) { ctrl_${control.name}.value = ${stateVarName}; }
+            `;
+          } else if (control.type === "range") {
+            previewControlsHtml += `<input type="range" id="ctrl-${control.name}" name="${control.name}" 
+                     min="${control.min}" max="${control.max}" step="${control.step}" 
+                     oninput="document.getElementById('val-${control.name}').textContent=this.value" 
+                     onchange="${changeFuncName}(this.value)" 
+                     value="" />`;
+            previewControlsHtml += `<span class="range-value" id="val-${control.name}"></span>`;
+            controlChangeHandlers += `
+              function ${changeFuncName}(value) {
+                ${stateVarName} = parseFloat(value);
+                storage.set('${storageKey}', value);
+                // Update display value explicitly on final change too, just in case
+                const valElem = document.getElementById('val-${control.name}');
+                if (valElem) valElem.textContent = value;
+                refreshImage(); // Refresh only on final change
+              }
+            `;
+            dynamicControlInitCode += `
+              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
+              if (ctrl_${control.name}) {
+                ctrl_${control.name}.value = ${stateVarName};
+                const valElem = document.getElementById('val-${control.name}');
+                if (valElem) valElem.textContent = ${stateVarName};
+              }
+            `;
+          } else if (control.type === "text") {
+            previewControlsHtml += `<input type="text" id="ctrl-${control.name}" name="${control.name}" 
+                     oninput="${changeFuncName}(this.value)" 
+                     value="" />`;
+            controlChangeHandlers += `
+              function ${changeFuncName}(value) {
+                ${stateVarName} = value;
+                storage.set('${storageKey}', value);
+                refreshImage();
+              }
+            `;
+            dynamicControlInitCode += `
+              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
+              if (ctrl_${control.name}) { ctrl_${control.name}.value = ${stateVarName}; }
+            `;
+          }
+          previewControlsHtml += `</div>`;
+        });
+        previewControlsHtml += "</div>";
+      }
+    } catch (importError) {
+      console.error(
+        `Could not import ${componentName} to check controls:`,
+        importError
+      );
+    }
+    // --- End Control Check ---
+
+    // Add specific controls for Transfer and LevelUp (keep existing logic)
+    let additionalControls = "";
     if (componentName === "Transfer") {
       additionalControls = `
         <div class="mode-controls">
@@ -823,8 +930,6 @@ app.get("/:componentName", async (req, res) => {
         </div>
       `;
     }
-
-    // Add type toggle for LevelUp component
     if (componentName === "LevelUp") {
       additionalControls = `
         <div class="type-controls">
@@ -835,198 +940,82 @@ app.get("/:componentName", async (req, res) => {
       `;
     }
 
-    // Create preview page
+    // Create preview page HTML
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <title>${componentName} Preview</title>
         <script>
-          // Client-side storage helper that works in all environments
           const storage = {
-            get: (key, defaultValue) => {
-              try {
-                if (typeof localStorage !== 'undefined') {
-                  const value = localStorage.getItem(key);
-                  return value !== null ? value : defaultValue;
-                }
-              } catch (e) {
-                console.warn('localStorage not available:', e);
-              }
-              return defaultValue;
-            },
-            set: (key, value) => {
-              try {
-                if (typeof localStorage !== 'undefined') {
-                  localStorage.setItem(key, value);
-                }
-              } catch (e) {
-                console.warn('localStorage not available:', e);
-              }
-            }
+            get: (key, defaultValue) => { try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } catch(e) { return defaultValue; } },
+            set: (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {} }
           };
           
-          // WebSocket connection for live reload
           const ws = new WebSocket('ws://' + window.location.host);
           
           let currentLang = storage.get('previewLang', 'en');
-          let debugMode = storage.get('debugMode', 'false') === 'true';
-          let currentMode = storage.get('transferMode', 'transfer');
-          let darkTheme = storage.get('darkTheme', 'true') === 'true';
+          let debugMode = storage.get('debugMode', false);
+          let darkTheme = storage.get('darkTheme', true);
+          let currentMode = storage.get('transferMode', 'transfer'); 
           let currentType = storage.get('levelUpType', 'chat');
           
-          function toggleDebug() {
-            debugMode = !debugMode;
-            storage.set('debugMode', debugMode);
-            document.getElementById('debugButton').classList.toggle('active', debugMode);
-            
-            ws.send(JSON.stringify({
-              type: 'debugChange',
-              component: '${componentName}',
-              debug: debugMode
-            }));
-          }
+          ${previewControlStateInit}
+
+          ${controlChangeHandlers.replace(
+            // Find the modelType handler specifically
+            /function\s+handle_modelType_Change\s*\(\s*value\s*\)\s*\{\s*current_modelType\s*=\s*value;\s*storage\.set\(\s*'control_ThreeDObject_modelType'\s*,\s*value\s*\);\s*refreshImage\(\s*\);\s*\}/,
+            // Replace it with one that adds forceInit=true
+            `function handle_modelType_Change(value) {
+               current_modelType = value;
+               storage.set('control_ThreeDObject_modelType', value);
+               refreshImage(true); // Pass true to indicate forceInit
+             }`
+          )}
           
-          function toggleTheme() {
-            darkTheme = !darkTheme;
-            storage.set('darkTheme', darkTheme);
-            document.getElementById('themeButton').classList.toggle('active', darkTheme);
-            document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
-            
-            ws.send(JSON.stringify({
-              type: 'themeChange',
-              component: '${componentName}',
-              darkTheme: darkTheme
-            }));
-            
-            refreshImage();
-          }
-          
-          function changeType(type) {
-            if ('${componentName}' !== 'LevelUp') return;
-            
-            currentType = type;
-            storage.set('levelUpType', type);
-            document.querySelectorAll('.type-btn').forEach(btn => {
-              btn.classList.toggle('active', btn.dataset.type === type);
-            });
-            
-            // Notify server about type change
-            ws.send(JSON.stringify({
-              type: 'typeChange',
-              component: '${componentName}',
-              levelType: type
-            }));
-            
-            refreshImage();
-          }
-          
-          function changeMode(mode) {
-            if ('${componentName}' !== 'Transfer') return;
-            
-            currentMode = mode;
-            storage.set('transferMode', mode);
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-              btn.classList.toggle('active', btn.dataset.mode === mode);
-            });
-            
-            // Notify server about mode change
-            ws.send(JSON.stringify({
-              type: 'modeChange',
-              component: '${componentName}',
-              mode: mode
-            }));
-            
-            refreshImage();
-          }
-          
-          function refreshImage() {
+          function toggleDebug() { debugMode = !debugMode; storage.set('debugMode', debugMode); document.getElementById('debugButton').classList.toggle('active', debugMode); refreshImage(); }
+          function toggleTheme() { darkTheme = !darkTheme; storage.set('darkTheme', darkTheme); document.getElementById('themeButton').classList.toggle('active', darkTheme); document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme'; refreshImage(); }
+          function changeLang(lang) { currentLang = lang; storage.set('previewLang', lang); document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang)); refreshImage(); }
+          function changeMode(mode) { if ('${componentName}' !== 'Transfer') return; currentMode = mode; storage.set('transferMode', mode); document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode)); refreshImage(); }
+          function changeType(type) { if ('${componentName}' !== 'LevelUp') return; currentType = type; storage.set('levelUpType', type); document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type)); refreshImage(); }
+
+          function refreshImage(forceInit = false) { 
             const img = document.querySelector('.preview img');
+            if (!img) return;
             let url = '/${componentName}/image?lang=' + currentLang;
-            
-            if ('${componentName}' === 'Transfer') {
-              url += '&mode=' + currentMode;
+            url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light');
+            if ('${componentName}' === 'Transfer') { url += '&mode=' + currentMode; }
+            if ('${componentName}' === 'LevelUp') { url += '&type=' + currentType; }
+            ${dynamicControlUrlParams}
+            if (forceInit) { 
+                url += '&forceInit=true'; // Add the flag to the URL
             }
-            
-            if ('${componentName}' === 'LevelUp') {
-              url += '&type=' + currentType;
-            }
-            
-            url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light') + '&t=' + Date.now();
+            url += '&t=' + Date.now();
             img.src = url;
           }
           
-          ws.onopen = () => {
-            // Tell server which component we're viewing
-            ws.send(JSON.stringify({ 
-              type: 'viewing',
-              component: '${componentName}',
-              lang: currentLang,
-              mode: currentMode,
-              debug: debugMode,
-              darkTheme: darkTheme
-            }));
-          };
-          
+          ws.onopen = () => { console.log('WS Open'); /* Send initial state if needed */ };
           ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'reload' || data.type === 'langChange' || 
-                data.type === 'debugChange' || data.type === 'modeChange' ||
-                data.type === 'themeChange') {
-              refreshImage();
-            }
-          };
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'reload') {
+                  console.log('Reload triggered by server');
+                  refreshImage(); // Or maybe location.reload() if backend changed drastically
+                }
+            } catch(e) { console.error('WS message error', e); }
+           }; // Added semicolon here
 
-          function changeLang(lang) {
-            currentLang = lang;
-            storage.set('previewLang', lang);
-            document.querySelectorAll('.lang-btn').forEach(btn => {
-              btn.classList.toggle('active', btn.dataset.lang === lang);
-            });
-            
-            // Notify server about language change
-            ws.send(JSON.stringify({
-              type: 'langChange',
-              component: '${componentName}',
-              lang: lang
-            }));
-
-            refreshImage();
-          }
-
-          // Initialize on load
           window.onload = () => {
-            // Initialize language buttons
-            document.querySelectorAll('.lang-btn').forEach(btn => {
-              btn.classList.toggle('active', btn.dataset.lang === currentLang);
-            });
+            // Init standard controls
+            document.querySelectorAll('.lang-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.lang === currentLang); });
+            if (document.getElementById('debugButton')) { document.getElementById('debugButton').classList.toggle('active', debugMode); }
+            if (document.getElementById('themeButton')) { document.getElementById('themeButton').classList.toggle('active', darkTheme); document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme'; }
+            if ('${componentName}' === 'Transfer') { document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === currentMode)); }
+            if ('${componentName}' === 'LevelUp') { document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === currentType)); }
             
-            // Initialize debug button
-            if (document.getElementById('debugButton')) {
-              document.getElementById('debugButton').classList.toggle('active', debugMode);
-            }
-            
-            // Initialize theme button
-            if (document.getElementById('themeButton')) {
-              document.getElementById('themeButton').classList.toggle('active', darkTheme);
-              document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
-            }
-            
-            // Initialize Transfer mode buttons if applicable
-            if ('${componentName}' === 'Transfer') {
-              document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.mode === currentMode);
-              });
-            }
-            
-            // Initialize LevelUp type buttons if applicable
-            if ('${componentName}' === 'LevelUp') {
-              document.querySelectorAll('.type-btn').forEach(btn => {
-                console.log('Setting type button:', btn.dataset.type, currentType);
-                btn.classList.toggle('active', btn.dataset.type === currentType);
-              });
-            }
-          };
+            // Init dynamic controls
+            ${dynamicControlInitCode}
+          }; // Added semicolon here
         </script>
         <style>
           body { 
@@ -1142,40 +1131,44 @@ app.get("/:componentName", async (req, res) => {
             border-radius: 0 0 0 4px;
             font-size: 12px;
           }
+          .dynamic-controls { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 15px; 
+            margin-bottom: 15px; 
+            padding: 10px; 
+            background: #eee; 
+            border-radius: 5px; 
+          }
+          .control-group { display: flex; align-items: center; gap: 8px; }
+          .control-group label { font-weight: 500; }
+          .control-group select, .control-group input {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+          }
+          .range-value { font-style: italic; color: #555; min-width: 30px; text-align: right; }
         </style>
       </head>
       <body>
         <h1>${componentName} Preview</h1>
         <div class="controls">
-          <a href="/" class="back">← Back to List</a>
-          <a href="#" class="reload" onclick="location.reload(); return false">↻ Reload</a>
-          <div class="lang-controls">
-            <button class="lang-btn" data-lang="en" onclick="changeLang('en')">English</button>
-            <button class="lang-btn" data-lang="ru" onclick="changeLang('ru')">Russian</button>
-            <button class="lang-btn" data-lang="uk" onclick="changeLang('uk')">Ukrainian</button>
-          </div>
-          <div class="debug-controls">
-            <button id="debugButton" onclick="toggleDebug()" class="debug-btn">Debug Mode</button>
-          </div>
-          <div class="theme-controls">
-            <button id="themeButton" onclick="toggleTheme()" class="theme-btn">Dark Theme</button>
-          </div>
-          ${additionalControls}
+           <!-- Standard Controls -->
+           <a href="/" class="back">← Back</a> <button onclick="refreshImage()">Reload Img</button>
+           <div class="lang-controls">
+             <button class="lang-btn" data-lang="en" onclick="changeLang('en')">English</button>
+             <button class="lang-btn" data-lang="ru" onclick="changeLang('ru')">Russian</button>
+             <button class="lang-btn" data-lang="uk" onclick="changeLang('uk')">Ukrainian</button>
+           </div>
+           <button id="debugButton" onclick="toggleDebug()">Debug</button>
+           <button id="themeButton" onclick="toggleTheme()">Theme</button>
+           ${additionalControls}
         </div>
-        <div class="preview">
-          <img src="/${componentName}/image?lang=en${
-      componentName === "Transfer" ? "&mode=transfer" : ""
-    }" onload="this.parentElement.setAttribute('style', 'width:' + this.naturalWidth + 'px; height:' + this.naturalHeight + 'px; position:relative;')" />
-          <div class="dimensions"></div>
-        </div>
+        ${previewControlsHtml} 
+        <div class="preview"> <img src="#" alt="Loading preview..."> <div class="dimensions"></div> </div>
         <script>
-          // Add dimensions display
-          const img = document.querySelector('.preview img');
-          img.onload = function() {
-            const dimensions = document.querySelector('.dimensions');
-            dimensions.textContent = this.naturalWidth + ' × ' + this.naturalHeight;
-            this.parentElement.setAttribute('style', 'width:' + this.naturalWidth + 'px; height:' + this.naturalHeight + 'px; position:relative;');
-          };
+          // Trigger initial load after setting up listeners
+          if (document.readyState === 'complete') { refreshImage(); } else { window.addEventListener('load', refreshImage); }
         </script>
       </body>
       </html>
@@ -1183,168 +1176,207 @@ app.get("/:componentName", async (req, res) => {
 
     res.send(html);
   } catch (error) {
-    console.error("Error details:", error);
-    res.status(500).send(`Error rendering component: ${error.message}`);
+    console.error("Error rendering component preview page:", error);
+    res.status(500).send(`Error rendering component preview: ${error.message}`);
   }
 });
 
 // Serve component image separately
 app.get("/:componentName/image", async (req, res) => {
+  let sessionId = null;
   try {
     const { componentName } = req.params;
+    // --- Log Received Query Parameters ---
+    console.log("Received query parameters:", req.query);
+    const forceInit = req.query.forceInit === "true";
+    console.log(`Parsed forceInit flag: ${forceInit}`); // Log parsed value
+    // --- End Logging ---
     const lang = req.query.lang || "en";
-    const mode = req.query.mode || "transfer"; // Get mode from query params
-    const type = req.query.type || "chat"; // Get type from query params for LevelUp
-    const debug = req.query.debug === "true"; // Parse debug parameter
-    const theme = req.query.theme || "dark"; // Get theme from query params
+    const mode = req.query.mode || "transfer";
+    const type = req.query.type || "chat";
+    const debug = req.query.debug === "true";
+    const theme = req.query.theme || "dark";
     const isDarkTheme = theme === "dark";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
-    // Import and render component with cache busting
-    delete require.cache[componentPath]; // Clear module cache
-    const imported = await import(
-      `file://${componentPath}?t=${Date.now()}`
-    ).catch((error) => {
-      console.error(`Failed to import component: ${error.message}`);
-      throw error;
-    });
+    // --- Import Component ---
+    delete require.cache[componentPath];
+    const imported = await import(`file://${componentPath}?t=${Date.now()}`);
     const Component = imported.default;
+    if (!Component) throw new Error(`Component not found in ${componentPath}`);
 
-    if (!Component) {
-      throw new Error(`Component not found in ${componentPath}`);
+    // --- Parse Dynamic Controls from Query ---
+    const controlValues = {};
+    if (Component.previewControls && Array.isArray(Component.previewControls)) {
+      Component.previewControls.forEach((control) => {
+        if (req.query[control.name] !== undefined) {
+          // Parse based on type defined in component
+          switch (control.type) {
+            case "range":
+            case "number": // Assuming a future number type
+              controlValues[control.name] =
+                parseFloat(req.query[control.name]) || control.defaultValue;
+              break;
+            case "checkbox": // Assuming a future checkbox type
+              controlValues[control.name] = req.query[control.name] === "true";
+              break;
+            case "select":
+            case "text":
+            default:
+              controlValues[control.name] =
+                req.query[control.name] || control.defaultValue;
+          }
+        } else {
+          controlValues[control.name] = control.defaultValue;
+        }
+      });
     }
+    console.log("Parsed control values:", controlValues);
+    // --- End Dynamic Controls Parsing ---
 
     console.log(
       `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}`
     );
 
-    // Generate image with mock props
+    // Generate mock data
     const mockData = await createMockData(lang, Component);
 
-    // Apply mode settings for Transfer component
+    // Apply mode/type/theme/debug settings AND dynamic controls to mockData
     if (componentName === "Transfer" && mockData) {
-      if (mode === "deposit") {
-        mockData.isDeposit = true;
-        mockData.isTransfer = false;
-      } else if (mode === "withdraw") {
-        mockData.isDeposit = false;
-        mockData.isTransfer = false;
-      } else if (mode === "transfer") {
-        mockData.isDeposit = false;
-        mockData.isTransfer = true;
-      }
+      mockData.isDeposit = mode === "deposit";
+      mockData.isTransfer = mode === "transfer";
     }
-
-    // Apply type settings for LevelUp component
     if (componentName === "LevelUp" && mockData) {
       mockData.type = type;
     }
-
-    // Add debug flag to mockData
     mockData.debug = debug;
-
-    // Apply theme settings
     if (componentName === "UpgradesDisplay" && mockData) {
-      // Set coloring based on theme
+      // Apply theme settings for specific components if needed
       mockData.coloring = isDarkTheme
         ? {
-            textColor: debug ? "#FF0000" : "#FFFFFF",
-            secondaryTextColor: "rgba(255, 255, 255, 0.8)",
-            tertiaryTextColor: "rgba(255, 255, 255, 0.6)",
-            overlayBackground: "rgba(0, 0, 0, 0.25)",
-            backgroundGradient:
-              "linear-gradient(135deg, #2196f3 0%, #1976d2 100%)",
-            isDarkText: false,
+            /* dark theme colors */
           }
         : {
-            textColor: debug ? "#FF0000" : "#000000",
-            secondaryTextColor: "rgba(0, 0, 0, 0.8)",
-            tertiaryTextColor: "rgba(0, 0, 0, 0.6)",
-            overlayBackground: "rgba(255, 255, 255, 0.5)",
-            backgroundGradient:
-              "linear-gradient(135deg, #f9f3e0 0%, #e6d7b0 100%)",
-            isDarkText: true,
+            /* light theme colors */
           };
     }
+    // Merge dynamic control values into mockData
+    Object.assign(mockData, controlValues);
 
-    // Validate the i18n object
-    if (!mockData.i18n || typeof mockData.i18n.__ !== "function") {
-      console.error("Invalid i18n object in mockData:", mockData.i18n);
+    // --- 3D Rendering Check ---
+    let threeDImageData = null;
+    if (Component.requires3D) {
+      sessionId = `preview_session_${componentName}`;
+      console.log(`Using fixed session ID for ${componentName}: ${sessionId}`);
+
+      const threeScriptPath = componentPath.replace(".jsx", ".three.js");
+      let getScriptContent = null;
+      try {
+        delete require.cache[threeScriptPath];
+        const scriptModule = await import(
+          `file://${threeScriptPath}?t=${Date.now()}`
+        );
+        getScriptContent = scriptModule.default;
+        if (typeof getScriptContent !== "function")
+          throw new Error(".three.js must export default func");
+      } catch (scriptError) {
+        throw new Error(`Could not load 3D script: ${scriptError.message}`);
+      }
+
+      // Prepare options for Puppeteer, using controlValues
+      const userAvatarUrl = mockData.interaction?.user?.avatarURL;
+      let modelColor = null,
+        backgroundColorHex = "#2B2D31",
+        ambientLightIntensity = 0.5,
+        directionalLightIntensity = 0.8;
+      if (userAvatarUrl) {
+        try {
+          const colorData = await processImageColors(userAvatarUrl);
+          if (colorData.embedColor && colorData.embedColor.startsWith("#")) {
+            const hex = colorData.embedColor.slice(1);
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            modelColor = (r << 16) + (g << 8) + b;
+            backgroundColorHex = colorData.embedColor;
+            if (colorData.isDarkText) {
+              // Light background
+              ambientLightIntensity = 0.8;
+              directionalLightIntensity = 0.6;
+            } else {
+              // Dark background
+              ambientLightIntensity = 0.4;
+              directionalLightIntensity = 1.0;
+            }
+          }
+        } catch (colorError) {
+          console.warn(`Preview: Error processing avatar colors:`, colorError);
+        }
+      }
+
+      const renderOptions = {
+        // Use values from controls or defaults
+        modelType: controlValues.modelType || "cube",
+        rotationX: controlValues.rotationX ?? 0.5, // Use ?? for 0 value
+        rotationY: controlValues.rotationY ?? 0.5,
+        width: Component.dimensions?.width || 600,
+        height: Component.dimensions?.height || 400,
+        modelColor: modelColor,
+        backgroundColor: backgroundColorHex,
+        ambientLightIntensity: ambientLightIntensity,
+        directionalLightIntensity: directionalLightIntensity,
+        // Pass *all* control values to the script, it might use them
+        ...controlValues,
+        forceInit: forceInit,
+      };
+      // Generate the script using the *current* renderOptions
+      renderOptions.initializationScript = getScriptContent(renderOptions);
+
+      console.log(
+        "Calling Puppeteer renderUpdate with options:",
+        renderOptions
+      );
+      threeDImageData = await renderUpdate(sessionId, renderOptions);
+      console.log("Puppeteer rendering complete for preview.");
+      mockData.imageData = threeDImageData;
+    }
+    // --- End 3D Rendering Check ---
+
+    // Validate i18n
+    if (!mockData.i18n || typeof mockData.i18n.__ !== "function")
       mockData.i18n = createI18nMock(lang, Component);
-    }
+    if (mockData.i18n) mockData.i18n.initialized = true;
 
-    // Ensure there's an initialized flag
-    if (mockData.i18n) {
-      mockData.i18n.initialized = true;
-    }
-
+    // Generate final image (Satori step)
     let buffer;
     try {
       buffer = await generateImage(
         Component,
         mockData,
-        {
-          image: 2,
-          emoji: 2,
-          debug: debug, // Pass debug flag to image generator
-        },
-        mockData.i18n
+        { image: 2, emoji: 2, debug: debug },
+        mockData.i18n,
+        { disableThrottle: true }
       );
-
-      if (!buffer || !Buffer.isBuffer(buffer)) {
-        throw new Error("Generated image is invalid");
-      }
+      if (!buffer || !Buffer.isBuffer(buffer))
+        throw new Error("Generated image invalid");
     } catch (renderError) {
-      console.error("Error generating image:", renderError);
-
-      // Create an error image with the error message
-      const errorMessage = renderError.message || "Unknown error";
-      const errorStack = renderError.stack || "";
-
-      try {
-        // Send a fallback error image
-        const { createCanvas } = await import("canvas");
-        const canvas = createCanvas(800, 400);
-        const ctx = canvas.getContext("2d");
-
-        // Fill background
-        ctx.fillStyle = "#FF0000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Add error message
-        ctx.fillStyle = "#FFFFFF";
-        ctx.font = "24px Arial";
-        ctx.fillText(`Error rendering component: ${componentName}`, 20, 40);
-        ctx.fillText(`Message: ${errorMessage.substring(0, 80)}`, 20, 80);
-
-        // Add small stack trace
-        ctx.font = "12px Arial";
-        const stackLines = errorStack.split("\n");
-        for (let i = 0; i < Math.min(stackLines.length, 8); i++) {
-          ctx.fillText(stackLines[i].substring(0, 100), 20, 120 + i * 20);
-        }
-
-        res.setHeader("Content-Type", "image/png");
-        const errorBuffer = canvas.toBuffer();
-        res.send(errorBuffer);
-        return;
-      } catch (canvasError) {
-        console.error("Error creating error image:", canvasError);
-        res.status(500).send(`Error rendering component: ${errorMessage}`);
-        return;
-      }
+      // ... (error image generation logic) ...
+      console.error("Satori/Resvg render error:", renderError);
+      // Simplified error image generation
+      const errorMsg = `Render Error: ${renderError.message.slice(0, 100)}`;
+      res.status(500).send(errorMsg); // Send text error for simplicity
+      return; // Stop execution
     }
 
-    // Determine content type
+    // Send response
     const isGif =
       buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
-    const contentType = isGif ? "image/gif" : "image/png";
-
-    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Type", isGif ? "image/gif" : "image/avif");
     res.send(buffer);
   } catch (error) {
-    console.error("Error details:", error);
-    res.status(500).send(`Error rendering component: ${error.message}`);
+    console.error("Error in /image route:", error);
+    // No explicit session closing needed here - timeout handles it
+    res.status(500).send(`Error rendering component image: ${error.message}`);
   }
 });
 

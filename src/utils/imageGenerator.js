@@ -368,6 +368,18 @@ function processColors(dominantColorRgbArray, options = {}) {
 
 // Updated processImageColors with caching
 export async function processImageColors(imageUrl) {
+  // Check if imageUrl is not a valid string
+  if (
+    !imageUrl ||
+    typeof imageUrl === "function" ||
+    typeof imageUrl !== "string"
+  ) {
+    console.warn(
+      `Invalid image URL type: ${typeof imageUrl}. Using default colors.`
+    );
+    return getDefaultColors();
+  }
+
   // Check cache first
   if (colorCache.has(imageUrl)) {
     console.log("Cache hit for image colors:", imageUrl);
@@ -835,8 +847,33 @@ export async function generateImage(
   component,
   props = {},
   scaling = { image: 1, emoji: 1, debug: false },
-  i18n
+  i18n,
+  options = {} // Add options object
 ) {
+  const { disableThrottle = false } = options; // Extract disableThrottle flag
+
+  // --- Direct execution if throttling is disabled ---
+  if (disableThrottle) {
+    console.log("Executing image generation directly (throttling disabled)");
+    try {
+      // Call the core logic directly, without using the throttle map
+      const result = await performActualGenerationLogic(
+        component,
+        props,
+        scaling,
+        i18n
+      );
+      await cleanup(false);
+      return result;
+    } catch (error) {
+      console.error("Direct image generation failed:", error);
+      await cleanup(true);
+      throw error;
+    }
+  }
+  // --- End direct execution block ---
+
+  // --- Original Throttling Logic Starts Here ---
   const componentName =
     typeof component === "string"
       ? component
