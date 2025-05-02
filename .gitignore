@@ -177,3 +177,4 @@ dist
 chrome/*
 temp/*
 bun.lockb
+bun.lock
