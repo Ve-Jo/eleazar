@@ -25,8 +25,7 @@ FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-# Install runtime dependencies for canvas, chromium, and software GL rendering
-RUN apk add --no-cache cairo jpeg pango giflib postgresql-client chromium mesa-dri-gallium
+RUN apk add --no-cache cairo jpeg pango giflib postgresql-client
 
 # Create a non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser
@@ -37,12 +36,6 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/bot.js ./bot.js
 COPY --from=builder /app/package.json ./package.json
-
-# Set production environment
-ENV NODE_ENV=production
-
-# Add PUPPETEER_EXECUTABLE_PATH
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Fix permissions for the non-root user
 RUN mkdir -p /app/node_modules/.prisma/client && \
@@ -58,4 +51,4 @@ EXPOSE 2333
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Run with db push instead of migrations for existing databases
-CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma db push --accept-data-loss && bun --expose-gc --smol . 
+CMD export DATABASE_URL=$PG_DATABASE_URL && bunx prisma generate && bunx prisma db push && bun --expose-gc --smol . 
