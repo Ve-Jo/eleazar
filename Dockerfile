@@ -26,7 +26,7 @@ FROM oven/bun:1-alpine
 WORKDIR /app
 
 # Install runtime dependencies for canvas and other native modules
-RUN apk add --no-cache cairo jpeg pango giflib postgresql-client
+RUN apk add --no-cache cairo jpeg pango giflib postgresql-client chromium
 
 # Create a non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser
@@ -40,6 +40,9 @@ COPY --from=builder /app/package.json ./package.json
 
 # Set production environment
 ENV NODE_ENV=production
+
+# Add PUPPETEER_EXECUTABLE_PATH
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Fix permissions for the non-root user
 RUN mkdir -p /app/node_modules/.prisma/client && \
