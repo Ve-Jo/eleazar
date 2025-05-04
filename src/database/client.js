@@ -376,41 +376,59 @@ class Database {
                         guildId: params.args.data.guildId,
                       },
                     },
-                    include: params.args.include,
+                    include: {
+                      economy: true,
+                      stats: true,
+                      Level: true,
+                      cooldowns: true,
+                      upgrades: true,
+                    },
                   });
 
                   if (existingUser) {
                     console.log(
-                      `User already exists in this guild, returning existing user`
+                      `User ${params.args.data.id} already exists in guild ${params.args.data.guildId}, returning existing record.`
                     );
+                    // Return the existing user WITH relations
                     return existingUser;
                   }
 
-                  // If it's truly a cross-guild conflict, create with composite ID
+                  // If user doesn't exist in *this* guild, the P2002 must be
+                  // from a different constraint or a more complex issue.
+                  // Let the original error propagate for now.
+                  console.warn(
+                    `P2002 error for user ${params.args.data.id} in guild ${params.args.data.guildId}, but user not found in this guild. Propagating error.`
+                  );
+                  // Remove composite ID logic
+                  /*
                   const compositeId = `${params.args.data.id}_${params.args.data.guildId}`;
                   console.log(
                     `Creating user with composite ID: ${compositeId}`
                   );
-
-                  // Try creating with a modified ID
                   const newArgs = {
                     ...params.args,
                     data: {
                       ...params.args.data,
                       id: compositeId,
                     },
+                    // We would need to re-add relation creation logic here, which is complex
                   };
-
                   return await this.client[params.model][params.action](
                     newArgs
                   );
+                  */
                 } catch (innerError) {
-                  console.error("Error handling duplicate user:", innerError);
+                  console.error("Error during P2002 handling:", innerError);
+                  // Fall through to re-throw original error if inner handling fails
                 }
               }
 
+              // Re-throw the original P2002 error if it wasn't handled above
+              // or if it wasn't the specific User creation case we checked for.
               throw new Error(
-                `Duplicate entry for ${error.meta?.target?.join(", ")}`
+                `Duplicate entry constraint violation (P2002) on ${error.meta?.target?.join(
+                  ", "
+                )}`
               );
             case "P2025":
               throw new Error("Record not found");
@@ -2122,7 +2140,11 @@ class Database {
 
       if (user && this.redisClient) {
         try {
-          await this._redisSet(cacheKey, user, { EX: CACHE_TTL.USER });
+          // Serialize the user object before caching
+          const serializedUser = serializeWithBigInt(user);
+          await this._redisSet(cacheKey, serializedUser, {
+            EX: CACHE_TTL.USER,
+          });
           this._logRedis("SET", cacheKey, "User cached");
         } catch (err) {
           console.error(`Redis SET Error for key ${cacheKey}:`, err);
@@ -2740,20 +2762,22 @@ class Database {
               });
             } catch (findError) {
               console.error("Error finding existing user:", findError);
-              // If the error is about duplicate Discord user ID, try with a composite ID
-              if (error.meta?.target?.includes("user_id")) {
-                const compositeId = `${userId}_${guildId}`;
-                return await prisma.user.create({
-                  data: {
-                    id: compositeId,
-                    guildId,
-                    lastActivity: Date.now(),
-                  },
-                });
-              }
-              throw findError;
+              // If the error is about duplicate Discord user ID, just re-throw.
+              // Manually creating a composite ID here is incorrect.
+              // if (error.meta?.target?.includes("user_id")) {
+              //   const compositeId = `${userId}_${guildId}`;
+              //   return await prisma.user.create({
+              //     data: {
+              //       id: compositeId,
+              //       guildId,
+              //       lastActivity: Date.now(),
+              //     },
+              //   });
+              // }
+              throw findError; // Re-throw the find error
             }
           }
+          // If it wasn't a P2002 error, re-throw the original error
           throw error;
         }
       });

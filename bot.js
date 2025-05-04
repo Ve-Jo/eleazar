@@ -8,6 +8,7 @@ import Database from "./src/database/client.js";
 import Replicate from "replicate";
 import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.js";
+import { startApiClientServer } from "./src/api/client/server.js";
 
 // Load environment variables
 dotenv.config();
@@ -223,6 +224,9 @@ async function initializeVoiceSessions() {
 
 await client.login(process.env.DISCORD_TOKEN);
 await initializeVoiceSessions();
+
+// Start the Client API Server
+startApiClientServer();
 
 // Check for season transition every hour
 /*setInterval(async () => {
