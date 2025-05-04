@@ -6,10 +6,6 @@ import fs from "fs/promises";
 import { watch } from "fs";
 import React from "react";
 import { WebSocketServer } from "ws";
-import {
-  renderUpdate,
-  closeSession,
-} from "../utils/PuppeteerSessionManager.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1183,7 +1179,6 @@ app.get("/:componentName", async (req, res) => {
 
 // Serve component image separately
 app.get("/:componentName/image", async (req, res) => {
-  let sessionId = null;
   try {
     const { componentName } = req.params;
     // --- Log Received Query Parameters ---
@@ -1266,7 +1261,6 @@ app.get("/:componentName/image", async (req, res) => {
     // --- 3D Rendering Check ---
     let threeDImageData = null;
     if (Component.requires3D) {
-      sessionId = `preview_session_${componentName}`;
       console.log(`Using fixed session ID for ${componentName}: ${sessionId}`);
 
       const threeScriptPath = componentPath.replace(".jsx", ".three.js");
