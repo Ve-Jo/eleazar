@@ -1,10 +1,10 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
 }
 
 model Guild {
@@ -16,43 +16,38 @@ model Guild {
 }
 
 model User {
-  id           String  @map("user_id")
-  guildId      String  @map("guild_id")
-  bannerUrl    String? @map("banner_url")
-  lastActivity BigInt  @default(0) @map("last_activity")
-  locale       String? @map("locale")
+  id              String           @id @map("user_id")
+  guildId         String           @map("guild_id")
+  bannerUrl       String?          @map("banner_url")
+  lastActivity    BigInt           @default(0) @map("last_activity")
+  locale          String?          @map("locale")
+  cooldowns       Cooldown?
+  crates          Crate[]
+  cryptoPositions CryptoPosition[]
+  economy         Economy?
+  legacyGameData  LegacyGameData[]
+  Level           Level?
+  stats           Statistics?
+  upgrades        Upgrade[]
+  guild           Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  VoiceSession    VoiceSession?
 
-  // Relations
-  guild     Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  economy   Economy?
-  stats     Statistics?
-  cooldowns Cooldown?
-  upgrades  Upgrade[]
-  Level     Level?
-  VoiceSession VoiceSession?
-  crates    Crate[]    // Add relation to Crates
-  legacyGameData LegacyGameData[] // Add relation to LegacyGameData
-  cryptoPositions CryptoPosition[] // Add relation to CryptoPosition
-
-  // Make the primary key a composite of guildId and id
-  @@id([guildId, id])
+  @@unique([guildId, id])
   @@index([guildId])
   @@index([lastActivity])
   @@map("users")
 }
 
-// Frequently accessed economy data
 model Economy {
-  id            String  @id @default(cuid())
-  userId        String
-  guildId       String
-  balance       Decimal @default(0) @db.Decimal(30, 5)
-  bankBalance   Decimal @default(0) @db.Decimal(30, 5)
-  bankRate      Decimal @default(0) @db.Decimal(10, 5)
-  bankStartTime BigInt  @default(0)
-  // Change from Json to Decimal
-  upgradeDiscount Decimal @default(0) @db.Decimal(5, 2) @map("upgrade_discount") // Single discount value as percentage
-  user          User    @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  id              String  @id @default(cuid())
+  userId          String
+  guildId         String
+  balance         Decimal @default(0) @db.Decimal(30, 5)
+  bankBalance     Decimal @default(0) @db.Decimal(30, 5)
+  bankRate        Decimal @default(0) @db.Decimal(10, 5)
+  bankStartTime   BigInt  @default(0)
+  upgradeDiscount Decimal @default(0) @map("upgrade_discount") @db.Decimal(5, 2)
+  user            User    @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([userId])
@@ -60,7 +55,6 @@ model Economy {
   @@map("economy")
 }
 
-// Level tracking
 model Level {
   id       String @id @default(cuid())
   userId   String @map("user_id")
@@ -68,9 +62,7 @@ model Level {
   xp       BigInt @default(0)
   gameXp   BigInt @default(0)
   seasonXp BigInt @default(0) @map("season_xp")
-
-  // Relations
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user     User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([xp])
@@ -79,27 +71,21 @@ model Level {
   @@map("levels")
 }
 
-// Statistics for tracking all counters and metrics
 model Statistics {
-  id           String  @id @default(cuid())
-  userId       String  @map("user_id")
-  guildId      String  @map("guild_id")
-  totalEarned  Decimal @default(0) @map("total_earned") @db.Decimal(30, 5)
-  messageCount Int     @default(0) @map("message_count")
-  commandCount Int     @default(0) @map("command_count")
-  voiceTime    BigInt  @default(0) @map("voice_time") // Added field for voice time tracking in milliseconds
-  lastUpdated  BigInt  @default(0) @map("last_updated")
-  gameRecords  Json    @default("{\"2048\": {\"highScore\": 0}, \"snake\": {\"highScore\": 0}}") @map("game_records")
-  // Detailed XP tracking
-  xpStats      Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
-  gameXpStats  Json    @default("{\"snake\": 0, \"2048\": 0}") @map("game_xp_stats")
-  interactionStats Json @default("{\"commands\":{}, \"buttons\":{}, \"selectMenus\":{}, \"modals\":{}}") @map("interaction_stats")
-
-  // Add disclaimer flag
+  id                    String  @id @default(cuid())
+  userId                String  @map("user_id")
+  guildId               String  @map("guild_id")
+  totalEarned           Decimal @default(0) @map("total_earned") @db.Decimal(30, 5)
+  messageCount          Int     @default(0) @map("message_count")
+  commandCount          Int     @default(0) @map("command_count")
+  lastUpdated           BigInt  @default(0) @map("last_updated")
+  gameRecords           Json    @default("{\"2048\": {\"highScore\": 0}, \"snake\": {\"highScore\": 0}}") @map("game_records")
+  xpStats               Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
+  gameXpStats           Json    @default("{\"2048\": 0, \"snake\": 0}") @map("game_xp_stats")
+  interactionStats      Json    @default("{\"modals\": {}, \"buttons\": {}, \"commands\": {}, \"selectMenus\": {}}") @map("interaction_stats")
+  voiceTime             BigInt  @default(0) @map("voice_time")
   crypto2DisclaimerSeen Boolean @default(false) @map("crypto2_disclaimer_seen")
-
-  // Relations
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user                  User    @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([totalEarned])
@@ -108,30 +94,24 @@ model Statistics {
   @@map("statistics")
 }
 
-// Cooldowns table for frequent updates
 model Cooldown {
   id      String @id @default(cuid())
   userId  String @map("user_id")
   guildId String @map("guild_id")
-  data    Json   @default("{}") // Stores all cooldown timestamps
-
-  // Relations
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  data    Json   @default("{}")
+  user    User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@map("cooldowns")
 }
 
-// Upgrades table for frequent access
 model Upgrade {
   id      String @id @default(cuid())
   userId  String @map("user_id")
   guildId String @map("guild_id")
-  type    String // "daily" or "crime"
+  type    String
   level   Int    @default(1)
-
-  // Relations
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user    User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId, type])
   @@index([type])
@@ -141,8 +121,8 @@ model Upgrade {
 model Analytics {
   id        Int    @id @default(autoincrement())
   timestamp BigInt @default(0)
-  type      String // "ping", "economy", etc.
-  data      Json // Flexible storage for different metric types
+  type      String
+  data      Json
 
   @@index([timestamp])
   @@index([type])
@@ -150,36 +130,36 @@ model Analytics {
 }
 
 model MusicPlayer {
-  id             String   @id @map("guild_id") // Discord guild ID
-  voiceChannelId String   @map("voice_channel_id") // Voice channel the bot is connected to
-  textChannelId  String   @map("text_channel_id") // Text channel for player messages 
-  queue          Json     @default("[]") @map("queue") // Current queue of tracks
-  currentTrack   Json?    @map("current_track") // Currently playing track
-  position       Int      @default(0) @map("position") // Current position in the track (ms)
+  id             String   @id @map("guild_id")
+  voiceChannelId String   @map("voice_channel_id")
+  textChannelId  String   @map("text_channel_id")
+  queue          Json     @default("[]") @map("queue")
+  currentTrack   Json?    @map("current_track")
+  position       Int      @default(0) @map("position")
   volume         Int      @default(100) @map("volume")
-  repeatMode     String   @default("off") @map("repeat_mode") // off, track, or queue
+  repeatMode     String   @default("off") @map("repeat_mode")
   autoplay       Boolean  @default(false) @map("autoplay")
-  filters        Json     @default("{}") @map("filters") // Active audio filters
+  filters        Json     @default("{}") @map("filters")
   lastUpdated    DateTime @updatedAt @map("last_updated")
 
   @@map("music_players")
 }
 
 model Seasons {
-  id          String @id @default("current")
-  seasonEnds  BigInt @map("season_ends")
+  id           String @id @default("current")
+  seasonEnds   BigInt @map("season_ends")
   seasonNumber Int    @default(1) @map("season_number")
-  
+
   @@map("seasons")
 }
 
 model VoiceSession {
-  id              String   @id @default(cuid())
-  userId          String   @map("user_id")
-  guildId         String   @map("guild_id")
-  channelId       String   @map("channel_id")
-  joinedAt        BigInt   @map("joined_at")
-  user            User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  id        String @id @default(cuid())
+  userId    String @map("user_id")
+  guildId   String @map("guild_id")
+  channelId String @map("channel_id")
+  joinedAt  BigInt @map("joined_at")
+  user      User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId])
   @@index([channelId])
@@ -187,36 +167,30 @@ model VoiceSession {
   @@map("voice_sessions")
 }
 
-// New model for crates
 model Crate {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  guildId     String   @map("guild_id")
-  type        String   // "daily", "weekly", "special", etc.
-  count       Int      @default(1)
-  properties  Json     @default("{}")  // For special properties like rarity, custom rewards, etc.
-  acquired    BigInt   @default(0)     // When the crate was acquired
-
-  // Relations
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  id         String @id @default(cuid())
+  userId     String @map("user_id")
+  guildId    String @map("guild_id")
+  type       String
+  count      Int    @default(1)
+  properties Json   @default("{}")
+  acquired   BigInt @default(0)
+  user       User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@unique([userId, guildId, type])
   @@index([type])
   @@map("crates")
 }
 
-// New model for legacy game data
 model LegacyGameData {
   id      String @id @default(cuid())
   userId  String @map("user_id")
   guildId String @map("guild_id")
-  gameId  String @map("game_id") // Identifier for the legacy game (e.g., "rpg_clicker2")
-  data    Json   @default("{}") // Stores the game data in its original JSON format
+  gameId  String @map("game_id")
+  data    Json   @default("{}")
+  user    User   @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
-  // Relations - reference the composite key
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
-
-  @@unique([userId, guildId, gameId]) // Ensure unique data per user, guild, and game
+  @@unique([userId, guildId, gameId])
   @@index([gameId])
   @@map("legacy_game_data")
 }
@@ -225,53 +199,44 @@ model CryptoPosition {
   id              String   @id @default(cuid())
   userId          String   @map("user_id")
   guildId         String   @map("guild_id")
-  symbol          String   // e.g., "BTCUSDT"
-  direction       String   // "LONG" or "SHORT"
-  entryPrice      Decimal  @db.Decimal(30, 8) @map("entry_price")
+  symbol          String
+  direction       String
+  entryPrice      Decimal  @map("entry_price") @db.Decimal(30, 8)
   quantity        Decimal  @db.Decimal(30, 8)
   leverage        Int
-  takeProfitPrice Decimal? @db.Decimal(30, 8) @map("take_profit_price")
-  stopLossPrice   Decimal? @db.Decimal(30, 8) @map("stop_loss_price")
+  takeProfitPrice Decimal? @map("take_profit_price") @db.Decimal(30, 8)
+  stopLossPrice   Decimal? @map("stop_loss_price") @db.Decimal(30, 8)
   createdAt       DateTime @default(now()) @map("created_at")
-
-  // Relations - reference the composite key
-  user User @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
+  user            User     @relation(fields: [userId, guildId], references: [id, guildId], onDelete: Cascade)
 
   @@index([userId, guildId])
   @@index([symbol])
   @@map("crypto_positions")
 }
 
-// New model for Marriages
 model Marriage {
   id        String   @id @default(cuid())
   guildId   String   @map("guild_id")
   userId1   String   @map("user_id1")
   userId2   String   @map("user_id2")
-  status    String   @default("PENDING") // PENDING, MARRIED
+  status    String   @default("PENDING")
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations (optional, can use IDs directly if preferred)
-  // user1 User @relation("MarriagesAsUser1", fields: [guildId, userId1], references: [guildId, id], onDelete: Cascade)
-  // user2 User @relation("MarriagesAsUser2", fields: [guildId, userId2], references: [guildId, id], onDelete: Cascade)
-
-  @@unique([guildId, userId1, userId2]) // Prevent duplicate marriages in either direction
+  @@unique([guildId, userId1, userId2])
   @@index([guildId, userId1])
   @@index([guildId, userId2])
   @@index([status])
   @@map("marriages")
 }
 
-// New model for Level-based Role Rewards
 model LevelRole {
   id            String @id @default(cuid())
   guildId       String @map("guild_id")
-  roleId        String @map("role_id") // The Discord Role ID
-  requiredLevel Int    @map("required_level") // The chat level required to obtain the role
-  // type          String @default("CHAT") // Future: Could be "CHAT", "GAME", "VOICE"
+  roleId        String @map("role_id")
+  requiredLevel Int    @map("required_level")
 
-  @@unique([guildId, roleId]) // Ensure a role isn't added twice per guild
-  @@unique([guildId, requiredLevel]) // Ensure only one role per level per guild (simplifies logic)
+  @@unique([guildId, roleId])
+  @@unique([guildId, requiredLevel])
   @@index([guildId])
   @@map("level_roles")
 }
