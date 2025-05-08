@@ -34,10 +34,11 @@ const CONFIG = {
     preferredModels: {
       text: [
         "openai/gpt-4.1-nano",
-        "openai/gpt-4o-mini",
         "qwen/qwen3-235b-a22b",
         "qwen/qwen3-30b-a3b",
+        "x-ai/grok-3-mini-beta",
         "google/gemini-2.5-flash-preview",
+        "microsoft/phi-4-reasoning-plus",
         "google/gemini-2.0-flash-001",
         "minimax/minimax-01",
         "qwen/qwen-vl-plus",
@@ -45,10 +46,6 @@ const CONFIG = {
         "google/gemma-3-27b-it",
         "mistralai/mistral-small-3.1-24b-instruct",
         "mistralai/pixtral-12b",
-        "thedrummer/anubis-pro-105b-v1",
-        "latitudegames/wayfarer-large-70b-llama-3.3",
-        "sao10k/l3.3-euryale-70b",
-        "thedrummer/skyfall-36b-v2",
         /*"microsoft/phi-3.5-mini-128k-instruct",
         "microsoft/mai-ds-r1:free",
         "thudm/glm-z1-32b:free",
@@ -64,7 +61,7 @@ const CONFIG = {
       ],
       vision: [
         /*"google/gemini-2.0-flash-001",*/
-        "openai/gpt-4o-mini",
+        "openai/gpt-4.1-nano",
         "minimax/minimax-01",
         "google/gemma-3-27b-it",
         "qwen/qwen-vl-plus",
