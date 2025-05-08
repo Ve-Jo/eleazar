@@ -16,7 +16,7 @@ model Guild {
 }
 
 model User {
-  id              String           @id @map("user_id")
+  id              String           @map("user_id")
   guildId         String           @map("guild_id")
   bannerUrl       String?          @map("banner_url")
   lastActivity    BigInt           @default(0) @map("last_activity")
@@ -32,7 +32,7 @@ model User {
   guild           Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
   VoiceSession    VoiceSession?
 
-  @@unique([guildId, id])
+  @@id([guildId, id])
   @@index([guildId])
   @@index([lastActivity])
   @@map("users")
