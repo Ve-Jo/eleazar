@@ -169,7 +169,7 @@ export default {
 
       const message = await interaction.followUp({
         content: i18n.__("games.coinflip.startMessage"),
-        files: [{ attachment: initialBuffer, name: "coinflip.png" }],
+        files: [{ attachment: initialBuffer, name: "coinflip.avif" }],
         components: [createComponents(false)],
         fetchReply: true,
       });
@@ -303,7 +303,7 @@ export default {
                   userBalance
                 );
                 await modalInteraction.update({
-                  files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
+                  files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
                   components: [createComponents(true)], // Enable flip button
                 });
               })
@@ -329,7 +329,7 @@ export default {
               currentBalance
             );
             await message.edit({
-              files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
+              files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
               components: [createComponents(gameInstance.betAmount > 0)],
             });
           } else if (i.customId === "coinflip_flip") {
@@ -447,7 +447,7 @@ export default {
             );
             await message.edit({
               content: messageContent,
-              files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
+              files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
               components: [createComponents(true)], // Keep flip button enabled
             });
           } else if (i.customId === "coinflip_end") {

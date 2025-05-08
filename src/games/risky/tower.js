@@ -227,13 +227,13 @@ export default {
       if (setupMessage) {
         await setupMessage.edit({
           content: i18n.__("games.tower.setupPrompt"),
-          files: [{ attachment: initialBuffer, name: "tower_setup.png" }],
+          files: [{ attachment: initialBuffer, name: "tower_setup.avif" }],
           components: [createSetupComponents()],
         });
       } else {
         setupMessage = await interaction.followUp({
           content: i18n.__("games.tower.setupPrompt"),
-          files: [{ attachment: initialBuffer, name: "tower_setup.png" }],
+          files: [{ attachment: initialBuffer, name: "tower_setup.avif" }],
           components: [createSetupComponents()],
           fetchReply: true,
         });
@@ -450,7 +450,7 @@ export default {
             isPreGame: true,
           });
           await modalSubmission.update({
-            files: [{ attachment: updatedBuffer, name: "tower_setup.png" }],
+            files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
             components: [createSetupComponents()], // Update buttons (Start might enable)
           });
         }
@@ -467,7 +467,7 @@ export default {
             isPreGame: true,
           });
           await i.update({
-            files: [{ attachment: updatedBuffer, name: "tower_setup.png" }],
+            files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
             components: [createSetupComponents()], // Update button label
           });
         }
@@ -589,7 +589,7 @@ export default {
 
       await setupMessage.edit({
         content: i18n.__("games.tower.gameStartedPrompt"),
-        files: [{ attachment: initialBuffer, name: "tower_game.png" }],
+        files: [{ attachment: initialBuffer, name: "tower_game.avif" }],
         components: createGameButtons(gameInstance.currentFloor),
         embeds: [], // Remove setup embed
       });
@@ -660,7 +660,7 @@ export default {
                 prize: prizeTaken.toFixed(2),
                 floor: gameInstance.currentFloor,
               }),
-              files: [{ attachment: finalBuffer, name: "tower_end.png" }],
+              files: [{ attachment: finalBuffer, name: "tower_end.avif" }],
               components: createGameOverButtons(userId),
             });
 
@@ -704,7 +704,7 @@ export default {
                   floor: gameInstance.currentFloor + 1,
                   bet: gameInstance.betAmount,
                 }),
-                files: [{ attachment: finalBuffer, name: "tower_end.png" }],
+                files: [{ attachment: finalBuffer, name: "tower_end.avif" }],
                 components: createGameOverButtons(userId),
               });
 
@@ -745,7 +745,7 @@ export default {
                     floor: MAX_FLOORS,
                     prize: maxPrize.toFixed(2),
                   }),
-                  files: [{ attachment: finalBuffer, name: "tower_win.png" }],
+                  files: [{ attachment: finalBuffer, name: "tower_win.avif" }],
                   components: createGameOverButtons(userId),
                 });
 
@@ -779,7 +779,7 @@ export default {
                       .calculatePrize(gameInstance.currentFloor)
                       .toFixed(2),
                   }),
-                  files: [{ attachment: nextBuffer, name: "tower_next.png" }],
+                  files: [{ attachment: nextBuffer, name: "tower_next.avif" }],
                   components: createGameButtons(gameInstance.currentFloor),
                 });
               }
