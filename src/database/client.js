@@ -4446,6 +4446,7 @@ class Database {
   }
 
   async createVoiceSession(guildId, userId, channelId, joinedAt) {
+    await this.ensureGuildUser(guildId, userId); // Ensure user and guild exist
     return await this.client.voiceSession.upsert({
       where: {
         userId_guildId: { userId, guildId },
