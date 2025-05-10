@@ -991,7 +991,13 @@
         "noTextResponseInternal": "(No text response received)",
         "emptyResponseInternal": "(Received an empty response from the AI)",
         "toolsDisabledNote": "*(AI tried to use tools, but they are currently disabled.)*",
-        "toolExecution": "🔧 Executing {count, plural, one {# tool} other {# tools}}..."
+        "toolExecution": "🔧 Executing {count, plural, one {# tool} other {# tools}}...",
+        "streamStart": "Thinking...",
+        "streamProcessing": "Processing...",
+        "streamStopped": "Generation stopped.",
+        "streamError": "Error during streaming: {error}",
+        "toolConfirmation": "Tool execution requested. Please confirm to run:",
+        "streamContinuation": "Continuing with tool results..."
       },
       "buttons": {
         "systemPrompt": {
@@ -1007,6 +1013,19 @@
         "menus": {
           "modelSelect": {
             "placeholder": "Select an AI model"
+          },
+          "settingsSelect": {
+            "placeholder": "Settings"
+          },
+          "settingsOptions": {
+            "systemPrompt": "Toggle system instructions for AI",
+            "tools": "Toggle AI tools functionality",
+            "clearContext": "Clear conversation history",
+            "finetune": "Adjust AI generation parameters",
+            "switchModel": {
+              "label": "Switch Model",
+              "description": "Change the AI model"
+            }
           }
         },
         "toolResult": {
@@ -1038,6 +1057,71 @@
           "mention": "(mention)",
           "everyone": "@ everyone",
           "here": "@ here"
+        },
+        "finetune": {
+          "buttonLabel": "Fine-tune Settings",
+          "modalTitle": "Fine-tune AI Parameters",
+          "modalTitlePage2": "Fine-tune AI Parameters (Page 2)",
+          "processingFirstSet": "Processing first set of parameters... Please fill in the remaining parameters.",
+          "chooseOption": "Please choose an option below:",
+          "configureMore": "Configure More Parameters",
+          "saveCurrentSettings": "Save Current Settings",
+          "resetToDefaults": "Reset to Defaults",
+          "allParametersUpdated": "All AI parameters updated successfully!",
+          "firstSetUpdated": "First set of parameters saved successfully!",
+          "parametersReset": "All AI parameters have been reset to default values!",
+          "error": "An error occurred while processing your parameters.",
+          "defaultUpdated": "First set of parameters updated by default since no further action was taken.",
+          "parameters": {
+            "temperature": {
+              "label": "Temperature",
+              "description": "Controls randomness: higher values produce more creative results"
+            },
+            "top_p": {
+              "label": "Top P",
+              "description": "Nucleus sampling: considers tokens with top_p probability mass"
+            },
+            "top_k": {
+              "label": "Top K",
+              "description": "Only sample from the K most likely tokens"
+            },
+            "frequency_penalty": {
+              "label": "Frequency Penalty",
+              "description": "Decreases repetition of frequent tokens"
+            },
+            "presence_penalty": {
+              "label": "Presence Penalty",
+              "description": "Decreases repetition of used tokens"
+            },
+            "repetition_penalty": {
+              "label": "Repetition Penalty",
+              "description": "Higher values prevent repetition"
+            },
+            "min_p": {
+              "label": "Min P",
+              "description": "Only tokens with at least this probability are considered"
+            },
+            "top_a": {
+              "label": "Top A",
+              "description": "Dynamic nucleus sampling threshold"
+            },
+            "max_completion_tokens": {
+              "label": "Max Tokens",
+              "description": "Maximum number of tokens to generate"
+            }
+          },
+          "selectParameter": "Select parameter to adjust",
+          "selectParameterPrompt": "Select an AI parameter to adjust:",
+          "parameterUpdated": "{parameter} updated to {value}.",
+          "selectionTimeout": "Parameter selection timed out."
+        },
+        "stream": {
+          "stop": "Stop"
+        },
+        "toolConfirm": {
+          "run": "Run {tool}",
+          "expired": "This tool confirmation has expired or was already used.",
+          "unauthorized": "Only the person who initiated this conversation can run this tool."
         }
       }
     },
