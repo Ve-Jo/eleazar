@@ -1,6 +1,7 @@
 import express from "express";
 import Database, {
   serializeWithBigInt,
+  deserializeWithBigInt,
   DEFAULT_VALUES,
 } from "../../database/client.js"; // Adjust path as needed
 
@@ -15,7 +16,7 @@ router.get("/users/:guildId/:userId", async (req, res) => {
     `[API] Request received for user data: guild=${guildId}, user=${userId}`
   );
   try {
-    const userData = await Database.ensureUser(guildId, userId);
+    let userData = await Database.ensureUser(guildId, userId);
 
     if (!userData) {
       console.error(
@@ -26,26 +27,56 @@ router.get("/users/:guildId/:userId", async (req, res) => {
         .json({ error: "Failed to retrieve or create user data" });
     }
 
-    // Step 1: Serialize the object with custom logic (handles BigInt/Decimal)
-    const serializedString = serializeWithBigInt(userData);
+    // Ensure userData is an object before further processing
+    // This handles cases where Redis might return a stringified JSON
+    if (typeof userData === "string") {
+      try {
+        console.log(
+          `[API] User data for ${userId} was a string, attempting to parse.`
+        );
+        userData = deserializeWithBigInt(userData); // Use the imported function
+      } catch (e) {
+        console.error(
+          `[API] Failed to parse stringified userData for ${userId}:`,
+          e,
+          "String was:",
+          userData
+        );
+        // If it's a string but not valid JSON after trying to deserialize, this is an issue.
+        // For now, we'll proceed, but serializeWithBigInt might fail or produce incorrect output.
+        // Ideally, data from ensureUser/cache should always be an object or null.
+      }
+    }
+
+    // Log the type of userData after potential parse
     console.log(
-      `[API] User data for ${userId} (after serializeWithBigInt):`,
-      serializedString
+      `[API] User data for ${userId} (type after ensureUser and potential pre-parse): ${typeof userData}`
     );
 
+    // Step 1: Serialize the object with custom logic (handles BigInt/Decimal)
+    // serializeWithBigInt expects an object. If userData became a string and couldn't be parsed, this might error.
+    const serializedString = serializeWithBigInt(userData);
+    // console.log( // Log this only if debugging deep serialization issues
+    //   `[API] User data for ${userId} (after serializeWithBigInt):`,
+    //   serializedString.substring(0, 500) + (serializedString.length > 500 ? "..." : "")
+    // );
+
     // Step 2: Parse the serialized string back into a plain JS object
+    // This step is crucial to ensure what res.json() sends is a clean object,
+    // not a string representation of a serialized object.
     let plainJsonObject;
     try {
       plainJsonObject = JSON.parse(serializedString);
-      console.log(
-        `[API] User data for ${userId} (after JSON.parse): object type = ${typeof plainJsonObject}`
-      );
+      // console.log( // Log this only if debugging deep serialization issues
+      //   `[API] User data for ${userId} (after JSON.parse): object type = ${typeof plainJsonObject}`
+      // );
     } catch (parseError) {
       console.error(
         `[API] Failed to re-parse serialized data for ${userId}:`,
         parseError,
         "Serialized string was:",
-        serializedString
+        serializedString.substring(0, 500) +
+          (serializedString.length > 500 ? "..." : "")
       );
       return res
         .status(500)
@@ -53,10 +84,9 @@ router.get("/users/:guildId/:userId", async (req, res) => {
     }
 
     // Step 3: Send the plain JS object using res.json()
-    // This object should now be safe for the default JSON.stringify used by res.json()
-    console.log(
-      `[API] Sending plainJsonObject for ${userId} via res.json()...`
-    );
+    // console.log( // Log this only if debugging deep serialization issues
+    //   `[API] Sending plainJsonObject for ${userId} via res.json()...`
+    // );
     res.json(plainJsonObject);
   } catch (error) {
     console.error(
