@@ -459,6 +459,3 @@ export default {
     await getEmotionData();
   },
 };
-
-// Re-export execute for internal use by the return button handler
-export const execute = module.exports.execute;
