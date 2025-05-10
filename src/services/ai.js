@@ -1,4 +1,6 @@
-import i18n from "../utils/newI18n.js";
+import { Groq } from "groq-sdk";
+import OpenAI from "openai";
+import fetch from "node-fetch";
 import {
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -8,22 +10,415 @@ import {
   TextInputStyle,
 } from "discord.js";
 import CONFIG from "../config/aiConfig.js";
+import i18n from "../utils/newI18n.js";
 import {
+  state,
   getUserPreferences,
   updateUserPreference,
   clearUserHistory,
-} from "../state/prefs.js";
-import { state } from "../state/state.js";
-import {
-  getAvailableModels,
-  getModelCapabilities,
-  getModelDetails,
-} from "./aiModels.js";
-import processAiRequest from "../handlers/processAiRequest.js";
+  addConversationToHistory,
+  isModelWithoutTools,
+  markModelAsNotSupportingTools,
+} from "../state/index.js";
+
+// =============================================================================
+// MODEL MANAGEMENT
+// =============================================================================
+
+// --- Model Cache ---
+let cachedModels = null; // { groq: [], openrouter: [] }
+let lastFetchTime = 0;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// --- Helper Functions ---
+
+// Extracts size info from model names
+function extractModelSize(modelId) {
+  const match = modelId.match(/([\d.]+[mMkKbB])[-\s_]/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+// Standardizes model names for display
+function formatModelName(model, provider) {
+  return `${provider}/${model.id}`;
+}
+
+// --- Model Fetching ---
+
+// Fetch models from Groq API
+async function fetchGroqModelsFromApi(groqClient) {
+  if (!groqClient) {
+    console.warn(
+      "Attempted to fetch Groq models without an initialized client."
+    );
+    return [];
+  }
+
+  try {
+    const preferredTextModels = new Set(
+      CONFIG.groq.preferredModels?.text || []
+    );
+    const preferredVisionModels = new Set(
+      CONFIG.groq.preferredModels?.vision || []
+    );
+
+    // Fetch all models from API
+    const models = await groqClient.models.list();
+    console.log(`Fetched ${models.data.length} models from Groq API`);
+
+    // Filter to only include models in our preferred lists
+    const filteredModels = models.data
+      .filter((m) => m.active)
+      .filter(
+        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
+      )
+      .map((model) => ({
+        id: model.id,
+        name: formatModelName(model, "groq"),
+        provider: "groq",
+        capabilities: {
+          vision: preferredVisionModels.has(model.id),
+          tools: true,
+          maxContext: model.context_window || 8192,
+        },
+      }));
+
+    console.log(`Filtered to ${filteredModels.length} preferred Groq models`);
+    return filteredModels;
+  } catch (error) {
+    console.error("Error fetching Groq models:", error.message);
+
+    // Fallback: create models from config if API call fails
+    console.log("Using fallback preferred models from config");
+    const fallbackModels = [];
+
+    // Add text models
+    CONFIG.groq.preferredModels?.text?.forEach((id) => {
+      fallbackModels.push({
+        id,
+        name: `groq/${id}`,
+        provider: "groq",
+        capabilities: {
+          vision: false,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    // Add vision models
+    CONFIG.groq.preferredModels?.vision?.forEach((id) => {
+      fallbackModels.push({
+        id,
+        name: `groq/${id}`,
+        provider: "groq",
+        capabilities: {
+          vision: true,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    return fallbackModels;
+  }
+}
+
+// Fetch models from OpenRouter API
+async function fetchOpenRouterModelsFromApi(openRouterClient) {
+  if (!openRouterClient) {
+    console.warn(
+      "Attempted to fetch OpenRouter models without an initialized client."
+    );
+    return [];
+  }
+
+  try {
+    const preferredTextModels = new Set(
+      CONFIG.openrouter.preferredModels?.text || []
+    );
+    const preferredVisionModels = new Set(
+      CONFIG.openrouter.preferredModels?.vision || []
+    );
+
+    // Fetch all models from API
+    const models = await openRouterClient.models.list();
+    console.log(`Fetched ${models.data.length} models from OpenRouter API`);
+
+    // Filter to only include models in our preferred lists
+    const filteredModels = models.data
+      .filter((m) => m.id && m.id.trim() !== "")
+      .filter(
+        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
+      )
+      .map((model) => ({
+        id: model.id,
+        name: formatModelName(model, "openrouter"),
+        provider: "openrouter",
+        capabilities: {
+          vision: preferredVisionModels.has(model.id),
+          tools: true,
+          maxContext: model.context_length || 8192,
+        },
+      }));
+
+    console.log(
+      `Filtered to ${filteredModels.length} preferred OpenRouter models`
+    );
+    return filteredModels;
+  } catch (error) {
+    console.error("Error fetching OpenRouter models:", error.message);
+
+    // Fallback: create models from config if API call fails
+    console.log("Using fallback preferred models from config");
+    const fallbackModels = [];
+
+    CONFIG.openrouter.preferredModels?.text?.forEach((id) => {
+      fallbackModels.push({
+        id,
+        name: `openrouter/${id}`,
+        provider: "openrouter",
+        capabilities: {
+          vision: false,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    CONFIG.openrouter.preferredModels?.vision?.forEach((id) => {
+      fallbackModels.push({
+        id,
+        name: `openrouter/${id}`,
+        provider: "openrouter",
+        capabilities: {
+          vision: true,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    return fallbackModels;
+  }
+}
+
+// Fetches models from all configured providers and caches them
+async function fetchAllModels(client) {
+  const now = Date.now();
+  if (
+    cachedModels &&
+    now - lastFetchTime < CACHE_DURATION &&
+    cachedModels.groq?.length &&
+    cachedModels.openrouter?.length
+  ) {
+    console.log("Using cached AI models.");
+    return cachedModels;
+  }
+
+  console.log("Fetching fresh AI models...");
+  cachedModels = { groq: [], openrouter: [] }; // Reset cache
+
+  const groqClient = client[CONFIG.groq.clientPath];
+  const openRouterClient = client[CONFIG.openrouter.clientPath];
+
+  const fetchPromises = [];
+  if (groqClient) {
+    fetchPromises.push(
+      fetchGroqModelsFromApi(groqClient).then((models) => {
+        cachedModels.groq = models;
+      })
+    );
+  } else {
+    console.warn("Groq client not available, cannot fetch Groq models.");
+  }
+
+  if (openRouterClient) {
+    fetchPromises.push(
+      fetchOpenRouterModelsFromApi(openRouterClient).then((models) => {
+        cachedModels.openrouter = models;
+      })
+    );
+  } else {
+    console.warn(
+      "OpenRouter client not available, cannot fetch OpenRouter models."
+    );
+  }
+
+  await Promise.all(fetchPromises);
+
+  lastFetchTime = now;
+  console.log(
+    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length})`
+  );
+  return cachedModels;
+}
+
+// --- Model Retrieval ---
+
+// Get available models filtered by capability
+export async function getAvailableModels(client, capabilityFilter = null) {
+  const allModelsData = await fetchAllModels(client);
+
+  const availableModelsMap = new Map();
+  [...allModelsData.groq, ...allModelsData.openrouter].forEach((model) => {
+    const baseName = `${model.provider}/${model.id}`;
+    availableModelsMap.set(baseName, model);
+  });
+
+  const isVisionRequest = capabilityFilter === "vision";
+  let preferredModelNamesConfig = [];
+  let resultModels = [];
+  const addedModelNames = new Set();
+  let uniquePreferredModelNames = [];
+
+  if (isVisionRequest) {
+    // Vision request - only use vision models from config
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.vision || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Filtering for VISION models based on config.");
+
+    // Remove duplicates preserving order from the vision config list
+    uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add available models ONLY from the preferred vision list
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model && model.capabilities.vision) {
+        resultModels.push(model);
+        addedModelNames.add(modelName);
+      }
+    }
+  } else {
+    // Text request - use text models from config
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.text || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Prioritizing TEXT models based on config.");
+
+    // Remove duplicates preserving order from the text config list
+    uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add available models ONLY from the preferred text list
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model) {
+        resultModels.push(model);
+        addedModelNames.add(modelName);
+      }
+    }
+  }
+
+  console.log(
+    `Returning ${resultModels.length} available models for ${
+      isVisionRequest ? "VISION" : "TEXT"
+    } request, ordered by config preference.`
+  );
+
+  return resultModels;
+}
+
+// Get details for a specific model by ID
+export async function getModelDetails(client, prefixedModelId) {
+  const allModels = await fetchAllModels(client);
+  const allCombined = [...allModels.groq, ...allModels.openrouter];
+
+  // Find model by its prefixed name
+  let model = allCombined.find((m) => m.name === prefixedModelId);
+
+  if (!model) {
+    console.warn(`Model details not found for prefixed ID: ${prefixedModelId}`);
+    // Fallback: try splitting and matching provider/id
+    const parts = prefixedModelId.split("/");
+    if (parts.length === 2) {
+      const [provider, id] = parts;
+      model = allCombined.find((m) => m.provider === provider && m.id === id);
+    }
+  }
+
+  if (model) {
+    // Check the global cache for tool support
+    const cacheKey = `${model.provider}/${model.id}`;
+
+    // Use the state structure for tool support
+    if (state.modelStatus.toolSupport.has(cacheKey)) {
+      model.capabilities.tools = state.modelStatus.toolSupport.get(cacheKey);
+      console.log(
+        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
+      );
+    }
+    // Check against known list of models without tools
+    else if (state.modelStatus.modelsWithoutTools.has(model.id)) {
+      model.capabilities.tools = false;
+      state.modelStatus.toolSupport.set(cacheKey, false);
+      console.log(
+        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
+      );
+    }
+  }
+
+  return model;
+}
+
+// Get the API client for a model
+export async function getApiClientForModel(client, prefixedModelId) {
+  const modelDetails = await getModelDetails(client, prefixedModelId);
+  if (!modelDetails) {
+    throw new Error(
+      `Could not find details or client for model: ${prefixedModelId}`
+    );
+  }
+
+  const provider = modelDetails.provider;
+  const clientPath = CONFIG[provider]?.clientPath;
+
+  if (!clientPath || !client[clientPath]) {
+    throw new Error(
+      `API client for provider '${provider}' not found or not initialized.`
+    );
+  }
+
+  return {
+    client: client[clientPath],
+    provider: provider,
+    modelId: modelDetails.id,
+  };
+}
+
+// Get capabilities for a specific model
+export async function getModelCapabilities(client, prefixedModelId) {
+  const modelDetails = await getModelDetails(client, prefixedModelId);
+  if (!modelDetails) {
+    console.error(
+      `Could not determine capabilities for unknown model: ${prefixedModelId}`
+    );
+    // Return default/conservative capabilities
+    return { vision: false, tools: false, maxContext: 8192 };
+  }
+  return modelDetails.capabilities;
+}
+
+// Update model cooldown
+export function updateModelCooldown(modelId) {
+  // Placeholder for rate limiting implementation
+  console.log(`Cooldown update requested for ${modelId} (placeholder)`);
+}
+
+// =============================================================================
+// MESSAGE HANDLING
+// =============================================================================
 
 // Track the last message with components for each user
 const lastUserComponentMessages = new Map();
 
+// Split message into smaller chunks if needed
 export function splitMessage(message, maxLength = 2000) {
   if (message.length <= maxLength) return [message];
   const chunks = [];
@@ -31,9 +426,11 @@ export function splitMessage(message, maxLength = 2000) {
   let inCodeBlock = false;
   let codeLang = "";
   const lines = message.split("\n");
+
   for (const line of lines) {
     const len = line.length + 1;
     const codeMatch = line.match(/^```(\w*)/);
+
     if (codeMatch) {
       if (inCodeBlock) {
         inCodeBlock = false;
@@ -66,13 +463,16 @@ export function splitMessage(message, maxLength = 2000) {
       }
     }
   }
+
   if (currentChunk) chunks.push(currentChunk);
   if (inCodeBlock && !chunks[chunks.length - 1].trim().endsWith("```")) {
     chunks[chunks.length - 1] += "\n```";
   }
+
   return chunks.map((c) => c.trim()).filter(Boolean);
 }
 
+// Build interactive components for AI responses
 export async function buildInteractionComponents(
   userId,
   availableModels,
@@ -82,8 +482,9 @@ export async function buildInteractionComponents(
   client = null
 ) {
   const prefs = getUserPreferences(userId);
-  let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2; // Default
+  let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2;
   let selectedModelDetails = null;
+
   if (prefs.selectedModel && client) {
     try {
       selectedModelDetails = await getModelDetails(client, prefs.selectedModel);
@@ -97,7 +498,7 @@ export async function buildInteractionComponents(
         }
       } else {
         console.log(
-          `No selected model details available for ${prefs.selectedModel}, disabling tools button`
+          `No selected model details available for ${prefs.selectedModel}`
         );
       }
     } catch (error) {
@@ -105,9 +506,10 @@ export async function buildInteractionComponents(
         "Error getting model details for context adjustment:",
         error
       );
-      selectedModelDetails = null; // Ensure it's null on error to avoid disabling tools incorrectly
+      selectedModelDetails = null;
     }
   }
+
   const components = [];
 
   // For initial model selection only - show model selection menu
@@ -119,11 +521,13 @@ export async function buildInteractionComponents(
       .setPlaceholder(
         i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
       );
+
     const opts = availableModels.slice(0, 25).map((m) => ({
       label: m.name.length > 100 ? m.name.substring(0, 97) + "..." : m.name,
       value: m.name,
       default: m.name === prefs.selectedModel,
     }));
+
     menu.addOptions(opts);
     components.push(new ActionRowBuilder().addComponents(menu));
     return components;
@@ -157,7 +561,7 @@ export async function buildInteractionComponents(
         `${selectedModelDetails.provider}/${selectedModelDetails.id}`
       );
 
-    // System prompt option
+    // System prompt option (combined with command guidance)
     const sysPromptEnabled =
       prefs.systemPromptEnabled && !modelIsDisabledInConfig;
     settingsMenu.addOptions({
@@ -167,45 +571,8 @@ export async function buildInteractionComponents(
           : "events.ai.buttons.systemPrompt.off"
       ),
       value: "toggle_context",
-      description:
-        i18n.__(
-          "events.ai.buttons.menus.settingsOptions.systemPrompt",
-          locale
-        ) || "Toggle system prompt",
+      description: "Toggle system instructions and command guidance",
       emoji: sysPromptEnabled ? "✅" : "❌",
-      default: false,
-    });
-
-    // Tools option
-    let modelSupportsTools = true;
-    if (selectedModelDetails) {
-      const cacheKey = `${selectedModelDetails.provider}/${selectedModelDetails.id}`;
-      if (state.modelStatus.toolSupport.has(cacheKey)) {
-        modelSupportsTools = state.modelStatus.toolSupport.get(cacheKey);
-      } else if (!selectedModelDetails.capabilities?.tools) {
-        modelSupportsTools = false;
-      }
-    } else {
-      modelSupportsTools = false;
-    }
-
-    const toolsEnabled = prefs.toolsEnabled && modelSupportsTools;
-    settingsMenu.addOptions({
-      label: i18n.__(
-        modelSupportsTools
-          ? toolsEnabled
-            ? "events.ai.buttons.systemPrompt.tools.on"
-            : "events.ai.buttons.systemPrompt.tools.off"
-          : "events.ai.buttons.systemPrompt.tools.offModel"
-      ),
-      value: "toggle_tools",
-      description:
-        i18n.__("events.ai.buttons.menus.settingsOptions.tools", locale) ||
-        (modelSupportsTools
-          ? "Toggle tools usage"
-          : "This model doesn't support tools"),
-      emoji: toolsEnabled ? "🔧" : "🔨",
-      disabled: !modelSupportsTools,
       default: false,
     });
 
@@ -261,6 +628,7 @@ export async function buildInteractionComponents(
   return components;
 }
 
+// Send AI response to user
 export async function sendResponse(
   message,
   processingMessage,
@@ -352,6 +720,7 @@ export async function sendResponse(
         (i.isButton() || i.isStringSelectMenu()) && i.user.id === userId,
       time: 15 * 60 * 1000,
     });
+
     collector.on("collect", async (interaction) => {
       try {
         // Handle settings menu selection
@@ -370,11 +739,6 @@ export async function sendResponse(
                 "systemPromptEnabled",
                 !prefs.systemPromptEnabled
               );
-              break;
-
-            case "toggle_tools":
-              // Toggle tools
-              updateUserPreference(userId, "toolsEnabled", !prefs.toolsEnabled);
               break;
 
             case "clear_context":
@@ -446,6 +810,9 @@ export async function sendResponse(
           );
 
           // Process the request with the newly selected model
+          const processAiRequest = (
+            await import("../handlers/processAiRequest.js")
+          ).default;
           await processAiRequest(
             message,
             userId,
@@ -500,7 +867,7 @@ export async function sendResponse(
   return finalMsg;
 }
 
-// New function to handle fine-tune settings modal
+// Handle fine-tune settings modal
 async function handleFinetuneModal(interaction, userId, locale = "en") {
   const prefs = getUserPreferences(userId);
   const { aiParams } = prefs;
@@ -578,7 +945,7 @@ async function handleFinetuneModal(interaction, userId, locale = "en") {
       const placeholder = createParameterPlaceholder(
         selectedParam,
         paramConfig,
-        aiParams[selectedParam] || paramConfig.default,
+        aiParams[selectedParam],
         locale
       );
 

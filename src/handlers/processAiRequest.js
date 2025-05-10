@@ -4,31 +4,39 @@ import {
   getUserPreferences,
   updateUserPreference,
   addConversationToHistory,
-} from "../state/prefs.js";
-import {
+  state,
   isModelRateLimited,
   setModelRateLimit,
-  state,
   markModelAsNotSupportingTools,
-} from "../state/state.js";
+} from "../state/index.js";
 import {
   getApiClientForModel,
   getModelCapabilities,
   getAvailableModels,
   updateModelCooldown,
-} from "../services/aiModels.js";
-import { generateToolsFromCommands } from "../services/tools.js";
-import {
   buildInteractionComponents,
   sendResponse,
-} from "../services/messages.js";
-import { executeToolCall } from "../services/toolExecutor.js";
+  generateToolsFromCommands,
+} from "../services/index.js";
+import { ButtonBuilder, ActionRowBuilder } from "discord.js";
 
 // Helper function to detect if AI is trying to use a "fake" tool in text format
 function detectFakeToolCalls(content) {
+  // Disabled - always return null to prevent fake tool call detection
+  return null;
+
+  /* Original code kept for reference but not executed
+  console.log(
+    `[DEBUG] Checking for fake tool calls in text: ${content.substring(
+      0,
+      100
+    )}${content.length > 100 ? "..." : ""}`
+  );
+
   // Pattern to detect attempted tool calls in several formats
   const patterns = [
     // Match format: !command argument or /command argument
+    // Fix the regex to properly escape the forward slash
     /[!\/]([a-z0-9_]+)(.*)/i,
     // Match format: @bot command argument
     /@[a-z0-9_]+\s+([a-z0-9_]+)(.*)/i,
@@ -39,19 +47,27 @@ function detectFakeToolCalls(content) {
   ];
 
   for (const pattern of patterns) {
+    console.log(`[DEBUG] Trying pattern: ${pattern}`);
     const match = content.match(pattern);
     if (match) {
       const fullMatch = match[0];
       const name = match[1];
       const argString = match[2]?.trim() || "{}";
+      console.log(
+        `[DEBUG] Found match with pattern. Command: ${name}, Args: ${argString}`
+      );
 
       // Try to parse arguments as JSON if they look like JSON
       let args = {};
       if (argString.startsWith("{") && argString.endsWith("}")) {
         try {
           args = JSON.parse(argString);
-        } catch {
+          console.log(
+            `[DEBUG] Successfully parsed args as JSON: ${JSON.stringify(args)}`
+          );
+        } catch (e) {
           // If parsing fails, use as string
+          console.log(`[DEBUG] Failed to parse args as JSON: ${e.message}`);
           const paramName = name === "say" ? "text" : "prompt";
           args = { [paramName]: argString };
         }
@@ -59,6 +75,9 @@ function detectFakeToolCalls(content) {
         // For simple text arguments, try to intelligently assign to parameter
         const paramName = name === "say" ? "text" : "prompt";
         args = { [paramName]: argString };
+        console.log(
+          `[DEBUG] Using string arg with param ${paramName}: ${argString}`
+        );
       }
 
       return {
@@ -69,7 +88,9 @@ function detectFakeToolCalls(content) {
     }
   }
 
+  console.log(`[DEBUG] No fake tool calls detected in text`);
   return null;
+  */
 }
 
 // Function to remove content between <think> tags
@@ -365,28 +386,34 @@ export default async function processAiRequest(
     }
     apiMessages.push(userMsg);
 
-    // Generate tools
+    // Generate command reference for AI awareness
     console.log(
       `Tools enabled in preferences for user ${userId}:`,
       prefs.toolsEnabled
     );
-    let shouldUseTools =
-      prefs.toolsEnabled && !isVisionRequest && capabilities.tools;
+    let shouldUseTools = false; // Always set to false to disable tools
     const modelToolSupportKey = `${apiClientInfo.provider}/${apiClientInfo.modelId}`;
-    const baseTools = shouldUseTools
-      ? generateToolsFromCommands(client, prefs.toolsEnabled)
-      : [];
-    if (capabilities.tools && !shouldUseTools) {
+
+    // Get command definitions for AI awareness, but don't send them to the model
+    const commandDefinitions = generateToolsFromCommands(client);
+    console.log(
+      `Generated ${commandDefinitions.length} command definitions for AI reference`
+    );
+
+    // Always use an empty array for baseTools when sending to AI
+    const baseTools = [];
+
+    if (capabilities.tools) {
       console.warn(
-        `Tools are supported by the model but disabled for user ${userId}. Consider enabling them.`
+        `Tools are supported by the model but disabled by configuration. Commands are scanned for reference only.`
       );
     }
 
     // Check if this model is known to not support tools from previous requests
     if (
       shouldUseTools &&
-      state.modelToolSupportCache.has(modelToolSupportKey) &&
-      !state.modelToolSupportCache.get(modelToolSupportKey)
+      state.modelStatus.toolSupport.has(modelToolSupportKey) &&
+      !state.modelStatus.toolSupport.get(modelToolSupportKey)
     ) {
       console.log(
         `Model ${prefs.selectedModel} is known to not support tools, disabling tools for this request`
@@ -403,35 +430,1577 @@ export default async function processAiRequest(
         prefs.toolsEnabled &&
         withTools &&
         baseTools.length;
+
+      let internalToolFollowUpDone = false; // Initialize flag
+
+      console.log(
+        `[DEBUG] makeApiRequest called with withTools=${withTools}, effectiveShouldUseTools=${effectiveShouldUseTools}`
+      );
+      console.log(`[DEBUG] Capabilities: ${JSON.stringify(capabilities)}`);
+      console.log(
+        `[DEBUG] prefs.toolsEnabled: ${prefs.toolsEnabled}, baseTools.length: ${baseTools.length}`
+      );
+
+      // Set up common parameters (provider-agnostic)
       const payload = {
         model: modelId,
         messages: apiMessages,
-        tools: effectiveShouldUseTools ? baseTools : undefined,
-        tool_choice: effectiveShouldUseTools ? "auto" : undefined,
+        stream: true, // Enable streaming for both providers
       };
+
+      // Add tools if applicable
+      if (effectiveShouldUseTools) {
+        payload.tools = baseTools;
+        payload.tool_choice = "auto";
+        console.log(`[DEBUG] Added ${baseTools.length} tools to payload`);
+      }
+
+      // Add AI generation parameters based on provider
+      if (provider === "groq") {
+        // Groq-specific parameters
+        Object.assign(payload, {
+          temperature: prefs.aiParams.temperature,
+          top_p: prefs.aiParams.top_p,
+          frequency_penalty: prefs.aiParams.frequency_penalty,
+          presence_penalty: prefs.aiParams.presence_penalty,
+          // Specific to Groq
+          max_tokens: 4096, // Use max_tokens instead of max_completion_tokens (standardized param)
+          // Do NOT include repetition_penalty as it's not supported by Groq
+        });
+
+        console.log(`[DEBUG] Configured Groq-specific parameters`);
+      } else if (provider === "openrouter") {
+        // OpenRouter parameters (with more options)
+        Object.assign(payload, {
+          temperature: prefs.aiParams.temperature,
+          top_p: prefs.aiParams.top_p,
+          top_k: prefs.aiParams.top_k,
+          frequency_penalty: prefs.aiParams.frequency_penalty,
+          presence_penalty: prefs.aiParams.presence_penalty,
+          // OpenRouter specific
+          min_p: prefs.aiParams.min_p,
+          top_a: prefs.aiParams.top_a,
+          repetition_penalty: prefs.aiParams.repetition_penalty,
+        });
+
+        console.log(`[DEBUG] Configured OpenRouter-specific parameters`);
+      } else {
+        // Generic fallback for other providers
+        Object.assign(payload, {
+          temperature: prefs.aiParams.temperature,
+          top_p: prefs.aiParams.top_p,
+          frequency_penalty: prefs.aiParams.frequency_penalty,
+          presence_penalty: prefs.aiParams.presence_penalty,
+        });
+
+        console.log(`[DEBUG] Configured generic provider parameters`);
+      }
+
       console.log(
         `Final tools decision: Using tools? ${effectiveShouldUseTools}`
       );
       console.log(
         `Making ${provider} API request ${
           effectiveShouldUseTools ? "with" : "without"
-        } tools`
+        } tools and custom parameters:`
       );
-      const response = await apiClient.chat.completions.create(payload);
-      // Mark in the response whether tools were disabled
-      response._toolsDisabled = !effectiveShouldUseTools;
-      return response;
+      console.log(
+        `Parameters: temperature=${payload.temperature}, top_p=${
+          payload.top_p
+        }${payload.top_k ? `, top_k=${payload.top_k}` : ""}${
+          payload.repetition_penalty
+            ? `, repetition_penalty=${payload.repetition_penalty}`
+            : ""
+        }`
+      );
+
+      try {
+        // Create a stop button
+        const stopButton = new ButtonBuilder()
+          .setCustomId(`ai_stop_stream_${userId}`)
+          .setLabel(
+            i18n.__("events.ai.buttons.stream.stop", effectiveLocale) || "Stop"
+          )
+          .setStyle(4) // Red button (DANGER)
+          .setEmoji("⏹️");
+
+        const stopRow = new ActionRowBuilder().addComponents([stopButton]);
+
+        // Set up message to show streaming
+        await procMsg.edit({
+          content:
+            i18n.__("events.ai.messages.streamStart", effectiveLocale) ||
+            "Thinking...",
+          components: [stopRow],
+        });
+        console.log(`[DEBUG] Stream message updated with stop button`);
+
+        // Create flags to manage the stream
+        let shouldStop = false;
+        let responseAccumulator = "";
+        let toolCalls = [];
+        let isFirstChunk = true;
+        let lastUpdateTime = Date.now();
+        const UPDATE_INTERVAL = 1000; // Update message every 1 second
+        let finalFinishReason = null; // Store the final finish reason
+        let needsImmediateExecution = false; // Flag for immediate execution after stream completion
+
+        // Set up collector for stop button
+        const collector = procMsg.createMessageComponentCollector({
+          filter: (i) =>
+            i.customId === `ai_stop_stream_${userId}` && i.user.id === userId,
+          time: 5 * 60 * 1000, // 5 minutes timeout
+        });
+
+        collector.on("collect", async (interaction) => {
+          shouldStop = true;
+          await interaction.update({
+            content:
+              i18n.__("events.ai.messages.streamStopped", effectiveLocale) ||
+              "Generation stopped.",
+            components: [],
+          });
+          collector.stop("user_stopped");
+        });
+
+        console.log(`[DEBUG] Starting API stream request to ${provider}`);
+        console.log(
+          `[DEBUG] Payload: model=${payload.model}, stream=${
+            payload.stream
+          }, has_tools=${!!payload.tools}`
+        );
+
+        // Start streaming with timeout handling
+        let stream;
+        try {
+          // Set a timeout for the API request
+          const timeoutMs = 60000; // 60 seconds timeout
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `API request timed out after ${timeoutMs / 1000} seconds`
+                  )
+                ),
+              timeoutMs
+            );
+          });
+
+          const apiPromise = apiClient.chat.completions.create({
+            ...payload,
+            stream: true,
+          });
+
+          stream = await Promise.race([apiPromise, timeoutPromise]);
+          console.log(`[DEBUG] Stream initialized successfully`);
+        } catch (streamError) {
+          console.error(`[DEBUG] Error initializing stream:`, streamError);
+          // Provide more specific error message based on error type
+          if (
+            streamError.message &&
+            streamError.message.includes("timed out")
+          ) {
+            throw new Error(
+              `API request timed out. Provider: ${provider}, Model: ${modelId}`
+            );
+          } else if (streamError.status) {
+            throw new Error(
+              `API returned status ${streamError.status}: ${
+                streamError.message || "Unknown error"
+              }`
+            );
+          } else {
+            throw streamError; // Rethrow original error
+          }
+        }
+
+        // Process the stream
+        let functionCall = null;
+        let completedToolCalls = [];
+        let pendingToolResults = [];
+        let isWaitingForToolResults = false;
+        let chunkCount = 0;
+
+        console.log(`[DEBUG] Starting to process stream chunks`);
+        for await (const chunk of stream) {
+          chunkCount++;
+          if (chunkCount % 10 === 0) {
+            console.log(`[DEBUG] Processed ${chunkCount} chunks so far`);
+          }
+
+          if (shouldStop) {
+            console.log(`[DEBUG] Stream stopped by user`);
+            break;
+          }
+
+          const content = chunk.choices[0]?.delta?.content || "";
+          const functionDelta = chunk.choices[0]?.delta?.tool_calls?.[0];
+          const finishReason = chunk.choices[0]?.finish_reason;
+
+          if (finishReason) {
+            console.log(
+              `[DEBUG] Stream chunk has finish_reason: ${finishReason}`
+            );
+            finalFinishReason = finishReason; // Store the final finish reason
+            if (finishReason === "tool_calls") {
+              needsImmediateExecution = true;
+            }
+          }
+
+          // Handle content
+          if (content) {
+            responseAccumulator += content;
+            if (content.length > 50) {
+              console.log(
+                `[DEBUG] Received large content chunk: ${content.length} chars`
+              );
+            }
+
+            // Update the message periodically to avoid rate limits
+            const now = Date.now();
+            if (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk) {
+              lastUpdateTime = now;
+              isFirstChunk = false;
+
+              // Sanitize and remove thinking tags
+              const sanitizedText = removeThinkTags(responseAccumulator);
+              console.log(
+                `[DEBUG] Updating message with accumulated content (${responseAccumulator.length} chars)`
+              );
+
+              // Show periodic updates
+              await procMsg
+                .edit({
+                  content:
+                    sanitizedText ||
+                    i18n.__(
+                      "events.ai.messages.streamProcessing",
+                      effectiveLocale
+                    ) ||
+                    "Processing...",
+                  components: [stopRow],
+                })
+                .catch((error) => {
+                  // Handle potential edit errors due to rate limits
+                  console.log(
+                    `[DEBUG] Rate limit hit on message edit: ${error.message}`
+                  );
+                });
+            }
+          }
+
+          // Handle function/tool calls in stream
+          if (functionDelta) {
+            console.log(
+              `[DEBUG] Received functionDelta in chunk: ${JSON.stringify(
+                functionDelta
+              )}`
+            );
+            if (functionDelta.index === 0 && !functionCall) {
+              functionCall = {
+                id: functionDelta.id,
+                type: functionDelta.type, // Ensure type is copied from the delta
+                function: {
+                  name: functionDelta.function?.name || "",
+                  arguments: functionDelta.function?.arguments || "",
+                },
+              };
+              console.log(
+                `[DEBUG] Started new functionCall: ${functionCall.function.name}, type: ${functionCall.type}`
+              );
+            } else if (functionCall && functionDelta.function) {
+              // Append more data to function call
+              if (functionDelta.function.name) {
+                functionCall.function.name += functionDelta.function.name;
+              }
+              if (functionDelta.function.arguments) {
+                functionCall.function.arguments +=
+                  functionDelta.function.arguments;
+              }
+              console.log(
+                `[DEBUG] Appended to functionCall: name=${functionCall.function.name}, args length=${functionCall.function.arguments.length}`
+              );
+            }
+          }
+
+          // Handle end of function call
+          if (chunk.choices[0]?.delta?.tool_calls === null && functionCall) {
+            console.log(
+              `[DEBUG] Completed tool call in stream: ${functionCall.function.name} with args: ${functionCall.function.arguments}`
+            );
+            completedToolCalls.push(functionCall);
+
+            // Execute tool call as soon as it's complete
+            if (functionCall.function && functionCall.function.name) {
+              console.log(
+                `[DEBUG] Executing streaming tool call: ${functionCall.function.name}`
+              );
+              isWaitingForToolResults = true;
+
+              try {
+                // Ensure arguments is valid JSON even if empty
+                if (
+                  !functionCall.function.arguments ||
+                  functionCall.function.arguments.trim() === ""
+                ) {
+                  functionCall.function.arguments = "{}";
+                  console.log(
+                    `[DEBUG] Empty arguments detected, defaulting to {}`
+                  );
+                } else {
+                  // Validate JSON format
+                  try {
+                    JSON.parse(functionCall.function.arguments);
+                  } catch (jsonError) {
+                    console.log(
+                      `[DEBUG] Invalid JSON in arguments, attempting to fix: ${jsonError.message}`
+                    );
+                    // Try to fix common JSON issues (missing quotes around keys, etc)
+                    const fixedJson = functionCall.function.arguments.replace(
+                      /([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g,
+                      '$1"$2"$3'
+                    ); // Add quotes to keys
+
+                    try {
+                      JSON.parse(fixedJson);
+                      functionCall.function.arguments = fixedJson;
+                      console.log(
+                        `[DEBUG] Successfully fixed JSON arguments: ${fixedJson}`
+                      );
+                    } catch (fixError) {
+                      // If we still can't parse it, just use an empty object
+                      console.log(
+                        `[DEBUG] Could not fix JSON arguments, defaulting to {}`
+                      );
+                      functionCall.function.arguments = "{}";
+                    }
+                  }
+                }
+
+                // Update message to show tool execution
+                await procMsg.edit({
+                  content: `${removeThinkTags(responseAccumulator)}\n\n${
+                    i18n.__(
+                      "events.ai.messages.streamToolExecution",
+                      { tool: functionCall.function.name },
+                      effectiveLocale
+                    ) || `Executing ${functionCall.function.name}...`
+                  }`,
+                  components: [stopRow],
+                });
+
+                // --- Direct command execution for all tools ---
+                // Use direct execution approach for all tools
+                let result;
+
+                console.log(
+                  `[DEBUG] Attempting direct execution for ${functionCall.function.name}`
+                );
+
+                // Parse the command parts
+                const commandParts = functionCall.function.name.split("_");
+                const commandName = commandParts[0];
+                const subCommandName =
+                  commandParts.length > 1
+                    ? commandParts.slice(1).join("_")
+                    : null;
+
+                // Get the command directly
+                const command = message.client.commands.get(commandName);
+                console.log(
+                  `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`
+                );
+                if (command) {
+                  console.log(`[DEBUG] Found base command: ${commandName}`);
+                  console.log(`[DEBUG] Command structure:`, {
+                    hasExecute: typeof command.execute === "function",
+                    hasSubcommands: !!command.subcommands,
+                    subcommandNames: command.subcommands
+                      ? Object.keys(command.subcommands)
+                      : [],
+                  });
+
+                  let targetCommand;
+                  if (
+                    subCommandName &&
+                    command.subcommands &&
+                    command.subcommands[subCommandName]
+                  ) {
+                    console.log(`[DEBUG] Found subcommand: ${subCommandName}`);
+                    targetCommand = command.subcommands[subCommandName];
+                  } else if (!subCommandName) {
+                    console.log(`[DEBUG] Using base command directly`);
+                    targetCommand = command;
+                  } else if (
+                    subCommandName &&
+                    command[`execute_${subCommandName}`]
+                  ) {
+                    console.log(
+                      `[DEBUG] Found alternate execution method: execute_${subCommandName}`
+                    );
+                    targetCommand = {
+                      execute:
+                        command[`execute_${subCommandName}`].bind(command),
+                    };
+                  }
+
+                  if (targetCommand) {
+                    console.log(
+                      `[DEBUG] Target command found, has execute: ${
+                        typeof targetCommand.execute === "function"
+                      }`
+                    );
+                  } else {
+                    console.log(
+                      `[DEBUG] No target command found for ${functionCall.function.name}`
+                    );
+                  }
+
+                  if (
+                    targetCommand &&
+                    typeof targetCommand.execute === "function"
+                  ) {
+                    console.log(`[DEBUG] Found executable target command`);
+
+                    // Create a defer message
+                    const deferMsg = await message.reply({
+                      content: `⏳ Processing ${functionCall.function.name} command...`,
+                      fetchReply: true,
+                    });
+
+                    // Create a proxy for the command
+                    const proxy = {
+                      _isAiProxy: true,
+                      options: {
+                        getMember: (name) => {
+                          if (
+                            name === "user" &&
+                            (!functionCall.function.arguments.user ||
+                              functionCall.function.arguments.user === "")
+                          ) {
+                            console.log(
+                              `[DEBUG] Returning message.member for empty user param`
+                            );
+                            return message.member;
+                          }
+                          // Handle user parameter
+                          const value = functionCall.function.arguments[name];
+                          if (!value) return null;
+                          // Rest of getMember logic
+                          if (/^\d{17,19}$/.test(value)) {
+                            return (
+                              message.guild?.members.cache.get(value) || null
+                            );
+                          }
+                          if (value.startsWith("<@") && value.endsWith(">")) {
+                            const userId = value.replace(/[<@!>]/g, "");
+                            return (
+                              message.guild?.members.cache.get(userId) || null
+                            );
+                          }
+                          const memberByName =
+                            message.guild?.members.cache.find(
+                              (member) =>
+                                member.user.username.toLowerCase() ===
+                                value.toLowerCase().replace("@", "")
+                            );
+                          return memberByName || null;
+                        },
+                        getString: (name) =>
+                          functionCall.function.arguments[name] || null,
+                        getInteger: (name) => {
+                          const val = functionCall.function.arguments[name];
+                          return val !== undefined ? parseInt(val, 10) : null;
+                        },
+                        getNumber: (name) => {
+                          const val = functionCall.function.arguments[name];
+                          return val !== undefined ? parseFloat(val) : null;
+                        },
+                        getBoolean: (name) => {
+                          const val = functionCall.function.arguments[name];
+                          if (val === undefined) return null;
+                          if (typeof val === "boolean") return val;
+                          if (val === "true" || val === "1") return true;
+                          if (val === "false" || val === "0") return false;
+                          return null;
+                        },
+                        getChannel: (name) => {
+                          const val = functionCall.function.arguments[name];
+                          if (!val) return null;
+                          if (/^\d{17,19}$/.test(val)) {
+                            return (
+                              message.guild?.channels.cache.get(val) || null
+                            );
+                          }
+                          if (val.startsWith("<#") && val.endsWith(">")) {
+                            const channelId = val.replace(/[<#>]/g, "");
+                            return (
+                              message.guild?.channels.cache.get(channelId) ||
+                              null
+                            );
+                          }
+                          return (
+                            message.guild?.channels.cache.find(
+                              (channel) =>
+                                channel.name.toLowerCase() === val.toLowerCase()
+                            ) || null
+                          );
+                        },
+                        getRole: (name) => {
+                          const val = functionCall.function.arguments[name];
+                          if (!val) return null;
+                          if (/^\d{17,19}$/.test(val)) {
+                            return message.guild?.roles.cache.get(val) || null;
+                          }
+                          if (val.startsWith("<@&") && val.endsWith(">")) {
+                            const roleId = val.replace(/[<@&>]/g, "");
+                            return (
+                              message.guild?.roles.cache.get(roleId) || null
+                            );
+                          }
+                          return (
+                            message.guild?.roles.cache.find(
+                              (role) =>
+                                role.name.toLowerCase() === val.toLowerCase()
+                            ) || null
+                          );
+                        },
+                        getSubcommand: () => subCommandName || null,
+                      },
+                      guild: message.guild,
+                      channel: message.channel,
+                      member: message.member,
+                      user: message.author,
+                      client: message.client,
+                      replied: false,
+                      deferred: true,
+                      locale: effectiveLocale,
+                      async reply(options) {
+                        this.replied = true;
+                        return deferMsg.edit(options);
+                      },
+                      async editReply(options) {
+                        this.replied = true;
+                        return deferMsg.edit(options);
+                      },
+                      async followUp(options) {
+                        return message.channel.send(options);
+                      },
+                      async deferReply() {
+                        return deferMsg;
+                      },
+                    };
+
+                    try {
+                      // Execute command directly
+                      console.log(
+                        `[DEBUG] Executing ${functionCall.function.name} command with proxy`
+                      );
+                      const cmdResult = await targetCommand.execute(
+                        proxy,
+                        i18n
+                      );
+                      console.log(
+                        `[DEBUG] Command execution result:`,
+                        cmdResult
+                      );
+                      console.log(`[DEBUG] Command replied:`, proxy.replied);
+
+                      // Add result to pendingToolResults
+                      pendingToolResults.push({
+                        tool_call_id: functionCall.id,
+                        role: "tool",
+                        name: functionCall.function.name,
+                        content: `Successfully executed ${functionCall.function.name}`,
+                      });
+
+                      console.log(
+                        `[DEBUG] Successfully executed ${functionCall.function.name} command directly`
+                      );
+                    } catch (cmdError) {
+                      console.error(
+                        `[DEBUG] Error in direct command execution: ${cmdError.message}`,
+                        cmdError.stack
+                      );
+                      pendingToolResults.push({
+                        tool_call_id: functionCall.id,
+                        role: "tool",
+                        name: functionCall.function.name,
+                        content: `Error executing ${functionCall.function.name}: ${cmdError.message}`,
+                      });
+                    }
+                  } else {
+                    console.log(
+                      `[DEBUG] Target command not found or not executable, falling back to normal execution`
+                    );
+                    try {
+                      const result = await executeToolCall(
+                        functionCall,
+                        message,
+                        effectiveLocale
+                      );
+                      pendingToolResults.push({
+                        tool_call_id: functionCall.id,
+                        role: "tool",
+                        name: functionCall.function.name,
+                        content:
+                          result.response ||
+                          (result.success ? "OK" : "Error executing tool"),
+                      });
+                    } catch (error) {
+                      console.error(
+                        `[DEBUG] Error in immediate execution:`,
+                        error
+                      );
+                      pendingToolResults.push({
+                        tool_call_id: functionCall.id,
+                        role: "tool",
+                        name: functionCall.function.name,
+                        content: `Error: ${error.message}`,
+                      });
+                    }
+                  }
+                } else {
+                  console.log(
+                    `[DEBUG] Base command not found, falling back to normal execution`
+                  );
+                  try {
+                    const result = await executeToolCall(
+                      functionCall,
+                      message,
+                      effectiveLocale
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: functionCall.id,
+                      role: "tool",
+                      name: functionCall.function.name,
+                      content:
+                        result.response ||
+                        (result.success ? "OK" : "Error executing tool"),
+                    });
+                  } catch (error) {
+                    console.error(
+                      `[DEBUG] Error in immediate execution:`,
+                      error
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: functionCall.id,
+                      role: "tool",
+                      name: functionCall.function.name,
+                      content: `Error: ${error.message}`,
+                    });
+                  }
+                }
+              } catch (error) {
+                console.error(`[DEBUG] Error in immediate execution:`, error);
+                pendingToolResults.push({
+                  tool_call_id: functionCall.id,
+                  role: "tool",
+                  name: functionCall.function.name,
+                  content: `Error: ${error.message}`,
+                });
+              }
+
+              isWaitingForToolResults = false;
+            }
+
+            functionCall = null;
+          }
+
+          // Handle end of stream
+          if (finishReason === "stop" || finishReason === "tool_calls") {
+            console.log(`[DEBUG] Stream finished with reason: ${finishReason}`);
+            break;
+          }
+        }
+
+        // Ensure any in-progress functionCall is added if the stream ended with tool_calls
+        if (finalFinishReason === "tool_calls" && functionCall) {
+          console.log(
+            `[DEBUG] Stream ended with tool_calls and an active functionCall: ${functionCall.function.name}. Adding to completedToolCalls.`
+          );
+          completedToolCalls.push(functionCall);
+          functionCall = null; // Clear it as it's now processed
+        }
+
+        console.log(
+          `[DEBUG] Stream processing complete after ${chunkCount} chunks. Stopping collector. Final reason: ${finalFinishReason}, needsImmediateExecution: ${needsImmediateExecution}`
+        );
+        // Stop the collector when stream ends
+        collector.stop("stream_complete");
+
+        // HANDLE IMMEDIATE TOOL EXECUTION
+        // This is necessary because the streaming code might end before our tool calls are fully processed
+        if (needsImmediateExecution && completedToolCalls.length > 0) {
+          console.log(
+            `[DEBUG] Processing ${completedToolCalls.length} completed tool calls after stream`
+          );
+
+          // Debug the available commands
+          console.log(
+            `[DEBUG] Available commands for lookup:`,
+            Array.from(message.client.commands.keys()).join(", ")
+          );
+
+          for (const toolCall of completedToolCalls) {
+            console.log(
+              `[DEBUG] Processing post-stream tool call: ${toolCall.function.name}`
+            );
+
+            // Special handling for economy_balance command
+            if (toolCall.function.name === "economy_balance") {
+              console.log(
+                `[DEBUG] Special handling for economy_balance command`
+              );
+
+              try {
+                // Parse arguments
+                let args = {};
+                try {
+                  if (
+                    toolCall.function.arguments &&
+                    toolCall.function.arguments.trim() !== ""
+                  ) {
+                    args = JSON.parse(toolCall.function.arguments);
+                  }
+                } catch (e) {
+                  console.error(
+                    `[DEBUG] Error parsing arguments: ${e.message}`
+                  );
+                  args = {};
+                }
+
+                // Get the economy command
+                const economyCommand = message.client.commands.get("economy");
+                if (!economyCommand) {
+                  console.error(`[DEBUG] Economy command not found!`);
+                  throw new Error("Economy command not found");
+                }
+
+                console.log(`[DEBUG] Retrieved economy command:`, {
+                  hasExecute: typeof economyCommand.execute === "function",
+                  hasSubcommands: !!economyCommand.subcommands,
+                });
+
+                // Find the balance subcommand in the economy folder directly
+                const balancePath = `../cmds/economy/balance.js`;
+                console.log(
+                  `[DEBUG] Attempting to import balance command directly`
+                );
+
+                await import(balancePath) // Added await here
+                  .then(async (balanceModule) => {
+                    console.log(`[DEBUG] Successfully imported balance module`);
+                    const balanceCommand = balanceModule.default;
+
+                    if (
+                      !balanceCommand ||
+                      typeof balanceCommand.execute !== "function"
+                    ) {
+                      console.error(
+                        `[DEBUG] Balance command import failed or has no execute method`
+                      );
+                      throw new Error("Balance command has no execute method");
+                    }
+
+                    // Create a defer message
+                    const deferMsg = await message.reply({
+                      content: `⏳ Processing economy_balance command...`,
+                      fetchReply: true,
+                    });
+
+                    // Create a proxy for the command
+                    const proxy = {
+                      _isAiProxy: true,
+                      options: {
+                        getMember: (name) => {
+                          // Default to message.member for empty user param
+                          if (
+                            name === "user" &&
+                            (!args.user || args.user === "")
+                          ) {
+                            console.log(
+                              `[DEBUG] Returning message.member for empty user param`
+                            );
+                            return message.member;
+                          }
+
+                          // Handle user parameter
+                          const value = args[name];
+                          if (!value) return message.member;
+
+                          // ID lookup
+                          if (/^\d{17,19}$/.test(value)) {
+                            return (
+                              message.guild?.members.cache.get(value) ||
+                              message.member
+                            );
+                          }
+
+                          // Mention lookup
+                          if (value.startsWith("<@") && value.endsWith(">")) {
+                            const userId = value.replace(/[<@!>]/g, "");
+                            return (
+                              message.guild?.members.cache.get(userId) ||
+                              message.member
+                            );
+                          }
+
+                          // Name lookup
+                          const memberByName =
+                            message.guild?.members.cache.find(
+                              (member) =>
+                                member.user.username.toLowerCase() ===
+                                value.toLowerCase().replace("@", "")
+                            );
+
+                          return memberByName || message.member;
+                        },
+                        getString: (name) => args[name] || null,
+                        getInteger: (name) => {
+                          const val = args[name];
+                          return val !== undefined ? parseInt(val, 10) : null;
+                        },
+                        getNumber: (name) => {
+                          const val = args[name];
+                          return val !== undefined ? parseFloat(val) : null;
+                        },
+                        getBoolean: (name) => {
+                          const val = args[name];
+                          if (val === undefined) return null;
+                          if (typeof val === "boolean") return val;
+                          if (val === "true" || val === "1") return true;
+                          if (val === "false" || val === "0") return false;
+                          return null;
+                        },
+                        getChannel: (name) => {
+                          const val = args[name];
+                          if (!val) return null;
+                          if (/^\d{17,19}$/.test(val)) {
+                            return (
+                              message.guild?.channels.cache.get(val) || null
+                            );
+                          }
+                          if (val.startsWith("<#") && val.endsWith(">")) {
+                            const channelId = val.replace(/[<#>]/g, "");
+                            return (
+                              message.guild?.channels.cache.get(channelId) ||
+                              null
+                            );
+                          }
+                          return (
+                            message.guild?.channels.cache.find(
+                              (channel) =>
+                                channel.name.toLowerCase() === val.toLowerCase()
+                            ) || null
+                          );
+                        },
+                        getRole: (name) => {
+                          const val = args[name];
+                          if (!val) return null;
+                          if (/^\d{17,19}$/.test(val)) {
+                            return message.guild?.roles.cache.get(val) || null;
+                          }
+                          if (val.startsWith("<@&") && val.endsWith(">")) {
+                            const roleId = val.replace(/[<@&>]/g, "");
+                            return (
+                              message.guild?.roles.cache.get(roleId) || null
+                            );
+                          }
+                          return (
+                            message.guild?.roles.cache.find(
+                              (role) =>
+                                role.name.toLowerCase() === val.toLowerCase()
+                            ) || null
+                          );
+                        },
+                        getSubcommand: () => "balance",
+                      },
+                      user: message.author,
+                      guild: message.guild,
+                      channel: message.channel,
+                      member: message.member,
+                      client: message.client,
+                      replied: false,
+                      deferred: true,
+                      locale: effectiveLocale,
+                      async reply(options) {
+                        this.replied = true;
+                        return deferMsg.edit(options);
+                      },
+                      async editReply(options) {
+                        this.replied = true;
+                        return deferMsg.edit(options);
+                      },
+                      async followUp(options) {
+                        return message.channel.send(options);
+                      },
+                      async deferReply() {
+                        return deferMsg;
+                      },
+                    };
+
+                    try {
+                      // Execute command directly
+                      console.log(
+                        `[DEBUG] Executing balance command with proxy`
+                      );
+                      // MODIFICATION: Assume balanceCommand.execute now returns the balance string
+                      // e.g., "Your current balance is 1000 credits."
+                      const executionOutcome = await balanceCommand.execute(
+                        proxy,
+                        i18n
+                      );
+                      let toolResultContent;
+
+                      if (
+                        typeof executionOutcome === "string" &&
+                        executionOutcome.length > 0
+                      ) {
+                        toolResultContent = executionOutcome;
+                        console.log(
+                          `[DEBUG economy_balance_handler] Received string outcome: "${executionOutcome}"`
+                        );
+                      } else if (
+                        typeof executionOutcome === "object" &&
+                        executionOutcome !== null &&
+                        typeof executionOutcome.textForAI === "string" &&
+                        executionOutcome.textForAI.length > 0
+                      ) {
+                        toolResultContent = executionOutcome.textForAI;
+                        console.log(
+                          `[DEBUG economy_balance_handler] Received object outcome with textForAI: "${executionOutcome.textForAI}"`
+                        );
+                        // If executionOutcome.replyText exists, balanceCommand.execute should have used it with proxy.reply/editReply
+                      } else {
+                        // Fallback if the command didn't return a string or expected object
+                        toolResultContent = `Successfully executed economy_balance command.`;
+                        console.log(
+                          `[DEBUG economy_balance_handler] executionOutcome was not a string or expected object, using default success message. Outcome:`,
+                          executionOutcome
+                        );
+                      }
+
+                      console.log(
+                        `[DEBUG] Balance command execution outcome raw:`,
+                        executionOutcome
+                      );
+                      console.log(
+                        `[DEBUG] Balance command proxy replied state after execution:`,
+                        proxy.replied
+                      );
+
+                      // Add result to pendingToolResults
+                      pendingToolResults.push({
+                        tool_call_id: toolCall.id,
+                        role: "tool",
+                        name: toolCall.function.name,
+                        // MODIFICATION: Use the captured/returned result
+                        content: toolResultContent,
+                      });
+
+                      console.log(
+                        `[DEBUG] Successfully executed economy_balance command directly. Content for AI: "${toolResultContent}"`
+                      );
+                    } catch (cmdError) {
+                      console.error(
+                        `[DEBUG] Error in balance command execution:`,
+                        cmdError
+                      );
+                      pendingToolResults.push({
+                        tool_call_id: toolCall.id,
+                        role: "tool",
+                        name: toolCall.function.name,
+                        content: `Error executing economy_balance: ${cmdError.message}`,
+                      });
+                    }
+                  })
+                  .catch((importError) => {
+                    console.error(
+                      `[DEBUG] Failed to import balance module:`,
+                      importError
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: toolCall.id,
+                      role: "tool",
+                      name: toolCall.function.name,
+                      content: `Error: Failed to import balance command: ${importError.message}`,
+                    });
+                  });
+
+                // Skip normal processing
+                continue;
+              } catch (error) {
+                console.error(
+                  `[DEBUG] Error in special economy_balance handling:`,
+                  error
+                );
+                pendingToolResults.push({
+                  tool_call_id: toolCall.id,
+                  role: "tool",
+                  name: toolCall.function.name,
+                  content: `Error: ${error.message}`,
+                });
+                continue;
+              }
+            }
+
+            try {
+              // Parse arguments
+              let args = {};
+              try {
+                if (
+                  toolCall.function.arguments &&
+                  toolCall.function.arguments.trim() !== ""
+                ) {
+                  args = JSON.parse(toolCall.function.arguments);
+                }
+              } catch (e) {
+                console.error(`[DEBUG] Error parsing arguments: ${e.message}`);
+              }
+
+              console.log(
+                `[DEBUG] Executing ${toolCall.function.name} with args:`,
+                args
+              );
+
+              // Update message to show tool execution
+              await procMsg.edit({
+                content: `${removeThinkTags(responseAccumulator)}\n\n${
+                  i18n.__(
+                    "events.ai.messages.streamToolExecution",
+                    { tool: toolCall.function.name },
+                    effectiveLocale
+                  ) || `Executing ${toolCall.function.name}...`
+                }`,
+                components: [stopRow],
+              });
+
+              // Parse the command parts
+              const commandParts = toolCall.function.name.split("_");
+              const commandName = commandParts[0];
+              const subCommandName =
+                commandParts.length > 1
+                  ? commandParts.slice(1).join("_")
+                  : null;
+
+              // Get the command directly
+              const command = message.client.commands.get(commandName);
+              console.log(
+                `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`
+              );
+              if (command) {
+                console.log(`[DEBUG] Found base command: ${commandName}`);
+                console.log(`[DEBUG] Command structure:`, {
+                  hasExecute: typeof command.execute === "function",
+                  hasSubcommands: !!command.subcommands,
+                  subcommandNames: command.subcommands
+                    ? Object.keys(command.subcommands)
+                    : [],
+                });
+
+                let targetCommand;
+                if (
+                  subCommandName &&
+                  command.subcommands &&
+                  command.subcommands[subCommandName]
+                ) {
+                  console.log(`[DEBUG] Found subcommand: ${subCommandName}`);
+                  targetCommand = command.subcommands[subCommandName];
+                } else if (!subCommandName) {
+                  console.log(`[DEBUG] Using base command directly`);
+                  targetCommand = command;
+                } else if (
+                  subCommandName &&
+                  command[`execute_${subCommandName}`]
+                ) {
+                  console.log(
+                    `[DEBUG] Found alternate execution method: execute_${subCommandName}`
+                  );
+                  targetCommand = {
+                    execute: command[`execute_${subCommandName}`].bind(command),
+                  };
+                }
+
+                if (targetCommand) {
+                  console.log(
+                    `[DEBUG] Target command found, has execute: ${
+                      typeof targetCommand.execute === "function"
+                    }`
+                  );
+                } else {
+                  console.log(
+                    `[DEBUG] No target command found for ${toolCall.function.name}`
+                  );
+                }
+
+                if (
+                  targetCommand &&
+                  typeof targetCommand.execute === "function"
+                ) {
+                  console.log(`[DEBUG] Found executable target command`);
+
+                  // Create a defer message
+                  const deferMsg = await message.reply({
+                    content: `⏳ Processing ${toolCall.function.name} command...`,
+                    fetchReply: true,
+                  });
+
+                  // Create a proxy for the command
+                  const proxy = {
+                    _isAiProxy: true,
+                    options: {
+                      getMember: (name) => {
+                        if (
+                          name === "user" &&
+                          (!args.user || args.user === "")
+                        ) {
+                          console.log(
+                            `[DEBUG] Returning message.member for empty user param`
+                          );
+                          return message.member;
+                        }
+                        // Handle user parameter
+                        const value = args[name];
+                        if (!value) return null;
+                        // Rest of getMember logic
+                        if (/^\d{17,19}$/.test(value)) {
+                          return (
+                            message.guild?.members.cache.get(value) || null
+                          );
+                        }
+                        if (value.startsWith("<@") && value.endsWith(">")) {
+                          const userId = value.replace(/[<@!>]/g, "");
+                          return (
+                            message.guild?.members.cache.get(userId) || null
+                          );
+                        }
+                        const memberByName = message.guild?.members.cache.find(
+                          (member) =>
+                            member.user.username.toLowerCase() ===
+                            value.toLowerCase().replace("@", "")
+                        );
+                        return memberByName || null;
+                      },
+                      getString: (name) => args[name] || null,
+                      getInteger: (name) => {
+                        const val = args[name];
+                        return val !== undefined ? parseInt(val, 10) : null;
+                      },
+                      getNumber: (name) => {
+                        const val = args[name];
+                        return val !== undefined ? parseFloat(val) : null;
+                      },
+                      getBoolean: (name) => {
+                        const val = args[name];
+                        if (val === undefined) return null;
+                        if (typeof val === "boolean") return val;
+                        if (val === "true" || val === "1") return true;
+                        if (val === "false" || val === "0") return false;
+                        return null;
+                      },
+                      getChannel: (name) => {
+                        const val = args[name];
+                        if (!val) return null;
+                        if (/^\d{17,19}$/.test(val)) {
+                          return message.guild?.channels.cache.get(val) || null;
+                        }
+                        if (val.startsWith("<#") && val.endsWith(">")) {
+                          const channelId = val.replace(/[<#>]/g, "");
+                          return (
+                            message.guild?.channels.cache.get(channelId) || null
+                          );
+                        }
+                        return (
+                          message.guild?.channels.cache.find(
+                            (channel) =>
+                              channel.name.toLowerCase() === val.toLowerCase()
+                          ) || null
+                        );
+                      },
+                      getRole: (name) => {
+                        const val = args[name];
+                        if (!val) return null;
+                        if (/^\d{17,19}$/.test(val)) {
+                          return message.guild?.roles.cache.get(val) || null;
+                        }
+                        if (val.startsWith("<@&") && val.endsWith(">")) {
+                          const roleId = val.replace(/[<@&>]/g, "");
+                          return message.guild?.roles.cache.get(roleId) || null;
+                        }
+                        return (
+                          message.guild?.roles.cache.find(
+                            (role) =>
+                              role.name.toLowerCase() === val.toLowerCase()
+                          ) || null
+                        );
+                      },
+                    },
+                    guild: message.guild,
+                    channel: message.channel,
+                    member: message.member,
+                    user: message.author,
+                    client: message.client,
+                    replied: false,
+                    deferred: true,
+                    locale: effectiveLocale,
+                    async reply(options) {
+                      this.replied = true;
+                      return deferMsg.edit(options);
+                    },
+                    async editReply(options) {
+                      this.replied = true;
+                      return deferMsg.edit(options);
+                    },
+                    async followUp(options) {
+                      return message.channel.send(options);
+                    },
+                    async deferReply() {
+                      return deferMsg;
+                    },
+                  };
+
+                  try {
+                    // Execute command directly
+                    console.log(
+                      `[DEBUG] Executing ${toolCall.function.name} command with proxy`
+                    );
+                    const cmdResult = await targetCommand.execute(proxy, i18n);
+                    console.log(`[DEBUG] Command execution result:`, cmdResult);
+                    console.log(`[DEBUG] Command replied:`, proxy.replied);
+
+                    // Add result to pendingToolResults
+                    pendingToolResults.push({
+                      tool_call_id: toolCall.id,
+                      role: "tool",
+                      name: toolCall.function.name,
+                      content: `Successfully executed ${toolCall.function.name}`,
+                    });
+
+                    console.log(
+                      `[DEBUG] Successfully executed ${toolCall.function.name} command directly`
+                    );
+                  } catch (cmdError) {
+                    console.error(
+                      `[DEBUG] Error in direct command execution:`,
+                      cmdError
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: toolCall.id,
+                      role: "tool",
+                      name: toolCall.function.name,
+                      content: `Error executing ${toolCall.function.name}: ${cmdError.message}`,
+                    });
+                  }
+                } else {
+                  console.log(
+                    `[DEBUG] Target command not found or not executable, falling back to normal execution`
+                  );
+                  try {
+                    const result = await executeToolCall(
+                      toolCall,
+                      message,
+                      effectiveLocale
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: toolCall.id,
+                      role: "tool",
+                      name: toolCall.function.name,
+                      content:
+                        result.response ||
+                        (result.success ? "OK" : "Error executing tool"),
+                    });
+                  } catch (error) {
+                    console.error(
+                      `[DEBUG] Error in immediate execution:`,
+                      error
+                    );
+                    pendingToolResults.push({
+                      tool_call_id: toolCall.id,
+                      role: "tool",
+                      name: toolCall.function.name,
+                      content: `Error: ${error.message}`,
+                    });
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`[DEBUG] Error in immediate execution:`, error);
+              pendingToolResults.push({
+                tool_call_id: toolCall.id,
+                role: "tool",
+                name: toolCall.function.name,
+                content: `Error: ${error.message}`,
+              });
+            }
+          }
+        }
+
+        // If we have tool results, we need to make another API call to continue the conversation
+        if (pendingToolResults.length > 0) {
+          console.log(
+            `[DEBUG] Making a follow-up API call with ${pendingToolResults.length} tool results`
+          );
+
+          // Add the assistant message with tool calls
+          apiMessages.push({
+            role: "assistant",
+            content: responseAccumulator,
+            tool_calls: completedToolCalls,
+          });
+
+          // Add the tool results
+          apiMessages.push(...pendingToolResults);
+
+          // Make a second API call with the tool results
+          try {
+            await procMsg.edit({
+              content: `${removeThinkTags(responseAccumulator)}\n\n${
+                i18n.__(
+                  "events.ai.messages.streamContinuation",
+                  effectiveLocale
+                ) || "Continuing with tool results..."
+              }`,
+              components: [stopRow],
+            });
+
+            // Log the messages we're about to send to verify they're correct
+            console.log(
+              `[DEBUG] Preparing to send ${apiMessages.length} messages to follow-up API call`
+            );
+            apiMessages.forEach((msg, index) => {
+              if (msg.role === "tool") {
+                console.log(
+                  `[DEBUG] API message ${index} (tool): ${msg.name} - ${
+                    msg.content ? msg.content.substring(0, 50) : "null"
+                  }`
+                );
+              } else if (msg.tool_calls) {
+                console.log(
+                  `[DEBUG] API message ${index} (${msg.role} with tool_calls): ${msg.tool_calls.length} tool calls`
+                );
+              } else {
+                console.log(
+                  `[DEBUG] API message ${index} (${msg.role}): ${
+                    typeof msg.content === "string"
+                      ? msg.content.substring(0, 50)
+                      : "complex content"
+                  }`
+                );
+              }
+            });
+
+            // Make non-streaming follow-up call to finish the conversation
+            console.log(
+              `[DEBUG] Starting non-streaming follow-up API call with tool results`
+            );
+            const followUpPayload = {
+              model: modelId,
+              messages: apiMessages,
+              temperature: prefs.aiParams.temperature,
+              top_p: prefs.aiParams.top_p,
+              frequency_penalty: prefs.aiParams.frequency_penalty,
+              presence_penalty: prefs.aiParams.presence_penalty,
+              stream: false, // No streaming for the follow-up
+            };
+
+            console.log(
+              `[DEBUG] Follow-up API call payload:`,
+              JSON.stringify({
+                ...followUpPayload,
+                messages: `[${apiMessages.length} messages]`, // Don't log full messages
+              })
+            );
+
+            const secondResponseData = await apiClient.chat.completions.create(
+              followUpPayload
+            );
+
+            console.log(`[DEBUG] Follow-up API call succeeded`);
+            const finalAiMsg = secondResponseData.choices[0].message;
+
+            console.log(
+              `[DEBUG] Follow-up response content: ${finalAiMsg.content?.substring(
+                0,
+                100
+              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`
+            );
+            responseAccumulator =
+              (responseAccumulator ? responseAccumulator + "\n\n" : "") +
+              (finalAiMsg.content || "");
+          } catch (followUpError) {
+            console.error(
+              `[DEBUG] Error in tool results follow-up:`,
+              followUpError
+            );
+            responseAccumulator += `\n\n${
+              i18n.__("events.ai.messages.streamToolError", effectiveLocale) ||
+              "Error processing tool results."
+            }`;
+          }
+          internalToolFollowUpDone = true; // Set flag if follow-up happens
+        } else if (
+          finalFinishReason === "tool_calls" &&
+          completedToolCalls.length > 0 &&
+          pendingToolResults.length === 0
+        ) {
+          // This case handles when we have tool calls but no results were added
+          console.log(
+            `[DEBUG] Stream ended with tool_calls but no pendingToolResults were added. Making follow-up API call anyway.`
+          );
+
+          // Add the assistant message with tool calls
+          apiMessages.push({
+            role: "assistant",
+            content: responseAccumulator,
+            tool_calls: completedToolCalls,
+          });
+
+          // Add empty results for any tool calls that didn't get results
+          const emptyResults = completedToolCalls.map((tool) => {
+            console.log(
+              `[DEBUG] Adding empty result for tool: ${tool.function.name}`
+            );
+            return {
+              tool_call_id: tool.id,
+              role: "tool",
+              name: tool.function.name,
+              content: "OK", // Simple default response
+            };
+          });
+
+          apiMessages.push(...emptyResults);
+
+          // Log the messages we're about to send to verify they're correct
+          apiMessages.forEach((msg, index) => {
+            if (msg.role === "tool") {
+              console.log(
+                `[DEBUG] API message ${index} (tool): ${
+                  msg.name
+                } - ${msg.content.substring(0, 50)}`
+              );
+            } else {
+              console.log(
+                `[DEBUG] API message ${index} (${msg.role}): ${
+                  typeof msg.content === "string"
+                    ? msg.content.substring(0, 50)
+                    : "complex content"
+                }`
+              );
+            }
+          });
+
+          try {
+            await procMsg.edit({
+              content: `${removeThinkTags(responseAccumulator)}\n\n${
+                i18n.__(
+                  "events.ai.messages.streamContinuation",
+                  effectiveLocale
+                ) || "Continuing after tool calls..."
+              }`,
+              components: [stopRow],
+            });
+
+            // Make a second API call with the tool results
+            console.log(
+              `[DEBUG] Starting non-streaming follow-up API call with tool results`
+            );
+            const followUpPayload = {
+              model: modelId,
+              messages: apiMessages,
+              temperature: prefs.aiParams.temperature,
+              top_p: prefs.aiParams.top_p,
+              frequency_penalty: prefs.aiParams.frequency_penalty,
+              presence_penalty: prefs.aiParams.presence_penalty,
+              stream: false, // No streaming for the follow-up
+            };
+
+            console.log(
+              `[DEBUG] Follow-up API call payload:`,
+              JSON.stringify({
+                ...followUpPayload,
+                messages: `[${apiMessages.length} messages]`, // Don't log full messages
+              })
+            );
+
+            const secondResponseData = await apiClient.chat.completions.create(
+              followUpPayload
+            );
+
+            console.log(`[DEBUG] Follow-up API call succeeded`);
+            const finalAiMsg = secondResponseData.choices[0].message;
+
+            console.log(
+              `[DEBUG] Follow-up response content: ${finalAiMsg.content?.substring(
+                0,
+                100
+              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`
+            );
+            responseAccumulator =
+              (responseAccumulator ? responseAccumulator + "\n\n" : "") +
+              (finalAiMsg.content || "");
+          } catch (followUpError) {
+            console.error(
+              `[DEBUG] Error in empty tool results follow-up:`,
+              followUpError
+            );
+            responseAccumulator += `\n\n${
+              i18n.__("events.ai.messages.streamToolError", effectiveLocale) ||
+              "Error processing tool results."
+            }`;
+          }
+          internalToolFollowUpDone = true; // Set flag if follow-up happens
+        }
+
+        // Create response object with the accumulated text
+        const response = {
+          choices: [
+            {
+              message: {
+                content: responseAccumulator,
+                tool_calls:
+                  completedToolCalls.length > 0
+                    ? completedToolCalls
+                    : undefined,
+              },
+            },
+          ],
+          _toolsDisabled: !effectiveShouldUseTools,
+          _internalToolFollowUpDone: internalToolFollowUpDone, // Include flag in response
+        };
+
+        return response;
+      } catch (error) {
+        console.error("Streaming error:", error);
+        // Remove stop button if there's an error
+        await procMsg
+          .edit({
+            content:
+              i18n.__(
+                "events.ai.messages.streamError",
+                { error: error.message },
+                effectiveLocale
+              ) || `Error: ${error.message}`,
+            components: [],
+          })
+          .catch(() => {});
+        throw error;
+      }
     }
 
     let responseData;
     try {
       // Try first with tools if they should be used
       if (shouldUseTools && baseTools.length) {
+        console.log(`[DEBUG] Attempting API request with tools first`);
         try {
           responseData = await makeApiRequest(true);
+          console.log(`[DEBUG] API request with tools succeeded`);
           // If successful, update cache to indicate tools are supported
-          state.modelToolSupportCache.set(modelToolSupportKey, true);
+          state.modelStatus.toolSupport.set(modelToolSupportKey, true);
         } catch (toolError) {
+          console.error(`[DEBUG] API request with tools failed:`, toolError);
           // Check if this is a "no tool support" error from OpenRouter
           if (
             provider === "openrouter" &&
@@ -443,23 +2012,31 @@ export default async function processAiRequest(
                 toolError.error?.message?.includes("support")))
           ) {
             console.log(
-              `Model ${prefs.selectedModel} doesn't support tools, retrying without tools`
+              `[DEBUG] Model ${prefs.selectedModel} doesn't support tools, retrying without tools`
             );
             // Use the helper function instead of directly setting cache
             markModelAsNotSupportingTools(modelToolSupportKey);
             // Retry without tools
             responseData = await makeApiRequest(false);
+            console.log(
+              `[DEBUG] API request without tools after tool-support error succeeded`
+            );
           } else {
             // Not a tool support error, rethrow
+            console.error(
+              `[DEBUG] API request error is not related to tool support, rethrowing`
+            );
             throw toolError;
           }
         }
       } else {
         // Tools not requested or not available, make standard request
+        console.log(`[DEBUG] Making standard API request without tools`);
         responseData = await makeApiRequest(false);
+        console.log(`[DEBUG] Standard API request succeeded`);
       }
     } catch (error) {
-      console.error(`API request error:`, error);
+      console.error(`[DEBUG] API request error:`, error);
       throw error; // Rethrow to be caught by outer catch
     }
 
@@ -488,6 +2065,7 @@ export default async function processAiRequest(
     const aiMsg = responseData.choices[0].message;
     let finalText = aiMsg.content?.trim() || "";
     const toolCalls = aiMsg.tool_calls || [];
+    const internalToolFollowUpDone = responseData._internalToolFollowUpDone;
 
     // Remove any <think> tags from the response
     finalText = removeThinkTags(finalText);
@@ -497,8 +2075,8 @@ export default async function processAiRequest(
 
     // Process tool calls if there are any and tools are enabled
     let anyToolUsedV2 = false; // Declare flag before the loop
-    if (toolCalls.length && prefs.toolsEnabled) {
-      console.log(`AI requested ${toolCalls.length} tool calls.`);
+    if (toolCalls.length && prefs.toolsEnabled && !internalToolFollowUpDone) {
+      console.log(`AI requested ${toolCalls.length} tool calls (second pass).`);
 
       // Process tool calls
       // Create a placeholder for accumulating tool responses for the AI
@@ -647,15 +2225,14 @@ export default async function processAiRequest(
           },
         };
 
-        // Execute the real tool
-        const { success, response, commandReplied, visualResponse } =
-          await executeToolCall(properToolCall, message, effectiveLocale);
+        // Tools are disabled - provide instructions instead
+        const success = false;
+        const commandReplied = false;
+        const visualResponse = false;
+        const response = `Tools have been disabled. Please use the /${fakeToolCall.name} command manually.`;
 
         console.log(
-          `Converted fake tool ${fakeToolCall.name} execution ${
-            success ? "succeeded" : "failed"
-          }` +
-            `. Command replied directly: ${commandReplied}, Visual response: ${visualResponse}`
+          `Detected fake tool call ${fakeToolCall.name}, instructing user to use commands manually`
         );
 
         // Replace the fake tool text with the real response
@@ -693,6 +2270,8 @@ export default async function processAiRequest(
 
     // Send final response
     addConversationToHistory(userId, messageContent, finalText);
+
+    // Apply settings menu after streaming is complete
     const models = await getAvailableModels(
       client,
       isVisionRequest ? "vision" : null
@@ -732,20 +2311,27 @@ export default async function processAiRequest(
     } else {
       // Original behavior: Edit the procMsg with V1 components and final AI text
       if (finalText || toolCalls.length === 0) {
-        // Send if text exists OR it's the initial non-tool response
-        await sendResponse(message, procMsg, finalText, comps, effectiveLocale);
+        // After streaming is complete, update the message with settings components
+        const finalMsg = await sendResponse(
+          message,
+          procMsg,
+          finalText,
+          comps,
+          effectiveLocale,
+          false
+        );
       } else if (procMsg) {
         // If only tools ran (no V2) and AI had no final text, delete processing message
         await procMsg.delete().catch(() => {});
       }
     }
   } catch (error) {
-    console.error(`Error in processAiRequest:`, error);
+    console.error(`[DEBUG] Error in processAiRequest:`, error);
     const errMsg = i18n.__(
       "events.ai.messages.errorOccurred",
       { error: error.message },
       effectiveLocale
     );
-    await sendResponse(message, procMsg, errMsg, [], effectiveLocale);
+    await sendResponse(message, procMsg, errMsg, [], effectiveLocale, false);
   }
 }

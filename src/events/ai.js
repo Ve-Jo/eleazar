@@ -13,12 +13,17 @@ import fetch from "node-fetch";
 import { Groq } from "groq-sdk";
 import CONFIG from "../config/aiConfig.js";
 import i18n from "../utils/newI18n.js";
-import { state } from "../state/state.js";
-import { buildInteractionComponents } from "../services/messages.js";
+import {
+  state,
+  getUserPreferences,
+  updateUserPreference,
+} from "../state/index.js";
+import {
+  buildInteractionComponents,
+  getAvailableModels,
+} from "../services/index.js";
 import processAiRequest from "../handlers/processAiRequest.js";
-import { getUserPreferences, updateUserPreference } from "../state/prefs.js";
 import OpenAI from "openai";
-import { getAvailableModels } from "../services/aiModels.js"; // Updated import path
 
 // --- Start Localization Definitions ---
 const localization_strings = {
@@ -32,6 +37,26 @@ const localization_strings = {
       en: "Model `{model}` is currently rate-limited. Please try again in about {minutes} minute(s) or select a different model.",
       ru: "Модель `{model}` в даний момент обмежена. Будь ласка, спробуйте ще раз через {minutes} хвилин або виберіть іншу модель.",
       uk: "Модель `{model}` в даний момент обмежена. Будь ласка, спробуйте ще раз через {minutes} хвилин або виберіть іншу модель.",
+    },
+    streamStart: {
+      en: "Thinking...",
+      ru: "Думаю...",
+      uk: "Думаю...",
+    },
+    streamProcessing: {
+      en: "Processing...",
+      ru: "Обработка...",
+      uk: "Обробка...",
+    },
+    streamStopped: {
+      en: "Generation stopped.",
+      ru: "Генерация остановлена.",
+      uk: "Генерація зупинена.",
+    },
+    streamError: {
+      en: "Error during streaming: {error}",
+      ru: "Ошибка при стриминге: {error}",
+      uk: "Помилка під час стрімінгу: {error}",
     },
     visionMismatch: {
       en: "Model `{model}` does not support image input. Please select a model with 'Vision' capability for this request.",
@@ -142,6 +167,47 @@ const localization_strings = {
           uk: "Виберіть модель AI",
         },
       },
+      settingsSelect: {
+        placeholder: {
+          en: "Settings",
+          ru: "Настройки",
+          uk: "Налаштування",
+        },
+      },
+      settingsOptions: {
+        systemPrompt: {
+          en: "Toggle system instructions for AI",
+          ru: "Включить/выключить системные инструкции для ИИ",
+          uk: "Увімкнути/вимкнути системні інструкції для ШІ",
+        },
+        tools: {
+          en: "Toggle AI tools functionality",
+          ru: "Включить/выключить функциональность инструментов ИИ",
+          uk: "Увімкнути/вимкнути функціональність інструментів ШІ",
+        },
+        clearContext: {
+          en: "Clear conversation history",
+          ru: "Очистить историю разговора",
+          uk: "Очистити історію розмови",
+        },
+        finetune: {
+          en: "Adjust AI generation parameters",
+          ru: "Настроить параметры генерации ИИ",
+          uk: "Налаштувати параметри генерації ШІ",
+        },
+        switchModel: {
+          label: {
+            en: "Switch Model",
+            ru: "Сменить модель",
+            uk: "Змінити модель",
+          },
+          description: {
+            en: "Change the AI model",
+            ru: "Изменить модель искусственного интеллекта",
+            uk: "Змінити модель штучного інтелекту",
+          },
+        },
+      },
     },
     toolResult: {
       successPrefix: {
@@ -233,6 +299,210 @@ const localization_strings = {
       mention: { en: "(mention)", ru: "(упоминание)", uk: "(упоминання)" },
       everyone: { en: "@ everyone", ru: "@ всех", uk: "@ всіх" },
       here: { en: "@ here", ru: "@ здесь", uk: "@ тут" },
+    },
+    finetune: {
+      buttonLabel: {
+        en: "Fine-tune Settings",
+        ru: "Настройки параметров",
+        uk: "Налаштування параметрів",
+      },
+      selectParameter: {
+        en: "Select parameter to adjust",
+        ru: "Выберите параметр для настройки",
+        uk: "Виберіть параметр для налаштування",
+      },
+      selectParameterPrompt: {
+        en: "Select an AI parameter to adjust:",
+        ru: "Выберите параметр ИИ для настройки:",
+        uk: "Виберіть параметр ШІ для налаштування:",
+      },
+      parameterUpdated: {
+        en: "{parameter} updated to {value}.",
+        ru: "{parameter} изменен на {value}.",
+        uk: "{parameter} змінено на {value}.",
+      },
+      selectionTimeout: {
+        en: "Parameter selection timed out.",
+        ru: "Время выбора параметра истекло.",
+        uk: "Час вибору параметра закінчився.",
+      },
+      modalTitle: {
+        en: "Fine-tune AI Parameters",
+        ru: "Настройка параметров ИИ",
+        uk: "Налаштування параметрів ШІ",
+      },
+      modalTitlePage2: {
+        en: "Fine-tune AI Parameters (Page 2)",
+        ru: "Настройка параметров ИИ (Страница 2)",
+        uk: "Налаштування параметрів ШІ (Сторінка 2)",
+      },
+      processingFirstSet: {
+        en: "Processing first set of parameters... Please fill in the remaining parameters.",
+        ru: "Обработка первого набора параметров... Пожалуйста, заполните оставшиеся параметры.",
+        uk: "Обробка першого набору параметрів... Будь ласка, заповніть решту параметрів.",
+      },
+      chooseOption: {
+        en: "Please choose an option below:",
+        ru: "Пожалуйста, выберите опцию ниже:",
+        uk: "Будь ласка, виберіть опцію нижче:",
+      },
+      configureMore: {
+        en: "Configure More Parameters",
+        ru: "Настроить больше параметров",
+        uk: "Налаштувати більше параметрів",
+      },
+      saveCurrentSettings: {
+        en: "Save Current Settings",
+        ru: "Сохранить текущие настройки",
+        uk: "Зберегти поточні налаштування",
+      },
+      resetToDefaults: {
+        en: "Reset to Defaults",
+        ru: "Сбросить на значения по умолчанию",
+        uk: "Скинути до значень за замовчуванням",
+      },
+      allParametersUpdated: {
+        en: "All AI parameters updated successfully!",
+        ru: "Все параметры ИИ успешно обновлены!",
+        uk: "Всі параметри ШІ успішно оновлені!",
+      },
+      firstSetUpdated: {
+        en: "First set of parameters saved successfully!",
+        ru: "Первый набор параметров успешно сохранен!",
+        uk: "Перший набір параметрів успішно збережено!",
+      },
+      parametersReset: {
+        en: "All AI parameters have been reset to default values!",
+        ru: "Все параметры ИИ были сброшены на значения по умолчанию!",
+        uk: "Всі параметри ШІ були скинуті до значень за замовчуванням!",
+      },
+      error: {
+        en: "An error occurred while processing your parameters.",
+        ru: "Произошла ошибка при обработке ваших параметров.",
+        uk: "Виникла помилка під час обробки ваших параметрів.",
+      },
+      defaultUpdated: {
+        en: "First set of parameters updated by default since no further action was taken.",
+        ru: "Первый набор параметров обновлен по умолчанию, так как дальнейших действий не было.",
+        uk: "Перший набір параметрів оновлено за замовчуванням, оскільки подальших дій не було.",
+      },
+      parameters: {
+        temperature: {
+          label: {
+            en: "Temperature",
+            ru: "Температура",
+            uk: "Температура",
+          },
+          description: {
+            en: "Controls randomness: higher values produce more creative results",
+            ru: "Контролирует случайность: более высокие значения дают более творческие результаты",
+            uk: "Контролює випадковість: вищі значення дають більш творчі результати",
+          },
+        },
+        top_p: {
+          label: {
+            en: "Top P",
+            ru: "Top P",
+            uk: "Top P",
+          },
+          description: {
+            en: "Nucleus sampling: considers tokens with top_p probability mass",
+            ru: "Выборка ядра: рассматривает токены с вероятностной массой top_p",
+            uk: "Вибірка ядра: розглядає токени з імовірнісною масою top_p",
+          },
+        },
+        top_k: {
+          label: {
+            en: "Top K",
+            ru: "Top K",
+            uk: "Top K",
+          },
+          description: {
+            en: "Only sample from the K most likely tokens",
+            ru: "Выборка только из K наиболее вероятных токенов",
+            uk: "Вибірка тільки з K найбільш ймовірних токенів",
+          },
+        },
+        frequency_penalty: {
+          label: {
+            en: "Frequency Penalty",
+            ru: "Штраф частоты",
+            uk: "Штраф частоти",
+          },
+          description: {
+            en: "Decreases repetition of frequent tokens",
+            ru: "Уменьшает повторение частых токенов",
+            uk: "Зменшує повторення частих токенів",
+          },
+        },
+        presence_penalty: {
+          label: {
+            en: "Presence Penalty",
+            ru: "Штраф присутствия",
+            uk: "Штраф присутності",
+          },
+          description: {
+            en: "Decreases repetition of used tokens",
+            ru: "Уменьшает повторение использованных токенов",
+            uk: "Зменшує повторення використаних токенів",
+          },
+        },
+        repetition_penalty: {
+          label: {
+            en: "Repetition Penalty",
+            ru: "Штраф повторения",
+            uk: "Штраф повторення",
+          },
+          description: {
+            en: "Higher values prevent repetition",
+            ru: "Более высокие значения предотвращают повторение",
+            uk: "Вищі значення запобігають повторенню",
+          },
+        },
+        min_p: {
+          label: {
+            en: "Min P",
+            ru: "Min P",
+            uk: "Min P",
+          },
+          description: {
+            en: "Only tokens with at least this probability are considered",
+            ru: "Рассматриваются только токены с вероятностью не меньше этой",
+            uk: "Розглядаються тільки токени з імовірністю не менше цієї",
+          },
+        },
+        top_a: {
+          label: {
+            en: "Top A",
+            ru: "Top A",
+            uk: "Top A",
+          },
+          description: {
+            en: "Dynamic nucleus sampling threshold",
+            ru: "Динамический порог выборки ядра",
+            uk: "Динамічний поріг вибірки ядра",
+          },
+        },
+        max_completion_tokens: {
+          label: {
+            en: "Max Tokens",
+            ru: "Макс. токенов",
+            uk: "Макс. токенів",
+          },
+          description: {
+            en: "Maximum number of tokens to generate",
+            ru: "Максимальное количество токенов для генерации",
+            uk: "Максимальна кількість токенів для генерації",
+          },
+        },
+      },
+    },
+    stream: {
+      stop: {
+        en: "Stop",
+        ru: "Стоп",
+        uk: "Стоп",
+      },
     },
   },
 };

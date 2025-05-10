@@ -341,35 +341,41 @@ async function getAvailableModels(client, capabilityFilter = null) {
 async function getModelDetails(client, prefixedModelId) {
   const allModels = await fetchAllModels(client);
   const allCombined = [...allModels.groq, ...allModels.openrouter];
+
   // Find model by its prefixed name (which we store in the 'name' field)
-  // Or potentially by matching provider/id if we change how models are stored/retrieved
-  const model = allCombined.find((m) => m.name === prefixedModelId); // Assuming 'name' holds the prefixed ID for lookup
+  let model = allCombined.find((m) => m.name === prefixedModelId);
+
   if (!model) {
     console.warn(`Model details not found for prefixed ID: ${prefixedModelId}`);
     // Fallback: try splitting and matching provider/id
     const parts = prefixedModelId.split("/");
     if (parts.length === 2) {
       const [provider, id] = parts;
-      return allCombined.find((m) => m.provider === provider && m.id === id);
+      model = allCombined.find((m) => m.provider === provider && m.id === id);
     }
-  } else {
+  }
+
+  if (model) {
     // Check the global cache for tool support
     const cacheKey = `${model.provider}/${model.id}`;
-    if (state.modelToolSupportCache.has(cacheKey)) {
-      model.capabilities.tools = state.modelToolSupportCache.get(cacheKey);
+
+    // Use the new state structure
+    if (state.modelStatus.toolSupport.has(cacheKey)) {
+      model.capabilities.tools = state.modelStatus.toolSupport.get(cacheKey);
       console.log(
         `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
       );
     }
     // Check against known list of models without tools
-    else if (state.modelsWithoutTools.has(model.id)) {
+    else if (state.modelStatus.modelsWithoutTools.has(model.id)) {
       model.capabilities.tools = false;
-      state.modelToolSupportCache.set(cacheKey, false);
+      state.modelStatus.toolSupport.set(cacheKey, false);
       console.log(
         `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
       );
     }
   }
+
   return model;
 }
 

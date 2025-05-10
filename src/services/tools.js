@@ -1,4 +1,10 @@
-import { state } from "../state/state.js";
+/**
+ * Tools utilities for scanning and organizing command information.
+ * This is used to help the AI understand what commands are available
+ * to guide users, but actual tool execution is disabled.
+ */
+
+import { state } from "../state/index.js";
 
 // Map Discord option types to JSON Schema types
 export function getParameterType(optionType) {
@@ -64,13 +70,19 @@ export function getParameterType(optionType) {
   return typeMap[effectiveType] || "string";
 }
 
-// Generate AI tool definitions from your Discord commands
-export function generateToolsFromCommands(client, toolsEnabled) {
-  if (!toolsEnabled) {
-    console.log("Tool generation skipped as tools are disabled for this user.");
-    return [];
-  }
-  console.log("Generating tools from commands...");
+/**
+ * Generate command definitions from Discord commands.
+ * This function scans all available commands and creates structured definitions
+ * that help the AI understand what commands are available and their parameters.
+ *
+ * Note: While this function returns tool-like definitions, they are only used for the AI
+ * to understand command structure and guide users, not for direct execution.
+ *
+ * @param {Object} client - Discord client with commands collection
+ * @returns {Array} Array of command definitions
+ */
+export function generateToolsFromCommands(client) {
+  console.log("[INFO] Scanning commands to build reference for AI guidance...");
 
   function inspectCommandStructure(cmd, prefix) {
     try {
@@ -84,7 +96,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
         : "none";
 
       console.log(
-        `${prefix} structure: execute=${hasFunctions}, subcommands=${hasSubcommands}, data=${dataType}`
+        `[INFO] ${prefix} structure: execute=${hasFunctions}, subcommands=${hasSubcommands}, data=${dataType}`
       );
     } catch (e) {
       console.error(`Error inspecting ${prefix}:`, e);
@@ -95,19 +107,24 @@ export function generateToolsFromCommands(client, toolsEnabled) {
     .filter((command) => command.data && command.data.ai !== false)
     .flatMap((command) => {
       const commandData = command.data;
-      console.log(`Processing command: ${commandData.name}`);
+      console.log(`[INFO] Processing command: ${commandData.name}`);
 
       // Debug the actual command structure
       inspectCommandStructure(command, `Command ${commandData.name}`);
 
-      const tools = [];
+      const commandDefinitions = [];
 
       // Check if command has subcommands in the subcommands object
       if (command.subcommands) {
+        console.log(
+          `[INFO] Command ${commandData.name} has subcommands:`,
+          Object.keys(command.subcommands)
+        );
+
         Object.entries(command.subcommands).forEach(
           ([subcommandName, subcommand]) => {
             console.log(
-              `Processing subcommand from subcommands object: ${commandData.name}_${subcommandName}`
+              `[INFO] Processing subcommand: ${commandData.name}_${subcommandName}`
             );
 
             // Debug the subcommand structure
@@ -127,7 +144,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
             ) {
               options = subcommand.data.options;
               console.log(
-                `Found ${options.length} options in subcommand.data.options`
+                `[INFO] Found ${options.length} options in subcommand.data.options`
               );
             } else if (
               subcommand.options &&
@@ -135,7 +152,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
             ) {
               options = subcommand.options;
               console.log(
-                `Found ${options.length} options in subcommand.options`
+                `[INFO] Found ${options.length} options in subcommand.options`
               );
             } else if (
               subcommand.data &&
@@ -151,7 +168,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
                 ) {
                   options = builtData.options;
                   console.log(
-                    `Found ${options.length} options in built subcommand data`
+                    `[INFO] Found ${options.length} options in built subcommand data`
                   );
                 }
               } catch (error) {
@@ -170,7 +187,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
                 ) {
                   options = jsonData.options;
                   console.log(
-                    `Found ${options.length} options in subcommand.data.toJSON()`
+                    `[INFO] Found ${options.length} options in subcommand.data.toJSON()`
                   );
                 }
               } catch (error) {
@@ -179,6 +196,12 @@ export function generateToolsFromCommands(client, toolsEnabled) {
                 );
               }
             }
+
+            // For debugging, log what the subcommand data contains
+            console.log(
+              `[INFO] Subcommand ${subcommandName} data:`,
+              subcommand.data
+            );
 
             // Process options if we found any
             options.forEach((option) => {
@@ -262,16 +285,16 @@ export function generateToolsFromCommands(client, toolsEnabled) {
             });
 
             console.log(
-              `Generated properties for ${commandData.name}_${subcommandName}:`,
+              `[INFO] Generated properties for ${commandData.name}_${subcommandName}:`,
               parameters
             );
             console.log(
-              `Required params for ${commandData.name}_${subcommandName}:`,
+              `[INFO] Required params for ${commandData.name}_${subcommandName}:`,
               required
             );
 
-            // Create the tool
-            tools.push({
+            // Create the command definition
+            const commandDef = {
               type: "function",
               function: {
                 name: `${commandData.name}_${subcommandName}`,
@@ -284,14 +307,21 @@ export function generateToolsFromCommands(client, toolsEnabled) {
                   required: required.length ? required : undefined,
                 },
               },
-            });
+            };
+
+            console.log(
+              `[INFO] Created definition for ${commandDef.function.name}`
+            );
+            commandDefinitions.push(commandDef);
           }
         );
       }
 
-      // If no subcommands were found but the command has direct options, create a tool for the main command
-      if (tools.length === 0 && command.execute) {
-        console.log(`Creating tool for main command: ${commandData.name}`);
+      // If no subcommands were found but the command has direct options, create a definition for the main command
+      if (commandDefinitions.length === 0 && command.execute) {
+        console.log(
+          `[INFO] Creating definition for main command: ${commandData.name}`
+        );
 
         const parameters = {};
         const required = [];
@@ -301,12 +331,12 @@ export function generateToolsFromCommands(client, toolsEnabled) {
         if (commandData.options && Array.isArray(commandData.options)) {
           options = commandData.options.filter((opt) => opt.type !== 1); // Filter out subcommand options
           console.log(
-            `Found ${options.length} direct options in commandData.options`
+            `[INFO] Found ${options.length} direct options in commandData.options`
           );
         } else if (command.options && Array.isArray(command.options)) {
           options = command.options.filter((opt) => opt.type !== 1);
           console.log(
-            `Found ${options.length} direct options in command.options`
+            `[INFO] Found ${options.length} direct options in command.options`
           );
         } else if (typeof commandData === "function") {
           try {
@@ -318,7 +348,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
             ) {
               options = builtData.options.filter((opt) => opt.type !== 1);
               console.log(
-                `Found ${options.length} direct options in built command data`
+                `[INFO] Found ${options.length} direct options in built command data`
               );
             }
           } catch (error) {
@@ -336,7 +366,7 @@ export function generateToolsFromCommands(client, toolsEnabled) {
             ) {
               options = jsonData.options.filter((opt) => opt.type !== 1);
               console.log(
-                `Found ${options.length} direct options in commandData.toJSON()`
+                `[INFO] Found ${options.length} direct options in commandData.toJSON()`
               );
             }
           } catch (error) {
@@ -426,13 +456,16 @@ export function generateToolsFromCommands(client, toolsEnabled) {
         });
 
         console.log(
-          `Generated properties for ${commandData.name}:`,
+          `[INFO] Generated properties for ${commandData.name}:`,
           parameters
         );
-        console.log(`Required params for ${commandData.name}:`, required);
+        console.log(
+          `[INFO] Required params for ${commandData.name}:`,
+          required
+        );
 
-        // Create the tool
-        tools.push({
+        // Create the command definition
+        const commandDef = {
           type: "function",
           function: {
             name: commandData.name,
@@ -444,10 +477,15 @@ export function generateToolsFromCommands(client, toolsEnabled) {
               required: required.length ? required : undefined,
             },
           },
-        });
+        };
+
+        console.log(
+          `[INFO] Created definition for ${commandDef.function.name}`
+        );
+        commandDefinitions.push(commandDef);
       }
 
-      return tools;
+      return commandDefinitions;
     })
     .filter((t) => t);
 }

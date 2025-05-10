@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const CONFIG = {
+  // Provider configurations
   groq: {
     provider: "groq",
     apiKey: process.env.GROQ_API,
@@ -26,6 +27,7 @@ const CONFIG = {
       ],
     },
   },
+
   openrouter: {
     provider: "openrouter",
     apiKey: process.env.OPENROUTER_API_KEY,
@@ -46,32 +48,18 @@ const CONFIG = {
         "google/gemma-3-27b-it",
         "mistralai/mistral-small-3.1-24b-instruct",
         "mistralai/pixtral-12b",
-        /*"microsoft/phi-3.5-mini-128k-instruct",
-        "microsoft/mai-ds-r1:free",
-        "thudm/glm-z1-32b:free",
-        "thudm/glm-4-32b:free",
-        "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
-        "nvidia/llama-3.3-nemotron-super-49b-v1:free",
-        "nvidia/llama-3.1-nemotron-nano-8b-v1:free",
-        "google/gemini-2.5-pro-exp-03-25:free",
-        "google/gemma-3-27b-it:free",
-        "qwen/qwen2.5-vl-32b-instruct:free",
-        "mistralai/mistral-small-3.1-24b-instruct",
-        "moonshotai/moonlight-16b-a3b-instruct:free",*/
       ],
       vision: [
-        /*"google/gemini-2.0-flash-001",*/
         "openai/gpt-4.1-nano",
         "minimax/minimax-01",
         "google/gemma-3-27b-it",
         "qwen/qwen-vl-plus",
         "mistralai/pixtral-12b",
-        /*"microsoft/phi-3.5-mini-128k-instruct",
-        "qwen/qwen2.5-vl-32b-instruct:free",
-        "google/gemma-3-27b-it:free",*/
       ],
     },
   },
+
+  // Context and system configuration
   maxContextLength: 4,
   disableSystemPromptFor: [
     "groq/llama3-70b-8192",
@@ -82,19 +70,98 @@ const CONFIG = {
     "openrouter/latitudegames/wayfarer-large-70b-llama-3.3",
     "openrouter/mistralai/pixtral-12b",
   ],
+
+  // AI generation parameters with documentation
+  aiParameters: {
+    // Creativity control parameters
+    temperature: {
+      default: 1,
+      min: 0.0,
+      max: 2.0,
+      description:
+        "Controls randomness: higher values produce more creative results",
+    },
+
+    // Sampling strategy parameters
+    top_p: {
+      default: 1.0,
+      min: 0.0,
+      max: 1.0,
+      description:
+        "Nucleus sampling: considers tokens with top_p probability mass",
+    },
+    top_k: {
+      default: 40,
+      min: 1,
+      max: 100,
+      description: "Only sample from the K most likely tokens",
+      providers: ["openrouter"],
+    },
+    min_p: {
+      default: 0.05,
+      min: 0.0,
+      max: 1.0,
+      description: "Only tokens with at least this probability are considered",
+      providers: ["openrouter"],
+    },
+    top_a: {
+      default: 0.0,
+      min: 0.0,
+      max: 1.0,
+      description: "Dynamic nucleus sampling threshold",
+      providers: ["openrouter"],
+    },
+
+    // Repetition control parameters
+    frequency_penalty: {
+      default: 0.0,
+      min: -2.0,
+      max: 2.0,
+      description: "Decreases repetition of frequent tokens",
+    },
+    presence_penalty: {
+      default: 0.0,
+      min: -2.0,
+      max: 2.0,
+      description: "Decreases repetition of used tokens",
+    },
+    repetition_penalty: {
+      default: 1.0,
+      min: 1.0,
+      max: 2.0,
+      description: "Higher values prevent repetition",
+      providers: ["openrouter"],
+    },
+
+    // Groq-specific parameters
+    max_completion_tokens: {
+      default: 4096,
+      min: 1,
+      max: 8192,
+      description: "Maximum number of tokens to generate (Groq only)",
+      providers: ["groq"],
+    },
+  },
+
+  // Default system context
   initialSystemContext: `You are a natural and helpful AI assistant for a Discord bot named "Eleazar" created by "@vejoy_".
 
 CONVERSATION NOTICE:
 - By default, assume the user just wants to have a casual conversation.
-- In conversation, respond naturally, be helpful, and don't try to execute tools unless specifically asked.
+- In conversation, respond naturally, be helpful, and don't try to execute commands.
 - Keep your responses conversational, concise, and engaging.
 
-TOOL USAGE NOTICE:
-- Only run tools when the user clearly requests a specific task that requires tools, AND if tools are enabled for this conversation.
-- Examples of clear task requests: "show me my balance", "translate this text", "help me create a poll", etc.
-- When you are running tool, make sure you're filling all the parameters correctly.
+COMMAND GUIDANCE:
+- You have access to information about all available commands in the bot.
+- When a user asks how to do something, explain how they can manually use the bot's commands.
+- For example: "To check your balance, you can type '/economy balance'"
+- Do NOT try to run commands for users. Instead, guide them on which command to use and its syntax.
+- When explaining commands, be clear about the command name, any required parameters, and what the command does.
+- Format command examples like this: "/command_name [parameter]"
+- When explaining a command with choices, include the available options.
+- For commands with numerical parameters, include any minimum/maximum values if available.
 
-Do not mention tools, commands, or your internal processes to the user. Always answer in the same language as the user.`,
+Do not imply that you can run commands for the user. Always answer in the same language as the user.`,
 };
 
 export default CONFIG;
