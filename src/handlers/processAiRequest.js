@@ -154,6 +154,130 @@ function splitMessage(message, maxLength = 2000) {
   return chunks;
 }
 
+// Function to gather user information for the system prompt
+async function getUserInfoForPrompt(message) {
+  const author = message.author;
+  const mentions = message.mentions.users;
+  const channelMentions = message.mentions.channels;
+  let userInfo = {};
+  let mentionedUsersInfo = [];
+  let mentionedChannelsInfo = [];
+  let serverInfo = {};
+  let currentChannelInfo = {};
+
+  // Get author info
+  if (author) {
+    userInfo = {
+      id: author.id,
+      username: author.username,
+      nickname: message.member?.nickname || author.username,
+      isBot: author.bot,
+      roles: message.member?.roles.cache.map((role) => role.name) || [],
+      joinedAt: message.member?.joinedAt
+        ? message.member.joinedAt.toISOString()
+        : null,
+      joinedAtRelative: message.member?.joinedAt
+        ? getRelativeTimeString(message.member.joinedAt)
+        : "unknown time",
+    };
+  }
+
+  // Get info about mentioned users
+  if (mentions && mentions.size > 0) {
+    await Promise.all(
+      Array.from(mentions.values()).map(async (user) => {
+        if (user.id === message.client.user.id) return; // Skip the bot itself
+
+        const member = message.guild
+          ? await message.guild.members.fetch(user.id).catch(() => null)
+          : null;
+
+        if (member) {
+          mentionedUsersInfo.push({
+            id: user.id,
+            username: user.username,
+            nickname: member.nickname || user.username,
+            isBot: user.bot,
+            roles: member.roles.cache.map((role) => role.name) || [],
+            joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
+            joinedAtRelative: member.joinedAt
+              ? getRelativeTimeString(member.joinedAt)
+              : "unknown time",
+          });
+        }
+      })
+    );
+  }
+
+  // Get current channel info
+  if (message.channel) {
+    currentChannelInfo = {
+      id: message.channel.id,
+      name: message.channel.name,
+      type: message.channel.type,
+      isThread: message.channel.isThread,
+      isDM: message.channel.type === "DM",
+      topic: message.channel.topic || "No topic set",
+      parentName: message.channel.parent ? message.channel.parent.name : null,
+      messageCount: message.channel.messages?.cache?.size || "unknown",
+    };
+  }
+
+  // Get info about mentioned channels
+  if (channelMentions && channelMentions.size > 0) {
+    Array.from(channelMentions.values()).forEach((channel) => {
+      mentionedChannelsInfo.push({
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        isThread: channel.isThread,
+        isDM: channel.type === "DM",
+        topic: channel.topic || "No topic set",
+        parentName: channel.parent ? channel.parent.name : null,
+      });
+    });
+  }
+
+  // Get server info if available
+  if (message.guild) {
+    serverInfo = {
+      name: message.guild.name,
+      memberCount: message.guild.memberCount,
+      createdAt: message.guild.createdAt.toISOString(),
+      createdAtRelative: getRelativeTimeString(message.guild.createdAt),
+      channelName: message.channel.name,
+      isThread: !!message.channel.isThread,
+      isDM: message.channel.type === "DM",
+    };
+  }
+
+  return {
+    userInfo,
+    mentionedUsersInfo,
+    mentionedChannelsInfo,
+    serverInfo,
+    currentChannelInfo,
+  };
+}
+
+// Helper function to get relative time string
+function getRelativeTimeString(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 30) return `${diffDays} days ago`;
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12)
+    return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
+
+  const diffYears = Math.floor(diffMonths / 12);
+  return `${diffYears} year${diffYears > 1 ? "s" : ""} ago`;
+}
+
 export default async function processAiRequest(
   message,
   userId,
@@ -353,13 +477,91 @@ export default async function processAiRequest(
       CONFIG.initialSystemContext &&
       !shouldDisableSysPromptForModel // Check the new config list
     ) {
+      // Get user information for the system prompt
+      const {
+        userInfo,
+        mentionedUsersInfo,
+        serverInfo,
+        mentionedChannelsInfo,
+        currentChannelInfo,
+      } = await getUserInfoForPrompt(message);
+
+      // Create an enhanced system prompt with user information
+      let enhancedSystemPrompt = CONFIG.initialSystemContext;
+
+      // Add user information section
+      enhancedSystemPrompt += `\n\nUSER INFORMATION:
+- You are currently talking to ${userInfo.nickname} (username: ${
+        userInfo.username
+      })
+- User ID: ${userInfo.id}
+- Joined server: ${userInfo.joinedAtRelative}
+- Roles: ${userInfo.roles.join(", ") || "none"}`;
+
+      // Add current channel information
+      enhancedSystemPrompt += `\n\nCURRENT CHANNEL:
+- Name: #${currentChannelInfo.name}
+- Type: ${
+        currentChannelInfo.isThread
+          ? "Thread"
+          : currentChannelInfo.isDM
+          ? "Direct Message"
+          : "Text Channel"
+      }
+- Topic: ${currentChannelInfo.topic || "No topic set"}
+${
+  currentChannelInfo.parentName
+    ? `- Parent: ${currentChannelInfo.parentName}`
+    : ""
+}`;
+
+      // Add mentioned users if any
+      if (mentionedUsersInfo.length > 0) {
+        enhancedSystemPrompt += `\n\nMENTIONED USERS:`;
+        mentionedUsersInfo.forEach((user) => {
+          enhancedSystemPrompt += `
+- ${user.nickname} (username: ${user.username})
+  - User ID: ${user.id}
+  - Joined server: ${user.joinedAtRelative}
+  - Roles: ${user.roles.join(", ") || "none"}`;
+        });
+      }
+
+      // Add mentioned channels if any
+      if (mentionedChannelsInfo.length > 0) {
+        enhancedSystemPrompt += `\n\nMENTIONED CHANNELS:`;
+        mentionedChannelsInfo.forEach((channel) => {
+          enhancedSystemPrompt += `
+- #${channel.name}
+  - Type: ${
+    channel.isThread
+      ? "Thread"
+      : channel.isDM
+      ? "Direct Message"
+      : "Text Channel"
+  }
+  - Topic: ${channel.topic || "No topic set"}
+  ${channel.parentName ? `- Parent: ${channel.parentName}` : ""}`;
+        });
+      }
+
+      // Add server information if available
+      if (serverInfo.name) {
+        enhancedSystemPrompt += `\n\nSERVER CONTEXT:
+- Server: ${serverInfo.name}
+- Members: ${serverInfo.memberCount}
+- Server created: ${serverInfo.createdAtRelative}`;
+      }
+
       // Ensure only one system message exists
       apiMessages = apiMessages.filter((m) => m.role !== "system");
       apiMessages.unshift({
         role: "system",
-        content: CONFIG.initialSystemContext,
+        content: enhancedSystemPrompt,
       });
-      console.log(`Prepending system prompt for model: ${prefs.selectedModel}`);
+      console.log(
+        `Prepending enhanced system prompt with user info for model: ${prefs.selectedModel}`
+      );
     } else {
       // Remove any existing system message if disabled by pref, config, or missing context
       apiMessages = apiMessages.filter((m) => m.role !== "system");
