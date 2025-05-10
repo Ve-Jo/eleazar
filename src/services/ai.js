@@ -790,8 +790,39 @@ export async function sendResponse(
           interaction.isStringSelectMenu() &&
           interaction.customId === `ai_select_model_${userId}`
         ) {
+          // Immediately defer the update to show loading state
+          await interaction.deferUpdate();
+          console.log(
+            `Model selection: Interaction deferred for user ${userId}`
+          );
+
           const selectedModel = interaction.values[0];
           updateUserPreference(userId, "selectedModel", selectedModel);
+          console.log(
+            `Model selection: Updated preference to ${selectedModel} for user ${userId}`
+          );
+
+          try {
+            // Update the message to show processing state
+            await finalMsg.edit({
+              content:
+                i18n.__(
+                  "events.ai.messages.modelSelectedProcessing",
+                  { model: selectedModel },
+                  locale
+                ) ||
+                `Model changed to ${selectedModel}. Processing your request...`,
+              components: [],
+            });
+            console.log(
+              `Model selection: Updated message with processing state`
+            );
+          } catch (editError) {
+            console.error(
+              `Error updating message after model selection:`,
+              editError
+            );
+          }
 
           // If user just selected a new model, retry the AI request with that model
           const messageContent = message.content
@@ -813,14 +844,43 @@ export async function sendResponse(
           const processAiRequest = (
             await import("../handlers/processAiRequest.js")
           ).default;
-          await processAiRequest(
-            message,
-            userId,
-            messageContent,
-            newVisionRequest,
-            finalMsg,
-            locale
-          );
+
+          try {
+            await processAiRequest(
+              message,
+              userId,
+              messageContent,
+              newVisionRequest,
+              finalMsg,
+              locale
+            );
+            console.log(
+              `Model selection: Completed processing with new model for user ${userId}`
+            );
+          } catch (processError) {
+            console.error(
+              `Error processing request with new model:`,
+              processError
+            );
+            // Update message with error if processing failed
+            try {
+              await finalMsg.edit({
+                content:
+                  i18n.__(
+                    "events.ai.messages.errorOccurred",
+                    { error: processError.message },
+                    locale
+                  ) || `Error: ${processError.message}`,
+                components: [],
+              });
+            } catch (finalEditError) {
+              console.error(
+                `Error updating message with error state:`,
+                finalEditError
+              );
+            }
+          }
+
           return; // Return early
         }
 

@@ -772,6 +772,12 @@ export default {
               `Initial Collector: Raw selected value: ${selectedModelId}`
             );
 
+            // Immediately defer the update to show loading state
+            await interaction.deferUpdate().catch((err) => {
+              console.error("Initial Collector: Failed to defer update:", err);
+            });
+            console.log("Initial Collector: Interaction deferred.");
+
             updateUserPreference(userId, "selectedModel", selectedModelId);
             console.log(
               `Initial Collector: User ${userId} preference updated to model: ${selectedModelId}`
@@ -787,18 +793,22 @@ export default {
               console.log("Initial Collector: Stopped collector.");
 
               try {
-                await interaction.deferUpdate();
-                console.log("Initial Collector: Interaction deferred.");
-
-                // Use locale for the edit message
-                await promptMsg.edit({
-                  content: i18n.__(
-                    "events.ai.messages.modelSelectedProcessing",
-                    { model: selectedModelId },
-                    effectiveLocale
-                  ),
-                  components: [],
-                });
+                // Use locale for the edit message - no need to defer again
+                await promptMsg
+                  .edit({
+                    content: i18n.__(
+                      "events.ai.messages.modelSelectedProcessing",
+                      { model: selectedModelId },
+                      effectiveLocale
+                    ),
+                    components: [],
+                  })
+                  .catch((err) => {
+                    console.error(
+                      "Initial Collector: Failed to update prompt message:",
+                      err
+                    );
+                  });
                 console.log(
                   `Initial Collector: Edited prompt message ${promptMsg.id}.`
                 );
