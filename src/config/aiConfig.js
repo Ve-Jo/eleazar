@@ -91,8 +91,8 @@ const CONFIG = {
         "Nucleus sampling: considers tokens with top_p probability mass",
     },
     top_k: {
-      default: 40,
-      min: 1,
+      default: 0.0,
+      min: 0,
       max: 100,
       description: "Only sample from the K most likely tokens",
       providers: ["openrouter"],
