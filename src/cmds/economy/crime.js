@@ -214,9 +214,9 @@ export default {
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
       // Create a component to hold the text and the select menu
-      const selectTargetComponent = new ComponentBuilder()
-        // .setColor(process.env.EMBED_COLOR) // Adjust color if needed
-        .setMode(builderMode) // Set mode
+      const selectTargetComponent = new ComponentBuilder({
+        mode: builderMode,
+      })
         .addText(i18n.__("commands.economy.crime.selectTarget"))
         .addActionRow(row);
 
@@ -446,6 +446,7 @@ export default {
               },
               balance: Number(updatedUserData.economy?.balance || 0),
             },
+            returnDominant: true,
             amount: amount,
             success: success,
           },

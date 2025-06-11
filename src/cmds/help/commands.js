@@ -566,7 +566,10 @@ export default {
       const [attachment, dominantColor] = await generateCommandImage();
 
       // Create the component using ComponentBuilder
-      const commandComponent = new ComponentBuilder({ dominantColor })
+      const commandComponent = new ComponentBuilder({
+        color: dominantColor,
+        mode: "V2",
+      })
         .addText(getTranslation("commands.help.commands.title"), "header3")
         .addImage("attachment://commands.avif");
 
@@ -634,11 +637,7 @@ export default {
         commandComponent.addActionRow(subcommandRow);
       }
 
-      return {
-        components: [commandComponent.build()],
-        files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
-      };
+      return commandComponent.toReplyOptions({ files: [attachment] });
     };
 
     const response = await interaction.editReply(await updateMessage());
