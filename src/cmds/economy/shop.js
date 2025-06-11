@@ -243,7 +243,7 @@ export default {
                     UPGRADES[key].effectValue / (60 * 1000)
                   );
                   effectUnit = "m";
-                  effectValue = upgrade.effect;
+                  effectValue = Math.floor(upgrade.effect / (60 * 1000));
                 } else if (key === "bank_rate") {
                   effectPerLevel = Math.round(UPGRADES[key].effectValue * 100);
                   effectUnit = "%";
@@ -357,7 +357,7 @@ export default {
                 effectPerLevel = Math.floor(
                   UPGRADES[key].effectValue / (60 * 1000)
                 );
-                effectValue = upgrade.effect;
+                effectValue = Math.floor(upgrade.effect / (60 * 1000));
               } else if (key === "bank_rate") {
                 effectPerLevel = Math.round(UPGRADES[key].effectValue * 100);
                 effectValue = upgrade.effect * 100;
