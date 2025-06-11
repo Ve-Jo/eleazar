@@ -1,0 +1,515 @@
+import { Groq } from "groq-sdk";
+import OpenAI from "openai";
+import fetch from "node-fetch";
+import CONFIG from "../../config/aiConfig.js";
+import { state } from "./index.js";
+
+// --- Model Cache ---
+let cachedModels = null; // { groq: [], openrouter: [] }
+let lastFetchTime = 0;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// --- Helper Functions ---
+
+// Standardizes model names for display
+function formatModelName(model, provider) {
+  return `${provider}/${model.id}`;
+}
+
+// --- API Client Management ---
+
+/**
+ * Initialize API clients for model providers
+ * @param {Object} client - Discord client object
+ * @returns {Object} Object containing initialization status for each provider
+ */
+export async function initializeApiClients(client) {
+  const results = { groq: false, openrouter: false };
+
+  // Initialize Groq client if configured
+  if (CONFIG.groq.apiKey) {
+    const clientPath = CONFIG.groq.clientPath;
+    if (!client[clientPath]) {
+      try {
+        client[clientPath] = new Groq({
+          apiKey: CONFIG.groq.apiKey,
+        });
+        console.log("✅ Successfully initialized Groq client");
+        results.groq = true;
+      } catch (error) {
+        console.error("❌ Failed to initialize Groq client:", error.message);
+      }
+    } else {
+      console.log(`✅ Groq client already exists at client.${clientPath}`);
+      results.groq = true;
+    }
+  }
+
+  // Initialize OpenRouter client if configured
+  if (CONFIG.openrouter.apiKey) {
+    const clientPath = CONFIG.openrouter.clientPath;
+    if (!client[clientPath]) {
+      try {
+        client[clientPath] = new OpenAI({
+          apiKey: CONFIG.openrouter.apiKey,
+          baseURL: CONFIG.openrouter.baseURL,
+        });
+        console.log("✅ Successfully initialized OpenRouter client");
+        results.openrouter = true;
+      } catch (error) {
+        console.error(
+          "❌ Failed to initialize OpenRouter client:",
+          error.message
+        );
+      }
+    } else {
+      console.log(
+        `✅ OpenRouter client already exists at client.${clientPath}`
+      );
+      results.openrouter = true;
+    }
+  }
+
+  return results;
+}
+
+// --- Model Fetching ---
+
+/**
+ * Fetch models from Groq API
+ * @param {Object} groqClient - Initialized Groq client
+ * @returns {Array} Array of available models
+ */
+async function fetchGroqModelsFromApi(groqClient) {
+  if (!groqClient) {
+    console.warn(
+      "Attempted to fetch Groq models without an initialized client."
+    );
+    return [];
+  }
+
+  try {
+    const preferredTextModels = new Set(
+      CONFIG.groq.preferredModels?.text || []
+    );
+    const preferredVisionModels = new Set(
+      CONFIG.groq.preferredModels?.vision || []
+    );
+
+    // Fetch all models from API
+    const models = await groqClient.models.list();
+    console.log(`Fetched ${models.data.length} models from Groq API`);
+
+    // Filter to only include models in our preferred lists
+    const filteredModels = models.data
+      .filter((m) => m.active)
+      .filter(
+        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
+      )
+      .map((model) => ({
+        id: model.id,
+        name: formatModelName(model, "groq"),
+        provider: "groq",
+        capabilities: {
+          vision: preferredVisionModels.has(model.id),
+          tools: true,
+          maxContext: model.context_window || 8192,
+        },
+      }));
+
+    console.log(`Filtered to ${filteredModels.length} preferred Groq models`);
+    return filteredModels;
+  } catch (error) {
+    console.error("Error fetching Groq models:", error.message);
+
+    // Fallback to config if API call fails
+    return createFallbackModels("groq");
+  }
+}
+
+/**
+ * Fetch models from OpenRouter API
+ * @param {Object} openRouterClient - Initialized OpenRouter client
+ * @returns {Array} Array of available models
+ */
+async function fetchOpenRouterModelsFromApi(openRouterClient) {
+  if (!openRouterClient) {
+    console.warn(
+      "Attempted to fetch OpenRouter models without an initialized client."
+    );
+    return [];
+  }
+
+  try {
+    const preferredTextModels = new Set(
+      CONFIG.openrouter.preferredModels?.text || []
+    );
+    const preferredVisionModels = new Set(
+      CONFIG.openrouter.preferredModels?.vision || []
+    );
+
+    // Fetch all models from API
+    const models = await openRouterClient.models.list();
+    console.log(`Fetched ${models.data.length} models from OpenRouter API`);
+
+    // Filter to only include models in our preferred lists
+    const filteredModels = models.data
+      .filter((m) => m.id && m.id.trim() !== "")
+      .filter(
+        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
+      )
+      .map((model) => ({
+        id: model.id,
+        name: formatModelName(model, "openrouter"),
+        provider: "openrouter",
+        capabilities: {
+          vision: preferredVisionModels.has(model.id),
+          tools: true,
+          maxContext: model.context_length || 8192,
+        },
+      }));
+
+    console.log(
+      `Filtered to ${filteredModels.length} preferred OpenRouter models`
+    );
+    return filteredModels;
+  } catch (error) {
+    console.error("Error fetching OpenRouter models:", error.message);
+
+    // Fallback to config if API call fails
+    return createFallbackModels("openrouter");
+  }
+}
+
+/**
+ * Create fallback models from config when API calls fail
+ * @param {string} provider - Provider name ('groq' or 'openrouter')
+ * @returns {Array} Array of fallback models
+ */
+function createFallbackModels(provider) {
+  console.log(`Using fallback preferred models from config for ${provider}`);
+  const fallbackModels = [];
+
+  // Add text models
+  CONFIG[provider]?.preferredModels?.text?.forEach((id) => {
+    fallbackModels.push({
+      id,
+      name: `${provider}/${id}`,
+      provider,
+      capabilities: {
+        vision: false,
+        tools: true,
+        maxContext: 8192,
+      },
+    });
+  });
+
+  // Add vision models
+  CONFIG[provider]?.preferredModels?.vision?.forEach((id) => {
+    fallbackModels.push({
+      id,
+      name: `${provider}/${id}`,
+      provider,
+      capabilities: {
+        vision: true,
+        tools: true,
+        maxContext: 8192,
+      },
+    });
+  });
+
+  return fallbackModels;
+}
+
+/**
+ * Fetches models from all configured providers and caches them
+ * @param {Object} client - Discord client object
+ * @returns {Object} Object containing all available models by provider
+ */
+async function fetchAllModels(client) {
+  const now = Date.now();
+  if (
+    cachedModels &&
+    now - lastFetchTime < CACHE_DURATION &&
+    cachedModels.groq?.length &&
+    cachedModels.openrouter?.length
+  ) {
+    console.log("Using cached AI models.");
+    return cachedModels;
+  }
+
+  console.log("Fetching fresh AI models...");
+  cachedModels = { groq: [], openrouter: [] }; // Reset cache
+
+  const groqClient = client[CONFIG.groq.clientPath];
+  const openRouterClient = client[CONFIG.openrouter.clientPath];
+
+  const fetchPromises = [];
+  if (groqClient) {
+    fetchPromises.push(
+      fetchGroqModelsFromApi(groqClient).then((models) => {
+        cachedModels.groq = models;
+      })
+    );
+  } else {
+    console.warn("Groq client not available, using fallback models.");
+    cachedModels.groq = createFallbackModels("groq");
+  }
+
+  if (openRouterClient) {
+    fetchPromises.push(
+      fetchOpenRouterModelsFromApi(openRouterClient).then((models) => {
+        cachedModels.openrouter = models;
+      })
+    );
+  } else {
+    console.warn("OpenRouter client not available, using fallback models.");
+    cachedModels.openrouter = createFallbackModels("openrouter");
+  }
+
+  await Promise.all(fetchPromises);
+
+  lastFetchTime = now;
+  console.log(
+    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length})`
+  );
+  return cachedModels;
+}
+
+// --- Model Retrieval and Management ---
+
+/**
+ * Get available models filtered by capability
+ * @param {Object} client - Discord client object
+ * @param {string|null} capabilityFilter - Capability to filter by ('vision' or null for text)
+ * @returns {Array} Array of available models matching the filter
+ */
+export async function getAvailableModels(client, capabilityFilter = null) {
+  const allModelsData = await fetchAllModels(client);
+
+  // Create a map of all models for quick lookup
+  const availableModelsMap = new Map();
+  [...allModelsData.groq, ...allModelsData.openrouter].forEach((model) => {
+    const baseName = `${model.provider}/${model.id}`;
+    availableModelsMap.set(baseName, model);
+  });
+
+  const isVisionRequest = capabilityFilter === "vision";
+  let preferredModelNamesConfig = [];
+  let resultModels = [];
+
+  // Determine which model list to use based on the capability filter
+  if (isVisionRequest) {
+    // Vision request - only use vision models from config
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.vision || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Filtering for VISION models based on config.");
+
+    // Remove duplicates preserving order
+    const uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add models that support vision
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model && model.capabilities.vision) {
+        resultModels.push(model);
+      }
+    }
+  } else {
+    // Text request - use text models from config
+    preferredModelNamesConfig = [
+      ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
+      ...(CONFIG.openrouter.preferredModels?.text || []).map(
+        (id) => `openrouter/${id}`
+      ),
+    ];
+    console.log("Prioritizing TEXT models based on config.");
+
+    // Remove duplicates preserving order
+    const uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
+
+    // Add models from the preferred text list
+    for (const modelName of uniquePreferredModelNames) {
+      const model = availableModelsMap.get(modelName);
+      if (model) {
+        resultModels.push(model);
+      }
+    }
+  }
+
+  console.log(
+    `Returning ${resultModels.length} available models for ${
+      isVisionRequest ? "VISION" : "TEXT"
+    } request`
+  );
+  return resultModels;
+}
+
+/**
+ * Get details for a specific model by ID
+ * @param {Object} client - Discord client object
+ * @param {string} prefixedModelId - Full model ID with provider prefix
+ * @returns {Object|null} Model details or null if not found
+ */
+export async function getModelDetails(client, prefixedModelId) {
+  const allModels = await fetchAllModels(client);
+  const allCombined = [...allModels.groq, ...allModels.openrouter];
+
+  // Find model by its prefixed name
+  let model = allCombined.find((m) => m.name === prefixedModelId);
+
+  if (!model) {
+    console.warn(`Model details not found for prefixed ID: ${prefixedModelId}`);
+    // Fallback: try splitting and matching provider/id
+    const parts = prefixedModelId.split("/");
+    if (parts.length === 2) {
+      const [provider, id] = parts;
+      model = allCombined.find((m) => m.provider === provider && m.id === id);
+    }
+  }
+
+  if (model) {
+    // Check the global cache for tool support
+    const cacheKey = `${model.provider}/${model.id}`;
+
+    // Update capabilities from cache if available
+    if (state.modelStatus.toolSupport.has(cacheKey)) {
+      model.capabilities.tools = state.modelStatus.toolSupport.get(cacheKey);
+      console.log(
+        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
+      );
+    }
+    // Check against known list of models without tools
+    else if (state.modelStatus.modelsWithoutTools.has(model.id)) {
+      model.capabilities.tools = false;
+      state.modelStatus.toolSupport.set(cacheKey, false);
+      console.log(
+        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
+      );
+    }
+  }
+
+  return model;
+}
+
+/**
+ * Get the API client for a model
+ * @param {Object} client - Discord client object
+ * @param {string} prefixedModelId - Full model ID with provider prefix
+ * @returns {Object} Object containing client, provider, and modelId
+ */
+export async function getApiClientForModel(client, prefixedModelId) {
+  const modelDetails = await getModelDetails(client, prefixedModelId);
+  if (!modelDetails) {
+    throw new Error(
+      `Could not find details or client for model: ${prefixedModelId}`
+    );
+  }
+
+  const provider = modelDetails.provider;
+  const clientPath = CONFIG[provider]?.clientPath;
+
+  if (!clientPath || !client[clientPath]) {
+    throw new Error(
+      `API client for provider '${provider}' not found or not initialized.`
+    );
+  }
+
+  return {
+    client: client[clientPath],
+    provider: provider,
+    modelId: modelDetails.id,
+  };
+}
+
+/**
+ * Get capabilities for a specific model
+ * @param {Object} client - Discord client object
+ * @param {string} prefixedModelId - Full model ID with provider prefix
+ * @returns {Object} Capabilities object with vision, tools, and maxContext properties
+ */
+export async function getModelCapabilities(client, prefixedModelId) {
+  const modelDetails = await getModelDetails(client, prefixedModelId);
+  if (!modelDetails) {
+    console.error(
+      `Could not determine capabilities for unknown model: ${prefixedModelId}`
+    );
+    // Return default/conservative capabilities
+    return { vision: false, tools: false, maxContext: 8192 };
+  }
+  return modelDetails.capabilities;
+}
+
+/**
+ * Update model cooldown/rate limit status
+ * @param {string} modelId - Model ID to update
+ * @param {number} durationMs - Duration in milliseconds for the rate limit
+ */
+export function updateModelCooldown(modelId, durationMs = 60000) {
+  state.modelStatus.rateLimits[modelId] = Date.now() + durationMs;
+  console.log(`Set cooldown for ${modelId} for ${durationMs}ms`);
+}
+
+/**
+ * Check if a model is currently rate-limited
+ * @param {string} modelId - The model ID to check
+ * @returns {Object} Object with isLimited and remainingTime properties
+ */
+export function checkModelRateLimit(modelId) {
+  const expireTime = state.modelStatus.rateLimits[modelId];
+  if (!expireTime) {
+    return { isLimited: false, remainingTime: 0 };
+  }
+
+  const now = Date.now();
+  if (now > expireTime) {
+    // Expired rate limit, clean up
+    delete state.modelStatus.rateLimits[modelId];
+    return { isLimited: false, remainingTime: 0 };
+  }
+
+  return {
+    isLimited: true,
+    remainingTime: Math.ceil((expireTime - now) / 1000 / 60), // in minutes
+  };
+}
+
+/**
+ * Mark a model as not supporting tools
+ * @param {string} modelId - Full model ID with provider prefix
+ */
+export function markModelAsNotSupportingTools(modelId) {
+  // Extract base ID if prefixed
+  const parts = modelId.split("/");
+  const baseId = parts.length > 1 ? parts[1] : modelId;
+
+  state.modelStatus.modelsWithoutTools.add(baseId);
+  state.modelStatus.toolSupport.set(modelId, false);
+  console.log(`Added ${modelId} to list of models without tool support`);
+}
+
+/**
+ * Check if a model supports reasoning capabilities
+ * @param {string} modelId - The model ID to check
+ * @returns {boolean} Whether the model supports reasoning
+ */
+export function supportsReasoning(modelId) {
+  if (!modelId) return false;
+
+  // If full model name with provider is provided (e.g., "openrouter/microsoft/phi-4-reasoning-plus")
+  const parts = modelId.split("/");
+  const baseModelId =
+    parts.length > 2
+      ? `${parts[1]}/${parts[2]}`
+      : parts.length === 2
+      ? parts[1]
+      : modelId;
+
+  return CONFIG.reasoningCapableModels.some(
+    (m) => m === baseModelId || m === modelId
+  );
+}
