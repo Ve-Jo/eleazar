@@ -7,7 +7,7 @@ export function serializeWithBigInt(data) {
       return { type: "BigInt", value: value.toString() };
     }
     // Handle Prisma Decimal type
-    if (value?.type === "Decimal") {
+    if (value instanceof Prisma.Decimal) {
       return { type: "Decimal", value: value.toString() };
     }
     return value;
@@ -15,6 +15,9 @@ export function serializeWithBigInt(data) {
 }
 
 export function deserializeWithBigInt(jsonString) {
+  if (!jsonString) {
+    return jsonString;
+  }
   return JSON.parse(jsonString, (_, value) => {
     if (value && typeof value === "object") {
       if (value.type === "BigInt") {
@@ -26,7 +29,12 @@ export function deserializeWithBigInt(jsonString) {
         }
       }
       if (value.type === "Decimal") {
-        return value.value;
+        try {
+          return new Prisma.Decimal(value.value);
+        } catch {
+          console.warn("Failed to parse Decimal:", value.value);
+          return value.value;
+        }
       }
     }
     return value;
@@ -2112,7 +2120,7 @@ class Database {
         const cachedUser = await this._redisGet(cacheKey);
         if (cachedUser) {
           this._logRedis("HIT", cacheKey, "User found in cache");
-          return cachedUser;
+          return deserializeWithBigInt(cachedUser);
         } else {
           this._logRedis("MISS", cacheKey);
         }
@@ -2177,7 +2185,8 @@ class Database {
         if (cachedLocale !== null && cachedLocale !== undefined) {
           // Check specifically for null/undefined miss
           this._logRedis("HIT", cacheKey, "User locale found in cache");
-          return cachedLocale; // Return cached value (could be null if explicitly cached as null)
+          if (cachedLocale === "$$NULL$$") return null;
+          return cachedLocale; // Return cached value
         } else {
           this._logRedis("MISS", cacheKey);
         }
@@ -3100,6 +3109,14 @@ class Database {
       // Update detailed XP stats only if needed
       let stats;
       if (existingStats) {
+        const currentXpStats =
+          existingStats.xpStats &&
+          typeof existingStats.xpStats === "object" &&
+          !existingStats.xpStats.updateMode
+            ? existingStats.xpStats
+            : {};
+        currentXpStats[type] = (currentXpStats[type] || 0) + amount;
+
         stats = await prisma.statistics.update({
           where: {
             userId_guildId: {
@@ -3108,14 +3125,7 @@ class Database {
             },
           },
           data: {
-            xpStats: {
-              updateMode: "merge",
-              value: {
-                [type]: {
-                  increment: amount,
-                },
-              },
-            },
+            xpStats: currentXpStats,
           },
         });
       } else {
@@ -3252,6 +3262,15 @@ class Database {
       // Update detailed game XP stats only if needed
       let stats;
       if (existingStats) {
+        const currentGameXpStats =
+          existingStats.gameXpStats &&
+          typeof existingStats.gameXpStats === "object" &&
+          !existingStats.gameXpStats.updateMode
+            ? existingStats.gameXpStats
+            : {};
+        currentGameXpStats[gameType] =
+          (currentGameXpStats[gameType] || 0) + amount;
+
         stats = await prisma.statistics.update({
           where: {
             userId_guildId: {
@@ -3260,14 +3279,7 @@ class Database {
             },
           },
           data: {
-            gameXpStats: {
-              updateMode: "merge",
-              value: {
-                [gameType]: {
-                  increment: amount,
-                },
-              },
-            },
+            gameXpStats: currentGameXpStats,
           },
         });
       } else {
@@ -3548,7 +3560,7 @@ class Database {
       if (this.redisClient) {
         try {
           const serializedData = serializeWithBigInt(player); // Serialize even if null
-          await this.redisClient.set(cacheKey, serializedData, {
+          await this._redisSet(cacheKey, serializedData, {
             EX: CACHE_TTL.PLAYER,
           });
           this._logRedis("set", cacheKey, true);
@@ -3609,7 +3621,7 @@ class Database {
       const cacheKey = this._cacheKeyPlayer(guildId);
       if (this.redisClient) {
         try {
-          await this.redisClient.del(cacheKey);
+          await this._redisDel(cacheKey);
           this._logRedis("del", cacheKey, true);
         } catch (err) {
           this._logRedis("del", cacheKey, err);
@@ -3699,7 +3711,7 @@ class Database {
       const cacheKey = this._cacheKeyPlayer(guildId);
       if (this.redisClient) {
         try {
-          await this.redisClient.del(cacheKey);
+          await this._redisDel(cacheKey);
           this._logRedis("del", cacheKey, true);
         } catch (err) {
           this._logRedis("del", cacheKey, err);
@@ -4474,10 +4486,10 @@ class Database {
     if (this.redisClient) {
       try {
         // Get old session first to know which list cache to potentially clear
-        const cachedData = await this.redisClient.get(cacheKey);
+        const cachedData = await this._redisGet(cacheKey);
         if (cachedData) oldSession = deserializeWithBigInt(cachedData);
 
-        await this.redisClient.del(cacheKey);
+        await this._redisDel(cacheKey);
         this._logRedis("del", cacheKey, true);
       } catch (err) {
         this._logRedis("del", cacheKey, err);
@@ -4498,7 +4510,7 @@ class Database {
       );
       if (this.redisClient) {
         try {
-          await this.redisClient.del(listCacheKey);
+          await this._redisDel(listCacheKey);
           this._logRedis("del", listCacheKey, true);
         } catch (err) {
           this._logRedis("del", listCacheKey, err);
@@ -4580,7 +4592,7 @@ class Database {
         const serializedData = serializeWithBigInt(sessions);
         // Use a shorter TTL for lists as they change more often? Or rely on individual session invalidation to clear this?
         // For simplicity, let's use a default TTL here. More complex invalidation could be added.
-        await this.redisClient.set(cacheKey, serializedData, {
+        await this._redisSet(cacheKey, serializedData, {
           EX: CACHE_TTL.DEFAULT,
         });
         this._logRedis("set", cacheKey, true);
@@ -4680,7 +4692,7 @@ class Database {
     // 1. Try fetching from Redis first
     if (this.redisClient) {
       try {
-        const cachedData = await this.redisClient.get(cacheKey);
+        const cachedData = await this._redisGet(cacheKey);
         this._logRedis("get", cacheKey, cachedData);
         if (cachedData) {
           cooldowns = deserializeWithBigInt(cachedData); // Use your deserializer
@@ -4724,7 +4736,7 @@ class Database {
       // 3. Store fetched data in Redis (if available)
       if (this.redisClient) {
         try {
-          await this.redisClient.set(
+          await this._redisSet(
             cacheKey,
             serializeWithBigInt(cooldowns), // Use your serializer
             { EX: CACHE_TTL.COOLDOWN } // Use defined TTL (node-redis syntax)
