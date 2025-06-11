@@ -1,7 +1,6 @@
 {
   "name": "eleazar",
   "module": "bot.js",
-  "type": "module",
   "devDependencies": {
     "@types/bun": "latest"
   },
