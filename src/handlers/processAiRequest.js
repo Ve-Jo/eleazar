@@ -1,24 +1,35 @@
 import i18n from "../utils/newI18n.js";
 import CONFIG from "../config/aiConfig.js";
+import { ButtonBuilder, ActionRowBuilder } from "discord.js";
+
+// Import from the unified AI API
 import {
+  // State
+  state,
+
+  // User preferences and history
   getUserPreferences,
   updateUserPreference,
   addConversationToHistory,
-  state,
+
+  // Model status
   isModelRateLimited,
-  setModelRateLimit,
   markModelAsNotSupportingTools,
-} from "../state/index.js";
-import {
+  supportsReasoning,
+
+  // Model management
   getApiClientForModel,
   getModelCapabilities,
   getAvailableModels,
-  updateModelCooldown,
-  buildInteractionComponents,
+
+  // Message handling
+  splitMessage,
   sendResponse,
+  buildInteractionComponents,
+
+  // Tools
   generateToolsFromCommands,
-} from "../services/index.js";
-import { ButtonBuilder, ActionRowBuilder } from "discord.js";
+} from "../ai.js";
 
 // Helper function to detect if AI is trying to use a "fake" tool in text format
 function detectFakeToolCalls(content) {
@@ -105,53 +116,6 @@ function removeThinkTags(content) {
 
   // Remove any leading/trailing whitespace that may be left after tag removal
   return cleanedContent.trim();
-}
-
-// Split response into chunks if needed
-function splitMessage(message, maxLength = 2000) {
-  const chunks = [];
-  let currentChunk = "";
-  let inCodeBlock = false;
-  let codeBlockLanguage = "";
-
-  const lines = message.split("\n");
-  for (const line of lines) {
-    const codeBlockMatch = line.match(/^```(\w+)?/);
-    if (codeBlockMatch) {
-      if (inCodeBlock) {
-        inCodeBlock = false;
-        currentChunk += line + "\n";
-        chunks.push(currentChunk.trim());
-        currentChunk = "";
-        continue;
-      } else {
-        inCodeBlock = true;
-        codeBlockLanguage = codeBlockMatch[1] || "";
-      }
-    }
-
-    if (currentChunk.length + line.length + 1 > maxLength) {
-      if (inCodeBlock) {
-        chunks.push(currentChunk.trim() + "\n```");
-        currentChunk = "```" + codeBlockLanguage + "\n" + line;
-      } else {
-        chunks.push(currentChunk.trim());
-        currentChunk = line;
-      }
-    } else {
-      currentChunk += (currentChunk ? "\n" : "") + line;
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk.trim());
-  }
-
-  if (inCodeBlock && !chunks[chunks.length - 1].endsWith("```")) {
-    chunks[chunks.length - 1] += "\n```";
-  }
-
-  return chunks;
 }
 
 // Function to gather user information for the system prompt
@@ -276,6 +240,40 @@ function getRelativeTimeString(date) {
 
   const diffYears = Math.floor(diffMonths / 12);
   return `${diffYears} year${diffYears > 1 ? "s" : ""} ago`;
+}
+
+// Function to process the AI response with reasoning tokens
+function processResponseWithReasoning(
+  responseContent,
+  reasoningContent = null
+) {
+  // If there's no reasoning content, just return the response content
+  if (!reasoningContent || reasoningContent.trim() === "") {
+    console.log(
+      `[DEBUG] No reasoning content to format, returning original response`
+    );
+    return responseContent;
+  }
+
+  console.log(
+    `[DEBUG] Formatting reasoning content with -# prefix. Original length: ${reasoningContent.length}`
+  );
+
+  // Format each line of reasoning with "-#" prefix
+  const formattedReasoning = reasoningContent
+    .split("\n")
+    .map((line) => `-# ${line}`)
+    .join("\n");
+
+  console.log(
+    `[DEBUG] Formatted reasoning length: ${formattedReasoning.length}`
+  );
+  console.log(
+    `[DEBUG] Combined response will have reasoning followed by response`
+  );
+
+  // Format the content with reasoning
+  return `${formattedReasoning}\n\n${responseContent}`;
 }
 
 export default async function processAiRequest(
@@ -655,6 +653,38 @@ ${
         payload.tools = baseTools;
         payload.tool_choice = "auto";
         console.log(`[DEBUG] Added ${baseTools.length} tools to payload`);
+      }
+
+      // Add reasoning configuration if enabled and supported
+      if (
+        supportsReasoning(modelId) &&
+        prefs.reasoningEnabled &&
+        prefs.reasoningLevel !== "off"
+      ) {
+        console.log(
+          `[DEBUG] Adding reasoning configuration for ${modelId} with level ${prefs.reasoningLevel}`
+        );
+
+        // Add reasoning configuration to the payload
+        payload.reasoning = {
+          effort: prefs.reasoningLevel || "medium",
+        };
+
+        console.log(
+          `[DEBUG] Reasoning config: ${JSON.stringify(payload.reasoning)}`
+        );
+      } else if (supportsReasoning(modelId)) {
+        // Explicitly set reasoning to be disabled with max_tokens: 0 instead of exclude: true
+        if (prefs.reasoningLevel === "off") {
+          console.log(
+            `[DEBUG] Explicitly disabling reasoning for ${modelId} by setting max_tokens: 0`
+          );
+          payload.reasoning = { max_tokens: 0 };
+        } else {
+          console.log(
+            `[DEBUG] Model supports reasoning, but reasoning is disabled in user preferences`
+          );
+        }
       }
 
       // Add AI generation parameters based on provider
@@ -2269,6 +2299,36 @@ ${
     const toolCalls = aiMsg.tool_calls || [];
     const internalToolFollowUpDone = responseData._internalToolFollowUpDone;
 
+    // Debug the AI message structure
+    console.log(
+      `[DEBUG] AI Message structure keys: ${Object.keys(aiMsg).join(", ")}`
+    );
+    // Special handling for the response object to check for reasoning or thinking fields
+    if (aiMsg.reasoning) {
+      console.log(
+        `[DEBUG] Found reasoning field in response with length: ${aiMsg.reasoning.length}`
+      );
+    } else if (aiMsg.thinking) {
+      console.log(
+        `[DEBUG] Found thinking field in response with length: ${aiMsg.thinking.length}`
+      );
+    } else {
+      console.log(`[DEBUG] No reasoning or thinking field found in response`);
+
+      // Dump the entire aiMsg structure for debugging (be careful with large responses)
+      try {
+        const aiMsgStr = JSON.stringify(aiMsg);
+        console.log(
+          `[DEBUG] Full aiMsg (length ${aiMsgStr.length}): ${aiMsgStr.substring(
+            0,
+            500
+          )}${aiMsgStr.length > 500 ? "..." : ""}`
+        );
+      } catch (e) {
+        console.log(`[DEBUG] Could not stringify aiMsg: ${e.message}`);
+      }
+    }
+
     // Remove any <think> tags from the response
     finalText = removeThinkTags(finalText);
 
@@ -2513,11 +2573,52 @@ ${
     } else {
       // Original behavior: Edit the procMsg with V1 components and final AI text
       if (finalText || toolCalls.length === 0) {
+        // Check if there's reasoning content in the response
+        let formattedText = finalText;
+
+        // Check if the AI response includes reasoning
+        // Show reasoning content in the response even if reasoningLevel is 'off'
+        // so the user can see all reasoning provided by the model
+        if (aiMsg.reasoning) {
+          console.log(
+            `[DEBUG] Response includes reasoning of length ${aiMsg.reasoning.length}`
+          );
+          console.log(
+            `[DEBUG] Sample reasoning: ${aiMsg.reasoning.substring(0, 100)}...`
+          );
+          formattedText = processResponseWithReasoning(
+            finalText,
+            aiMsg.reasoning
+          );
+          console.log(
+            `[DEBUG] Final formatted text length: ${formattedText.length}`
+          );
+        } else {
+          console.log(`[DEBUG] No reasoning found in AI response`);
+
+          // Check if there's any other field that might contain reasoning
+          if (aiMsg.thinking) {
+            console.log(
+              `[DEBUG] Found 'thinking' field instead of 'reasoning'`
+            );
+            formattedText = processResponseWithReasoning(
+              finalText,
+              aiMsg.thinking
+            );
+          } else if (typeof aiMsg === "object") {
+            console.log(
+              `[DEBUG] Available fields in aiMsg: ${Object.keys(aiMsg).join(
+                ", "
+              )}`
+            );
+          }
+        }
+
         // After streaming is complete, update the message with settings components
         const finalMsg = await sendResponse(
           message,
           procMsg,
-          finalText,
+          formattedText,
           comps,
           effectiveLocale,
           false

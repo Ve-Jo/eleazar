@@ -13,17 +13,29 @@ import fetch from "node-fetch";
 import { Groq } from "groq-sdk";
 import CONFIG from "../config/aiConfig.js";
 import i18n from "../utils/newI18n.js";
+import OpenAI from "openai";
+
+// Import everything from the unified AI API
 import {
+  // State
   state,
+
+  // User preferences
   getUserPreferences,
   updateUserPreference,
-} from "../state/index.js";
-import {
-  buildInteractionComponents,
+
+  // Model status
+  isModelRateLimited,
+
+  // Model management
   getAvailableModels,
-} from "../services/index.js";
+  initializeApiClients,
+
+  // UI components
+  buildInteractionComponents,
+} from "../ai.js";
+
 import processAiRequest from "../handlers/processAiRequest.js";
-import OpenAI from "openai";
 
 // --- Start Localization Definitions ---
 const localization_strings = {
@@ -123,6 +135,11 @@ const localization_strings = {
       ru: "*(AI попытался использовать инструменты, но они в данный момент отключены.)*",
       uk: "*(AI спробував використовувати інструменти, але вони в даний момент відключені.)*",
     },
+    reasoningDisabled: {
+      en: "*(AI tried to use reasoning, but it is currently disabled.)*",
+      ru: "*(AI попытался использовать рассуждение, но оно в данный момент отключено.)*",
+      uk: "*(AI спробував використовувати міркування, але воно в даний момент вимкнено.)*",
+    },
   },
   buttons: {
     systemPrompt: {
@@ -153,6 +170,23 @@ const localization_strings = {
           uk: "Інструменти: ВИМК (Модель)",
         },
       },
+      reasoning: {
+        on: {
+          en: "Reasoning: ON",
+          ru: "Рассуждение: ВКЛ",
+          uk: "Міркування: ВКЛ",
+        },
+        off: {
+          en: "Reasoning: OFF",
+          ru: "Рассуждение: ВЫКЛ",
+          uk: "Міркування: ВИМК",
+        },
+        offModel: {
+          en: "Reasoning: OFF (Model)",
+          ru: "Рассуждение: ВЫКЛ (Модель)",
+          uk: "Міркування: ВИМК (Модель)",
+        },
+      },
       clearContext: {
         en: "Context ({current}/{max})",
         ru: "Контекст ({current}/{max})",
@@ -165,6 +199,16 @@ const localization_strings = {
           en: "Select an AI model",
           ru: "Выберите модель AI",
           uk: "Виберіть модель AI",
+        },
+        visionSupport: {
+          en: "Images",
+          ru: "Изображения",
+          uk: "Зображення",
+        },
+        reasoningSupport: {
+          en: "Reasoning",
+          ru: "Рассуждение",
+          uk: "Міркування",
         },
       },
       settingsSelect: {
@@ -184,6 +228,11 @@ const localization_strings = {
           en: "Toggle AI tools functionality",
           ru: "Включить/выключить функциональность инструментов ИИ",
           uk: "Увімкнути/вимкнути функціональність інструментів ШІ",
+        },
+        reasoning: {
+          en: "Toggle AI reasoning capabilities",
+          ru: "Включить/выключить возможности рассуждения ИИ",
+          uk: "Увімкнути/вимкнути можливості міркування ШІ",
         },
         clearContext: {
           en: "Clear conversation history",
@@ -206,6 +255,11 @@ const localization_strings = {
             ru: "Изменить модель искусственного интеллекта",
             uk: "Змінити модель штучного інтелекту",
           },
+        },
+        reasoningSettings: {
+          en: "Configure AI reasoning parameters",
+          ru: "Настроить параметры рассуждения ИИ",
+          uk: "Налаштувати параметри міркування ШІ",
         },
       },
     },
@@ -497,6 +551,66 @@ const localization_strings = {
         },
       },
     },
+    reasoning: {
+      buttonLabel: {
+        en: "Reasoning Settings",
+        ru: "Настройки рассуждения",
+        uk: "Налаштування міркування",
+      },
+      selectParameter: {
+        en: "Configure reasoning",
+        ru: "Настроить рассуждение",
+        uk: "Налаштувати міркування",
+      },
+      settingsUpdated: {
+        en: "Reasoning settings updated: Effort={effort}, Max Tokens={maxTokens}, Exclude={exclude}",
+        ru: "Настройки рассуждения обновлены: Усилие={effort}, Макс. токенов={maxTokens}, Исключить={exclude}",
+        uk: "Налаштування міркування оновлені: Зусилля={effort}, Макс. токенів={maxTokens}, Виключити={exclude}",
+      },
+      error: {
+        en: "An error occurred while updating reasoning settings.",
+        ru: "Произошла ошибка при обновлении настроек рассуждения.",
+        uk: "Виникла помилка під час оновлення налаштувань міркування.",
+      },
+      parameters: {
+        effort: {
+          label: {
+            en: "Reasoning Effort",
+            ru: "Усилие рассуждения",
+            uk: "Зусилля міркування",
+          },
+          description: {
+            en: "Controls how much reasoning the model should do",
+            ru: "Контролирует, насколько много рассуждений должна делать модель",
+            uk: "Контролює, наскільки багато міркувань повинна робити модель",
+          },
+        },
+        maxTokens: {
+          label: {
+            en: "Max Reasoning Tokens",
+            ru: "Макс. токенов рассуждения",
+            uk: "Макс. токенів міркування",
+          },
+          description: {
+            en: "Maximum tokens to use for reasoning",
+            ru: "Максимальное количество токенов для рассуждения",
+            uk: "Максимальна кількість токенів для міркування",
+          },
+        },
+        exclude: {
+          label: {
+            en: "Exclude Reasoning",
+            ru: "Исключить рассуждение",
+            uk: "Виключити міркування",
+          },
+          description: {
+            en: "Whether to exclude reasoning from the response",
+            ru: "Исключать ли рассуждение из ответа",
+            uk: "Чи виключати міркування з відповіді",
+          },
+        },
+      },
+    },
     stream: {
       stop: {
         en: "Stop",
@@ -546,84 +660,15 @@ function validateEnvironment() {
 
 validateEnvironment();
 
-async function checkAndInitGroqClient(client) {
-  const clientPath = CONFIG.groq.clientPath;
-
-  if (!client[clientPath]) {
-    console.warn(`⚠️ Groq client not found at client.${clientPath}`);
-    console.log("Attempting to initialize Groq client");
-
-    try {
-      if (CONFIG.groq.apiKey) {
-        client[clientPath] = new Groq({
-          apiKey: CONFIG.groq.apiKey,
-        });
-        console.log("✅ Successfully initialized Groq client");
-      } else {
-        console.error("❌ Cannot initialize Groq client: missing API key");
-      }
-    } catch (error) {
-      console.error("❌ Failed to initialize Groq client:", error.message);
-      console.error("Make sure you have the 'groq-sdk' package installed");
-    }
-  } else {
-    console.log(`✅ Groq client already exists at client.${clientPath}`);
-  }
-
-  return !!client[clientPath];
-}
-
-async function checkAndInitOpenRouterClient(client) {
-  const clientPath = CONFIG.openrouter.clientPath;
-  const apiKey = CONFIG.openrouter.apiKey;
-  const baseURL = CONFIG.openrouter.baseURL;
-
-  if (!apiKey) {
-    console.log(
-      "ℹ️ OpenRouter API key not configured, skipping client initialization."
-    );
-    return false;
-  }
-
-  if (!client[clientPath]) {
-    console.warn(`⚠️ OpenRouter client not found at client.${clientPath}`);
-    console.log("Attempting to initialize OpenRouter client");
-
-    try {
-      client[clientPath] = new OpenAI({
-        apiKey: apiKey,
-        baseURL: baseURL,
-      });
-      console.log("✅ Successfully initialized OpenRouter client");
-    } catch (error) {
-      console.error(
-        "❌ Failed to initialize OpenRouter client:",
-        error.message
-      );
-      console.error("Make sure you have the 'openai' package installed");
-    }
-  } else {
-    console.log(`✅ OpenRouter client already exists at client.${clientPath}`);
-  }
-
-  return !!client[clientPath];
-}
-
-// Groq model utilities are now imported from ../services/groqModels.js
-
 // --- Start MessageCreate Handler Localization ---
 export default {
   name: Events.MessageCreate,
   localization_strings: localization_strings, // Add the strings object to the export
   async execute(message) {
+    // Initialize AI clients if not already done
     if (!message.client._aiClientsChecked) {
       message.client._aiClientsChecked = true;
-      if (CONFIG.groq.apiKey) {
-        await checkAndInitGroqClient(message.client);
-      }
-      if (CONFIG.openrouter.apiKey) {
-        await checkAndInitOpenRouterClient(message.client);
-      }
+      await initializeApiClients(message.client);
     }
 
     if (message.author.bot) return;
@@ -918,6 +963,28 @@ export default {
       }
 
       return; // Stop processing, wait for interaction
+    }
+
+    // Check if selected model is rate-limited
+    if (prefs.selectedModel) {
+      if (isModelRateLimited(prefs.selectedModel)) {
+        // Get the remaining time from state
+        const expireTime = state.modelStatus.rateLimits[prefs.selectedModel];
+        const now = Date.now();
+        const minutes = Math.ceil((expireTime - now) / 1000 / 60); // in minutes
+
+        await message.reply(
+          i18n.__(
+            "events.ai.messages.rateLimited",
+            {
+              model: prefs.selectedModel,
+              minutes: minutes,
+            },
+            effectiveLocale
+          )
+        );
+        return;
+      }
     }
 
     console.log(

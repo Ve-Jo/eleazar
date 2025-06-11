@@ -11,19 +11,15 @@ const CONFIG = {
       text: [
         "meta-llama/llama-4-maverick-17b-128e-instruct",
         "meta-llama/llama-4-scout-17b-16e-instruct",
-        "llama-3.2-90b-vision-preview",
         "llama-3.3-70b-versatile",
         "llama3-70b-8192",
         "deepseek-r1-distill-llama-70b",
         "mistral-saba-24b",
         "qwen-qwq-32b",
-        "llama-3.2-11b-vision-preview",
       ],
       vision: [
         "meta-llama/llama-4-maverick-17b-128e-instruct",
         "meta-llama/llama-4-scout-17b-16e-instruct",
-        "llama-3.2-90b-vision-preview",
-        "llama-3.2-11b-vision-preview",
       ],
     },
   },
@@ -38,38 +34,41 @@ const CONFIG = {
         "openai/gpt-4.1-nano",
         "qwen/qwen3-235b-a22b",
         "qwen/qwen3-30b-a3b",
+        "mistralai/magistral-small-2506",
         "x-ai/grok-3-mini-beta",
         "google/gemini-2.5-flash-preview",
-        "microsoft/phi-4-reasoning-plus",
-        "google/gemini-2.0-flash-001",
+        "google/gemma-3-27b-it",
         "minimax/minimax-01",
         "qwen/qwen-vl-plus",
-        "qwen/qwen3-32b",
-        "google/gemma-3-27b-it",
-        "mistralai/mistral-small-3.1-24b-instruct",
-        "mistralai/pixtral-12b",
       ],
       vision: [
         "openai/gpt-4.1-nano",
         "minimax/minimax-01",
         "google/gemma-3-27b-it",
         "qwen/qwen-vl-plus",
-        "mistralai/pixtral-12b",
       ],
     },
   },
 
+  // Models that support reasoning capabilities
+  reasoningCapableModels: [
+    "qwen/qwen3-235b-a22b",
+    "qwen/qwen3-30b-a3b",
+    "x-ai/grok-3-mini-beta",
+    "mistralai/magistral-small-2506",
+  ],
+
+  // Default reasoning settings
+  defaultReasoningSettings: {
+    enabled: true,
+    effort: "medium", // "low", "medium", "high"
+    maxTokens: 2000,
+    exclude: false,
+  },
+
   // Context and system configuration
   maxContextLength: 4,
-  disableSystemPromptFor: [
-    "groq/llama3-70b-8192",
-    "openrouter/sao10k/l3.3-euryale-70b",
-    "openrouter/thedrummer/skyfall-36b-v2",
-    "openrouter/google/gemini-2.0-flash-001",
-    "openrouter/mistralai/mistral-small-3.1-24b-instruct",
-    "openrouter/latitudegames/wayfarer-large-70b-llama-3.3",
-    "openrouter/mistralai/pixtral-12b",
-  ],
+  disableSystemPromptFor: [],
 
   // AI generation parameters with documentation
   aiParameters: {
@@ -109,6 +108,26 @@ const CONFIG = {
       min: 0.0,
       max: 1.0,
       description: "Dynamic nucleus sampling threshold",
+      providers: ["openrouter"],
+    },
+
+    // Reasoning parameters
+    reasoning_effort: {
+      default: "medium",
+      options: ["low", "medium", "high"],
+      description: "Controls how much reasoning the model should do",
+      providers: ["openrouter"],
+    },
+    reasoning_max_tokens: {
+      default: 2000,
+      min: 0,
+      max: 10000,
+      description: "Maximum tokens to use for reasoning (if supported)",
+      providers: ["openrouter"],
+    },
+    reasoning_exclude: {
+      default: false,
+      description: "Whether to exclude reasoning from the response",
       providers: ["openrouter"],
     },
 
