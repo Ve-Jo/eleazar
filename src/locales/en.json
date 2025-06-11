@@ -997,7 +997,8 @@
         "streamStopped": "Generation stopped.",
         "streamError": "Error during streaming: {error}",
         "toolConfirmation": "Tool execution requested. Please confirm to run:",
-        "streamContinuation": "Continuing with tool results..."
+        "streamContinuation": "Continuing with tool results...",
+        "reasoningDisabled": "*(AI tried to use reasoning, but it is currently disabled.)*"
       },
       "buttons": {
         "systemPrompt": {
@@ -1008,11 +1009,18 @@
             "off": "Tools: OFF",
             "offModel": "Tools: OFF (Model)"
           },
-          "clearContext": "Context ({current}/{max})"
+          "clearContext": "Context ({current}/{max})",
+          "reasoning": {
+            "on": "Reasoning: ON",
+            "off": "Reasoning: OFF",
+            "offModel": "Reasoning: OFF (Model)"
+          }
         },
         "menus": {
           "modelSelect": {
-            "placeholder": "Select an AI model"
+            "placeholder": "Select an AI model",
+            "visionSupport": "Images",
+            "reasoningSupport": "Reasoning"
           },
           "settingsSelect": {
             "placeholder": "Settings"
@@ -1025,7 +1033,9 @@
             "switchModel": {
               "label": "Switch Model",
               "description": "Change the AI model"
-            }
+            },
+            "reasoning": "Toggle AI reasoning capabilities",
+            "reasoningSettings": "Configure AI reasoning parameters"
           }
         },
         "toolResult": {
@@ -1122,6 +1132,26 @@
           "run": "Run {tool}",
           "expired": "This tool confirmation has expired or was already used.",
           "unauthorized": "Only the person who initiated this conversation can run this tool."
+        },
+        "reasoning": {
+          "buttonLabel": "Reasoning Settings",
+          "selectParameter": "Configure reasoning",
+          "settingsUpdated": "Reasoning settings updated: Effort={effort}, Max Tokens={maxTokens}, Exclude={exclude}",
+          "error": "An error occurred while updating reasoning settings.",
+          "parameters": {
+            "effort": {
+              "label": "Reasoning Effort",
+              "description": "Controls how much reasoning the model should do"
+            },
+            "maxTokens": {
+              "label": "Max Reasoning Tokens",
+              "description": "Maximum tokens to use for reasoning"
+            },
+            "exclude": {
+              "label": "Exclude Reasoning",
+              "description": "Whether to exclude reasoning from the response"
+            }
+          }
         }
       }
     },
