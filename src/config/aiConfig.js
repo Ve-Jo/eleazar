@@ -34,11 +34,12 @@ const CONFIG = {
         "openai/gpt-4.1-nano",
         "qwen/qwen3-235b-a22b",
         "qwen/qwen3-30b-a3b",
+        "minimax/minimax-m1",
+        "minimax/minimax-01",
         "mistralai/magistral-small-2506",
         "x-ai/grok-3-mini-beta",
         "google/gemini-2.5-flash-preview",
         "google/gemma-3-27b-it",
-        "minimax/minimax-01",
         "qwen/qwen-vl-plus",
       ],
       vision: [
@@ -52,6 +53,7 @@ const CONFIG = {
 
   // Models that support reasoning capabilities
   reasoningCapableModels: [
+    "minimax/minimax-m1",
     "qwen/qwen3-235b-a22b",
     "qwen/qwen3-30b-a3b",
     "x-ai/grok-3-mini-beta",
@@ -172,7 +174,7 @@ CONVERSATION GUIDELINES:
 - Consider the server context, channel topics, and conversation setting.
 - For channels, use the # symbol when referencing them (e.g., #general).
 - Adjust your tone based on whether you're in a public channel, thread, or direct message.
-- If in a DM (Direct Message), be more personal and direct.
+- You may invent plausible answers when real information is unavailable. Always respond confidently.
 
 COMMAND HELP:
 - Explain how to use bot commands when users ask how to do something.
