@@ -151,32 +151,52 @@ router.post("/games/updateRecord", async (req, res) => {
 });
 
 // Update Balance
-router.post("/economy/updateBalance", async (req, res) => {
-  const { guildId, userId, amount, reason } = req.body;
+router.post("/update-balance", async (req, res) => {
+  // Get values from body or headers
+  const guildId =
+    req.body.guildId || req.headers["x-guild-id"] || req.params.guildId;
+  const userId =
+    req.body.userId ||
+    req.headers["x-user-id"] ||
+    req.params.userId ||
+    req.user?.id;
+  const { amount, reason } = req.body;
+
   console.log(
-    `[API] Request received to update balance: guild=${guildId}, user=${userId}, amount=${amount}, reason=${reason}`
+    `[API Router] Request received to update balance: guild=${guildId}, user=${userId}, amount=${amount}, reason=${reason}`
   );
+
   if (!guildId || !userId || amount === undefined) {
-    return res
-      .status(400)
-      .json({ error: "Missing required fields: guildId, userId, amount" });
+    return res.status(400).json({
+      error: "Missing required fields: guildId, userId, amount",
+      received: {
+        guildId,
+        userId,
+        amount,
+        headers: {
+          "x-guild-id": req.headers["x-guild-id"],
+          "x-user-id": req.headers["x-user-id"],
+        },
+      },
+      help: "Make sure to include guildId in x-guild-id header, userId in x-user-id header or body, and amount in the request body",
+    });
   }
   try {
     const result = await Database.addBalance(guildId, userId, amount);
     const responseData = {
       success: true,
-      // Assuming result contains the updated economy record
-      // Convert BigInt/Decimal to string for JSON compatibility if needed
-      newBalance: result?.balance?.toString() ?? "N/A", // Example conversion
+      newBalance: result?.balance?.toString() ?? "N/A",
+      message: "Balance updated successfully via router",
     };
-    // Use res.json
     res.json(responseData);
   } catch (error) {
     console.error(
-      `[API] Error updating balance for ${userId} in guild ${guildId}:`,
+      `[API Router] Error updating balance for ${userId} in guild ${guildId}:`,
       error
     );
-    res.status(500).json({ error: "Internal server error" });
+    res
+      .status(500)
+      .json({ error: "Internal server error", message: error.message });
   }
 });
 
