@@ -29,6 +29,7 @@ export const state = {
     rateLimits: {}, // modelId -> timestamp when rate limit expires
     toolSupport: new Map(), // modelId -> boolean indicating tool support
     modelsWithoutTools: new Set(), // Set of model IDs known not to support tools
+    modelCapabilitiesCache: new Map(), // modelId -> capabilities object with reasoning, vision, etc.
   },
 };
 
@@ -117,6 +118,12 @@ export function getUserPreferences(userId) {
           .map(([key, param]) => [key, param.default])
       ),
     };
+
+    // Make sure web_search parameter is present
+    if (state.userPreferences[userId].aiParams.web_search === undefined) {
+      state.userPreferences[userId].aiParams.web_search =
+        CONFIG.aiParameters.web_search?.default || false;
+    }
 
     // Add reasoning level if it doesn't exist
     if (!state.userPreferences[userId].hasOwnProperty("reasoningLevel")) {

@@ -147,30 +147,93 @@ async function fetchOpenRouterModelsFromApi(openRouterClient) {
     const preferredVisionModels = new Set(
       CONFIG.openrouter.preferredModels?.vision || []
     );
+    const preferredModelsSet = new Set([
+      ...preferredTextModels,
+      ...preferredVisionModels,
+    ]);
 
     // Fetch all models from API
     const models = await openRouterClient.models.list();
     console.log(`Fetched ${models.data.length} models from OpenRouter API`);
 
-    // Filter to only include models in our preferred lists
-    const filteredModels = models.data
+    // Process all models with intelligent capability detection
+    const processedModels = models.data
       .filter((m) => m.id && m.id.trim() !== "")
-      .filter(
-        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
-      )
-      .map((model) => ({
-        id: model.id,
-        name: formatModelName(model, "openrouter"),
-        provider: "openrouter",
-        capabilities: {
-          vision: preferredVisionModels.has(model.id),
-          tools: true,
-          maxContext: model.context_length || 8192,
-        },
-      }));
+      .map((model) => {
+        // Check if the model is in our preferred list or if it meets pricing criteria
+        const isPreferred = preferredModelsSet.has(model.id);
+
+        // Vision capability detection
+        // First check our manual configuration, then look at model metadata
+        const hasVision =
+          preferredVisionModels.has(model.id) ||
+          (model.capabilities && model.capabilities.includes("vision")) ||
+          model.id.toLowerCase().includes("vision") ||
+          model.id.toLowerCase().includes("vl");
+
+        // Reasoning capability detection
+        // First check our manual configuration, then infer from model metadata
+        const hasReasoning =
+          CONFIG.reasoningCapableModels.includes(model.id) ||
+          (model.capabilities && model.capabilities.includes("reasoning")) ||
+          model.id.toLowerCase().includes("reason");
+
+        // Context window detection
+        const contextWindow = model.context_length || 8192;
+
+        return {
+          id: model.id,
+          name: formatModelName(model, "openrouter"),
+          provider: "openrouter",
+          capabilities: {
+            vision: hasVision,
+            tools: true,
+            maxContext: contextWindow,
+            reasoning: hasReasoning,
+          },
+          pricing: {
+            prompt: model.pricing?.prompt,
+            completion: model.pricing?.completion,
+          },
+          isPreferred: isPreferred,
+        };
+      });
+
+    // Filter to include preferred models and other affordable models
+    const filteredModels = processedModels.filter((model) => {
+      // Always include preferred models
+      if (model.isPreferred) {
+        return true;
+      }
+
+      // Include other models based on pricing if they're comparable to our preferred models
+      // This allows newly released models to be included
+      const averagePreferredPromptPrice =
+        processedModels
+          .filter((m) => m.isPreferred && m.pricing?.prompt)
+          .reduce((sum, m) => sum + m.pricing.prompt, 0) /
+          processedModels.filter((m) => m.isPreferred && m.pricing?.prompt)
+            .length || Infinity;
+
+      const averagePreferredCompletionPrice =
+        processedModels
+          .filter((m) => m.isPreferred && m.pricing?.completion)
+          .reduce((sum, m) => sum + m.pricing.completion, 0) /
+          processedModels.filter((m) => m.isPreferred && m.pricing?.completion)
+            .length || Infinity;
+
+      // Include if the model pricing is comparable or lower than our preferred models
+      const isPricingAcceptable =
+        (!model.pricing?.prompt ||
+          model.pricing.prompt <= averagePreferredPromptPrice * 1.5) &&
+        (!model.pricing?.completion ||
+          model.pricing.completion <= averagePreferredCompletionPrice * 1.5);
+
+      return isPricingAcceptable;
+    });
 
     console.log(
-      `Filtered to ${filteredModels.length} preferred OpenRouter models`
+      `Filtered to ${filteredModels.length} OpenRouter models (${processedModels.length} total available)`
     );
     return filteredModels;
   } catch (error) {
@@ -270,6 +333,15 @@ async function fetchAllModels(client) {
   await Promise.all(fetchPromises);
 
   lastFetchTime = now;
+
+  // Store model capabilities in the cache for future reference
+  [...cachedModels.groq, ...cachedModels.openrouter].forEach((model) => {
+    if (model && model.id) {
+      const cacheKey = `${model.provider}/${model.id}`;
+      state.modelStatus.modelCapabilitiesCache.set(cacheKey, model);
+    }
+  });
+
   console.log(
     `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length})`
   );
@@ -500,16 +572,49 @@ export function markModelAsNotSupportingTools(modelId) {
 export function supportsReasoning(modelId) {
   if (!modelId) return false;
 
-  // If full model name with provider is provided (e.g., "openrouter/microsoft/phi-4-reasoning-plus")
+  // Parse the model ID to handle different formats
   const parts = modelId.split("/");
-  const baseModelId =
-    parts.length > 2
-      ? `${parts[1]}/${parts[2]}`
-      : parts.length === 2
-      ? parts[1]
-      : modelId;
+  let provider, baseModelId;
 
-  return CONFIG.reasoningCapableModels.some(
+  if (parts.length === 3) {
+    // Format: provider/company/model
+    provider = parts[0];
+    baseModelId = `${parts[1]}/${parts[2]}`;
+  } else if (parts.length === 2) {
+    // Format: provider/model
+    provider = parts[0];
+    baseModelId = parts[1];
+  } else {
+    // Just model name
+    baseModelId = modelId;
+  }
+
+  // First check the static configuration
+  const isInConfig = CONFIG.reasoningCapableModels.some(
     (m) => m === baseModelId || m === modelId
   );
+
+  if (isInConfig) {
+    return true;
+  }
+
+  // Check the model capabilities cache for reasoning support
+  // Try both formats: full ID and base ID
+  const fullCacheKey = modelId;
+  const modelDetails =
+    state.modelStatus.modelCapabilitiesCache?.get(fullCacheKey);
+
+  if (modelDetails?.capabilities?.reasoning) {
+    return true;
+  }
+
+  // For OpenRouter models, check if the model name contains reasoning keywords
+  if (provider === "openrouter") {
+    const reasoningKeywords = ["reason", "ration", "logic", "think"];
+    return reasoningKeywords.some((keyword) =>
+      baseModelId.toLowerCase().includes(keyword)
+    );
+  }
+
+  return false;
 }

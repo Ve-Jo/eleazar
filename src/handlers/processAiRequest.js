@@ -247,33 +247,9 @@ function processResponseWithReasoning(
   responseContent,
   reasoningContent = null
 ) {
-  // If there's no reasoning content, just return the response content
-  if (!reasoningContent || reasoningContent.trim() === "") {
-    console.log(
-      `[DEBUG] No reasoning content to format, returning original response`
-    );
-    return responseContent;
-  }
-
-  console.log(
-    `[DEBUG] Formatting reasoning content with -# prefix. Original length: ${reasoningContent.length}`
-  );
-
-  // Format each line of reasoning with "-#" prefix
-  const formattedReasoning = reasoningContent
-    .split("\n")
-    .map((line) => `-# ${line}`)
-    .join("\n");
-
-  console.log(
-    `[DEBUG] Formatted reasoning length: ${formattedReasoning.length}`
-  );
-  console.log(
-    `[DEBUG] Combined response will have reasoning followed by response`
-  );
-
-  // Format the content with reasoning
-  return `${formattedReasoning}\n\n${responseContent}`;
+  // Per user request, don't include reasoning in the final response
+  // Just return the response content without adding reasoning
+  return responseContent;
 }
 
 export default async function processAiRequest(
@@ -668,6 +644,7 @@ ${
         // Add reasoning configuration to the payload
         payload.reasoning = {
           effort: prefs.reasoningLevel || "medium",
+          exclude: false, // Always include reasoning in the response for streaming
         };
 
         console.log(
@@ -714,6 +691,26 @@ ${
           top_a: prefs.aiParams.top_a,
           repetition_penalty: prefs.aiParams.repetition_penalty,
         });
+
+        // Add web search capability if enabled for OpenRouter
+        if (prefs.aiParams.web_search) {
+          console.log(`[DEBUG] Enabling web search for OpenRouter request`);
+
+          // According to OpenRouter docs, web search is properly configured using plugins
+          // This is preferred over appending ":online" to the modelId
+          if (!payload.plugins) {
+            payload.plugins = [];
+          }
+
+          payload.plugins.push({
+            id: "web",
+            max_results: 1, // Limit to 3 results to keep costs reasonable
+            search_prompt:
+              "A web search was conducted today. Incorporate the following web search results into your response. IMPORTANT: Cite sources using markdown links named with the domain.",
+          });
+
+          console.log(`[DEBUG] Added web plugin to request`);
+        }
 
         console.log(`[DEBUG] Configured OpenRouter-specific parameters`);
       } else {
@@ -770,6 +767,8 @@ ${
         // Create flags to manage the stream
         let shouldStop = false;
         let responseAccumulator = "";
+        let reasoningAccumulator = ""; // Add accumulator for reasoning content
+        let showingReasoning = true; // Flag to control whether to show reasoning
         let toolCalls = [];
         let isFirstChunk = true;
         let lastUpdateTime = Date.now();
@@ -867,6 +866,7 @@ ${
           }
 
           const content = chunk.choices[0]?.delta?.content || "";
+          const reasoning = chunk.choices[0]?.delta?.reasoning || ""; // Add check for reasoning field
           const functionDelta = chunk.choices[0]?.delta?.tool_calls?.[0];
           const finishReason = chunk.choices[0]?.finish_reason;
 
@@ -878,6 +878,54 @@ ${
             if (finishReason === "tool_calls") {
               needsImmediateExecution = true;
             }
+
+            // When we get a finish_reason, stop showing reasoning and show final response
+            showingReasoning = false;
+          }
+
+          // Handle reasoning content
+          if (reasoning) {
+            reasoningAccumulator += reasoning;
+            console.log(
+              `[DEBUG] Received reasoning chunk: ${reasoning.length} chars`
+            );
+
+            // Format reasoning for display with -# at the beginning of each line
+            // Only add -# to lines that actually contain text
+            const sanitizedReasoning = reasoningAccumulator
+              .replace(
+                /<@[!&]?\d+>/g,
+                i18n.__(
+                  "events.ai.buttons.sanitization.mention",
+                  effectiveLocale
+                )
+              )
+              .replace(
+                /@everyone/gi,
+                i18n.__(
+                  "events.ai.buttons.sanitization.everyone",
+                  effectiveLocale
+                )
+              )
+              .replace(
+                /@here/gi,
+                i18n.__("events.ai.buttons.sanitization.here", effectiveLocale)
+              );
+            const formattedReasoning = sanitizedReasoning
+              .split("\n")
+              .map((line) => (line.trim() ? `-# ${line}` : ""))
+              .join("\n");
+
+            await procMsg
+              .edit({
+                content: formattedReasoning || "Thinking...",
+                components: [stopRow],
+              })
+              .catch((error) => {
+                console.log(
+                  `[DEBUG] Rate limit hit on reasoning edit: ${error.message}`
+                );
+              });
           }
 
           // Handle content
@@ -891,17 +939,42 @@ ${
 
             // Update the message periodically to avoid rate limits
             const now = Date.now();
-            if (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk) {
+            if (
+              !showingReasoning &&
+              (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk)
+            ) {
               lastUpdateTime = now;
               isFirstChunk = false;
 
               // Sanitize and remove thinking tags
-              const sanitizedText = removeThinkTags(responseAccumulator);
+              let sanitizedText = removeThinkTags(responseAccumulator);
+              sanitizedText = sanitizedText
+                .replace(
+                  /<@[!&]?\d+>/g,
+                  i18n.__(
+                    "events.ai.buttons.sanitization.mention",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@everyone/gi,
+                  i18n.__(
+                    "events.ai.buttons.sanitization.everyone",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@here/gi,
+                  i18n.__(
+                    "events.ai.buttons.sanitization.here",
+                    effectiveLocale
+                  )
+                );
               console.log(
                 `[DEBUG] Updating message with accumulated content (${responseAccumulator.length} chars)`
               );
 
-              // Show periodic updates
+              // Show periodic updates (only show content if we're not showing reasoning)
               await procMsg
                 .edit({
                   content:

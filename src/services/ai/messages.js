@@ -202,88 +202,72 @@ export async function buildInteractionComponents(
             ) || "Settings"
       );
 
-    // Check if system prompt should be disabled for this model
-    const modelIsDisabledInConfig =
-      selectedModelDetails &&
-      CONFIG.disableSystemPromptFor?.includes(
-        `${selectedModelDetails.provider}/${selectedModelDetails.id}`
-      );
+    const options = [];
 
-    // System prompt option
-    const sysPromptEnabled =
-      prefs.systemPromptEnabled && !modelIsDisabledInConfig;
-    settingsMenu.addOptions({
-      label: i18n.__(
-        sysPromptEnabled
-          ? "events.ai.buttons.systemPrompt.on"
-          : "events.ai.buttons.systemPrompt.off"
-      ),
-      value: "toggle_context",
-      description:
-        i18n.__(
-          "events.ai.buttons.menus.settingsOptions.systemPrompt",
-          locale
-        ) || "Toggle system prompt",
-      emoji: sysPromptEnabled ? "✅" : "❌",
-      default: false,
+    // System prompt toggle option
+    options.push({
+      label: i18n.__("events.ai.buttons.menus.settingsSelect.systemPrompt"),
+      description: prefs.systemPromptEnabled
+        ? i18n.__("events.ai.buttons.menus.settingsSelect.systemPromptEnabled")
+        : i18n.__(
+            "events.ai.buttons.menus.settingsSelect.systemPromptDisabled"
+          ),
+      value: "system_prompt",
+      emoji: prefs.systemPromptEnabled ? "✅" : "❌",
     });
 
-    // Tools option
-    let modelSupportsTools = true;
-    if (selectedModelDetails) {
-      const cacheKey = `${selectedModelDetails.provider}/${selectedModelDetails.id}`;
-      if (state.modelStatus.toolSupport.has(cacheKey)) {
-        modelSupportsTools = state.modelStatus.toolSupport.get(cacheKey);
-      } else if (!selectedModelDetails.capabilities?.tools) {
-        modelSupportsTools = false;
-      }
-    } else {
-      modelSupportsTools = false;
-    }
-
-    const toolsEnabled = prefs.toolsEnabled && modelSupportsTools;
-    settingsMenu.addOptions({
-      label: i18n.__(
-        modelSupportsTools
-          ? toolsEnabled
-            ? "events.ai.buttons.systemPrompt.tools.on"
-            : "events.ai.buttons.systemPrompt.tools.off"
-          : "events.ai.buttons.systemPrompt.tools.offModel"
-      ),
-      value: "toggle_tools",
-      description:
-        i18n.__("events.ai.buttons.menus.settingsOptions.tools", locale) ||
-        (modelSupportsTools
-          ? "Toggle tools usage"
-          : "This model doesn't support tools"),
-      emoji: toolsEnabled ? "🔧" : "🔨",
-      disabled: !modelSupportsTools,
-      default: false,
+    // Tools support toggle
+    options.push({
+      label: i18n.__("events.ai.buttons.menus.settingsSelect.tools"),
+      description: prefs.toolsEnabled
+        ? i18n.__("events.ai.buttons.menus.settingsSelect.toolsEnabled")
+        : i18n.__("events.ai.buttons.menus.settingsSelect.toolsDisabled"),
+      value: "tools",
+      emoji: prefs.toolsEnabled ? "✅" : "❌",
     });
 
-    // Reasoning option (if model supports it)
-    const modelId = prefs.selectedModel;
-    const modelSupportsReasoning = modelId ? supportsReasoning(modelId) : false;
+    // Check if we're using an OpenRouter model to add web search option
+    const isOpenRouterModel =
+      prefs.selectedModel && prefs.selectedModel.startsWith("openrouter/");
+    /*if (isOpenRouterModel) {
+      // Web search toggle
+      options.push({
+        label:
+          i18n.__("events.ai.buttons.menus.settingsSelect.webSearch") ||
+          "Web Search",
+        description: prefs.aiParams.web_search
+          ? i18n.__(
+              "events.ai.buttons.menus.settingsSelect.webSearchEnabled"
+            ) || "Search enabled"
+          : i18n.__(
+              "events.ai.buttons.menus.settingsSelect.webSearchDisabled"
+            ) || "Search disabled",
+        value: "web_search",
+        emoji: prefs.aiParams.web_search ? "✅" : "❌",
+      });
+    }*/
 
-    if (modelSupportsReasoning) {
-      // Create a single reasoning level menu instead of a toggle
-      /*settingsMenu.addOptions({
-        label: `Reasoning: ${prefs.reasoningLevel.toUpperCase() || "MEDIUM"}`,
-        value: "reasoning_level",
+    // Only show reasoning toggle for capable models
+    if (
+      prefs.selectedModel &&
+      supportsReasoning(prefs.selectedModel) &&
+      !selectedModelDetails?.capabilities?.vision
+    ) {
+      options.push({
+        label: i18n.__("events.ai.buttons.menus.settingsSelect.reasoning"),
         description:
-          i18n.__(
-            "events.ai.buttons.menus.settingsOptions.reasoning",
-            locale
-          ) || "Set AI reasoning level",
-        emoji: getReasoningEmoji(prefs.reasoningLevel),
-        disabled: !modelSupportsReasoning,
-        default: false,
-      });*/
+          prefs.reasoningLevel === "off"
+            ? i18n.__("events.ai.buttons.menus.settingsSelect.reasoningOff")
+            : `${getReasoningEmoji(prefs.reasoningLevel)} ${
+                prefs.reasoningLevel
+              }`,
+        value: "reasoning",
+      });
     }
 
     // Clear context option
     const current = prefs.messageHistory.length;
-    settingsMenu.addOptions({
+    options.push({
       label: i18n.__("events.ai.buttons.systemPrompt.clearContext", {
         current,
         max: effectiveMaxContext,
@@ -300,7 +284,7 @@ export async function buildInteractionComponents(
     });
 
     // Fine-tune settings option
-    settingsMenu.addOptions({
+    options.push({
       label: i18n.__("events.ai.buttons.finetune.buttonLabel", locale),
       value: "finetune_settings",
       description:
@@ -311,7 +295,7 @@ export async function buildInteractionComponents(
     });
 
     // Switch model option
-    settingsMenu.addOptions({
+    options.push({
       label:
         i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.label",
@@ -327,6 +311,7 @@ export async function buildInteractionComponents(
       default: false,
     });
 
+    settingsMenu.addOptions(options);
     components.push(new ActionRowBuilder().addComponents(settingsMenu));
   }
 
@@ -435,7 +420,7 @@ export async function sendResponse(
           const prefs = getUserPreferences(userId);
 
           switch (selectedValue) {
-            case "toggle_context":
+            case "system_prompt":
               // Toggle system prompt
               updateUserPreference(
                 userId,
@@ -444,12 +429,21 @@ export async function sendResponse(
               );
               break;
 
-            case "toggle_tools":
+            case "tools":
               // Toggle tools
               updateUserPreference(userId, "toolsEnabled", !prefs.toolsEnabled);
               break;
 
-            case "reasoning_level":
+            case "web_search":
+              // Toggle web search
+              const currentWebSearch = prefs.aiParams.web_search || false;
+              updateUserPreference(userId, "aiParams", {
+                ...prefs.aiParams,
+                web_search: !currentWebSearch,
+              });
+              break;
+
+            case "reasoning":
               // Show reasoning levels menu
               const reasoningMenu = new StringSelectMenuBuilder()
                 .setCustomId(`ai_reasoning_level_${userId}`)

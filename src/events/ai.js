@@ -217,6 +217,61 @@ const localization_strings = {
           ru: "Настройки",
           uk: "Налаштування",
         },
+        systemPrompt: {
+          en: "System Prompt",
+          ru: "Системный промт",
+          uk: "Системне повідомлення",
+        },
+        systemPromptEnabled: {
+          en: "System instructions enabled",
+          ru: "Системные инструкции включены",
+          uk: "Системні інструкції увімкнено",
+        },
+        systemPromptDisabled: {
+          en: "System instructions disabled",
+          ru: "Системные инструкции отключены",
+          uk: "Системні інструкції вимкнено",
+        },
+        tools: {
+          en: "AI Tools",
+          ru: "Инструменты ИИ",
+          uk: "Інструменти ШІ",
+        },
+        toolsEnabled: {
+          en: "Tools enabled",
+          ru: "Инструменты включены",
+          uk: "Інструменти увімкнено",
+        },
+        toolsDisabled: {
+          en: "Tools disabled",
+          ru: "Инструменты отключены",
+          uk: "Інструменти вимкнено",
+        },
+        webSearch: {
+          en: "Web Search",
+          ru: "Поиск в интернете",
+          uk: "Пошук в інтернеті",
+        },
+        webSearchEnabled: {
+          en: "Web search enabled",
+          ru: "Поиск в интернете включен",
+          uk: "Пошук в інтернеті увімкнено",
+        },
+        webSearchDisabled: {
+          en: "Web search disabled",
+          ru: "Поиск в интернете отключен",
+          uk: "Пошук в інтернеті вимкнено",
+        },
+        reasoning: {
+          en: "AI Reasoning",
+          ru: "Рассуждение ИИ",
+          uk: "Міркування ШІ",
+        },
+        reasoningOff: {
+          en: "Reasoning disabled",
+          ru: "Рассуждение отключено",
+          uk: "Міркування вимкнено",
+        },
       },
       settingsOptions: {
         systemPrompt: {

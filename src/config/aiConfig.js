@@ -133,6 +133,13 @@ const CONFIG = {
       providers: ["openrouter"],
     },
 
+    // Web search parameters
+    web_search: {
+      default: false,
+      description: "Enable web search capability for the model",
+      providers: ["openrouter"],
+    },
+
     // Repetition control parameters
     frequency_penalty: {
       default: 0.0,
