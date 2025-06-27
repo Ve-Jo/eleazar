@@ -1023,7 +1023,18 @@
             "reasoningSupport": "Reasoning"
           },
           "settingsSelect": {
-            "placeholder": "Settings"
+            "placeholder": "Settings",
+            "systemPrompt": "System Prompt",
+            "systemPromptEnabled": "System instructions enabled",
+            "systemPromptDisabled": "System instructions disabled",
+            "tools": "AI Tools",
+            "toolsEnabled": "Tools enabled",
+            "toolsDisabled": "Tools disabled",
+            "webSearch": "Web Search",
+            "webSearchEnabled": "Web search enabled",
+            "webSearchDisabled": "Web search disabled",
+            "reasoning": "AI Reasoning",
+            "reasoningOff": "Reasoning disabled"
           },
           "settingsOptions": {
             "systemPrompt": "Toggle system instructions for AI",

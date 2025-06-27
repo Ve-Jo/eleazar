@@ -1407,7 +1407,18 @@
             "reasoningSupport": "Рассуждение"
           },
           "settingsSelect": {
-            "placeholder": "Настройки"
+            "placeholder": "Настройки",
+            "systemPrompt": "Системный промт",
+            "systemPromptEnabled": "Системные инструкции включены",
+            "systemPromptDisabled": "Системные инструкции отключены",
+            "tools": "Инструменты ИИ",
+            "toolsEnabled": "Инструменты включены",
+            "toolsDisabled": "Инструменты отключены",
+            "webSearch": "Поиск в интернете",
+            "webSearchEnabled": "Поиск в интернете включен",
+            "webSearchDisabled": "Поиск в интернете отключен",
+            "reasoning": "Рассуждение ИИ",
+            "reasoningOff": "Рассуждение отключено"
           },
           "settingsOptions": {
             "systemPrompt": "Включить/выключить системные инструкции для ИИ",

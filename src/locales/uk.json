@@ -1407,7 +1407,18 @@
             "reasoningSupport": "Міркування"
           },
           "settingsSelect": {
-            "placeholder": "Налаштування"
+            "placeholder": "Налаштування",
+            "systemPrompt": "Системне повідомлення",
+            "systemPromptEnabled": "Системні інструкції увімкнено",
+            "systemPromptDisabled": "Системні інструкції вимкнено",
+            "tools": "Інструменти ШІ",
+            "toolsEnabled": "Інструменти увімкнено",
+            "toolsDisabled": "Інструменти вимкнено",
+            "webSearch": "Пошук в інтернеті",
+            "webSearchEnabled": "Пошук в інтернеті увімкнено",
+            "webSearchDisabled": "Пошук в інтернеті вимкнено",
+            "reasoning": "Міркування ШІ",
+            "reasoningOff": "Міркування вимкнено"
           },
           "settingsOptions": {
             "systemPrompt": "Увімкнути/вимкнути системні інструкції для ШІ",
