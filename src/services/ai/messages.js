@@ -1,4 +1,4 @@
-import i18n from "../../utils/newI18n.js";
+import i18n from "../../utils/i18n.js";
 import {
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -73,15 +73,15 @@ export function splitMessage(message, maxLength = 2000) {
 }
 
 // Helper function to build model options with proper descriptions and features
-function buildModelOptions(models, selectedModel, locale = "en") {
-  return models.slice(0, 25).map((m) => {
+async function buildModelOptions(models, selectedModel, locale = "en") {
+  const optionPromises = models.slice(0, 25).map(async (m) => {
     // Build descriptive features based on capabilities
     const features = [];
 
     // Add vision capability indicator if model supports it
     if (m.capabilities && m.capabilities.vision) {
       features.push(
-        `🖼️ ${i18n.__(
+        `🖼️ ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.visionSupport",
           locale
         )}`
@@ -91,7 +91,7 @@ function buildModelOptions(models, selectedModel, locale = "en") {
     // Add reasoning capability indicator if model supports it
     if (supportsReasoning(m.id)) {
       features.push(
-        `🧠 ${i18n.__(
+        `🧠 ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.reasoningSupport",
           locale
         )}`
@@ -107,6 +107,8 @@ function buildModelOptions(models, selectedModel, locale = "en") {
       // Provider emoji can be added back if needed
     };
   });
+
+  return Promise.all(optionPromises);
 }
 
 export async function buildInteractionComponents(
@@ -166,11 +168,11 @@ export async function buildInteractionComponents(
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`ai_select_model_${userId}`)
       .setPlaceholder(
-        i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
+        await i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
       );
 
     // Use the shared function to build options
-    const opts = buildModelOptions(
+    const opts = await buildModelOptions(
       availableModels,
       prefs.selectedModel,
       locale
@@ -191,25 +193,29 @@ export async function buildInteractionComponents(
       .setPlaceholder(
         prefs.selectedModel
           ? `${prefs.selectedModel} - ${
-              i18n.__(
+              (await i18n.__(
                 "events.ai.buttons.menus.settingsSelect.placeholder",
                 locale
-              ) || "Settings"
+              )) || "Settings"
             }`
-          : i18n.__(
+          : (await i18n.__(
               "events.ai.buttons.menus.settingsSelect.placeholder",
               locale
-            ) || "Settings"
+            )) || "Settings"
       );
 
     const options = [];
 
     // System prompt toggle option
     options.push({
-      label: i18n.__("events.ai.buttons.menus.settingsSelect.systemPrompt"),
+      label: await i18n.__(
+        "events.ai.buttons.menus.settingsSelect.systemPrompt"
+      ),
       description: prefs.systemPromptEnabled
-        ? i18n.__("events.ai.buttons.menus.settingsSelect.systemPromptEnabled")
-        : i18n.__(
+        ? await i18n.__(
+            "events.ai.buttons.menus.settingsSelect.systemPromptEnabled"
+          )
+        : await i18n.__(
             "events.ai.buttons.menus.settingsSelect.systemPromptDisabled"
           ),
       value: "system_prompt",
@@ -218,10 +224,10 @@ export async function buildInteractionComponents(
 
     // Tools support toggle
     options.push({
-      label: i18n.__("events.ai.buttons.menus.settingsSelect.tools"),
+      label: await i18n.__("events.ai.buttons.menus.settingsSelect.tools"),
       description: prefs.toolsEnabled
-        ? i18n.__("events.ai.buttons.menus.settingsSelect.toolsEnabled")
-        : i18n.__("events.ai.buttons.menus.settingsSelect.toolsDisabled"),
+        ? await i18n.__("events.ai.buttons.menus.settingsSelect.toolsEnabled")
+        : await i18n.__("events.ai.buttons.menus.settingsSelect.toolsDisabled"),
       value: "tools",
       emoji: prefs.toolsEnabled ? "✅" : "❌",
     });
@@ -233,13 +239,13 @@ export async function buildInteractionComponents(
       // Web search toggle
       options.push({
         label:
-          i18n.__("events.ai.buttons.menus.settingsSelect.webSearch") ||
+          await i18n.__("events.ai.buttons.menus.settingsSelect.webSearch") ||
           "Web Search",
         description: prefs.aiParams.web_search
-          ? i18n.__(
+          ? await i18n.__(
               "events.ai.buttons.menus.settingsSelect.webSearchEnabled"
             ) || "Search enabled"
-          : i18n.__(
+          : await i18n.__(
               "events.ai.buttons.menus.settingsSelect.webSearchDisabled"
             ) || "Search disabled",
         value: "web_search",
@@ -254,10 +260,14 @@ export async function buildInteractionComponents(
       !selectedModelDetails?.capabilities?.vision
     ) {
       options.push({
-        label: i18n.__("events.ai.buttons.menus.settingsSelect.reasoning"),
+        label: await i18n.__(
+          "events.ai.buttons.menus.settingsSelect.reasoning"
+        ),
         description:
           prefs.reasoningLevel === "off"
-            ? i18n.__("events.ai.buttons.menus.settingsSelect.reasoningOff")
+            ? await i18n.__(
+                "events.ai.buttons.menus.settingsSelect.reasoningOff"
+              )
             : `${getReasoningEmoji(prefs.reasoningLevel)} ${
                 prefs.reasoningLevel
               }`,
@@ -268,16 +278,16 @@ export async function buildInteractionComponents(
     // Clear context option
     const current = prefs.messageHistory.length;
     options.push({
-      label: i18n.__("events.ai.buttons.systemPrompt.clearContext", {
+      label: await i18n.__("events.ai.buttons.systemPrompt.clearContext", {
         current,
         max: effectiveMaxContext,
       }),
       value: "clear_context",
       description:
-        i18n.__(
+        (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.clearContext",
           locale
-        ) || "Clear conversation history",
+        )) || "Clear conversation history",
       emoji: "🗑️",
       disabled: current === 0,
       default: false,
@@ -285,11 +295,13 @@ export async function buildInteractionComponents(
 
     // Fine-tune settings option
     options.push({
-      label: i18n.__("events.ai.buttons.finetune.buttonLabel", locale),
+      label: await i18n.__("events.ai.buttons.finetune.buttonLabel", locale),
       value: "finetune_settings",
       description:
-        i18n.__("events.ai.buttons.menus.settingsOptions.finetune", locale) ||
-        "Adjust AI generation parameters",
+        (await i18n.__(
+          "events.ai.buttons.menus.settingsOptions.finetune",
+          locale
+        )) || "Adjust AI generation parameters",
       emoji: "🎛️",
       default: false,
     });
@@ -297,16 +309,16 @@ export async function buildInteractionComponents(
     // Switch model option
     options.push({
       label:
-        i18n.__(
+        (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.label",
           locale
-        ) || "Switch Model",
+        )) || "Switch Model",
       value: "switch_model",
       description:
-        i18n.__(
+        (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.description",
           locale
-        ) || "Change the AI model",
+        )) || "Change the AI model",
       emoji: "🔄",
       default: false,
     });
@@ -332,13 +344,16 @@ export async function sendResponse(
   const sanitized = content
     .replace(
       /<@[!&]?\d+>/g,
-      i18n.__("events.ai.buttons.sanitization.mention", locale)
+      await i18n.__("events.ai.buttons.sanitization.mention", locale)
     )
     .replace(
       /@everyone/gi,
-      i18n.__("events.ai.buttons.sanitization.everyone", locale)
+      await i18n.__("events.ai.buttons.sanitization.everyone", locale)
     )
-    .replace(/@here/gi, i18n.__("events.ai.buttons.sanitization.here", locale));
+    .replace(
+      /@here/gi,
+      await i18n.__("events.ai.buttons.sanitization.here", locale)
+    );
 
   const chunks = splitMessage(sanitized);
   let finalMsg;
@@ -512,11 +527,13 @@ export async function sendResponse(
               const modelMenu = new StringSelectMenuBuilder()
                 .setCustomId(`ai_select_model_${userId}`)
                 .setPlaceholder(
-                  i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
+                  await i18n.__(
+                    "events.ai.buttons.menus.modelSelect.placeholder"
+                  )
                 );
 
               // Use the shared function to build options
-              const opts = buildModelOptions(
+              const opts = await buildModelOptions(
                 models,
                 prefs.selectedModel,
                 locale
@@ -680,32 +697,34 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
   console.log(`Handling fine-tune modal for provider: ${provider}`);
 
   // Format values for display - filter parameters based on provider
-  const paramOptions = Object.entries(CONFIG.aiParameters)
-    .filter(([param, config]) => {
-      // If parameter has provider restriction, check if current provider is supported
-      if (config.providers && Array.isArray(config.providers)) {
-        return config.providers.includes(provider);
-      }
-      // If no provider restriction, show the parameter for all providers
-      return true;
-    })
-    .map(([param, config]) => ({
-      label: i18n.__(
-        `events.ai.buttons.finetune.parameters.${param}.label`,
-        locale
-      ),
-      value: param,
-      description: `${aiParams[param] || config.default} (${config.min}-${
-        config.max
-      })`,
-    }));
+  const paramOptions = await Promise.all(
+    Object.entries(CONFIG.aiParameters)
+      .filter(([param, config]) => {
+        // If parameter has provider restriction, check if current provider is supported
+        if (config.providers && Array.isArray(config.providers)) {
+          return config.providers.includes(provider);
+        }
+        // If no provider restriction, show the parameter for all providers
+        return true;
+      })
+      .map(async ([param, config]) => ({
+        label: await i18n.__(
+          `events.ai.buttons.finetune.parameters.${param}.label`,
+          locale
+        ),
+        value: param,
+        description: `${aiParams[param] || config.default} (${config.min}-${
+          config.max
+        })`,
+      }))
+  );
 
   // Create selection menu
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`ai_param_select_${userId}`)
       .setPlaceholder(
-        i18n.__("events.ai.buttons.finetune.selectParameter", locale) ||
+        (await i18n.__("events.ai.buttons.finetune.selectParameter", locale)) ||
           "Select parameter to adjust"
       )
       .addOptions(paramOptions)
@@ -714,8 +733,10 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
   // Show parameter selection menu
   await interaction.reply({
     content:
-      i18n.__("events.ai.buttons.finetune.selectParameterPrompt", locale) ||
-      "Select an AI parameter to adjust:",
+      (await i18n.__(
+        "events.ai.buttons.finetune.selectParameterPrompt",
+        locale
+      )) || "Select an AI parameter to adjust:",
     components: [row],
     ephemeral: true,
   });
@@ -735,7 +756,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       const paramConfig = CONFIG.aiParameters[selectedParam];
 
       // Create placeholder for modal input
-      const placeholder = createParameterPlaceholder(
+      const placeholder = await createParameterPlaceholder(
         selectedParam,
         paramConfig,
         aiParams[selectedParam],
@@ -746,7 +767,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       const modal = new ModalBuilder()
         .setCustomId(`ai_param_edit_${userId}_${selectedParam}`)
         .setTitle(
-          i18n.__(
+          await i18n.__(
             `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
             locale
           )
@@ -789,10 +810,10 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
 
       // Acknowledge the parameter update
       await modalInteraction.reply({
-        content: i18n.__(
+        content: await i18n.__(
           "events.ai.buttons.finetune.parameterUpdated",
           {
-            parameter: i18n.__(
+            parameter: await i18n.__(
               `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
               locale
             ),
@@ -807,7 +828,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       try {
         await i
           .reply({
-            content: i18n.__("events.ai.buttons.finetune.error", locale),
+            content: await i18n.__("events.ai.buttons.finetune.error", locale),
             ephemeral: true,
           })
           .catch(() => {});
@@ -817,14 +838,16 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
     }
   });
 
-  collector.on("end", (collected) => {
+  collector.on("end", async (collected) => {
     if (collected.size === 0) {
       // Clean up if no selection was made
       message
         .edit({
           content:
-            i18n.__("events.ai.buttons.finetune.selectionTimeout", locale) ||
-            "Parameter selection timed out.",
+            (await i18n.__(
+              "events.ai.buttons.finetune.selectionTimeout",
+              locale
+            )) || "Parameter selection timed out.",
           components: [],
         })
         .catch(console.error);
@@ -833,14 +856,14 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
 }
 
 // Helper function to create parameter placeholder
-function createParameterPlaceholder(
+async function createParameterPlaceholder(
   paramName,
   paramConfig,
   currentValue,
   locale
 ) {
   const defaultVal = paramConfig.default;
-  const description = i18n.__(
+  const description = await i18n.__(
     `events.ai.buttons.finetune.parameters.${paramName}.description`,
     locale
   );

@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import music from "../database/client.js";
+import hubClient from "../api/hubClient.js";
 
 export default {
   name: Events.VoiceStateUpdate,
@@ -27,7 +27,7 @@ export default {
       if (!guildId) return;
 
       const player = client.lavalink.getPlayer(guildId);
-      if (!player || !music) return;
+      if (!player || !hubClient) return;
 
       // If this is the bot's voice state
       if (oldState.member?.id === client.user?.id) {
@@ -53,11 +53,11 @@ export default {
                 console.log("Successfully reconnected to voice channel");
               } catch (error) {
                 console.error("Failed to reconnect:", error);
-                await music.savePlayer(player).catch(console.error);
+                await hubClient.savePlayer(player).catch(console.error);
               }
             } else {
               console.log("No users in channel, saving state...");
-              await music.savePlayer(player).catch(console.error);
+              await hubClient.savePlayer(player).catch(console.error);
             }
           } catch (error) {
             console.error("Error handling voice disconnection:", error);
@@ -98,7 +98,7 @@ export default {
               console.log(
                 "No users in either channel, saving and disconnecting..."
               );
-              await music.savePlayer(player).catch(console.error);
+              await hubClient.savePlayer(player).catch(console.error);
               await player.disconnect().catch(console.error);
             }
           } catch (error) {

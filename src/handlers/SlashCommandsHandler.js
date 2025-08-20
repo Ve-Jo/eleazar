@@ -1,5 +1,5 @@
 import { REST, Routes } from "discord.js";
-import i18n from "../utils/newI18n.js";
+import { hubClient } from "../api/hubClient.js"; // Replace i18n import
 
 class CommandManager {
   constructor(client) {
@@ -11,7 +11,9 @@ class CommandManager {
     try {
       console.log("Starting command registration process...");
 
-      const { serverCommands, globalCommands } = this.prepareCommands(commands);
+      const { serverCommands, globalCommands } = await this.prepareCommands(
+        commands
+      );
 
       // Check if SERVER_SLASHES is true
       const forceServer = process.env.SERVER_SLASHES === "true";
@@ -35,47 +37,48 @@ class CommandManager {
     }
   }
 
-  prepareCommands(commands) {
+  async prepareCommands(commands) {
     const serverCommands = [];
     const globalCommands = [];
     const processedNames = new Set();
 
-    commands.forEach((cmd, name) => {
+    for (const [name, cmd] of commands) {
       if (processedNames.has(name)) {
         console.warn(`Skipping duplicate command: ${name}`);
-        return;
+        continue;
       }
       processedNames.add(name);
 
-      const commandData = this.buildCommandData(cmd);
+      const commandData = await this.buildCommandData(cmd);
       if (cmd.server) {
         serverCommands.push(commandData);
       } else {
         globalCommands.push(commandData);
       }
-    });
+    }
 
     return { serverCommands, globalCommands };
   }
 
-  buildCommandData(cmd) {
+  async buildCommandData(cmd) {
     const json = cmd.data.toJSON();
 
     // Handle localizations
-    this.applyLocalizations(json, cmd);
+    await this.applyLocalizations(json, cmd);
 
     // Handle subcommands
     if (json.options?.length > 0) {
-      this.processSubcommands(json, cmd);
+      await this.processSubcommands(json, cmd);
     }
 
     return json;
   }
 
-  applyLocalizations(json, cmd) {
-    // Register command localizations with i18n
+  async applyLocalizations(json, cmd) {
+    // Make async
+    // Register command localizations with hubClient
     if (cmd.localization_strings) {
-      i18n.registerLocalizations(
+      await hubClient.registerLocalizations(
         "commands",
         cmd.data.name,
         cmd.localization_strings
@@ -121,43 +124,33 @@ class CommandManager {
     return filtered;
   }
 
-  processSubcommands(json, cmd) {
-    json.options.forEach((option) => {
-      // Check if it's a subcommand definition (type 1)
-      if (option.type === 1) {
-        // Prioritize localizations defined directly in the main command file's structure
-        let locStrings = cmd.localization_strings?.subcommands?.[option.name];
-        let isFromMainFile = !!locStrings;
-
-        // If not found there, try finding the loaded subcommand object (for separate files)
-        let subcommandObj = null;
-        if (!locStrings && cmd.subcommands) {
-          subcommandObj = cmd.subcommands[option.name];
-          locStrings = subcommandObj?.localization_strings;
+  // In processSubcommands, make async if needed or use await
+  async processSubcommands(json, cmd) {
+    await Promise.all(
+      json.options.map(async (option) => {
+        if (option.type === 1) {
+          let locStrings = cmd.localization_strings?.subcommands?.[option.name];
+          let subcommandObj = null;
+          if (!locStrings && cmd.subcommands) {
+            subcommandObj = cmd.subcommands[option.name];
+            locStrings = subcommandObj?.localization_strings;
+          }
+          if (locStrings) {
+            await hubClient.registerLocalizations(
+              "commands",
+              `${cmd.data.name}.${option.name}`,
+              locStrings
+            );
+            this.applySubcommandLocalizations(
+              option,
+              locStrings,
+              cmd,
+              subcommandObj
+            );
+          }
         }
-
-        // If localization strings were found from either source, apply them
-        if (locStrings) {
-          // Register subcommand localizations with i18n (use the combined key)
-          // Ensure registration happens only once if possible, though i18n might handle overwrites
-          i18n.registerLocalizations(
-            "commands",
-            `${cmd.data.name}.${option.name}`,
-            locStrings // Register the found strings
-          );
-
-          // Apply to the JSON structure
-          // Pass the found locStrings directly, and the original cmd/subcommandObj for context if needed
-          this.applySubcommandLocalizations(
-            option,
-            locStrings,
-            cmd,
-            subcommandObj
-          );
-        }
-      }
-      // TODO: Add handling for subcommand groups (type 2) if necessary
-    });
+      })
+    );
   }
 
   applySubcommandLocalizations(option, locStrings, mainCmd, subcommandObj) {

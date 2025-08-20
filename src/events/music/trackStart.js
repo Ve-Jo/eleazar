@@ -1,5 +1,5 @@
 import { createMusicButtons } from "../../utils/musicButtons.js";
-import i18n from "../../utils/newI18n.js";
+import i18n from "../../utils/i18n.js";
 import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
 import { AttachmentBuilder } from "discord.js";
 

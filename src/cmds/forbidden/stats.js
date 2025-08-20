@@ -4,7 +4,7 @@ import {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { generateImage } from "../../utils/imageGenerator.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 
 export default {
   data: () => {
@@ -42,7 +42,7 @@ export default {
     await interaction.deferReply();
 
     // Get historical analytics data
-    const pingStats = await Database.getAnalytics("ping", 10);
+    const pingStats = await hubClient.getAnalytics("ping", 10);
 
     const latestData = pingStats[0]?.data || {};
     const { shards = {}, serversCount = 0 } = latestData;
@@ -119,7 +119,7 @@ export default {
         }`
       )
       .setAuthor({
-        name: i18n.__("help.stats.title"),
+        name: await i18n.__("help.stats.title"),
         iconURL: interaction.client.user.displayAvatarURL(),
       });
 

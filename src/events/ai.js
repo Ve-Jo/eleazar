@@ -8,11 +8,11 @@ import {
 } from "discord.js";
 import { translate } from "bing-translate-api";
 import { Memer } from "memer.ts";
-import Database from "../database/client.js";
+import hubClient from "../api/hubClient.js";
 import fetch from "node-fetch";
 import { Groq } from "groq-sdk";
 import CONFIG from "../config/aiConfig.js";
-import i18n from "../utils/newI18n.js";
+import i18n from "../utils/i18n.js";
 import OpenAI from "openai";
 
 // Import everything from the unified AI API
@@ -762,7 +762,7 @@ export default {
     // Determine locale early for potential messages
     let effectiveLocale = "en";
     try {
-      const userDbLocale = await Database.getUserLocale(
+      const userDbLocale = await hubClient.getUserLocale(
         message.guild?.id,
         userId
       );
@@ -814,7 +814,7 @@ export default {
         if (availableModels.length === 0) {
           // Use determined locale for the reply
           await message.reply(
-            i18n.__(
+            await i18n.__(
               "events.ai.messages.noModelsFound",
               { vision: isVisionRequest ? "vision" : "text" },
               effectiveLocale
@@ -836,7 +836,7 @@ export default {
         console.log("Sending model selection prompt");
         // Use locale for the prompt message
         let promptMsg = await message.reply({
-          content: i18n.__(
+          content: await i18n.__(
             "events.ai.messages.selectModelPrompt",
             effectiveLocale
           ),
@@ -896,7 +896,7 @@ export default {
                 // Use locale for the edit message - no need to defer again
                 await promptMsg
                   .edit({
-                    content: i18n.__(
+                    content: await i18n.__(
                       "events.ai.messages.modelSelectedProcessing",
                       { model: selectedModelId },
                       effectiveLocale
@@ -920,7 +920,7 @@ export default {
                 // Use locale for the fallback message
                 await message.channel
                   .send(
-                    i18n.__(
+                    await i18n.__(
                       "events.ai.messages.modelSelectedProcessing",
                       { model: selectedModelId },
                       effectiveLocale
@@ -960,7 +960,7 @@ export default {
               );
               try {
                 await interaction.update({
-                  content: i18n.__("events.ai.messages.modelSelected", {
+                  content: await i18n.__("events.ai.messages.modelSelected", {
                     model: selectedModelId,
                   }),
                   components: [],
@@ -982,7 +982,7 @@ export default {
           // They are now handled by the collector attached in sendResponse.
         });
 
-        collector.on("end", (collected, reason) => {
+        collector.on("end", async (collected, reason) => {
           console.log(
             `Collector for ${userId} ended with reason: ${reason}, collected ${collected.size} interactions`
           );
@@ -996,13 +996,13 @@ export default {
               // Use locale for the timeout message
               promptMsg
                 .edit({
-                  content: i18n.__(
+                  content: await i18n.__(
                     "events.ai.messages.selectionTimeout",
                     effectiveLocale
                   ),
                   components: [],
                 })
-                .catch((e) =>
+                .catch(async (e) =>
                   console.error("Failed to edit timeout message:", e)
                 );
               console.log(`Pending interaction timed out for user ${userId}`);
@@ -1013,7 +1013,9 @@ export default {
         console.error("Error during model selection process:", error);
         // Use locale for the error message
         await message
-          .reply(i18n.__("events.ai.messages.selectionError", effectiveLocale))
+          .reply(
+            await i18n.__("events.ai.messages.selectionError", effectiveLocale)
+          )
           .catch((e) => {});
       }
 
@@ -1029,7 +1031,7 @@ export default {
         const minutes = Math.ceil((expireTime - now) / 1000 / 60); // in minutes
 
         await message.reply(
-          i18n.__(
+          await i18n.__(
             "events.ai.messages.rateLimited",
             {
               model: prefs.selectedModel,

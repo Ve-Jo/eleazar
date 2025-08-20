@@ -1,5 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 
 export default {
   data: () => {
@@ -34,14 +34,11 @@ export default {
     const { guild } = interaction;
 
     // Get current guild settings
-    const guildData = await Database.client.guild.findUnique({
-      where: { id: guild.id },
-      select: { settings: true },
-    });
+    const guildData = await hubClient.getGuild(interaction.guild.id);
 
     if (!guildData?.settings?.counting?.channel_id) {
       return interaction.reply({
-        content: i18n.__("commands.counting.no_channel"),
+        content: await i18n.__("commands.counting.no_channel"),
         ephemeral: true,
       });
     }
@@ -54,7 +51,7 @@ export default {
       : null;
 
     await interaction.reply({
-      content: i18n.__("commands.counting.status.status", {
+      content: await i18n.__("commands.counting.status.status", {
         channel: channel?.name || "Unknown",
         number: guildData.settings.counting.message,
         pinoneach: guildData.settings.counting.pinoneach || "None",

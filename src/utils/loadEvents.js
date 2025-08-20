@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import i18n from "./newI18n.js"; // Import i18n instance
+
+import hubClient from "../api/hubClient.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,12 +27,9 @@ export async function loadEvents(client) {
 
       // --- Start Localization Registration ---
       if (event.default.localization_strings) {
-        const eventName = path.basename(file, ".js"); // e.g., "ai"
+        const eventName = path.basename(file, ".js");
         console.log(`Registering localizations for event: ${eventName}`);
-        // Pass the whole strings object defined in the event file
-        // Use registerLocalizations as it correctly handles the final save loop
-        // Change save to false, we will save explicitly after the loop
-        i18n.registerLocalizations(
+        await hubClient.registerLocalizations(
           "events",
           eventName,
           event.default.localization_strings,
@@ -62,6 +60,6 @@ export async function loadEvents(client) {
 
   // --- Explicitly save all translations after loading all events ---
   console.log("Saving all translations after event loading...");
-  i18n.saveAllTranslations();
+  await hubClient.saveAllTranslations();
   console.log("All translations saved.");
 }

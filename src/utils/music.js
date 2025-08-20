@@ -1,7 +1,7 @@
 import { LavalinkManager } from "lavalink-client";
 import { fileURLToPath } from "url";
 import autoPlayFunction from "../handlers/MusicAutoplay.js";
-import music from "../database/client.js";
+import hubClient from "../api/hubClient.js";
 import { dirname, join } from "path";
 import fetch from "node-fetch";
 import fs from "fs";
@@ -131,7 +131,7 @@ async function testServerConnection(node) {
 
 async function loadMusicPlayers(client) {
   try {
-    const savedPlayers = await music.loadPlayers().catch((err) => {
+    const savedPlayers = await hubClient.loadPlayers().catch((err) => {
       console.error("Failed to load music players from database:", err);
       return [];
     });
@@ -184,7 +184,8 @@ async function loadMusicPlayers(client) {
           console.log(
             `Guild ${data.id} no longer exists, skipping player restoration`
           );
-          await music.deletePlayer(data.id).catch(() => null);
+          // TODO: Implement deletePlayer in hub services
+          await hubClient.deletePlayer(data.id).catch(() => null);
           continue;
         }
 
@@ -195,7 +196,7 @@ async function loadMusicPlayers(client) {
           console.log(
             `Voice channel ${data.voiceChannelId} no longer exists in guild ${data.id}`
           );
-          await music.deletePlayer(data.id).catch(() => null);
+          await hubClient.deletePlayer(data.id).catch(() => null);
           continue;
         }
 
@@ -205,7 +206,7 @@ async function loadMusicPlayers(client) {
           console.log(
             `Channel ${data.voiceChannelId} is not a voice channel, skipping`
           );
-          await music.deletePlayer(data.id).catch(() => null);
+          await hubClient.deletePlayer(data.id).catch(() => null);
           continue;
         }
 
@@ -762,7 +763,7 @@ async function init(client) {
           console.log(`No content to save for player ${player.guildId}`);
           return;
         }
-        await music.savePlayer(player);
+        await hubClient.savePlayer(player);
       } catch (error) {
         console.error(
           `Failed to save player state (debounced): ${error.message}`
@@ -1459,14 +1460,23 @@ async function init(client) {
           // Cancel any pending saves for this player
           debouncedSavePlayer.cancel?.();
 
-          // Directly delete from database without debounce
-          await music.deletePlayer(player.guildId);
+          await hubClient.deletePlayer(player.guildId);
           player.cleanup && player.cleanup();
         } catch (error) {
-          console.error(
-            `Failed to cleanup player for guild ${player.guildId}:`,
-            error
-          );
+          // Ignore "Record not found" errors as the player may have already been deleted
+          if (
+            error.message?.includes("Record not found") ||
+            error.message?.includes("500 Internal Server Error")
+          ) {
+            console.log(
+              `Player record for guild ${player.guildId} was already deleted or doesn't exist`
+            );
+          } else {
+            console.error(
+              `Failed to cleanup player for guild ${player.guildId}:`,
+              error
+            );
+          }
         }
       }
     });

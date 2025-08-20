@@ -79,8 +79,8 @@ export default {
     const locale = interaction.locale;
 
     // Helper function to get translation or use default
-    const getTranslation = (key) => {
-      const translation = i18n.__(key);
+    const getTranslation = async (key) => {
+      const translation = await i18n.__(key);
 
       return translation;
     };
@@ -570,7 +570,10 @@ export default {
         color: dominantColor,
         mode: "V2",
       })
-        .addText(getTranslation("commands.help.commands.title"), "header3")
+        .addText(
+          await getTranslation("commands.help.commands.title"),
+          "header3"
+        )
         .addImage("attachment://commands.avif");
 
       // Only add interactive components if not disabled
@@ -579,7 +582,9 @@ export default {
         const categoryMenu = new StringSelectMenuBuilder()
           .setCustomId("category")
           .setPlaceholder(
-            getTranslation("commands.help.commands.categoryMenu.placeholder")
+            await getTranslation(
+              "commands.help.commands.categoryMenu.placeholder"
+            )
           )
           .addOptions(
             Array.from(categories)
@@ -616,7 +621,7 @@ export default {
         if (options.length === 0) {
           options = [
             {
-              label: getTranslation(
+              label: await getTranslation(
                 "commands.help.commands.noCommandsAvailable"
               ),
               value: "none",
@@ -627,7 +632,9 @@ export default {
         const subcommandMenu = new StringSelectMenuBuilder()
           .setCustomId("subcommand")
           .setPlaceholder(
-            getTranslation("commands.help.commands.subcommandMenu.placeholder")
+            await getTranslation(
+              "commands.help.commands.subcommandMenu.placeholder"
+            )
           )
           .addOptions(options);
 
@@ -649,7 +656,7 @@ export default {
     collector.on("collect", async (i) => {
       if (i.user.id !== interaction.user.id) {
         await i.reply({
-          content: getTranslation(
+          content: await getTranslation(
             "commands.help.commands.youCannotUseThisMenu"
           ),
           ephemeral: true,

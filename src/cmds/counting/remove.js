@@ -1,5 +1,5 @@
 import { SlashCommandSubcommandBuilder, PermissionsBitField } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 
 export default {
   data: () => {
@@ -40,37 +40,26 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("commands.counting.no_perms"),
+        content: await i18n.__("commands.counting.no_perms"),
         ephemeral: true,
       });
     }
 
     // Get current guild settings
-    const guildData = await Database.client.guild.findUnique({
-      where: { id: guild.id },
-      select: { settings: true },
-    });
+    const guildData = await hubClient.getGuild(interaction.guild.id);
 
     if (!guildData?.settings?.counting?.channel_id) {
       return interaction.reply({
-        content: i18n.__("commands.counting.no_channel"),
+        content: await i18n.__("commands.counting.no_channel"),
         ephemeral: true,
       });
     }
 
     // Update guild settings to remove counting data
-    await Database.client.guild.update({
-      where: { id: guild.id },
-      data: {
-        settings: {
-          ...guildData.settings,
-          counting: null,
-        },
-      },
-    });
+    await hubClient.removeCounting(interaction.guild.id);
 
     await interaction.reply({
-      content: i18n.__("commands.counting.remove.success"),
+      content: await i18n.__("commands.counting.remove.success"),
       ephemeral: true,
     });
   },

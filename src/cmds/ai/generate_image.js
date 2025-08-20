@@ -179,14 +179,14 @@ export default {
     try {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: i18n.__("commands.ai.generate_image.generating", {
+          content: await i18n.__("commands.ai.generate_image.generating", {
             prompt,
           }),
           ephemeral: false,
         });
       } else if (interaction.deferred) {
         await interaction.editReply({
-          content: i18n.__("commands.ai.generate_image.generating", {
+          content: await i18n.__("commands.ai.generate_image.generating", {
             prompt,
           }),
         });
@@ -200,7 +200,7 @@ export default {
           try {
             if (!interaction.replied && !interaction.deferred) return;
             await interaction.editReply({
-              content: i18n.__("commands.ai.generate_image.generating", {
+              content: await i18n.__("commands.ai.generate_image.generating", {
                 prompt,
               }),
             });
@@ -234,7 +234,7 @@ export default {
             Buffer.from(imageBuffer)
           ).setName("generated_image.png");
 
-          const responseContent = i18n.__(
+          const responseContent = await i18n.__(
             "commands.ai.generate_image.generated",
             {
               prompt,
@@ -259,7 +259,9 @@ export default {
         throw new Error("No image in response");
       } catch (gradioError) {
         console.error("Gradio client error:", gradioError);
-        const errorMessage = i18n.__("commands.ai.generate_image.gradio_error");
+        const errorMessage = await i18n.__(
+          "commands.ai.generate_image.gradio_error"
+        );
 
         if (interaction.replied || interaction.deferred) {
           return interaction.editReply({
@@ -273,7 +275,7 @@ export default {
       }
     } catch (error) {
       console.error("Error generating image:", error);
-      const errorMessage = i18n.__("commands.ai.generate_image.error");
+      const errorMessage = await i18n.__("commands.ai.generate_image.error");
 
       try {
         if (interaction.replied || interaction.deferred) {
@@ -290,7 +292,7 @@ export default {
         // As a last resort, try sending a new message
         try {
           await interaction.channel.send({
-            content: i18n.__("commands.ai.generate_image.error", {
+            content: await i18n.__("commands.ai.generate_image.error", {
               user: interaction.user,
               error: errorMessage,
             }),

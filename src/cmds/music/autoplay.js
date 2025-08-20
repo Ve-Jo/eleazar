@@ -43,12 +43,12 @@ export default {
     );
     if (!player)
       return interaction.editReply({
-        content: i18n.__("commands.music.autoplay.noMusicPlaying"),
+        content: await i18n.__("commands.music.autoplay.noMusicPlaying"),
         ephemeral: true,
       });
     if (interaction.member.voice.channelId !== player.voiceChannelId)
       return interaction.editReply({
-        content: i18n.__("commands.music.autoplay.notInVoiceChannel"),
+        content: await i18n.__("commands.music.autoplay.notInVoiceChannel"),
         ephemeral: true,
       });
 
@@ -57,7 +57,7 @@ export default {
       player.set("autoplay_enabled", true);
 
       return interaction.editReply({
-        content: i18n.__("commands.music.autoplay.autoplayToggled", {
+        content: await i18n.__("commands.music.autoplay.autoplayToggled", {
           enabled: !autoplay,
         }),
         ephemeral: true,
@@ -66,7 +66,7 @@ export default {
       player.set("autoplay_enabled", false);
 
       return interaction.editReply({
-        content: i18n.__("commands.music.autoplay.autoplayToggled", {
+        content: await i18n.__("commands.music.autoplay.autoplayToggled", {
           enabled: !autoplay,
         }),
         ephemeral: true,

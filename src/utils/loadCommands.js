@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Collection } from "discord.js";
-import i18n from "./newI18n.js";
+import hubClient from "../api/hubClient.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,7 +37,7 @@ export async function loadCommands(
   client.commands = new Collection();
 
   // Set default locale
-  i18n.setLocale("en");
+  // Removed setLocale
 
   try {
     const commandsPath = path.join(__dirname, "..", "cmds");
@@ -103,8 +103,7 @@ export async function loadCommands(
           `Registering localizations for ${category}.${commandData.name}`
         );
 
-        // Register command localizations with new i18n system
-        i18n.registerLocalizations(
+        hubClient.registerLocalizations(
           "commands",
           commandData.name,
           command.localization_strings
@@ -153,7 +152,7 @@ export async function loadCommands(
                 console.log(JSON.stringify(subcommandModule.default, null, 2));
               }
               // Register subcommand localizations
-              i18n.registerLocalizations(
+              hubClient.registerLocalizations(
                 "commands",
                 `${commandData.name}.${subcommandName}`,
                 subcommand.localization_strings

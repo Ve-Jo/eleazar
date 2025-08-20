@@ -4,15 +4,12 @@ import {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType,
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
-import Database from "../../database/client.js";
-import { CRATE_TYPES } from "../../database/client.js";
+import hubClient, { CRATE_TYPES } from "../../api/hubClient.js";
 import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.js";
-// Import the CratesDisplay component to access its localizations
 import CratesDisplay from "../../render-server/components/CratesDisplay.jsx";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
@@ -93,6 +90,11 @@ export default {
       ru: "Назад к ящикам",
       uk: "Назад до скринь",
     },
+    backToCrates: {
+      en: "Back to Crates",
+      ru: "Назад к кейсам",
+      uk: "Назад до кейсів",
+    },
     noCratesAvailable: {
       en: "You don't have any of these crates",
       ru: "У вас нет таких ящиков",
@@ -118,702 +120,613 @@ export default {
       ru: "• {{amount}}% скидки\n",
       uk: "• {{amount}}% знижки\n",
     },
-    rewardCooldown: {
-      en: "• {{time}} cooldown reduction for {{type}}\n",
-      ru: "• Уменьшение перезарядки {{type}} на {{time}}\n",
-      uk: "• Зменшення перезарядки {{type}} на {{time}}\n",
+    error: {
+      en: "An error occurred while processing your request.",
+      ru: "Произошла ошибка при обработке вашего запроса.",
+      uk: "Сталася помилка під час обробки вашого запиту.",
     },
   },
-  async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
+  async execute(interaction, i18n) {
+    const builderMode = "v2";
+
+    await interaction.deferReply();
+
+    try {
+      const requestedCase = interaction.options.getString("case");
+
+      if (requestedCase) {
+        return await this.handleDirectCaseOpen(
+          interaction,
+          i18n,
+          requestedCase,
+          builderMode
+        );
+      }
+
+      return await this.handleCaseMenu(interaction, i18n, builderMode);
+    } catch (error) {
+      console.error("Error in cases command:", error);
+      await this.handleError(interaction, i18n, error);
+    }
+  },
+
+  async handleDirectCaseOpen(interaction, i18n, requestedCase, builderMode) {
+    if (!["daily", "weekly"].includes(requestedCase)) {
+      await interaction.editReply({
+        content: await i18n.__("commands.economy.cases.noCratesAvailable"),
+      });
+      return;
+    }
+
+    const cooldownTimestamp = await hubClient.getCrateCooldown(
+      interaction.guild.id,
+      interaction.user.id,
+      requestedCase
+    );
+
+    const now = Date.now();
+    const remainingCooldown =
+      cooldownTimestamp > 0
+        ? Math.max(
+            0,
+            cooldownTimestamp + CRATE_TYPES[requestedCase].cooldown - now
+          )
+        : 0;
+
+    if (remainingCooldown > 0) {
+      await interaction.editReply({
+        content: await i18n.__("commands.economy.cases.cooldownActive", {
+          time: prettyMs(remainingCooldown, { verbose: true }),
+        }),
+      });
+      return;
     }
 
     try {
-      // Get user data
-      let userData = await Database.getUser(
-        interaction.guild.id,
-        interaction.user.id
+      const { crateName, crateEmoji } = this.getCrateInfo(requestedCase, i18n);
+      const rewardMessage = await this.openCaseAndCreateMessage(
+        interaction,
+        i18n,
+        requestedCase,
+        crateName,
+        crateEmoji,
+        builderMode,
+        "DIRECT CASE OPENING"
       );
 
-      // Check if a specific case was requested
-      const requestedCase = interaction.options.getString("case");
-      if (requestedCase) {
-        // Check if requested case is available (not on cooldown)
-        if (["daily", "weekly"].includes(requestedCase)) {
-          const cooldown = await Database.getCrateCooldown(
-            interaction.guild.id,
-            interaction.user.id,
-            requestedCase
-          );
+      const message = await interaction.editReply(rewardMessage);
+      this.setupBackToMenuCollector(message, interaction, i18n);
+    } catch (error) {
+      console.error("Error opening requested case:", error);
+      await interaction.editReply({
+        content: await i18n.__("commands.economy.cases.error"),
+        ephemeral: true,
+      });
+    }
+  },
 
-          if (cooldown > 0) {
-            await interaction.editReply({
-              content: i18n.__("commands.economy.cases.cooldownActive", {
-                time: prettyMs(cooldown, { verbose: true }),
+  async handleCaseMenu(interaction, i18n, builderMode) {
+    // Ensure user exists in database before fetching data
+    await hubClient.ensureGuildUser(interaction.guild.id, interaction.user.id);
+
+    const userData = await hubClient.getUser(
+      interaction.guild.id,
+      interaction.user.id
+    );
+
+    const cratesList = await this.buildCratesList(interaction, i18n);
+    let selectedCrate = 0;
+
+    const generateCratesMessage = async (disableInteractions = false) => {
+      const [pngBuffer, dominantColor] = await generateImage(
+        "CratesDisplay",
+        {
+          interaction: {
+            user: {
+              id: interaction.user.id,
+              username: interaction.user.username,
+              displayName: interaction.user.displayName,
+              avatarURL: interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
               }),
-            });
-            return;
-          }
-
-          try {
-            // Get crate type info for display
-            const userLocale = i18n.getUserLocale
-              ? i18n.getUserLocale()
-              : interaction.locale.split("-")[0].toLowerCase();
-
-            const getCrateTranslation = (path, defaultValue) => {
-              const pathParts = path.split(".");
-              let result = CratesDisplay.localization_strings;
-              for (const part of pathParts) {
-                if (!result[part]) return defaultValue;
-                result = result[part];
-              }
-              return result[userLocale] || result.en || defaultValue;
-            };
-
-            const crateName = getCrateTranslation(
-              `types.${requestedCase}.name`,
-              requestedCase
-            );
-            const crateEmoji = CRATE_TYPES[requestedCase]?.emoji || "🎁";
-
-            // Open the case directly
-            const rewards = await Database.openCrate(
-              interaction.guild.id,
-              interaction.user.id,
-              requestedCase
-            );
-
-            // Generate reward display
-            const [rewardBuffer, dominantColor] = await generateImage(
-              "CrateRewards",
-              {
-                interaction: {
-                  user: {
-                    id: interaction.user.id,
-                    username: interaction.user.username,
-                    displayName: interaction.user.displayName,
-                    avatarURL: interaction.user.displayAvatarURL({
-                      extension: "png",
-                      size: 1024,
-                    }),
-                  },
-                  guild: {
-                    id: interaction.guild.id,
-                    name: interaction.guild.name,
-                    iconURL: interaction.guild.iconURL({
-                      extension: "png",
-                      size: 1024,
-                    }),
-                  },
-                },
-                locale: interaction.locale,
-                crateType: requestedCase,
-                crateEmoji: crateEmoji,
-                crateName: crateName,
-                rewards: rewards,
-                dominantColor: "user",
-                returnDominant: true,
-              },
-              { image: 2, emoji: 2 },
-              i18n
-            );
-
-            const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-              name: `reward.avif`,
-            });
-
-            // Create ComponentBuilder for reward display
-            const rewardComponent = new ComponentBuilder({
-              dominantColor,
-              mode: builderMode,
-            })
-              .addText(
-                i18n.__("commands.economy.cases.rewardIntro", {
-                  crate: crateName,
-                }),
-                "header3"
-              )
-              .addImage(`attachment://reward.avif`);
-
-            // Add details about rewards (optional for component, good for text fallback)
-            let rewardDetailsText = "";
-            if (rewards.coins > 0) {
-              rewardDetailsText += i18n.__(
-                "commands.economy.cases.rewardCoins",
-                {
-                  amount: Math.round(rewards.coins),
-                }
-              );
-            }
-            if (rewards.xp > 0) {
-              rewardDetailsText += i18n.__("commands.economy.cases.rewardXp", {
-                amount: Math.round(rewards.xp),
-              });
-            }
-            if (rewards.discount > 0) {
-              rewardDetailsText += i18n.__(
-                "commands.economy.cases.rewardDiscount",
-                {
-                  amount: rewards.discount,
-                }
-              );
-            }
-            /*if (rewards.cooldownReductions) {
-              rewardDetailsText += i18n.__(
-                "commands.economy.cases.rewardCooldown",
-                {
-                  time: prettyMs(rewards.cooldownReductions.amount, {
-                    verbose: true,
-                  }),
-                  type: rewards.cooldownReductions.type,
-                }
-              );
-            }*/
-
-            // Prepare reply options using the builder
-            const rewardOptions = rewardComponent.toReplyOptions({
-              files: [rewardAttachment],
-              content: isAiContext ? rewardDetailsText : undefined,
-            });
-
-            // Reply/edit based on context
-            if (isAiContext) {
-              await interaction.reply(rewardOptions);
-            } else {
-              await interaction.editReply(rewardOptions);
-            }
-
-            return;
-          } catch (error) {
-            console.error("Error opening requested case:", error);
-            const errorOptions = {
-              content: i18n.__("commands.economy.cases.error"),
-              ephemeral: true,
-            };
-            if (isAiContext) {
-              throw new Error(i18n.__("commands.economy.cases.error"));
-            } else {
-              await interaction.editReply(errorOptions);
-            }
-            return;
-          }
-        } else {
-          // For non-standard cases (inventory cases), could implement here
-          await interaction.editReply({
-            content: i18n.__("commands.economy.cases.noCratesAvailable"),
-          });
-          return;
-        }
-      }
-
-      // If we reach here, no specific case was requested or direct opening failed
-      // Continue with original code to show the case menu
-
-      // Get all crates the user has (including core ones like daily/weekly)
-      const crates = await Database.getUserCrates(
-        interaction.guild.id,
-        interaction.user.id
-      );
-
-      // Get cooldowns for standard crates
-      const dailyCooldown = await Database.getCrateCooldown(
-        interaction.guild.id,
-        interaction.user.id,
-        "daily"
-      );
-
-      const weeklyCooldown = await Database.getCrateCooldown(
-        interaction.guild.id,
-        interaction.user.id,
-        "weekly"
-      );
-
-      // Get user locale for translations
-      const userLocale = i18n.getUserLocale
-        ? i18n.getUserLocale()
-        : interaction.locale.split("-")[0].toLowerCase();
-
-      // Get CratesDisplay translations based on locale
-      const getCrateTranslation = (path, defaultValue) => {
-        const pathParts = path.split(".");
-        let result = CratesDisplay.localization_strings;
-        for (const part of pathParts) {
-          if (!result[part]) return defaultValue;
-          result = result[part];
-        }
-        return result[userLocale] || result.en || defaultValue;
-      };
-
-      // Prepare crates for display
-      const cratesList = [
-        {
-          id: "daily",
-          name: getCrateTranslation("types.daily.name", "Daily Crate"),
-          description: getCrateTranslation(
-            "types.daily.description",
-            "A crate you can open once every 24 hours"
-          ),
-          emoji: CRATE_TYPES.daily.emoji,
-          available: dailyCooldown <= 0,
-          cooldown: dailyCooldown > 0 ? dailyCooldown : 0,
-          count: -1, // -1 indicates standard crate (not inventory)
-        },
-        {
-          id: "weekly",
-          name: getCrateTranslation("types.weekly.name", "Weekly Crate"),
-          description: getCrateTranslation(
-            "types.weekly.description",
-            "A crate you can open once every 7 days"
-          ),
-          emoji: CRATE_TYPES.weekly.emoji,
-          available: weeklyCooldown <= 0,
-          cooldown: weeklyCooldown > 0 ? weeklyCooldown : 0,
-          count: -1, // -1 indicates standard crate (not inventory)
-        },
-      ];
-
-      // Add any special crates the user has in their inventory
-      for (const crate of crates) {
-        if (crate.count > 0 && !["daily", "weekly"].includes(crate.type)) {
-          const crateType = crate.type;
-          // Use CratesDisplay translations if available, otherwise use special description
-          cratesList.push({
-            id: crateType,
-            name: getCrateTranslation(`types.${crateType}.name`, crateType),
-            description: getCrateTranslation(
-              `types.${crateType}.description`,
-              getCrateTranslation(
-                "types.special.description",
-                "A special crate with unique rewards"
-              )
-            ),
-            emoji: "🎁", // Default emoji for special crates
-            available: true,
-            cooldown: 0,
-            count: crate.count,
-          });
-        }
-      }
-
-      let selectedCrate = 0; // Index of currently selected crate
-
-      const generateCratesMessage = async (options = {}) => {
-        const { disableInteractions = false } = options;
-
-        // Get user data
-        userData = await Database.getUser(
-          interaction.guild.id,
-          interaction.user.id
-        );
-
-        // Get crate info for each type
-        const crateInfo = cratesList[selectedCrate];
-
-        const [pngBuffer, dominantColor] = await generateImage(
-          "CratesDisplay",
-          {
-            interaction: {
-              user: {
-                id: interaction.user.id,
-                username: interaction.user.username,
-                displayName: interaction.user.displayName,
-                avatarURL: interaction.user.displayAvatarURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
-              guild: {
-                id: interaction.guild.id,
-                name: interaction.guild.name,
-                iconURL: interaction.guild.iconURL({
-                  extension: "png",
-                  size: 1024,
-                }),
-              },
             },
-            database: {
-              balance: Math.round(Number(userData.economy?.balance || 0)),
-              xp: userData.Level?.xp || 0,
-              seasonXp: userData.Level?.seasonXp || 0,
+            guild: {
+              id: interaction.guild.id,
+              name: interaction.guild.name,
+              iconURL: interaction.guild.iconURL({
+                extension: "png",
+                size: 1024,
+              }),
             },
-            locale: interaction.locale,
-            crates: cratesList,
-            selectedCrate: selectedCrate,
-            dominantColor: "user",
-            returnDominant: true,
           },
-          { image: 2, emoji: 2 },
+          database: {
+            balance: Math.round(Number(userData.economy?.balance || 0)),
+            xp: userData.Level?.xp || 0,
+            seasonXp: userData.Level?.seasonXp || 0,
+          },
+          locale: interaction.locale,
+          crates: cratesList,
+          selectedCrate: selectedCrate,
+          dominantColor: "user",
+          returnDominant: true,
+        },
+        { image: 2, emoji: 2 },
+        i18n
+      );
+
+      const attachment = new AttachmentBuilder(pngBuffer, {
+        name: "crates.avif",
+      });
+
+      const cratesComponent = new ComponentBuilder({
+        dominantColor,
+        mode: builderMode,
+      })
+        .addText(await i18n.__("commands.economy.cases.title"), "header3")
+        .addText(
+          await i18n.__("commands.economy.cases.balance", {
+            balance: Math.round(Number(userData.economy?.balance || 0)),
+          })
+        )
+        .addImage("attachment://crates.avif");
+
+      if (!disableInteractions) {
+        const selectMenu = await this.createSelectMenu(
+          cratesList,
+          selectedCrate,
+          i18n
+        );
+        const openButton = await this.createOpenButton(
+          cratesList,
+          selectedCrate,
           i18n
         );
 
-        const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crates.avif`,
-        });
-
-        // Create Crates component with conditional mode
-        const cratesComponent = new ComponentBuilder({
-          dominantColor,
-          mode: builderMode,
-        })
-          .addText(i18n.__(`commands.economy.cases.title`), "header3")
-          .addText(
-            i18n.__("commands.economy.cases.balance", {
-              balance: Math.round(Number(userData.economy?.balance || 0)),
-            })
-          )
-          .addImage(`attachment://crates.avif`);
-
-        // Create selection menu for crates
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId("select_crate")
-          .setPlaceholder(i18n.__("selectCrate"))
-          .addOptions(
-            cratesList.map((crate, index) => {
-              const labelPrefix = crate.count > 0 ? `(${crate.count}) ` : "";
-              const labelSuffix =
-                !crate.available && crate.cooldown > 0
-                  ? ` (${prettyMs(crate.cooldown, { compact: true })})`
-                  : "";
-
-              return {
-                label: `${labelPrefix}${crate.name}${labelSuffix}`,
-                description: crate.description,
-                value: index.toString(),
-                emoji: crate.emoji,
-                default: selectedCrate === index,
-              };
-            })
-          );
-
-        // Create open button
-        const openButton = new ButtonBuilder()
-          .setCustomId("open_crate")
-          .setLabel(i18n.__("commands.economy.cases.openButton"))
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(!cratesList[selectedCrate].available);
-
-        // Define action rows but don't add them yet
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
         const buttonRow = new ActionRowBuilder().addComponents(openButton);
 
-        // Conditionally add interactive components
-        if (!disableInteractions) {
-          cratesComponent.addActionRow(selectRow);
-          cratesComponent.addActionRow(buttonRow);
-        }
-
-        return {
-          components: [cratesComponent.build()],
-          files: [attachment],
-          flags: MessageFlags.IsComponentsV2,
-        };
-      };
-
-      // Initial message send/edit
-      const initialMessageOptions = await generateCratesMessage();
-      let message;
-      if (isAiContext) {
-        // AI context: Use proxy reply
-        message = await interaction.reply(initialMessageOptions); // interaction is proxy
-        // No collector needed for AI context
-        return;
-      } else {
-        // Normal context: Edit deferred reply
-        message = await interaction.editReply(initialMessageOptions);
+        cratesComponent.addActionRow(selectRow);
+        cratesComponent.addActionRow(buttonRow);
       }
 
-      // Create collector for buttons and select menu (only for normal context)
-      const collector = message.createMessageComponentCollector({
-        filter: (i) => i.user.id === interaction.user.id,
-        time: 60000,
-      });
+      return {
+        components: [cratesComponent.build()],
+        files: [attachment],
+        flags: MessageFlags.IsComponentsV2,
+      };
+    };
 
-      collector.on("collect", async (i) => {
+    const initialMessage = await generateCratesMessage();
+    const message = await interaction.editReply(initialMessage);
+
+    const collector = message.createMessageComponentCollector({
+      filter: (i) => i.user.id === interaction.user.id,
+      time: 60000,
+    });
+
+    collector.on("collect", async (i) => {
+      try {
+        console.log("Button/Menu interaction detected:", i.customId);
         if (i.customId === "select_crate") {
           selectedCrate = parseInt(i.values[0]);
           await i.update(await generateCratesMessage());
         } else if (i.customId === "open_crate") {
-          const selectedCrateInfo = cratesList[selectedCrate];
-
-          if (!selectedCrateInfo.available) {
-            await i.reply({
-              content: i18n.__("commands.economy.cases.cooldownActive", {
-                time: prettyMs(selectedCrateInfo.cooldown, { verbose: true }),
-              }),
-              ephemeral: true,
-            });
-            return;
-          }
-
-          try {
-            // Open the crate
-            const rewards = await Database.openCrate(
-              interaction.guild.id,
-              interaction.user.id,
-              selectedCrateInfo.id
-            );
-
-            // Update crate status after opening
-            if (["daily", "weekly"].includes(selectedCrateInfo.id)) {
-              const cooldown = await Database.getCrateCooldown(
-                interaction.guild.id,
-                interaction.user.id,
-                selectedCrateInfo.id
-              );
-              cratesList[selectedCrate].available = cooldown <= 0;
-              cratesList[selectedCrate].cooldown = cooldown;
-            } else if (selectedCrateInfo.count > 0) {
-              cratesList[selectedCrate].count--;
-              if (cratesList[selectedCrate].count <= 0) {
-                cratesList[selectedCrate].available = false;
-              }
-            }
-
-            // Generate reward display
-            const [rewardBuffer] = await generateImage(
-              "CrateRewards",
-              {
-                interaction: {
-                  user: {
-                    id: interaction.user.id,
-                    username: interaction.user.username,
-                    displayName: interaction.user.displayName,
-                    avatarURL: interaction.user.displayAvatarURL({
-                      extension: "png",
-                      size: 1024,
-                    }),
-                  },
-                  guild: {
-                    id: interaction.guild.id,
-                    name: interaction.guild.name,
-                    iconURL: interaction.guild.iconURL({
-                      extension: "png",
-                      size: 1024,
-                    }),
-                  },
-                },
-                locale: interaction.locale,
-                crateType: selectedCrateInfo.id,
-                crateEmoji: selectedCrateInfo.emoji,
-                crateName: selectedCrateInfo.name,
-                rewards: rewards,
-                dominantColor: "user",
-                returnDominant: true,
-              },
-              { image: 2, emoji: 2 },
-              i18n
-            );
-
-            const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-              name: `reward.avif`,
-            });
-
-            // Create a button to go back to crates
-            const backButton = new ButtonBuilder()
-              .setCustomId("back_to_crates")
-              .setLabel(i18n.__("commands.economy.cases.backButton"))
-              .setStyle(ButtonStyle.Secondary);
-
-            // Generate reward message text
-            let rewardText = i18n.__("commands.economy.cases.rewardIntro", {
-              crate: selectedCrateInfo.name,
-            });
-
-            if (rewards.coins > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardCoins", {
-                amount: rewards.coins,
-              });
-            }
-
-            if (rewards.xp > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardXp", {
-                amount: rewards.xp,
-              });
-            }
-
-            if (rewards.discount > 0) {
-              rewardText += i18n.__("commands.economy.cases.rewardDiscount", {
-                amount: rewards.discount,
-              });
-            }
-
-            if (Object.keys(rewards.cooldownReductions).length > 0) {
-              for (const [cooldownType, reduction] of Object.entries(
-                rewards.cooldownReductions
-              )) {
-                // Use CratesDisplay translations for cooldown types
-                const cooldownTypeName = getCrateTranslation(
-                  `cooldownTypes.${cooldownType}`,
-                  cooldownType
-                );
-                rewardText += i18n.__("commands.economy.cases.rewardCooldown", {
-                  type: cooldownTypeName,
-                  time: prettyMs(reduction, { verbose: true }),
-                });
-              }
-            }
-
-            // Create reward component
-            const rewardComponent = new ComponentBuilder()
-              .addText(rewardText)
-              .addImage("attachment://reward.avif");
-
-            // Add back button
-            const backRow = new ActionRowBuilder().addComponents(backButton);
-            rewardComponent.addActionRow(backRow);
-
-            // Final reply logic for normal context
-            const rewardOptions = rewardComponent.toReplyOptions({
-              files: [rewardAttachment],
-            });
-            await i.update(rewardOptions);
-
-            // Create a collector just for the back button
-            const backCollector = message.createMessageComponentCollector({
-              filter: (i) =>
-                i.user.id === interaction.user.id &&
-                i.customId === "back_to_crates",
-              time: 60000,
-              max: 1,
-            });
-
-            backCollector.on("collect", async (i) => {
-              // --- Explicitly invalidate cache BEFORE fetching fresh data ---
-              const userCacheKeyFull = Database._cacheKeyUser(
-                interaction.guild.id,
-                interaction.user.id,
-                true
-              );
-              const userCacheKeyBasic = Database._cacheKeyUser(
-                interaction.guild.id,
-                interaction.user.id,
-                false
-              );
-              const statsCacheKey = Database._cacheKeyStats(
-                interaction.guild.id,
-                interaction.user.id
-              );
-              const cratesCacheKey = Database._cacheKeyCrates(
-                interaction.guild.id,
-                interaction.user.id
-              ); // Crate list might have changed
-              const cooldownCacheKey = Database._cacheKeyCooldown(
-                interaction.guild.id,
-                interaction.user.id
-              ); // Cooldowns definitely changed
-              if (Database.redisClient) {
-                try {
-                  const keysToDel = [
-                    userCacheKeyFull,
-                    userCacheKeyBasic,
-                    statsCacheKey,
-                    cratesCacheKey,
-                    cooldownCacheKey,
-                  ];
-                  await Database.redisClient.del(keysToDel);
-                  Database._logRedis("del", keysToDel.join(", "), true);
-                } catch (err) {
-                  Database._logRedis("del", keysToDel.join(", "), err);
-                }
-              }
-
-              // Fetch fresh user data AFTER invalidation
-              userData = await Database.getUser(
-                interaction.guild.id,
-                interaction.user.id
-              );
-
-              // Refresh the crate data from the database
-              const dailyCooldown = await Database.getCrateCooldown(
-                interaction.guild.id,
-                interaction.user.id,
-                "daily"
-              );
-
-              const weeklyCooldown = await Database.getCrateCooldown(
-                interaction.guild.id,
-                interaction.user.id,
-                "weekly"
-              );
-
-              // Get updated crate inventory
-              const updatedCrates = await Database.getUserCrates(
-                interaction.guild.id,
-                interaction.user.id
-              );
-
-              // Update the standard crates in the list
-              cratesList[0].available = dailyCooldown <= 0;
-              cratesList[0].cooldown = dailyCooldown > 0 ? dailyCooldown : 0;
-
-              cratesList[1].available = weeklyCooldown <= 0;
-              cratesList[1].cooldown = weeklyCooldown > 0 ? weeklyCooldown : 0;
-
-              // Update inventory crates
-              for (let j = 2; j < cratesList.length; j++) {
-                const matchingCrate = updatedCrates.find(
-                  (c) => c.type === cratesList[j].id
-                );
-                if (matchingCrate) {
-                  cratesList[j].count = matchingCrate.count;
-                  cratesList[j].available = matchingCrate.count > 0;
-                } else {
-                  cratesList[j].count = 0;
-                  cratesList[j].available = false;
-                }
-              }
-
-              await i.update(await generateCratesMessage());
-            });
-          } catch (error) {
-            console.error("Error opening crate:", error);
-            // Handle error for normal context (followUp is fine after deferUpdate)
-            await i.followUp({
-              content: i18n.__("commands.economy.cases.error"),
-              ephemeral: true,
-            });
-          }
+          console.log("Open crate button clicked!");
+          await this.handleCrateOpen(
+            i,
+            cratesList,
+            selectedCrate,
+            interaction,
+            i18n,
+            builderMode,
+            message
+          );
         }
-      });
-
-      collector.on("end", async () => {
-        if (message.editable) {
-          try {
-            // Regenerate the message without interactive components
-            const finalMessage = await generateCratesMessage({
-              disableInteractions: true,
-            });
-            await message.edit(finalMessage);
-          } catch (error) {
-            console.error("Error updating components on end:", error);
-            // Fallback: Try removing components if regeneration fails
-            await message.edit({ components: [] }).catch(() => {});
-          }
-        }
-      });
-    } catch (error) {
-      console.error("Error in cases command:", error);
-      const errorOptions = {
-        content: i18n.__("commands.economy.cases.error"),
-        ephemeral: true,
-      };
-      // Check AI context for error handling
-      if (!!interaction._isAiProxy) {
-        throw new Error(i18n.__("commands.economy.cases.error"));
-      } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+      } catch (error) {
+        console.error("Error in collector:", error);
+        await this.handleCollectorError(i, i18n);
       }
+    });
+
+    collector.on("end", async () => {
+      try {
+        if (message.editable) {
+          const finalMessage = await generateCratesMessage(true);
+          await message.edit(finalMessage);
+        }
+      } catch (error) {
+        console.error("Error updating components on end:", error);
+      }
+    });
+  },
+
+  async buildCratesList(interaction, i18n) {
+    const crates = await hubClient.getUserCrates(
+      interaction.guild.id,
+      interaction.user.id
+    );
+
+    const [dailyCooldown, weeklyCooldown] = await Promise.all([
+      this.getCooldownTime(interaction, "daily"),
+      this.getCooldownTime(interaction, "weekly"),
+    ]);
+
+    const cratesList = [
+      {
+        id: "daily",
+        name: this.getCrateTranslation("types.daily.name", "Daily Crate", i18n),
+        description: this.getCrateTranslation(
+          "types.daily.description",
+          "A crate you can open once every 24 hours",
+          i18n
+        ),
+        emoji: CRATE_TYPES.daily.emoji,
+        available: dailyCooldown <= 0,
+        cooldown: dailyCooldown,
+        count: -1,
+      },
+      {
+        id: "weekly",
+        name: this.getCrateTranslation(
+          "types.weekly.name",
+          "Weekly Crate",
+          i18n
+        ),
+        description: this.getCrateTranslation(
+          "types.weekly.description",
+          "A crate you can open once every 7 days",
+          i18n
+        ),
+        emoji: CRATE_TYPES.weekly.emoji,
+        available: weeklyCooldown <= 0,
+        cooldown: weeklyCooldown,
+        count: -1,
+      },
+    ];
+
+    // Add special crates from inventory
+    for (const crate of crates) {
+      if (crate.count > 0 && !["daily", "weekly"].includes(crate.type)) {
+        cratesList.push({
+          id: crate.type,
+          name: this.getCrateTranslation(
+            `types.${crate.type}.name`,
+            crate.type,
+            i18n
+          ),
+          description: this.getCrateTranslation(
+            `types.${crate.type}.description`,
+            "A special crate with unique rewards",
+            i18n
+          ),
+          emoji: "🎁",
+          available: true,
+          cooldown: 0,
+          count: crate.count,
+        });
+      }
+    }
+
+    return cratesList;
+  },
+
+  async getCooldownTime(interaction, crateType) {
+    const cooldownTimestamp = await hubClient.getCrateCooldown(
+      interaction.guild.id,
+      interaction.user.id,
+      crateType
+    );
+
+    const now = Date.now();
+    return cooldownTimestamp > 0
+      ? Math.max(0, cooldownTimestamp + CRATE_TYPES[crateType].cooldown - now)
+      : 0;
+  },
+
+  getCrateTranslation(path, defaultValue, i18n) {
+    const userLocale = i18n.getUserLocale ? i18n.getUserLocale() : "en";
+
+    const pathParts = path.split(".");
+    let result = CratesDisplay.localization_strings;
+
+    for (const part of pathParts) {
+      if (!result[part]) return defaultValue;
+      result = result[part];
+    }
+
+    return result[userLocale] || result.en || defaultValue;
+  },
+
+  getCrateInfo(requestedCase, i18n) {
+    const crateName = this.getCrateTranslation(
+      `types.${requestedCase}.name`,
+      requestedCase,
+      i18n
+    );
+    const crateEmoji = CRATE_TYPES[requestedCase]?.emoji || "🎁";
+
+    return { crateName, crateEmoji };
+  },
+
+  async createSelectMenu(cratesList, selectedCrate, i18n) {
+    return new StringSelectMenuBuilder()
+      .setCustomId("select_crate")
+      .setPlaceholder(await i18n.__("commands.economy.cases.selectCrate"))
+      .addOptions(
+        cratesList.map((crate, index) => {
+          const labelPrefix = crate.count > 0 ? `(${crate.count}) ` : "";
+          const labelSuffix =
+            !crate.available && crate.cooldown > 0
+              ? ` (${prettyMs(crate.cooldown, { compact: true })})`
+              : "";
+
+          return {
+            label: `${labelPrefix}${crate.name}${labelSuffix}`,
+            description: crate.description,
+            value: index.toString(),
+            emoji: crate.emoji,
+            default: selectedCrate === index,
+          };
+        })
+      );
+  },
+
+  async createOpenButton(cratesList, selectedCrate, i18n) {
+    return new ButtonBuilder()
+      .setCustomId("open_crate")
+      .setLabel(await i18n.__("commands.economy.cases.openButton"))
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!cratesList[selectedCrate].available);
+  },
+
+  async handleCrateOpen(
+    i,
+    cratesList,
+    selectedCrate,
+    interaction,
+    i18n,
+    builderMode,
+    message
+  ) {
+    const selectedCrateInfo = cratesList[selectedCrate];
+
+    if (!selectedCrateInfo.available) {
+      await i.reply({
+        content: await i18n.__("commands.economy.cases.cooldownActive", {
+          time: prettyMs(selectedCrateInfo.cooldown, { verbose: true }),
+        }),
+        ephemeral: true,
+      });
+      return;
+    }
+
+    try {
+      const rewardMessage = await this.openCaseAndCreateMessage(
+        interaction,
+        i18n,
+        selectedCrateInfo.id,
+        selectedCrateInfo.name,
+        selectedCrateInfo.emoji,
+        builderMode,
+        "INTERACTIVE CASE OPENING"
+      );
+
+      await i.update(rewardMessage);
+      this.setupBackToCratesCollector(message, interaction, i18n, cratesList);
+    } catch (error) {
+      console.error("Error in interactive case opening:", error);
+      await i.reply({
+        content: await i18n.__("commands.economy.cases.error"),
+        ephemeral: true,
+      });
+    }
+  },
+
+  // Shared method for opening cases and creating reward messages
+  async openCaseAndCreateMessage(
+    interaction,
+    i18n,
+    crateType,
+    crateName,
+    crateEmoji,
+    builderMode,
+    logPrefix = "CASE OPENING"
+  ) {
+    const rewards = await hubClient.openCrate(
+      interaction.guild.id,
+      interaction.user.id,
+      crateType
+    );
+
+    console.log(`${logPrefix} - REWARDS:`);
+    console.log(rewards);
+
+    return await this.createRewardMessage(
+      interaction,
+      i18n,
+      crateType,
+      crateName,
+      crateEmoji,
+      rewards,
+      builderMode
+    );
+  },
+
+  async createRewardMessage(
+    interaction,
+    i18n,
+    crateType,
+    crateName,
+    crateEmoji,
+    rewards,
+    builderMode
+  ) {
+    const [rewardBuffer, dominantColor] = await generateImage(
+      "CrateRewards",
+      {
+        interaction: {
+          user: {
+            id: interaction.user.id,
+            username: interaction.user.username,
+            displayName: interaction.user.displayName,
+            avatarURL: interaction.user.displayAvatarURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+          guild: {
+            id: interaction.guild.id,
+            name: interaction.guild.name,
+            iconURL: interaction.guild.iconURL({
+              extension: "png",
+              size: 1024,
+            }),
+          },
+        },
+        locale: interaction.locale,
+        crateType: crateType,
+        crateEmoji: crateEmoji,
+        crateName: crateName,
+        rewards: rewards,
+        dominantColor: "user",
+        returnDominant: true,
+      },
+      { image: 2, emoji: 2 },
+      i18n
+    );
+
+    const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
+      name: "reward.avif",
+    });
+
+    const rewardComponent = new ComponentBuilder({
+      dominantColor,
+      mode: builderMode,
+    }).addImage("attachment://reward.avif");
+
+    const backButton = new ButtonBuilder()
+      .setCustomId("back_to_crates")
+      .setLabel(await i18n.__("commands.economy.cases.backToCrates"))
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji("🔙");
+
+    const backRow = new ActionRowBuilder().addComponents(backButton);
+    rewardComponent.addActionRow(backRow);
+
+    return rewardComponent.toReplyOptions({
+      files: [rewardAttachment],
+    });
+  },
+
+  setupBackToMenuCollector(message, interaction, i18n) {
+    const backCollector = message.createMessageComponentCollector({
+      filter: (i) =>
+        i.user.id === interaction.user.id && i.customId === "back_to_crates",
+      time: 60000,
+      max: 1,
+    });
+
+    backCollector.on("collect", async (i) => {
+      await i.deferUpdate();
+
+      const newInteraction = {
+        ...interaction,
+        options: {
+          ...interaction.options,
+          getString: (name) =>
+            name === "case" ? null : interaction.options.getString(name),
+        },
+        editReply: i.editReply.bind(i),
+        reply: i.reply.bind(i),
+        deferReply: () => Promise.resolve(),
+      };
+
+      await this.execute(newInteraction, i18n);
+    });
+
+    this.setupCollectorEnd(backCollector, message);
+  },
+
+  setupBackToCratesCollector(message, interaction, i18n, cratesList) {
+    const backCollector = message.createMessageComponentCollector({
+      filter: (i) =>
+        i.user.id === interaction.user.id && i.customId === "back_to_crates",
+      time: 60000,
+      max: 1,
+    });
+
+    backCollector.on("collect", async (i) => {
+      try {
+        const updatedCratesList = await this.buildCratesList(interaction, i18n);
+        // Update the original cratesList reference
+        cratesList.splice(0, cratesList.length, ...updatedCratesList);
+
+        const newInteraction = {
+          ...interaction,
+          guild: interaction.guild,
+          user: interaction.user,
+          options: interaction.options,
+          locale: interaction.locale,
+          editReply: i.update.bind(i),
+          deferReply: () => Promise.resolve(),
+        };
+
+        await this.handleCaseMenu(newInteraction, i18n, "v2");
+      } catch (error) {
+        console.error("Error in back collector:", error);
+        await this.handleCollectorError(i, i18n);
+      }
+    });
+
+    this.setupCollectorEnd(backCollector, message);
+  },
+
+  setupCollectorEnd(collector, message) {
+    collector.on("end", async () => {
+      try {
+        if (message.editable) {
+          await message.edit({ components: [] });
+        }
+      } catch (error) {
+        console.error("Error disabling components:", error);
+      }
+    });
+  },
+
+  async handleError(interaction, i18n, error) {
+    const errorOptions = {
+      content: await i18n.__("commands.economy.cases.error"),
+      ephemeral: true,
+    };
+
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions);
+      } else {
+        await interaction.reply(errorOptions);
+      }
+    } catch (replyError) {
+      console.error("Error sending error message:", replyError);
+    }
+  },
+
+  async handleCollectorError(i, i18n) {
+    try {
+      if (i.replied || i.deferred) {
+        await i.followUp({
+          content: await i18n.__("commands.economy.cases.error"),
+          ephemeral: true,
+        });
+      } else {
+        await i.reply({
+          content: await i18n.__("commands.economy.cases.error"),
+          ephemeral: true,
+        });
+      }
+    } catch (error) {
+      console.error("Error sending collector error message:", error);
     }
   },
 };

@@ -82,7 +82,7 @@ export default {
     } catch (error) {
       console.error("Error applying text meme filter:", error);
       await interaction.editReply(
-        i18n.__("commands.filters.text_memer.errorApplyingFilter")
+        await i18n.__("commands.filters.text_memer.errorApplyingFilter")
       );
     }
   },

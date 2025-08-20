@@ -1,6 +1,6 @@
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
-import i18n from "./newI18n.js";
-import Database from "../database/client.js";
+import i18n from "./i18n.js";
+import hubClient from "../api/hubClient.js";
 import { generateImage } from "./imageGenerator.js";
 
 export async function handleLevelUp(
@@ -64,7 +64,7 @@ export async function handleLevelUp(
     let userLocale = "en";
 
     try {
-      const userDbLocale = await Database.getUserLocale(guildId, userId);
+      const userDbLocale = await hubClient.getUserLocale(guildId, userId);
       if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
         userLocale = userDbLocale;
         console.log(

@@ -4,20 +4,19 @@ import { loadEvents } from "./src/utils/loadEvents.js";
 import { Memer } from "memer.ts";
 import { AutomaticSpeechRecognition, TextToImage } from "deepinfra";
 import Groq from "groq-sdk";
-import Database from "./src/database/client.js";
+import hubClient from "./src/api/hubClient.js";
 import Replicate from "replicate";
 import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.js";
-import { startApiClientServer } from "./src/api/client/server.js";
 
 // Load environment variables
 dotenv.config();
 
 // Import preview server if enabled
-const previewApp =
+/*const previewApp =
   process.env.PREVIEW === "true"
     ? (await import("./src/render-server/preview.js")).default
-    : null;
+    : null;*/
 
 //startResourceMonitor(process.env.NODE_ENV === "production" ? 300000 : 100);
 console.log("Starting bot...");
@@ -133,100 +132,32 @@ client.deepinfra = {
   ),
 };
 
-await Database.initialize();
+console.log("Hub client ready");
+
+// Check database health
+try {
+  await hubClient.checkDatabaseHealth();
+  console.log("Database health check passed");
+} catch (error) {
+  console.error("Database health check failed:", error);
+}
 
 // Check and reinitialize voice sessions for existing voice users
 async function initializeVoiceSessions() {
-  console.log("Checking existing voice sessions...");
-
   try {
-    // First, get and clean up all existing sessions
-    const existingSessions = await Database.client.voiceSession.findMany();
-    console.log(
-      `[Voice Init] Found ${existingSessions.length} existing sessions`
-    );
-
-    for (const session of existingSessions) {
-      const guild = client.guilds.cache.get(session.guildId);
-      if (!guild) {
-        console.log(
-          `[Voice Init] Removing session for guild ${session.guildId} (guild not found)`
-        );
-        await Database.removeVoiceSession(session.guildId, session.userId);
-        continue;
-      }
-
-      const member = await guild.members
-        .fetch(session.userId)
-        .catch(() => null);
-      if (!member || !member.voice.channelId) {
-        console.log(
-          `[Voice Init] User ${session.userId} not in voice, processing final XP`
-        );
-        // Calculate and add XP for interrupted session
-        await Database.calculateAndAddVoiceXP(
-          session.guildId,
-          session.userId,
-          session
-        );
-        await Database.removeVoiceSession(session.guildId, session.userId);
-        continue;
-      }
-
-      // Check if user is in the same channel as recorded
-      if (member.voice.channelId !== session.channelId) {
-        console.log(
-          `[Voice Init] User ${session.userId} in different channel, updating session`
-        );
-        await Database.removeVoiceSession(session.guildId, session.userId);
-      }
-    }
-
-    // Now create new sessions for current voice users
-    for (const [guildId, guild] of client.guilds.cache) {
-      const voiceChannels = guild.channels.cache.filter(
-        (channel) => channel.type === 2
-      );
-
-      for (const [channelId, channel] of voiceChannels) {
-        const nonBotMembers = channel.members.filter(
-          (member) => !member.user.bot
-        );
-
-        if (nonBotMembers.size >= 1) {
-          console.log(
-            `[Voice Init] Found ${nonBotMembers.size} users in ${channel.name} (${guild.name})`
-          );
-
-          for (const [memberId, member] of nonBotMembers) {
-            await Database.createVoiceSession(
-              guildId,
-              memberId,
-              channelId,
-              Date.now()
-            );
-            console.log(
-              `[Voice Init] Created/Updated session for ${member.user.tag}`
-            );
-          }
-        }
-      }
-    }
+    // TODO: Implement voice session cleanup in hub services
+    // await hubClient.cleanupVoiceSessions();
+    console.log("Voice session cleanup will be handled by hub services");
   } catch (error) {
-    console.error(
-      "[Voice Init] Error during voice session initialization:",
-      error
-    );
+    console.error("Error cleaning up voice sessions:", error);
   }
-
-  console.log("Voice session initialization complete");
 }
 
 await client.login(process.env.DISCORD_TOKEN);
 await initializeVoiceSessions();
 
 // Start the Client API Server
-startApiClientServer();
+//startApiClientServer();
 
 // Check for season transition every hour
 /*setInterval(async () => {
@@ -236,7 +167,7 @@ startApiClientServer();
 Database.startPingCollection(client);*/
 
 // Start preview server if enabled
-if (previewApp) {
+/*if (previewApp) {
   const port = 2333;
   const server = previewApp.app.listen(port, () => {
     console.log(`Preview server running at http://localhost:${port}`);
@@ -246,7 +177,7 @@ if (previewApp) {
   server.on("upgrade", (request, socket, head) => {
     previewApp.handleUpgrade(request, socket, head);
   });
-}
+}*/
 
 /*startResourceMonitor(5000);*/
 
@@ -273,8 +204,7 @@ process.on("uncaughtException", (error) => {
 process.on("SIGINT", async () => {
   console.log("Shutting down...");
   try {
-    await Database.disconnect();
-    console.log("Database disconnected");
+    console.log("Bot shutdown complete");
     process.exit(0);
   } catch (error) {
     console.error("Error during shutdown:", error);

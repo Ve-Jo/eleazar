@@ -241,13 +241,10 @@ export default {
 
   async execute(interaction, i18n) {
     // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Defer the reply
+    await interaction.deferReply();
 
     const { guild, user } = interaction;
     const emotionType = interaction.options.getString("emotion");
@@ -277,7 +274,7 @@ export default {
                 return {
                   image: imageUrl,
                   category: emotionType,
-                  emotion: i18n.__(
+                  emotion: await i18n.__(
                     `commands.emotions.myself.${emotionType}.title`
                   ),
                 };
@@ -297,14 +294,10 @@ export default {
 
       if (!emotionUrl) {
         const errorOptions = {
-          content: i18n.__("commands.emotions.imageNotFound"),
+          content: await i18n.__("commands.emotions.imageNotFound"),
           ephemeral: true,
         };
-        if (isAiContext) {
-          throw new Error(i18n.__("commands.emotions.imageNotFound"));
-        } else {
-          return interaction.editReply(errorOptions);
-        }
+        return interaction.editReply(errorOptions);
       }
 
       // Create embed/component with emotion image and description
@@ -313,11 +306,11 @@ export default {
         mode: builderMode,
       })
         .addText(
-          i18n.__(`commands.emotions.myself.${emotionType}.title`),
+          await i18n.__(`commands.emotions.myself.${emotionType}.title`),
           "header3"
         )
         .addText(
-          i18n.__(`commands.emotions.myself.${emotionType}.description`, {
+          await i18n.__(`commands.emotions.myself.${emotionType}.description`, {
             user: user.id,
           })
         )
@@ -325,71 +318,57 @@ export default {
         .addTimestamp(interaction.locale);
 
       // Prepare reply options
-      const replyOptions = emotionComponent.toReplyOptions({
-        // Add content only for V1 mode (AI context)
-        content: isAiContext
-          ? i18n.__(`commands.emotions.myself.${emotionType}.title`)
-          : undefined,
+      const replyOptions = emotionComponent.toReplyOptions();
+
+      // Edit the deferred reply
+      let message;
+      message = await interaction.editReply(replyOptions);
+
+      // Create collector for the button
+      const collector = message.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        filter: (i) => i.user.id === user.id, // Only the original user can click "Next"
+        time: 60000, // 60 seconds
       });
 
-      // Handle initial reply/edit based on context
-      let message;
-      if (isAiContext) {
-        message = await interaction.reply(replyOptions);
-        // No collector needed for AI
-      } else {
-        message = await interaction.editReply(replyOptions);
+      collector.on("collect", async (i) => {
+        if (i.customId === "next_emotion") {
+          await i.deferUpdate(); // Acknowledge the button click
+          await getEmotionData(); // Fetch and display the next image
+        }
+      });
 
-        // Create collector for the button (only for normal context)
-        const collector = message.createMessageComponentCollector({
-          componentType: ComponentType.Button,
-          filter: (i) => i.user.id === user.id, // Only the original user can click "Next"
-          time: 60000, // 60 seconds
-        });
-
-        collector.on("collect", async (i) => {
-          if (i.customId === "next_emotion") {
-            await i.deferUpdate(); // Acknowledge the button click
-            await getEmotionData(); // Fetch and display the next image
-          }
-        });
-
-        collector.on("end", async (collected, reason) => {
-          if (reason !== "messageDelete" && message.editable) {
-            try {
-              // Fetch the latest message state to remove components
-              const latestMessage = await message.channel.messages.fetch(
-                message.id
-              );
-              if (latestMessage.components.length > 0) {
-                await latestMessage.edit({ components: [] });
-              }
-            } catch (error) {
-              console.error(
-                "Failed to remove components on collector end:",
-                error
-              );
+      collector.on("end", async (collected, reason) => {
+        if (reason !== "messageDelete" && message.editable) {
+          try {
+            // Fetch the latest message state to remove components
+            const latestMessage = await message.channel.messages.fetch(
+              message.id
+            );
+            if (latestMessage.components.length > 0) {
+              await latestMessage.edit({ components: [] });
             }
+          } catch (error) {
+            console.error(
+              "Failed to remove components on collector end:",
+              error
+            );
           }
-        });
-      }
+        }
+      });
     } catch (error) {
       console.error("Error getting emotion data:", error);
       const errorOptions = {
-        content: i18n.__("commands.emotions.myself.imageNotFound"),
+        content: await i18n.__("commands.emotions.myself.imageNotFound"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
-      if (isAiContext) {
-        throw new Error(i18n.__("commands.emotions.myself.imageNotFound"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

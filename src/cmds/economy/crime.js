@@ -6,9 +6,10 @@ import {
   SlashCommandSubcommandBuilder,
   MessageFlags,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
+import ms from "ms";
 
 export default {
   data: () => {
@@ -75,37 +76,37 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     const { guild, user } = interaction;
 
     try {
+      // Ensure user exists in database before fetching data
+      await hubClient.ensureGuildUser(guild.id, user.id);
+
       // Get user data with upgrades to calculate cooldown reduction
-      let userData = await Database.getUser(guild.id, user.id);
+      let userData = await hubClient.getUser(guild.id, user.id, true);
 
-      // Apply cooldown reduction from crime upgrade
-      const crimeUpgrade = userData.upgrades.find((u) => u.type === "crime");
-      const crimeLevel = crimeUpgrade?.level || 1;
-
-      // Calculate cooldown reduction (20 minutes per level starting from level 2)
-      const cooldownReduction = (crimeLevel - 1) * (20 * 60 * 1000);
-
-      // Check if cooldown is active (with reduction applied)
-      const baseCooldownTime = await Database.getCooldown(
+      // Check if cooldown is active (getCooldown already handles crime upgrade reduction)
+      const cooldownResponse = await hubClient.getCooldown(
         guild.id,
         user.id,
         "crime"
       );
 
-      // Apply cooldown reduction, but ensure it doesn't go below 0
-      const cooldownTime = Math.max(0, baseCooldownTime - cooldownReduction);
+      // Extract cooldown value from response object
+      const cooldownTime = cooldownResponse?.cooldown || 0;
+
+      console.log("cooldownResponse:", cooldownResponse);
+      console.log("cooldownTime:", cooldownTime);
+      console.log(
+        "crimeLevel:",
+        userData.upgrades.find((u) => u.type === "crime")?.level || 1
+      );
 
       if (cooldownTime > 0) {
         const timeLeft = Math.ceil(cooldownTime / 1000);
@@ -152,8 +153,8 @@ export default {
           dominantColor,
           mode: builderMode,
         })
-          .addText(i18n.__("commands.economy.crime.title"), "header3")
-          .addText(i18n.__("commands.economy.crime.cooldown"))
+          .addText(await i18n.__("commands.economy.crime.title"), "header3")
+          .addText(await i18n.__("commands.economy.crime.cooldown"))
           .addImage("attachment://crime_cooldown.avif");
 
         return interaction.editReply({
@@ -164,22 +165,17 @@ export default {
 
       // Get all users in the guild with their data
       // Only fetch users with a positive balance to avoid unnecessary processing
-      const validTargets = await Database.client.user.findMany({
-        where: {
-          guildId: guild.id,
-          id: { not: user.id },
-          economy: {
-            balance: { gt: 0 }, // Only users with balance > 0
-          },
-        },
-        include: {
-          economy: true,
-        },
-      });
+      let validTargets = await hubClient.getGuildUsers(guild.id);
+
+      //filter targets to not be the same user id and have balance > 1
+      validTargets = validTargets.filter(
+        (target) =>
+          target.id !== user.id && Number(target.economy?.balance || 0) > 1
+      );
 
       if (validTargets.length === 0) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.crime.noValidTargets"),
+          content: await i18n.__("commands.economy.crime.noValidTargets"),
           ephemeral: true,
         });
       }
@@ -187,7 +183,7 @@ export default {
       // Create selection menu with potential targets
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId("select_crime_target")
-        .setPlaceholder(i18n.__("commands.economy.crime.selectTarget"))
+        .setPlaceholder(await i18n.__("commands.economy.crime.selectTarget"))
         .addOptions(
           await Promise.all(
             validTargets.map(async (userData) => {
@@ -217,27 +213,14 @@ export default {
       const selectTargetComponent = new ComponentBuilder({
         mode: builderMode,
       })
-        .addText(i18n.__("commands.economy.crime.selectTarget"))
+        .addText(await i18n.__("commands.economy.crime.selectTarget"))
         .addActionRow(row);
 
       // Reply logic based on context
       const selectTargetOptions = selectTargetComponent.toReplyOptions();
       let response;
-      if (isAiContext) {
-        // AI cannot select a target, return an error/message
-        console.log(
-          "AI context detected in crime.js, cannot proceed with target selection."
-        );
-        // Return a message to the AI instead of throwing an error here
-        return interaction.reply({
-          content:
-            "Crime command requires target selection and cannot be used by AI.",
-          ephemeral: true, // Maybe not needed for AI?
-        });
-      } else {
-        // Normal context: Edit the deferred reply to show the selector
-        response = await interaction.editReply(selectTargetOptions);
-      }
+      // Normal context: Edit the deferred reply to show the selector
+      response = await interaction.editReply(selectTargetOptions);
 
       try {
         const collection = await response.awaitMessageComponent({
@@ -248,11 +231,10 @@ export default {
 
         const targetId = collection.values[0];
         const target = await guild.members.fetch(targetId);
-
         // Get user and target data in parallel to reduce wait time
         const [userData, targetData] = await Promise.all([
-          Database.getUser(guild.id, user.id),
-          Database.getUser(guild.id, targetId),
+          hubClient.getUser(guild.id, user.id, true),
+          hubClient.getUser(guild.id, targetId, true),
         ]);
 
         // Calculate success chance and potential rewards based on crime level
@@ -287,117 +269,26 @@ export default {
 
         // Only perform database operations if the amount is non-zero
         if (amount > 0) {
-          // Update balances in a transaction
-          await Database.client.$transaction(async (tx) => {
-            if (success) {
-              // Deduct amount from target
-              await tx.economy.update({
-                where: {
-                  userId_guildId: {
-                    userId: targetId,
-                    guildId: guild.id,
-                  },
-                },
-                data: {
-                  balance: { decrement: amount },
-                },
-              });
-
-              // Add amount to user and update stats
-              await tx.economy.update({
-                where: {
-                  userId_guildId: {
-                    userId: user.id,
-                    guildId: guild.id,
-                  },
-                },
-                data: {
-                  balance: { increment: amount },
-                },
-              });
-
-              await tx.statistics.update({
-                where: {
-                  userId_guildId: {
-                    userId: user.id,
-                    guildId: guild.id,
-                  },
-                },
-                data: {
-                  totalEarned: { increment: amount },
-                },
-              });
-            } else {
-              // Deduct fine from user
-              await tx.economy.update({
-                where: {
-                  userId_guildId: {
-                    userId: user.id,
-                    guildId: guild.id,
-                  },
-                },
-                data: {
-                  balance: { decrement: amount },
-                },
-              });
-            }
-
-            // Update crime cooldown
-            await Database.updateCooldown(guild.id, user.id, "crime");
-          });
-        } else {
-          // Just update the cooldown if no money is involved
-          await Database.updateCooldown(guild.id, user.id, "crime");
-        }
-
-        // --- Explicitly invalidate cache AFTER transaction/cooldown update ---
-        const userCacheKeyFull = Database._cacheKeyUser(
-          guild.id,
-          user.id,
-          true
-        );
-        const userCacheKeyBasic = Database._cacheKeyUser(
-          guild.id,
-          user.id,
-          false
-        );
-        const targetCacheKeyFull = Database._cacheKeyUser(
-          guild.id,
-          targetId,
-          true
-        );
-        const targetCacheKeyBasic = Database._cacheKeyUser(
-          guild.id,
-          targetId,
-          false
-        );
-        const userStatsKey = Database._cacheKeyStats(guild.id, user.id);
-        const targetStatsKey = Database._cacheKeyStats(guild.id, targetId);
-        const userCooldownKey = Database._cacheKeyCooldown(guild.id, user.id);
-        if (Database.redisClient) {
-          try {
-            const keysToDel = [
-              userCacheKeyFull,
-              userCacheKeyBasic,
-              userStatsKey,
-              userCooldownKey,
-              targetCacheKeyFull,
-              targetCacheKeyBasic,
-              targetStatsKey,
-            ];
-            await Database.redisClient.del(keysToDel);
-            Database._logRedis("del", keysToDel.join(", "), true);
-          } catch (err) {
-            Database._logRedis("del", keysToDel.join(", "), err);
+          if (success) {
+            // Deduct amount from target and add to user
+            await hubClient.addBalance(guild.id, targetId, -amount);
+            await hubClient.addBalance(guild.id, user.id, amount);
+          } else {
+            // Deduct fine from user and give it to the victim as compensation
+            await hubClient.addBalance(guild.id, user.id, -amount);
+            await hubClient.addBalance(guild.id, targetId, amount);
           }
         }
+
+        // Update crime cooldown
+        await hubClient.setCooldown(guild.id, user.id, "crime", ms("2h"));
 
         // Get updated data (reuse the data if amount is zero to avoid unnecessary database queries)
         const [updatedUserData, updatedTargetData] =
           amount > 0
             ? await Promise.all([
-                Database.getUser(guild.id, user.id),
-                Database.getUser(guild.id, targetId),
+                hubClient.getUser(guild.id, user.id, true),
+                hubClient.getUser(guild.id, targetId, true),
               ])
             : [userData, targetData];
 
@@ -463,14 +354,14 @@ export default {
           dominantColor,
           mode: builderMode,
         })
-          .addText(i18n.__("commands.economy.crime.title"), "header3")
+          .addText(await i18n.__("commands.economy.crime.title"), "header3")
           .addText(
             success
-              ? i18n.__("commands.economy.crime.successTarget", {
+              ? await i18n.__("commands.economy.crime.successTarget", {
                   amount,
                   target: target.displayName,
                 })
-              : i18n.__("commands.economy.crime.failTarget", { amount })
+              : await i18n.__("commands.economy.crime.failTarget", { amount })
           )
           .addImage(`attachment://crime_result.avif`);
 
@@ -483,7 +374,7 @@ export default {
         // Handle timeout or other errors during target selection
         console.error("Error during crime target selection:", error);
         const errorOptions = {
-          content: i18n.__("commands.economy.crime.noSelection"),
+          content: await i18n.__("commands.economy.crime.noSelection"),
           components: [],
           files: [],
         };
@@ -493,18 +384,13 @@ export default {
     } catch (error) {
       console.error("Error in crime command:", error);
       const errorOptions = {
-        content: i18n.__("commands.economy.crime.error"),
+        content: await i18n.__("commands.economy.crime.error"),
         ephemeral: true,
       };
-      // Check AI context for error handling
-      if (!!interaction._isAiProxy) {
-        throw new Error(i18n.__("commands.economy.crime.error"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

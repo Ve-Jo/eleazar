@@ -1,5 +1,5 @@
 import { AttachmentBuilder, MessageFlags } from "discord.js";
-import i18n from "./newI18n.js";
+import i18n from "./i18n.js";
 import { generateImage } from "./imageGenerator.js";
 import { ComponentBuilder } from "./componentConverter.js";
 import { createMusicButtons } from "./musicButtons.js";
@@ -67,20 +67,30 @@ const localization_strings = {
   },
 };
 
-// Register translations with i18n system
-Object.keys(localization_strings).forEach((category) => {
-  Object.keys(localization_strings[category]).forEach((component) => {
-    i18n.registerLocalizations(
-      category,
-      component,
-      localization_strings[category][component],
-      true
-    );
-  });
-});
+// Replace i18n import with hubClient
+import { hubClient } from "../api/hubClient.js";
 
+// Use fire-and-forget async registration
+(async () => {
+  for (const category of Object.keys(localization_strings)) {
+    for (const component of Object.keys(localization_strings[category])) {
+      await hubClient.registerLocalizations(
+        category,
+        component,
+        localization_strings[category][component],
+        true
+      );
+    }
+  }
+})();
+
+// In createOrUpdateMusicPlayerEmbed, remove i18n.setLocale and use hubClient.getTranslation with explicit locale
+// Make the function async if not already
+// Replace all await i18n.__ calls with await hubClient.getTranslation('music.player.[key]', locale, { variables })
 let lastGeneratedImage = null;
 let lastGeneratedImageTimestamp = 0;
+
+// Remove extra comments added previously
 
 export async function createOrUpdateMusicPlayerEmbed(
   track,
@@ -94,7 +104,7 @@ export async function createOrUpdateMusicPlayerEmbed(
   if (locale.includes("-")) {
     locale = locale.split("-")[0];
   }
-  i18n.setLocale(locale);
+  // Remove i18n.setLocale
 
   if (!player.activatedFilters) {
     player.activatedFilters = [];
@@ -136,27 +146,48 @@ export async function createOrUpdateMusicPlayerEmbed(
             user: {
               id: track.requester?.id || "unknown",
               username:
-                track.requester?.username || i18n.__("music.player.noTitle"),
+                track.requester?.username ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               displayName:
-                track.requester?.displayName || i18n.__("music.player.noTitle"),
+                track.requester?.displayName ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               avatarURL: getAvatarUrl(track.requester),
               locale: track.requester?.locale || "en",
             },
           },
           currentSong: {
-            title: track.info.title || i18n.__("music.player.noTitle"),
-            artist: track.info.author || i18n.__("music.player.noArtist"),
+            title:
+              track.info.title ||
+              (await hubClient.getTranslation("music.player.noTitle", locale)),
+            artist:
+              track.info.author ||
+              (await hubClient.getTranslation("music.player.noArtist", locale)),
             thumbnail: track.info.artworkUrl,
             addedBy:
-              track.requester?.username || i18n.__("music.player.noTitle"),
+              track.requester?.username ||
+              (await hubClient.getTranslation("music.player.noTitle", locale)),
             addedByAvatar: getAvatarUrl(track.requester),
             duration: track.info.duration,
             user: {
               id: track.requester?.id || "unknown",
               username:
-                track.requester?.username || i18n.__("music.player.noTitle"),
+                track.requester?.username ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               displayName:
-                track.requester?.displayName || i18n.__("music.player.noTitle"),
+                track.requester?.displayName ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               avatarURL: getAvatarUrl(track.requester),
             },
           },
@@ -164,31 +195,51 @@ export async function createOrUpdateMusicPlayerEmbed(
           previousSong: previousSong
             ? {
                 title:
-                  previousSong.info.title || i18n.__("music.player.noTitle"),
+                  previousSong.info.title ||
+                  (await hubClient.getTranslation(
+                    "music.player.noTitle",
+                    locale
+                  )),
                 duration: previousSong.info.duration,
                 thumbnail: previousSong.info.artworkUrl,
                 user: {
                   id: previousSong.requester?.id || "unknown",
                   username:
                     previousSong.requester?.username ||
-                    i18n.__("music.player.noTitle"),
+                    (await hubClient.getTranslation(
+                      "music.player.noTitle",
+                      locale
+                    )),
                   displayName:
                     previousSong.requester?.displayName ||
-                    i18n.__("music.player.noTitle"),
+                    (await hubClient.getTranslation(
+                      "music.player.noTitle",
+                      locale
+                    )),
                   avatarURL: getAvatarUrl(previousSong.requester),
                 },
               }
             : undefined,
-          nextSongs: player.queue.tracks.slice(0, 5).map((t) => ({
-            title: t.info.title || i18n.__("music.player.noTitle"),
+          nextSongs: player.queue.tracks.slice(0, 5).map(async (t) => ({
+            title:
+              t.info.title ||
+              (await hubClient.getTranslation("music.player.noTitle", locale)),
             duration: t.info.duration,
             thumbnail: t.info.artworkUrl,
             user: {
               id: t.requester?.id || "unknown",
               username:
-                t.requester?.username || i18n.__("music.player.noTitle"),
+                t.requester?.username ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               displayName:
-                t.requester?.displayName || i18n.__("music.player.noTitle"),
+                t.requester?.displayName ||
+                (await hubClient.getTranslation(
+                  "music.player.noTitle",
+                  locale
+                )),
               avatarURL: getAvatarUrl(t.requester),
             },
           })),
@@ -217,7 +268,7 @@ export async function createOrUpdateMusicPlayerEmbed(
 
   // Create the main component using ComponentBuilder
   const musicPlayerComponent = new ComponentBuilder()
-    .addText(i18n.__("music.player.title"), "header3")
+    .addText(await i18n.__("music.player.title"), "header3")
     .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
     // Add the generated image
     .addImage(`attachment://${attachment.name}`)

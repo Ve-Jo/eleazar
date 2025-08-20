@@ -11,11 +11,7 @@ const CONFIG = {
       text: [
         "meta-llama/llama-4-maverick-17b-128e-instruct",
         "meta-llama/llama-4-scout-17b-16e-instruct",
-        "llama-3.3-70b-versatile",
-        "llama3-70b-8192",
         "deepseek-r1-distill-llama-70b",
-        "mistral-saba-24b",
-        "qwen-qwq-32b",
       ],
       vision: [
         "meta-llama/llama-4-maverick-17b-128e-instruct",
@@ -32,13 +28,13 @@ const CONFIG = {
     preferredModels: {
       text: [
         "openai/gpt-4.1-nano",
+        "qwen/qwen3-235b-a22b-thinking-2507",
         "qwen/qwen3-235b-a22b",
-        "qwen/qwen3-30b-a3b",
-        "minimax/minimax-m1",
+        "moonshotai/kimi-k2",
         "minimax/minimax-01",
         "mistralai/magistral-small-2506",
         "x-ai/grok-3-mini-beta",
-        "google/gemini-2.5-flash-preview",
+        "google/gemini-2.5-flash-lite-preview-06-17",
         "google/gemma-3-27b-it",
         "qwen/qwen-vl-plus",
       ],
@@ -54,8 +50,7 @@ const CONFIG = {
   // Models that support reasoning capabilities
   reasoningCapableModels: [
     "minimax/minimax-m1",
-    "qwen/qwen3-235b-a22b",
-    "qwen/qwen3-30b-a3b",
+    "qwen/qwen3-235b-a22b-thinking-2507",
     "x-ai/grok-3-mini-beta",
     "mistralai/magistral-small-2506",
   ],

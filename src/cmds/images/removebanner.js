@@ -1,5 +1,5 @@
 import { SlashCommandSubcommandBuilder, MessageFlags } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
@@ -52,51 +52,28 @@ export default {
     }
 
     try {
-      // Remove the banner URL from the database
-      await Database.client.user.update({
-        where: {
-          guildId_id: {
-            id: interaction.user.id,
-            guildId: interaction.guild.id,
-          },
-        },
-        data: {
-          bannerUrl: null, // Set bannerUrl to null
-        },
-      });
+      // Ensure user exists in database before updating
+      await hubClient.ensureGuildUser(
+        interaction.guild.id,
+        interaction.user.id
+      );
 
-      // --- Explicitly invalidate cache AFTER update ---
-      const userCacheKeyFull = Database._cacheKeyUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
-      const userCacheKeyBasic = Database._cacheKeyUser(
-        interaction.guild.id,
-        interaction.user.id,
-        false
-      );
-      if (Database.redisClient) {
-        try {
-          const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
-          await Database.redisClient.del(keysToDel);
-          Database._logRedis("del", keysToDel.join(", "), true);
-        } catch (err) {
-          Database._logRedis("del", keysToDel.join(", "), err);
-        }
-      }
+      // Remove the banner URL using hubClient
+      await hubClient.updateUser(interaction.guild.id, interaction.user.id, {
+        bannerUrl: null,
+      });
 
       // Create success component (optional, but good practice)
       const successComponent = new ComponentBuilder({
         mode: builderMode,
         color: 0x00ff00, // Green color for success
-      }).addText(i18n.__("commands.images.removebanner.success"));
+      }).addText(await i18n.__("commands.images.removebanner.success"));
 
       // Reply/edit based on context
       const replyOptions = successComponent.toReplyOptions({
         ephemeral: true, // Keep ephemeral for both contexts
         content: isAiContext
-          ? i18n.__("commands.images.removebanner.success")
+          ? await i18n.__("commands.images.removebanner.success")
           : undefined,
       });
 
@@ -112,18 +89,18 @@ export default {
       const errorComponent = new ComponentBuilder({
         mode: builderMode,
         color: 0xff0000, // Red color for error
-      }).addText(i18n.__("commands.images.removebanner.error"));
+      }).addText(await i18n.__("commands.images.removebanner.error"));
 
       const errorOptions = errorComponent.toReplyOptions({
         ephemeral: true,
         content: isAiContext
-          ? i18n.__("commands.images.removebanner.error")
+          ? await i18n.__("commands.images.removebanner.error")
           : undefined,
       });
 
       if (isAiContext) {
         // For AI, throw the error message instead of replying
-        throw new Error(i18n.__("commands.images.removebanner.error"));
+        throw new Error(await i18n.__("commands.images.removebanner.error"));
       } else {
         // For normal interactions, edit the deferred reply
         if (interaction.replied || interaction.deferred) {

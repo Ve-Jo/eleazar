@@ -97,6 +97,7 @@ const CrateRewards = (props) => {
   const totalRewards =
     (rewards.coins > 0 ? 1 : 0) +
     (rewards.xp > 0 ? 1 : 0) +
+    (rewards.seasonXp > 0 ? 1 : 0) +
     (rewards.discount > 0 ? 1 : 0) +
     Object.keys(rewards.cooldownReductions || {}).length;
 
@@ -224,6 +225,15 @@ const CrateRewards = (props) => {
                 "#2196f3" // Blue color
               )}
 
+            {/* Season XP reward */}
+            {rewards.seasonXp > 0 &&
+              renderRewardItem(
+                "🌟",
+                translations.seasonXp,
+                `+${rewards.seasonXp}`,
+                "#ff9800" // Orange color
+              )}
+
             {/* Discount reward */}
             {rewards.discount > 0 &&
               renderRewardItem(
@@ -264,6 +274,7 @@ const CrateRewards = (props) => {
             {/* If no rewards, show message */}
             {!rewards.coins &&
               !rewards.xp &&
+              !rewards.seasonXp &&
               !rewards.discount &&
               Object.keys(rewards.cooldownReductions || {}).length === 0 && (
                 <div
@@ -365,6 +376,11 @@ CrateRewards.localization_strings = {
     en: "Experience Points",
     ru: "Очки опыта",
     uk: "Очки досвіду",
+  },
+  seasonXp: {
+    en: "Season XP",
+    ru: "Сезонный опыт",
+    uk: "Сезонний досвід",
   },
   discount: {
     en: "Discount",

@@ -6,8 +6,8 @@ import {
   StringSelectMenuBuilder,
   AttachmentBuilder,
 } from "discord.js";
-import Database from "../../database/client.js";
-import legacyDb from "../../database/legacyClient.js"; // Import legacy client
+import hubClient from "../../api/hubClient.js";
+//import legacyDb from "../../database/legacyClient.js"; // Import legacy client
 import { generateImage } from "../../utils/imageGenerator.js";
 import { loadGames, getGameModule } from "../../utils/loadGames.js";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
@@ -147,14 +147,15 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    return interaction.reply({
+      content: "Команда устарела",
+      ephemeral: true,
+    });
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     try {
       // Explicitly set locale based on interaction
@@ -188,7 +189,7 @@ export default {
         // Validate the requested game exists
         if (!gamesMap.has(requestedGame)) {
           await interaction.editReply({
-            content: i18n.__("commands.economy.work.gameNotFound"),
+            content: await i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
           });
           return;
@@ -199,7 +200,7 @@ export default {
         const gameModule = await getGameModule(requestedGame, i18n);
         if (!gameModule?.default) {
           await interaction.editReply({
-            content: i18n.__("commands.economy.work.gameNotFound"),
+            content: await i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
           });
           return;
@@ -208,7 +209,7 @@ export default {
         // Execute the game - handle legacy vs non-legacy
         if (gameModule.default.isLegacy) {
           // Pass legacy DB for legacy games
-          await gameModule.default.execute(interaction, legacyDb);
+          //await gameModule.default.execute(interaction, legacyDb);
         } else {
           // Pass i18n for non-legacy games
           await gameModule.default.execute(interaction, i18n);
@@ -217,7 +218,7 @@ export default {
       }
 
       // Get user and game records in a single operation
-      const gameRecords = await Database.getGameRecords(
+      const gameRecords = await hubClient.getGameRecords(
         interaction.guild.id,
         interaction.user.id
       );
@@ -237,13 +238,13 @@ export default {
       );
 
       // Use translated category names
-      const standardCategoryName = i18n.__(
+      const standardCategoryName = await i18n.__(
         "commands.economy.work.standardGamesCategory"
       );
-      const riskyCategoryName = i18n.__(
+      const riskyCategoryName = await i18n.__(
         "commands.economy.work.riskyGamesCategory"
       );
-      const legacyCategoryName = i18n.__(
+      const legacyCategoryName = await i18n.__(
         "commands.economy.work.oldGamesCategory"
       );
 
@@ -294,7 +295,7 @@ export default {
       if (Object.keys(games).length === 0) {
         console.warn("[work] No games were categorized.");
         await interaction.editReply({
-          content: i18n.__("commands.economy.work.noGamesAvailable"),
+          content: await i18n.__("commands.economy.work.noGamesAvailable"),
           ephemeral: true,
         });
         return;
@@ -308,7 +309,7 @@ export default {
       let currentGameRecords = gameRecords;
 
       // Get user data once for initial rendering
-      let userData = await Database.getUser(
+      let userData = await hubClient.getUser(
         interaction.guild.id,
         interaction.user.id
       );
@@ -378,13 +379,13 @@ export default {
           mode: builderMode,
         })
           .setColor(dominantColor?.embedColor)
-          .addText(i18n.__(`commands.economy.work.title`), "header3")
+          .addText(await i18n.__(`commands.economy.work.title`), "header3")
           .addImage(`attachment://work_games.avif`);
 
         // Create category select menu
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_category")
-          .setPlaceholder(i18n.__(`commands.economy.work.selectCategory`))
+          .setPlaceholder(await i18n.__(`commands.economy.work.selectCategory`))
           .addOptions(
             categoryNames.map((category, index) => ({
               label: category,
@@ -408,7 +409,7 @@ export default {
 
         const selectButton = new ButtonBuilder()
           .setCustomId("select_game")
-          .setLabel(i18n.__(`commands.economy.work.playGame`))
+          .setLabel(await i18n.__(`commands.economy.work.playGame`))
           .setStyle(
             selectedGame === currentCategoryGames[highlightedGame]?.id
               ? ButtonStyle.Secondary
@@ -437,23 +438,14 @@ export default {
         // Return the complete reply options object using the builder
         return gameLauncherComponent.toReplyOptions({
           files: [attachment],
-          // Add content only for V1 mode (AI context)
-          content: isAiContext
-            ? i18n.__(`commands.economy.work.title`)
-            : undefined,
         });
       };
 
       // Initial reply/edit
       const initialMessageOptions = await generateGameMessage();
-      let message;
-      if (isAiContext) {
-        // AI Context: Use proxy reply
-        message = await interaction.reply(initialMessageOptions);
-      } else {
-        // Normal context: Edit deferred reply
-        message = await interaction.editReply(initialMessageOptions);
-      }
+
+      // Edit deferred reply
+      const message = await interaction.editReply(initialMessageOptions);
 
       // Create collector for buttons and select menu
       const collector = message.createMessageComponentCollector({
@@ -478,7 +470,7 @@ export default {
 
         if (!currentCategoryGames || currentCategoryGames.length === 0) {
           await i.reply({
-            content: i18n.__(`commands.economy.work.noGamesAvailable`),
+            content: await i18n.__(`commands.economy.work.noGamesAvailable`),
             ephemeral: true,
           });
           return;
@@ -514,7 +506,7 @@ export default {
           const game = currentCategoryGames[highlightedGame];
           if (!game) {
             await i.reply({
-              content: i18n.__(`commands.economy.work.gameNotFound`),
+              content: await i18n.__(`commands.economy.work.gameNotFound`),
               ephemeral: true,
             });
             return;
@@ -550,7 +542,7 @@ export default {
               // Let's pass interaction and legacyDb for now.
               // IMPORTANT: The legacy game file rpg_clicker2.js needs modification
               // to accept (interaction, legacyDb) and use legacyDb for db calls.
-              await gameModule.default.execute(interaction, legacyDb); // Pass interaction and legacy DB
+              //await gameModule.default.execute(interaction, legacyDb); // Pass interaction and legacy DB
             } else {
               console.log(`[work-collect] Executing standard game: ${game.id}`);
               // For non-legacy games like Tower
@@ -561,7 +553,7 @@ export default {
             console.error(`Error executing game ${game.id}:`, error);
             // Use followUp as update was already sent to remove components
             await i.followUp({
-              content: i18n.__(`commands.economy.work.gameError`, {
+              content: await i18n.__(`commands.economy.work.gameError`, {
                 game: game.title,
               }),
               ephemeral: true,
@@ -587,23 +579,17 @@ export default {
       });
     } catch (error) {
       console.error("Error in work command:", error);
-      await interaction.editReply({
-        content: i18n.__("commands.economy.work.error"), // Use specific key
-        ephemeral: true,
-      });
-      // Check AI context for error handling
+      // Create error options with appropriate message
       const errorOptions = {
-        content: i18n.__("commands.economy.work.error"),
+        content: await i18n.__("commands.economy.work.error"),
         ephemeral: true,
       };
-      if (!!interaction._isAiProxy) {
-        throw new Error(i18n.__("commands.economy.work.error"));
+
+      // Send error response based on interaction state
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

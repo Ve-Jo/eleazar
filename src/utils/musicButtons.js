@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
-import i18n from "./newI18n.js";
+import hubClient from "../api/hubClient.js";
 
 // Define localization strings
 const localization_strings = {
@@ -8,58 +8,63 @@ const localization_strings = {
       previous: {
         en: "Previous",
         ru: "Предыдущий",
-        uk: "Попередній"
+        uk: "Попередній",
       },
       loop: {
         en: "Loop",
         ru: "Повтор",
-        uk: "Повтор"
+        uk: "Повтор",
       },
       pause: {
         en: "Pause",
         ru: "Пауза",
-        uk: "Пауза"
+        uk: "Пауза",
       },
       play: {
         en: "Play",
         ru: "Воспроизвести",
-        uk: "Відтворити"
+        uk: "Відтворити",
       },
       autoplay: {
         en: "Autoplay",
         ru: "Автовоспроизведение",
-        uk: "Автовідтворення"
+        uk: "Автовідтворення",
       },
       on: {
         en: "ON",
         ru: "ВКЛ",
-        uk: "УВІМК"
+        uk: "УВІМК",
       },
       off: {
         en: "OFF",
         ru: "ВЫКЛ",
-        uk: "ВИМК"
+        uk: "ВИМК",
       },
       skip: {
         en: "Skip",
         ru: "Пропустить",
-        uk: "Пропустити"
-      }
-    }
-  }
+        uk: "Пропустити",
+      },
+    },
+  },
 };
 
-// Register translations with i18n system
-Object.keys(localization_strings).forEach(category => {
-  Object.keys(localization_strings[category]).forEach(component => {
-    i18n.registerLocalizations(category, component, localization_strings[category][component], true);
+// Register translations with hubClient asynchronously
+(async () => {
+  Object.keys(localization_strings).forEach((category) => {
+    Object.keys(localization_strings[category]).forEach((component) => {
+      hubClient.registerLocalizations(
+        category,
+        component,
+        localization_strings[category][component],
+        true
+      );
+    });
   });
-});
+})();
 
-export function createMusicButtons(player) {
+export async function createMusicButtons(player) {
   const locale = player.queue.current?.userData?.requester?.locale || "en";
-
-  i18n.setLocale(i18n.getLocales().includes(locale) ? locale : "en");
 
   let autoplay = false;
   try {
@@ -102,7 +107,11 @@ export function createMusicButtons(player) {
     new ButtonBuilder()
       .setCustomId("music_autoplay")
       .setEmoji("🎧")
-      .setLabel(autoplay ? i18n.__("music.buttons.on") : i18n.__("music.buttons.off"))
+      .setLabel(
+        autoplay
+          ? await hubClient.getTranslation("music.buttons.on", {}, locale)
+          : await hubClient.getTranslation("music.buttons.off", {}, locale)
+      )
       .setStyle(autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("music_skip")

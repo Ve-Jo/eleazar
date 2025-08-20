@@ -145,13 +145,13 @@ export default {
     const attachment = interaction.options.getAttachment("image");
 
     if (!attachment) {
-      return interaction.editReply(i18n.__("no_attachment"));
+      return interaction.editReply(await i18n.__("no_attachment"));
     }
 
     // Check if file is an image
     if (!attachment.contentType?.startsWith("image/")) {
       return interaction.editReply(
-        i18n.__("not_an_image", {
+        await i18n.__("not_an_image", {
           content_type: attachment.contentType || "unknown",
         })
       );
@@ -159,19 +159,19 @@ export default {
 
     // Check file size (10MB limit)
     if (attachment.size > 10 * 1024 * 1024) {
-      return interaction.editReply(i18n.__("file_too_large"));
+      return interaction.editReply(await i18n.__("file_too_large"));
     }
 
     try {
       // Download the image
       const response = await fetch(attachment.url);
       if (!response.ok) {
-        throw new Error(i18n.__("download_failed"));
+        throw new Error(await i18n.__("download_failed"));
       }
 
       const imageBuffer = await response.arrayBuffer();
 
-      await interaction.editReply(i18n.__("processing"));
+      await interaction.editReply(await i18n.__("processing"));
 
       // Call the upscale API using Replicate
       const prediction = await interaction.client.replicate.predictions.create({
@@ -183,7 +183,7 @@ export default {
       });
 
       if (!prediction) {
-        throw new Error(i18n.__("api_error"));
+        throw new Error(await i18n.__("api_error"));
       }
 
       // Wait for the prediction to complete
@@ -199,14 +199,14 @@ export default {
       }
 
       if (finalPrediction.status === "failed") {
-        throw new Error(i18n.__("processing_failed"));
+        throw new Error(await i18n.__("processing_failed"));
       }
 
       // Get the result image
       const output = finalPrediction.output;
 
       if (!output || !output[0]) {
-        throw new Error(i18n.__("no_output"));
+        throw new Error(await i18n.__("no_output"));
       }
 
       // Download the result image
@@ -214,7 +214,7 @@ export default {
       const upscaledImageResponse = await fetch(upscaledImageUrl);
 
       if (!upscaledImageResponse.ok) {
-        throw new Error(i18n.__("result_download_failed"));
+        throw new Error(await i18n.__("result_download_failed"));
       }
 
       const upscaledImageBuffer = await upscaledImageResponse.arrayBuffer();
@@ -225,12 +225,12 @@ export default {
       ).setName("upscaled_image.png");
 
       await interaction.editReply({
-        content: i18n.__("success"),
+        content: await i18n.__("success"),
         files: [resultAttachment],
       });
     } catch (error) {
       console.error("Error upscaling image:", error);
-      await interaction.editReply(i18n.__("error"));
+      await interaction.editReply(await i18n.__("error"));
     }
   },
 };

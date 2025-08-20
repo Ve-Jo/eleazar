@@ -1,5 +1,5 @@
 import { createMusicButtons } from "../../utils/musicButtons.js";
-import i18n from "../../utils/newI18n.js";
+import i18n from "../../utils/i18n.js";
 import { createOrUpdateMusicPlayerEmbed } from "../../utils/musicPlayerEmbed.js";
 
 // Define localization strings
@@ -105,7 +105,7 @@ export default {
       // Get the message reference from the map instead of player.nowPlayingMessage
       const existingMessage = client.musicMessageMap.get(player.guildId);
       if (!existingMessage) {
-        console.log(i18n.__("music.update.noMessage"));
+        console.log(await i18n.__("music.update.noMessage"));
         return;
       }
 
@@ -132,7 +132,7 @@ export default {
         const track = player.queue.current;
 
         if (!track?.info) {
-          console.log(i18n.__("music.update.trackInfoMissing"));
+          console.log(await i18n.__("music.update.trackInfoMissing"));
           player.set("isUpdatingMessage", false);
           return;
         }
@@ -140,7 +140,7 @@ export default {
         // Fetch the channel from the existing message
         const channel = existingMessage.channel;
         if (!channel) {
-          console.log(i18n.__("music.update.channelNotFound"));
+          console.log(await i18n.__("music.update.channelNotFound"));
           client.musicMessageMap.delete(player.guildId); // Clean up map if channel is gone
           player.set("isUpdatingMessage", false);
           return;
@@ -153,14 +153,14 @@ export default {
             .fetch(existingMessage.id)
             .catch(() => null);
           if (!message) {
-            console.log(i18n.__("music.update.messageNotFound"));
+            console.log(await i18n.__("music.update.messageNotFound"));
             client.musicMessageMap.delete(player.guildId); // Clean up map
             player.set("isUpdatingMessage", false);
             return;
           }
         } catch (error) {
           console.log(
-            i18n.__("music.update.messageDeleted") + ":",
+            (await i18n.__("music.update.messageDeleted")) + ":",
             error.message
           );
           client.musicMessageMap.delete(player.guildId); // Clean up map
@@ -175,8 +175,11 @@ export default {
         );
 
         // Edit the message with the new component data
-        await message.edit(updatedPlayerData).catch((error) => {
-          console.error(i18n.__("music.update.updateError") + ":", error);
+        await message.edit(updatedPlayerData).catch(async (error) => {
+          console.error(
+            (await i18n.__("music.update.updateError")) + ":",
+            error
+          );
           // If editing fails (e.g., message deleted), remove from map
           if (error.code === 10008) {
             // Unknown Message
@@ -184,12 +187,15 @@ export default {
           }
         });
       } catch (error) {
-        console.error(i18n.__("music.update.errorInHandler") + ":", error);
+        console.error(
+          (await i18n.__("music.update.errorInHandler")) + ":",
+          error
+        );
       } finally {
         player.set("isUpdatingMessage", false);
       }
     } catch (error) {
-      console.error(i18n.__("music.update.errorInEvent") + ":", error);
+      console.error((await i18n.__("music.update.errorInEvent")) + ":", error);
     }
   },
 };

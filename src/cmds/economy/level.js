@@ -3,9 +3,9 @@ import {
   SlashCommandSubcommandBuilder,
   MessageFlags,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
-import i18n from "../../utils/newI18n.js";
+import i18n from "../../utils/i18n.js";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
@@ -83,21 +83,21 @@ export default {
     },
   },
 
-  async execute(interaction) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+  async execute(interaction, i18n) {
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     try {
       const user = interaction.options.getMember("user") || interaction.member;
 
+      // Ensure user exists in database before fetching data
+      await hubClient.ensureGuildUser(interaction.guild.id, user.id);
+
       // Get user data with relationships
-      const userData = await Database.getUser(
+      const userData = await hubClient.getUser(
         interaction.guild.id,
         user.id,
         true
@@ -105,22 +105,20 @@ export default {
 
       if (!userData) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.level.userNotFound"),
+          content: await i18n.__("commands.economy.level.userNotFound"),
           ephemeral: true,
         });
       }
 
       // Fetch seasons data
-      const seasons = await Database.client.seasons.findFirst({
-        where: { id: "current" },
-      });
+      const seasons = await hubClient.getCurrentSeason();
 
       // Fetch and calculate all level data
       const chatXp = Number(userData.Level?.xp || 0);
-      const chatLevelInfo = Database.calculateLevel(chatXp);
+      const chatLevelInfo = hubClient.calculateLevel(chatXp);
 
       const gameXp = Number(userData.Level?.gameXp || 0);
-      const gameLevelInfo = Database.calculateLevel(gameXp);
+      const gameLevelInfo = hubClient.calculateLevel(gameXp);
 
       const seasonXp = Number(userData.Level?.seasonXp || 0);
       const seasonEnds =
@@ -130,7 +128,7 @@ export default {
       // --- Fetch Level Role Info --- //
       let nextLevelRoleInfo = null;
       try {
-        const nextRoleData = await Database.getNextLevelRole(
+        const nextRoleData = await hubClient.getNextLevelRole(
           interaction.guild.id,
           chatLevelInfo.level
         );
@@ -198,14 +196,10 @@ export default {
       if (!buffer) {
         console.error("Buffer is undefined or null");
         const errorOptions = {
-          content: i18n.__("commands.economy.level.imageError"),
+          content: await i18n.__("commands.economy.level.imageError"),
           ephemeral: true,
         };
-        if (isAiContext) {
-          throw new Error(i18n.__("commands.economy.level.imageError"));
-        } else {
-          return interaction.editReply(errorOptions);
-        }
+        return interaction.editReply(errorOptions);
       }
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -217,44 +211,30 @@ export default {
         dominantColor: dominantColor,
         mode: builderMode,
       })
-        .addText(i18n.__("commands.economy.level.title"), "header3")
+        .addText(await i18n.__("commands.economy.level.title"), "header3")
         .addImage("attachment://level.avif")
         .addTimestamp(interaction.locale);
 
       // Prepare the reply options using the builder
       const replyOptions = levelComponent.toReplyOptions({
         files: [attachment],
-        // Add content only for V1 mode (AI context)
-        content: isAiContext
-          ? i18n.__("commands.economy.level.title")
-          : undefined,
       });
 
-      // Adjust reply logic based on context
-      if (isAiContext) {
-        // AI Context: Use proxy's reply
-        await interaction.reply(replyOptions); // interaction is proxy
-      } else {
-        // Normal Context: Edit the original deferred reply
-        await interaction.editReply(replyOptions);
-      }
+      // Always edit the original deferred reply
+      await interaction.editReply(replyOptions);
     } catch (error) {
       console.error("Error in level command:", error);
       const errorOptions = {
-        content: i18n.__("commands.economy.level.error"),
+        content: await i18n.__("commands.economy.level.error"),
         ephemeral: true,
         components: [], // Ensure components are cleared on error
         embeds: [], // Ensure embeds are cleared on error
         files: [], // Ensure files are cleared on error
       };
-      if (isAiContext) {
-        throw new Error(i18n.__("commands.economy.level.error"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

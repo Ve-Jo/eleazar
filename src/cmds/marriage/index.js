@@ -3,7 +3,7 @@ import {
   EmbedBuilder,
   PermissionsBitField,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 
 export default {
   data: () => {
@@ -240,23 +240,23 @@ export default {
 
           if (userId === targetUserId) {
             return interaction.editReply(
-              i18n.__("commands.marriage.cannotMarrySelf")
+              await i18n.__("commands.marriage.cannotMarrySelf")
             );
           }
           if (targetUser.bot) {
             return interaction.editReply(
-              i18n.__("commands.marriage.cannotMarryBot")
+              await i18n.__("commands.marriage.cannotMarryBot")
             );
           }
 
           try {
-            await Database.proposeMarriage(guildId, userId, targetUserId);
+            await hubClient.proposeMarriage(guildId, userId, targetUserId);
 
             // --- Send DM to target user ---
             let dmSent = false;
             try {
               await targetUser.send(
-                i18n.__("commands.marriage.proposalDM", {
+                await i18n.__("commands.marriage.proposalDM", {
                   user: interaction.user.tag,
                   guild: interaction.guild.name,
                 })
@@ -271,29 +271,31 @@ export default {
             // --- End Send DM ---
 
             return interaction.editReply(
-              i18n.__("commands.marriage.proposeSuccess", {
+              (await i18n.__("commands.marriage.proposeSuccess", {
                 user: targetUser.toString(),
                 proposer: interaction.user.toString(),
-              }) +
-                (dmSent ? "" : ` ${i18n.__("commands.marriage.cannotSendDM")}`)
+              })) +
+                (dmSent
+                  ? ""
+                  : ` ${await i18n.__("commands.marriage.cannotSendDM")}`)
             );
           } catch (error) {
             // Handle specific errors from proposeMarriage
             if (error.message.includes("User 1 is already married")) {
               return interaction.editReply(
-                i18n.__("commands.marriage.alreadyMarried")
+                await i18n.__("commands.marriage.alreadyMarried")
               );
             }
             if (error.message.includes("User 2 is already married")) {
               return interaction.editReply(
-                i18n.__("commands.marriage.targetAlreadyMarried", {
+                await i18n.__("commands.marriage.targetAlreadyMarried", {
                   user: targetUser.toString(),
                 })
               );
             }
             console.error("Propose marriage error:", error);
             return interaction.editReply(
-              i18n.__("commands.marriage.proposalError")
+              await i18n.__("commands.marriage.proposalError")
             );
           }
         }
@@ -302,23 +304,23 @@ export default {
           const proposingUserId = proposingUser.id;
 
           try {
-            await Database.acceptMarriage(guildId, proposingUserId, userId);
+            await hubClient.acceptMarriage(guildId, userId, proposingUserId);
             return interaction.editReply(
-              i18n.__("commands.marriage.acceptSuccess", {
+              await i18n.__("commands.marriage.acceptSuccess", {
                 user: proposingUser.toString(),
               })
             );
           } catch (error) {
             if (error.message.includes("No pending marriage proposal")) {
               return interaction.editReply(
-                i18n.__("commands.marriage.noProposalToAccept", {
+                await i18n.__("commands.marriage.noProposalToAccept", {
                   user: proposingUser.toString(),
                 })
               );
             }
             console.error("Accept marriage error:", error);
             return interaction.editReply(
-              i18n.__("commands.marriage.acceptError")
+              await i18n.__("commands.marriage.acceptError")
             );
           }
         }
@@ -328,46 +330,50 @@ export default {
 
           try {
             // Reject checks both directions (userId1, userId2) and (userId2, userId1)
-            await Database.rejectMarriage(guildId, proposingUserId, userId);
+            await hubClient.rejectMarriage(guildId, userId, proposingUserId);
             return interaction.editReply(
-              i18n.__("commands.marriage.rejectSuccess", {
+              await i18n.__("commands.marriage.rejectSuccess", {
                 user: proposingUser.toString(),
               })
             );
           } catch (error) {
             if (error.message.includes("No pending marriage proposal")) {
               // Check if the proposal was sent *by* the current user to the target
-              const status = await Database.getMarriageStatus(guildId, userId);
+              const status = await hubClient.getMarriageStatus(guildId, userId);
               if (
                 status?.partnerId === proposingUserId &&
                 status?.status === "PENDING"
               ) {
-                await Database.rejectMarriage(guildId, userId, proposingUserId); // Reject own proposal
+                await hubClient.rejectMarriage(
+                  guildId,
+                  userId,
+                  proposingUserId
+                ); // Reject own proposal
                 return interaction.editReply(
-                  i18n.__("commands.marriage.rejectSuccess", {
+                  await i18n.__("commands.marriage.rejectSuccess", {
                     user: proposingUser.toString(),
                   })
                 );
               }
               // Otherwise, no proposal exists from the target user
               return interaction.editReply(
-                i18n.__("commands.marriage.noProposalToReject", {
+                await i18n.__("commands.marriage.noProposalToReject", {
                   user: proposingUser.toString(),
                 })
               );
             }
             console.error("Reject marriage error:", error);
             return interaction.editReply(
-              i18n.__("commands.marriage.rejectError")
+              await i18n.__("commands.marriage.rejectError")
             );
           }
         }
         case "divorce": {
           try {
-            const status = await Database.getMarriageStatus(guildId, userId);
+            const status = await hubClient.getMarriageStatus(guildId, userId);
             if (!status || status.status !== "MARRIED") {
               return interaction.editReply(
-                i18n.__("commands.marriage.notMarried")
+                await i18n.__("commands.marriage.notMarried")
               );
             }
 
@@ -378,30 +384,21 @@ export default {
               ? partner.toString()
               : `User (${status.partnerId})`;
 
-            await Database.dissolveMarriage(guildId, userId, status.partnerId);
+            await hubClient.dissolveMarriage(guildId, userId, status.partnerId);
 
-            // --- Send DMs to both users ---
-            let selfDmSent = false;
+            // --- Send DM to partner only ---
             let partnerDmSent = false;
-            const divorceMessage = i18n.__("commands.marriage.divorceDM", {
-              user: partner.tag,
-              guild: interaction.guild.name,
-            });
-            const selfDivorceMessage = i18n.__("commands.marriage.divorceDM", {
-              user: interaction.user.tag,
-              guild: interaction.guild.name,
-            });
-
-            try {
-              await interaction.user.send(divorceMessage);
-              selfDmSent = true;
-            } catch (e) {
-              console.warn(`Failed to send divorce DM to ${userId}`);
-            }
+            const divorceMessage = await i18n.__(
+              "commands.marriage.divorceDM",
+              {
+                user: interaction.user.tag,
+                guild: interaction.guild.name,
+              }
+            );
 
             if (partner) {
               try {
-                await partner.send(selfDivorceMessage);
+                await partner.send(divorceMessage);
                 partnerDmSent = true;
               } catch (e) {
                 console.warn(
@@ -409,30 +406,29 @@ export default {
                 );
               }
             }
-            // --- End Send DMs ---
+            // --- End Send DM ---
 
-            let replyMessage = i18n.__("commands.marriage.divorceSuccess", {
-              user: partnerTag,
-            });
-            if (!selfDmSent)
-              replyMessage += ` ${i18n
-                .__("commands.marriage.cannotSendDM")
-                .replace("user", "yourself")}`;
+            let replyMessage = await i18n.__(
+              "commands.marriage.divorceSuccess",
+              {
+                user: partnerTag,
+              }
+            );
             if (!partnerDmSent)
-              replyMessage += ` ${i18n
-                .__("commands.marriage.cannotSendDM")
-                .replace("the user", "your partner")}`;
+              replyMessage += ` ${(
+                await i18n.__("commands.marriage.cannotSendDM")
+              ).replace("the user", "your partner")}`;
 
             return interaction.editReply(replyMessage);
           } catch (error) {
             if (error.message.includes("No active marriage found")) {
               return interaction.editReply(
-                i18n.__("commands.marriage.notMarried")
+                await i18n.__("commands.marriage.notMarried")
               );
             }
             console.error("Divorce error:", error);
             return interaction.editReply(
-              i18n.__("commands.marriage.divorceError")
+              await i18n.__("commands.marriage.divorceError")
             );
           }
         }

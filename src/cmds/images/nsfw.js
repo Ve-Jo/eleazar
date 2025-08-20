@@ -96,7 +96,7 @@ export default {
     // Check NSFW channel
     if (!interaction.channel.nsfw) {
       return interaction.reply({
-        content: i18n.__("commands.images.nsfw.nsfwChannelOnly"),
+        content: await i18n.__("commands.images.nsfw.nsfwChannelOnly"),
         ephemeral: true,
       });
     }
@@ -157,7 +157,7 @@ export default {
         imageData = await getImageData(); // Retry fetch
         if (!imageData || !imageData.url) {
           return {
-            content: i18n.__("commands.images.nsfw.notFound"),
+            content: await i18n.__("commands.images.nsfw.notFound"),
             components: [],
             embeds: [], // Ensure empty arrays for V1
             ephemeral: true,
@@ -171,7 +171,7 @@ export default {
         // color: process.env.EMBED_COLOR ?? 0x0099ff
       })
         .addText(
-          imageData.category || i18n.__("commands.images.nsfw.title"), // Use category as title
+          imageData.category || (await i18n.__("commands.images.nsfw.title")), // Use category as title
           "header3"
         )
         .addImage(imageData.url) // Use direct URL

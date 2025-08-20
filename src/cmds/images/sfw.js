@@ -140,7 +140,7 @@ export default {
         imageData = await getImageData(); // Retry fetch
         if (!imageData || !imageData.url) {
           return {
-            content: i18n.__("commands.images.sfw.notFound"),
+            content: await i18n.__("commands.images.sfw.notFound"),
             components: [],
             embeds: [], // Ensure empty arrays for V1 compatibility
             ephemeral: true,
@@ -154,7 +154,7 @@ export default {
         // color: process.env.EMBED_COLOR ?? 0x0099ff // Optional: Set color if needed
       })
         .addText(
-          imageData.category || i18n.__("commands.images.sfw.title"), // Use category as title
+          imageData.category || (await i18n.__("commands.images.sfw.title")), // Use category as title
           "header3"
         )
         .addImage(imageData.url) // Use direct URL

@@ -372,6 +372,12 @@ ${text}`;
    * @returns {ComponentBuilder} this builder for chaining
    */
   addText(text, style = "plain") {
+    // Validate text parameter to prevent ValidationError
+    if (text === undefined || text === null) {
+      console.warn("addText called with undefined/null text, skipping");
+      return this;
+    }
+
     if (this.mode === "v2") {
       let formattedText = text;
       switch (style) {

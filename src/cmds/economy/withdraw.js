@@ -3,9 +3,9 @@ import {
   SlashCommandSubcommandBuilder,
   MessageFlags,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
-import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
+// Using standard JavaScript numbers instead of Prisma.Decimal
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
@@ -84,218 +84,132 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     const amount = interaction.options.getString("amount");
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
     try {
-      // --- Marriage Check & Initial Data Fetch ---
-      const marriageStatus = await Database.getMarriageStatus(guildId, userId);
+      // Get marriage status for visual display purposes only
+      const marriageStatus = await hubClient.getMarriageStatus(guildId, userId);
       let partnerData = null;
-      let userBankBalance = new Prisma.Decimal(0);
-      let partnerBankBalance = new Prisma.Decimal(0);
-      let combinedAvailableBalance = new Prisma.Decimal(0);
+      let userBankBalance = 0;
+      let partnerBankBalance = 0;
+      let combinedAvailableBalance = 0;
 
-      const initialUserData = await Database.getUser(guildId, userId, true);
+      // Ensure user exists in database before fetching data
+      await hubClient.ensureGuildUser(guildId, userId);
+
+      const initialUserData = await hubClient.getUser(guildId, userId, true);
 
       if (!initialUserData?.economy) {
-        // User might not have an economy record yet, but could be married
-        // Continue check, but user's balance is 0
-      } else {
-        userBankBalance = new Prisma.Decimal(
-          await Database.calculateBankBalance(initialUserData)
-        );
-        combinedAvailableBalance =
-          combinedAvailableBalance.plus(userBankBalance);
+        return interaction.editReply({
+          content: await i18n.__("commands.economy.withdraw.noBankAccount"),
+          ephemeral: true,
+        });
       }
 
+      // Calculate user's bank balance
+      userBankBalance = await hubClient.calculateBankBalance(initialUserData);
+      combinedAvailableBalance = userBankBalance;
+
+      // Fetch partner data if married (for visual display only)
       if (marriageStatus && marriageStatus.status === "MARRIED") {
-        partnerData = await Database.getUser(
+        partnerData = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
           true
         );
         if (partnerData?.economy) {
-          partnerBankBalance = new Prisma.Decimal(
-            await Database.calculateBankBalance(partnerData)
+          partnerBankBalance = await hubClient.calculateBankBalance(
+            partnerData
           );
-          combinedAvailableBalance =
-            combinedAvailableBalance.plus(partnerBankBalance);
+          combinedAvailableBalance += partnerBankBalance;
         }
-      } else if (userBankBalance.isZero()) {
-        // If not married and user has no balance, they can't withdraw
+      }
+
+      if (userBankBalance === 0) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.withdraw.noBankAccount"),
+          content: await i18n.__("commands.economy.withdraw.noBankAccount"),
           ephemeral: true,
         });
       }
-      // --- End Marriage Check & Initial Data Fetch ---
 
-      // Calculate withdrawal amount with precision
-      let amountToWithdraw = new Prisma.Decimal(0);
+      // Calculate withdrawal amount with precision - but only withdraw from user's own balance
+      let amountToWithdraw = 0;
       const requestedAmount = interaction.options.getString("amount");
 
-      // --- Declare amounts outside transaction --- //
-      let partnerWithdrawAmount = new Prisma.Decimal(0);
-      // --- End Declare amounts --- //
-
       if (requestedAmount === "all") {
-        amountToWithdraw = combinedAvailableBalance;
+        amountToWithdraw = userBankBalance; // Only user's balance, not combined
       } else if (requestedAmount === "half") {
-        amountToWithdraw = combinedAvailableBalance.dividedBy(2);
+        amountToWithdraw = userBankBalance / 2; // Only user's balance, not combined
       } else {
-        amountToWithdraw = new Prisma.Decimal(requestedAmount);
-        if (amountToWithdraw.isNaN()) {
+        amountToWithdraw = parseFloat(requestedAmount);
+        if (isNaN(amountToWithdraw)) {
           return interaction.editReply({
-            content: i18n.__("commands.economy.withdraw.invalidAmount"),
+            content: await i18n.__("commands.economy.withdraw.invalidAmount"),
             ephemeral: true,
           });
         }
       }
 
-      // Ensure 5 decimal precision (Prisma handles this, but good practice for display/checks)
-      amountToWithdraw = new Prisma.Decimal(amountToWithdraw.toFixed(5));
+      // Ensure 5 decimal precision
+      amountToWithdraw = parseFloat((Number(amountToWithdraw) || 0).toFixed(5));
 
-      // Validate amount
-      if (combinedAvailableBalance.lessThan(amountToWithdraw)) {
+      // Validate amount against user's individual balance
+      if (userBankBalance < amountToWithdraw) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.withdraw.insufficientFunds"),
+          content: await i18n.__("commands.economy.withdraw.insufficientFunds"),
           ephemeral: true,
         });
       }
-      if (amountToWithdraw.lessThanOrEqualTo(0)) {
+      if (amountToWithdraw <= 0) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.withdraw.amountGreaterThanZero"),
+          content: await i18n.__(
+            "commands.economy.withdraw.amountGreaterThanZero"
+          ),
           ephemeral: true,
         });
       }
 
-      // --- Perform the withdrawal transaction ---
-      await Database.client.$transaction(async (tx) => {
-        let remainingWithdrawAmount = amountToWithdraw;
-        let userWithdrawAmount = new Prisma.Decimal(0);
+      // Perform the withdrawal transaction (only from user's balance)
+      await hubClient.withdraw(guildId, userId, amountToWithdraw);
 
-        // 1. Withdraw from the user's account first
-        if (userBankBalance.greaterThan(0)) {
-          userWithdrawAmount = Prisma.Decimal.min(
-            remainingWithdrawAmount,
-            userBankBalance
-          );
-          remainingWithdrawAmount =
-            remainingWithdrawAmount.minus(userWithdrawAmount);
-        }
+      // Get user data after the transaction for the receipt
+      const finalUserData = await hubClient.getUser(guildId, userId, true);
 
-        // 2. Withdraw the rest from the partner's account if married and necessary
-        if (
-          remainingWithdrawAmount.greaterThan(0) &&
-          partnerData &&
-          partnerBankBalance.greaterThan(0)
-        ) {
-          partnerWithdrawAmount = Prisma.Decimal.min(
-            remainingWithdrawAmount,
-            partnerBankBalance
-          );
-          remainingWithdrawAmount = remainingWithdrawAmount.minus(
-            partnerWithdrawAmount
-          );
-        }
-
-        // This check should technically be covered by the initial balance check, but double-check
-        if (remainingWithdrawAmount.greaterThan(0)) {
-          console.error("Withdrawal calculation error: Remaining amount > 0", {
-            initialCombined: combinedAvailableBalance.toString(),
-            amountToWithdraw: amountToWithdraw.toString(),
-            userBalance: userBankBalance.toString(),
-            partnerBalance: partnerBankBalance.toString(),
-            userWithdraw: userWithdrawAmount.toString(),
-            partnerWithdraw: partnerWithdrawAmount.toString(),
-            remaining: remainingWithdrawAmount.toString(),
-          });
-          throw new Error("Calculation error during withdrawal.");
-        }
-
-        const totalWithdrawn = userWithdrawAmount.plus(partnerWithdrawAmount);
-
-        // 3. Update the user's economy record
-        const newUserBankBalance = userBankBalance.minus(userWithdrawAmount);
-        await tx.economy.upsert({
-          where: { userId_guildId: { userId: userId, guildId: guildId } },
-          create: {
-            // Should not happen if user has balance, but handle defensively
-            userId: userId,
-            guildId: guildId,
-            balance: totalWithdrawn.toFixed(5),
-            bankBalance: newUserBankBalance.toFixed(5),
-            bankRate: newUserBankBalance.lessThanOrEqualTo(0)
-              ? "0"
-              : initialUserData?.economy?.bankRate ?? "0",
-            bankStartTime: newUserBankBalance.lessThanOrEqualTo(0)
-              ? 0
-              : Date.now(),
-          },
-          update: {
-            balance: { increment: totalWithdrawn.toFixed(5) }, // Add total withdrawn to user's pocket
-            bankBalance: newUserBankBalance.toFixed(5),
-            bankRate: newUserBankBalance.lessThanOrEqualTo(0)
-              ? "0.00000"
-              : initialUserData.economy.bankRate,
-            bankStartTime: newUserBankBalance.lessThanOrEqualTo(0)
-              ? 0
-              : Date.now(),
-          },
-        });
-        await tx.user.update({
-          where: { guildId_id: { id: userId, guildId: guildId } },
-          data: { lastActivity: Date.now() },
-        });
-
-        // 4. Update the partner's economy record if applicable
-        if (partnerData && partnerWithdrawAmount.greaterThan(0)) {
-          const newPartnerBankBalance = partnerBankBalance.minus(
-            partnerWithdrawAmount
-          );
-          await tx.economy.update({
-            where: {
-              userId_guildId: { userId: partnerData.id, guildId: guildId },
-            },
-            data: {
-              // Partner's pocket balance doesn't change
-              bankBalance: newPartnerBankBalance.toFixed(5),
-              bankRate: newPartnerBankBalance.lessThanOrEqualTo(0)
-                ? "0.00000"
-                : partnerData.economy.bankRate,
-              bankStartTime: newPartnerBankBalance.lessThanOrEqualTo(0)
-                ? 0
-                : Date.now(),
-            },
-          });
-          await tx.user.update({
-            where: { guildId_id: { id: partnerData.id, guildId: guildId } },
-            data: { lastActivity: Date.now() }, // Update partner activity too
-          });
-        }
-      });
-      // --- End withdrawal transaction ---
-
-      // --- Send Confirmation ---
-      // Get user data *after* the transaction for the receipt
-      const finalUserData = await Database.getUser(guildId, userId, true);
-      if (marriageStatus && marriageStatus.status === "MARRIED") {
-        // Recalculate partner balance AFTER transaction for the receipt
-        partnerData = await Database.getUser(
+      // Calculate combined balance for visual display if married
+      if (
+        marriageStatus &&
+        marriageStatus.status === "MARRIED" &&
+        partnerData
+      ) {
+        const updatedPartner = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
           true
         );
+        const userBankBalance =
+          Number(await hubClient.calculateBankBalance(finalUserData)) || 0;
+        const partnerBankBalance = updatedPartner?.economy
+          ? Number(await hubClient.calculateBankBalance(updatedPartner)) || 0
+          : 0;
+        const combinedBankBalance = userBankBalance + partnerBankBalance;
+
+        finalUserData.partnerData = updatedPartner;
+        finalUserData.marriageStatus = marriageStatus;
+        finalUserData.combinedBankBalance =
+          Number(combinedBankBalance).toFixed(5);
+        partnerData = updatedPartner;
+      } else {
+        const userBankBalance =
+          Number(await hubClient.calculateBankBalance(finalUserData)) || 0;
+        finalUserData.combinedBankBalance = Number(userBankBalance).toFixed(5);
       }
 
       const [buffer, dominantColor] = await generateImage(
@@ -324,7 +238,7 @@ export default {
           database: finalUserData, // Pass final user data
           partnerData: partnerData, // Pass final partner data if married
           type: "withdraw",
-          amount: amountToWithdraw.toNumber(), // Pass the actual withdrawn amount
+          amount: amountToWithdraw, // Pass the actual withdrawn amount
           dominantColor: "user",
           returnDominant: true,
         },
@@ -340,40 +254,34 @@ export default {
         dominantColor,
         mode: builderMode,
       })
-        .addText(i18n.__("commands.economy.withdraw.title"), "header3")
+        .addText(await i18n.__("commands.economy.withdraw.title"), "header3")
         .addImage("attachment://withdraw_receipt.avif")
         .addTimestamp(interaction.locale);
 
       const replyOptions = receiptComponent.toReplyOptions({
         files: [attachment],
-        content: isAiContext
-          ? `${i18n.__(
-              "commands.economy.withdraw.title"
-            )}: ${amountToWithdraw.toFixed(2)}`
-          : undefined,
       });
 
-      // Reply/edit based on context
-      if (isAiContext) {
-        await interaction.reply(replyOptions);
-      } else {
-        await interaction.editReply(replyOptions);
-      }
+      // Always edit reply
+      await interaction.editReply(replyOptions);
 
-      // --- Send DM to Partner if needed ---
-      if (partnerData && partnerWithdrawAmount.greaterThan(0)) {
+      // Send DM to partner if married (informational only)
+      if (partnerData) {
         try {
           const partnerDiscordUser = await interaction.client.users.fetch(
             partnerData.id
           );
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
-              content: i18n.__("commands.economy.withdraw.partnerWithdrawDM", {
-                user: interaction.user.tag,
-                amount: amountToWithdraw.toFixed(2), // Total withdrawn
-                partnerAmount: partnerWithdrawAmount.toFixed(2), // Amount taken from partner
-                guild: interaction.guild.name,
-              }),
+              content: await i18n.__(
+                "commands.economy.withdraw.partnerWithdrawDM",
+                {
+                  user: interaction.user.tag,
+                  amount: amountToWithdraw.toFixed(2),
+                  partnerAmount: "0.00", // No money taken from partner
+                  guild: interaction.guild.name,
+                }
+              ),
             });
           }
         } catch (dmError) {
@@ -383,24 +291,19 @@ export default {
           );
         }
       }
-      // --- End Send DM ---
     } catch (error) {
       console.error("Error in withdraw command:", error);
       const errorOptions = {
-        content: i18n.__("commands.economy.withdraw.error"),
+        content: await i18n.__("commands.economy.withdraw.error"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
-      if (isAiContext) {
-        throw new Error(i18n.__("commands.economy.withdraw.error"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

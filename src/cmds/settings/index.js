@@ -5,8 +5,8 @@ import {
   PermissionsBitField,
   ChannelType,
 } from "discord.js";
-import Database from "../../database/client.js";
-import i18n from "../../utils/newI18n.js";
+import hubClient from "../../api/hubClient.js";
+import i18n from "../../utils/i18n.js";
 
 export default {
   data: () => {
@@ -201,7 +201,7 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("commands.settings.error_permissions"),
+        content: await i18n.__("commands.settings.error_permissions"),
         ephemeral: true,
       });
     }
@@ -223,16 +223,16 @@ export default {
 
           if (botMember.roles.highest.comparePositionTo(role) <= 0) {
             return interaction.editReply(
-              i18n.__(`${i18nBaseKey}.error_role_unmanageable`, {
+              await i18n.__(`${i18nBaseKey}.error_role_unmanageable`, {
                 roleName: role.name,
               })
             );
           }
 
           try {
-            await Database.addLevelRole(guild.id, role.id, level);
+            await hubClient.addLevelRole(guild.id, level, role.id);
             await interaction.editReply(
-              i18n.__(`${i18nBaseKey}.success`, {
+              await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
                 level: level,
               })
@@ -246,7 +246,7 @@ export default {
                   .fetch(existingRoleId)
                   .catch(() => null);
                 await interaction.editReply(
-                  i18n.__(`${i18nBaseKey}.error_level_exists`, {
+                  await i18n.__(`${i18nBaseKey}.error_level_exists`, {
                     existingRoleName: existingRole?.name || existingRoleId,
                     level: level,
                   })
@@ -255,7 +255,7 @@ export default {
                 const match = dbError.message.match(/level (\d+)/);
                 const existingLevel = match ? match[1] : "unknown";
                 await interaction.editReply(
-                  i18n.__(`${i18nBaseKey}.error_role_exists`, {
+                  await i18n.__(`${i18nBaseKey}.error_role_exists`, {
                     roleName: role.name,
                     existingLevel: existingLevel,
                   })
@@ -263,7 +263,7 @@ export default {
               }
             } else if (dbError.message.includes("level must be at least 1")) {
               await interaction.editReply(
-                i18n.__(`${i18nBaseKey}.error_level_invalid`)
+                await i18n.__(`${i18nBaseKey}.error_level_invalid`)
               );
             } else {
               throw dbError;
@@ -272,16 +272,16 @@ export default {
         } else if (subcommand === "remove") {
           const role = interaction.options.getRole("role");
           try {
-            await Database.removeLevelRole(guild.id, role.id);
+            await hubClient.removeLevelRole(guild.id, level);
             await interaction.editReply(
-              i18n.__(`${i18nBaseKey}.success`, {
+              await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
               })
             );
           } catch (dbError) {
             if (dbError.message.includes("not found")) {
               await interaction.editReply(
-                i18n.__(`${i18nBaseKey}.error_not_found`, {
+                await i18n.__(`${i18nBaseKey}.error_not_found`, {
                   roleName: role.name,
                 })
               );
@@ -290,14 +290,16 @@ export default {
             }
           }
         } else if (subcommand === "list") {
-          const levelRoles = await Database.getLevelRoles(guild.id);
+          const levelRoles = await hubClient.getGuildLevelRoles(guild.id);
 
           if (!levelRoles || levelRoles.length === 0) {
-            return interaction.editReply(i18n.__(`${i18nBaseKey}.no_roles`));
+            return interaction.editReply(
+              await i18n.__(`${i18nBaseKey}.no_roles`)
+            );
           }
 
           const embed = new EmbedBuilder()
-            .setTitle(i18n.__(`${i18nBaseKey}.title`))
+            .setTitle(await i18n.__(`${i18nBaseKey}.title`))
             .setColor(process.env.EMBED_COLOR || 0x0099ff)
             .setTimestamp();
 
@@ -305,10 +307,10 @@ export default {
           for (const lr of levelRoles) {
             const roleMention = `<@&${lr.roleId}>`;
             description +=
-              i18n.__(`${i18nBaseKey}.entry`, {
+              (await i18n.__(`${i18nBaseKey}.entry`, {
                 level: lr.requiredLevel,
                 roleMention: roleMention,
-              }) + "\n";
+              })) + "\n";
           }
 
           embed.setDescription(description.trim());
@@ -320,7 +322,7 @@ export default {
       console.error("Error executing levelroles setting command:", error);
       await interaction
         .editReply({
-          content: i18n.__("commands.settings.error_generic"),
+          content: await i18n.__("commands.settings.error_generic"),
         })
         .catch(() => {});
     }

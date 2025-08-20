@@ -1,8 +1,8 @@
 import { Events } from "discord.js";
-import Database from "../database/client.js";
+import hubClient from "../api/hubClient.js";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.js";
 import { handleLevelUp } from "../utils/levelUpHandler.js";
-import i18n from "../utils/newI18n.js";
+import i18n from "../utils/i18n.js";
 
 // --- Start Localization Definitions ---
 const localization_strings = {
@@ -32,10 +32,16 @@ export default {
     // Determine locale for message sender
     let effectiveLocale = "en";
     try {
-      const userDbLocale = await Database.getUserLocale(guild?.id, author.id);
-      if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
-        effectiveLocale = userDbLocale;
-      } else if (guild?.preferredLocale) {
+      // Only fetch user locale if we have a guild context
+      if (guild?.id) {
+        const userDbLocale = await hubClient.getUserLocale(guild.id, author.id);
+        if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
+          effectiveLocale = userDbLocale;
+        }
+      }
+
+      // Fallback to guild preferred locale if user locale not found
+      if (effectiveLocale === "en" && guild?.preferredLocale) {
         const normalizedGuildLocale = guild.preferredLocale
           .split("-")[0]
           .toLowerCase();
@@ -73,7 +79,7 @@ export default {
               }
             } else {
               await message.reply(
-                i18n.__(
+                await i18n.__(
                   "events.message.transcription.success",
                   { text: transcriptionText },
                   effectiveLocale
@@ -82,23 +88,26 @@ export default {
             }
           } else {
             await message.reply(
-              i18n.__("events.message.transcription.failed", effectiveLocale)
+              await i18n.__(
+                "events.message.transcription.failed",
+                effectiveLocale
+              )
             );
           }
         } catch (error) {
           console.error("Error transcribing voice message:", error);
           await message.reply(
-            i18n.__("events.message.transcription.failed", effectiveLocale)
+            await i18n.__(
+              "events.message.transcription.failed",
+              effectiveLocale
+            )
           );
         }
       }
     }
 
     // Handle counting
-    const guildSettings = await Database.client.guild.findUnique({
-      where: { id: guild.id },
-      select: { settings: true },
-    });
+    const guildSettings = await hubClient.getGuild(guild.id);
 
     if (guildSettings?.settings?.counting) {
       const countingData = guildSettings.settings.counting;
@@ -122,16 +131,13 @@ export default {
           }
 
           // Update counting data
-          await Database.client.guild.update({
-            where: { id: guild.id },
-            data: {
-              settings: {
-                ...guildSettings.settings,
-                counting: {
-                  ...countingData,
-                  message: currentNumber + 1,
-                  lastwritter: message.author.id,
-                },
+          await hubClient.updateGuild(guild.id, {
+            settings: {
+              ...guildSettings.settings,
+              counting: {
+                ...countingData,
+                message: currentNumber + 1,
+                lastwritter: message.author.id,
               },
             },
           });
@@ -161,15 +167,12 @@ export default {
               await message.member.roles.add(role);
 
               // Update lastpinnedmember
-              await Database.client.guild.update({
-                where: { id: guild.id },
-                data: {
-                  settings: {
-                    ...guildSettings.settings,
-                    counting: {
-                      ...countingData,
-                      lastpinnedmember: message.author.id,
-                    },
+              await hubClient.updateGuild(guild.id, {
+                settings: {
+                  ...guildSettings.settings,
+                  counting: {
+                    ...countingData,
+                    lastpinnedmember: message.author.id,
                   },
                 },
               });
@@ -186,28 +189,20 @@ export default {
     // Handle XP gain
     try {
       // Check if enough time has passed since last XP gain
-      const cooldownTime = await Database.getCooldown(
-        guild.id,
+      const cooldownTime = await hubClient.getCooldown(
         author.id,
+        guild.id,
         "message"
       );
 
       if (cooldownTime === 0) {
         // Get guild settings for XP amount
-        const guildSettings = await Database.client.guild.findUnique({
-          where: { id: guild.id },
-          select: { settings: true },
-        });
+        const guildSettings = await hubClient.getGuild(guild.id);
 
         const xpPerMessage = guildSettings?.settings?.xp_per_message || 15;
 
         // Get current XP stats
-        const stats = await Database.client.statistics.findUnique({
-          where: {
-            userId_guildId: { userId: author.id, guildId: guild.id },
-          },
-          select: { xpStats: true },
-        });
+        const stats = await hubClient.getStatistics(author.id, guild.id);
 
         let xpStats = stats?.xpStats || {};
         if (typeof xpStats === "string") {
@@ -231,43 +226,12 @@ export default {
         xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
 
         // Add XP with specific type for chat messages
-        await Database.client.statistics.upsert({
-          where: {
-            userId_guildId: { userId: author.id, guildId: guild.id },
-          },
-          create: {
-            user: {
-              connectOrCreate: {
-                where: {
-                  guildId_id: { guildId: guild.id, id: author.id },
-                },
-                create: {
-                  id: author.id,
-                  guild: {
-                    connectOrCreate: {
-                      where: { id: guild.id },
-                      create: { id: guild.id },
-                    },
-                  },
-                  lastActivity: BigInt(Date.now()),
-                },
-              },
-            },
-            xpStats,
-            messageCount: 1,
-            lastUpdated: Date.now(),
-          },
-          update: {
-            xpStats,
-            messageCount: { increment: 1 },
-            lastUpdated: Date.now(),
-          },
-        });
+        await hubClient.updateStats(author.id, guild.id, "messageCount", 1);
 
         // Add XP and check for level-up
-        const xpResult = await Database.addXP(
-          guild.id,
+        const xpResult = await hubClient.addXP(
           author.id,
+          guild.id,
           xpPerMessage,
           "chat"
         );
@@ -373,8 +337,7 @@ export default {
           );
         }
 
-        await Database.updateCooldown(guild.id, author.id, "message");
-        await Database.incrementMessageCount(guild.id, author.id);
+        await hubClient.setCooldown(author.id, guild.id, "message", 60000);
       }
     } catch (error) {
       console.error("Error handling XP gain:", error);

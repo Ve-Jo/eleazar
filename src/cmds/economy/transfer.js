@@ -3,7 +3,7 @@ import {
   SlashCommandSubcommandBuilder,
   MessageFlags,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
@@ -94,14 +94,11 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getString("amount");
@@ -109,21 +106,29 @@ export default {
     // Prevent self-transfers
     if (targetUser.id === interaction.user.id) {
       return interaction.editReply({
-        content: i18n.__("commands.economy.transfer.cannotTransferToSelf"),
+        content: await i18n.__(
+          "commands.economy.transfer.cannotTransferToSelf"
+        ),
         ephemeral: true,
       });
     }
 
     try {
+      // Ensure both users exist in database before fetching data
+      await Promise.all([
+        hubClient.ensureGuildUser(interaction.guild.id, interaction.user.id),
+        hubClient.ensureGuildUser(interaction.guild.id, targetUser.id),
+      ]);
+
       // Get sender user data with all relations
-      const senderData = await Database.getUser(
+      const senderData = await hubClient.getUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
 
       // Get recipient user data
-      const recipientData = await Database.getUser(
+      const recipientData = await hubClient.getUser(
         interaction.guild.id,
         targetUser.id,
         true
@@ -139,7 +144,7 @@ export default {
         amountInt = parseFloat(amount);
         if (isNaN(amountInt)) {
           return interaction.editReply({
-            content: i18n.__("commands.economy.transfer.invalidAmount"),
+            content: await i18n.__("commands.economy.transfer.invalidAmount"),
             ephemeral: true,
           });
         }
@@ -148,129 +153,38 @@ export default {
       // Validate amount
       if (!senderData.economy || senderData.economy.balance < amountInt) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.transfer.insufficientFunds"),
+          content: await i18n.__("commands.economy.transfer.insufficientFunds"),
           ephemeral: true,
         });
       }
       if (amountInt <= 0) {
         return interaction.editReply({
-          content: i18n.__("commands.economy.transfer.amountGreaterThanZero"),
+          content: await i18n.__(
+            "commands.economy.transfer.amountGreaterThanZero"
+          ),
           ephemeral: true,
         });
       }
 
       // Ensure 5 decimal precision
-      amountInt = parseFloat(amountInt.toFixed(5));
+      amountInt = parseFloat((Number(amountInt) || 0).toFixed(5));
 
-      // Perform transfer operation in single transaction
-      await Database.client.$transaction(async (tx) => {
-        // Deduct from sender
-        await tx.economy.update({
-          where: {
-            userId_guildId: {
-              userId: interaction.user.id,
-              guildId: interaction.guild.id,
-            },
-          },
-          data: {
-            balance: {
-              decrement: amountInt,
-            },
-          },
-        });
-
-        // Add to recipient
-        await tx.economy.upsert({
-          where: {
-            userId_guildId: {
-              userId: targetUser.id,
-              guildId: interaction.guild.id,
-            },
-          },
-          update: {
-            balance: {
-              increment: amountInt,
-            },
-          },
-          create: {
-            userId: targetUser.id,
-            guildId: interaction.guild.id,
-            balance: amountInt,
-            bankBalance: "0.00000",
-            bankRate: "0.00000",
-            bankStartTime: 0,
-          },
-        });
-
-        // Update sender's last activity
-        await tx.user.update({
-          where: {
-            guildId_id: {
-              id: interaction.user.id,
-              guildId: interaction.guild.id,
-            },
-          },
-          data: {
-            lastActivity: Date.now(),
-          },
-        });
-      });
-
-      // --- Explicitly invalidate cache AFTER transaction ---
-      const senderCacheKeyFull = Database._cacheKeyUser(
+      // Perform transfer operation
+      await hubClient.transferBalance(
         interaction.guild.id,
         interaction.user.id,
-        true
-      );
-      const senderCacheKeyBasic = Database._cacheKeyUser(
-        interaction.guild.id,
-        interaction.user.id,
-        false
-      );
-      const recipientCacheKeyFull = Database._cacheKeyUser(
-        interaction.guild.id,
         targetUser.id,
-        true
+        amountInt
       );
-      const recipientCacheKeyBasic = Database._cacheKeyUser(
-        interaction.guild.id,
-        targetUser.id,
-        false
-      );
-      // transferBalance -> addBalance invalidates stats too, but let's be explicit
-      const senderStatsKey = Database._cacheKeyStats(
-        interaction.guild.id,
-        interaction.user.id
-      );
-      const recipientStatsKey = Database._cacheKeyStats(
-        interaction.guild.id,
-        targetUser.id
-      );
-      if (Database.redisClient) {
-        try {
-          const keysToDel = [
-            senderCacheKeyFull,
-            senderCacheKeyBasic,
-            senderStatsKey,
-            recipientCacheKeyFull,
-            recipientCacheKeyBasic,
-            recipientStatsKey,
-          ];
-          await Database.redisClient.del(keysToDel);
-          Database._logRedis("del", keysToDel.join(", "), true);
-        } catch (err) {
-          Database._logRedis("del", keysToDel.join(", "), err);
-        }
-      }
 
-      // Get updated user data
-      const updatedSender = await Database.getUser(
+      // Get updated user data (users already ensured above)
+      const updatedSender = await hubClient.getUser(
         interaction.guild.id,
         interaction.user.id,
         true
       );
 
-      const updatedRecipient = await Database.getUser(
+      const updatedRecipient = await hubClient.getUser(
         interaction.guild.id,
         targetUser.id,
         true
@@ -336,43 +250,30 @@ export default {
         dominantColor,
         mode: builderMode,
       })
-        .addText(i18n.__("commands.economy.transfer.title"), "header3")
+        .addText(await i18n.__("commands.economy.transfer.title"), "header3")
         .addImage("attachment://transfer_receipt.avif")
         .addTimestamp(interaction.locale);
 
       // Prepare reply options
       const replyOptions = transferComponent.toReplyOptions({
         files: [attachment],
-        content: isAiContext
-          ? `${i18n.__("commands.economy.transfer.title")}: ${amountInt.toFixed(
-              2
-            )} to ${targetUser.tag}`
-          : undefined,
       });
 
-      // Reply/edit based on context
-      if (isAiContext) {
-        await interaction.reply(replyOptions);
-      } else {
-        await interaction.editReply(replyOptions);
-      }
+      // Always edit reply
+      await interaction.editReply(replyOptions);
     } catch (error) {
       console.error("Error executing transfer command:", error);
       const errorOptions = {
-        content: i18n.__("commands.economy.transfer.error"),
+        content: await i18n.__("commands.economy.transfer.error"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
-      if (isAiContext) {
-        throw new Error(i18n.__("commands.economy.transfer.error"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

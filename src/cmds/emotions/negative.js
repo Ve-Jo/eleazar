@@ -219,13 +219,10 @@ export default {
 
   async execute(interaction, i18n) {
     // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Defer the reply
+    await interaction.deferReply();
 
     const { guild, user } = interaction;
     const targetUser = interaction.options.getUser("user") || user;
@@ -234,13 +231,13 @@ export default {
     // Prevent interaction with self or bots
     if (targetUser.id === user.id) {
       return interaction.editReply({
-        content: i18n.__("commands.emotions.cannotSelectSelf"),
+        content: await i18n.__("commands.emotions.cannotSelectSelf"),
         ephemeral: true,
       });
     }
     if (targetUser.bot) {
       return interaction.editReply({
-        content: i18n.__("commands.emotions.cannotSelectBot"),
+        content: await i18n.__("commands.emotions.cannotSelectBot"),
         ephemeral: true,
       });
     }
@@ -269,8 +266,12 @@ export default {
                 return {
                   image: imageUrl,
                   category: emotionType,
-                  emotion: i18n.__(
+                  emotion: await i18n.__(
                     `commands.emotions.negative.${emotionType}.title`
+                  ),
+                  description: await i18n.__(
+                    `commands.emotions.negative.${emotionType}.description`,
+                    { user: interaction.user.id, targetUser: targetUser.id }
                   ),
                 };
               }
@@ -290,14 +291,10 @@ export default {
 
       if (!emotionData || !emotionData.image) {
         const errorOptions = {
-          content: i18n.__("commands.emotions.negative.imageNotFound"),
+          content: await i18n.__("commands.emotions.negative.imageNotFound"),
           ephemeral: true,
         };
-        if (isAiContext) {
-          throw new Error(i18n.__("commands.emotions.negative.imageNotFound"));
-        } else {
-          return interaction.editReply(errorOptions);
-        }
+        return interaction.editReply(errorOptions);
       }
 
       // Create component using ComponentBuilder
@@ -311,74 +308,62 @@ export default {
         .addTimestamp(interaction.locale);
 
       // Prepare reply options
-      const replyOptions = emotionComponent.toReplyOptions({
-        content: isAiContext ? emotionData.emotion : undefined,
+      const replyOptions = emotionComponent.toReplyOptions();
+
+      // Edit the deferred reply
+      let message = await interaction.editReply(replyOptions);
+
+      // Add collector for buttons (only for normal context)
+      const collector = message.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 60000, // 60 seconds
       });
 
-      // Reply/edit based on context
-      let message;
-      if (isAiContext) {
-        message = await interaction.reply(replyOptions);
-        // No collector needed for AI
-      } else {
-        message = await interaction.editReply(replyOptions);
-
-        // Add collector for buttons (only for normal context)
-        const collector = message.createMessageComponentCollector({
-          componentType: ComponentType.Button,
-          time: 60000, // 60 seconds
-        });
-
-        collector.on("collect", async (i) => {
-          if (i.customId === "next_emotion") {
-            // Only the original user can get the next image
-            if (i.user.id !== user.id) {
-              await i.reply({
-                content: "Only the command user can request the next image.",
-                ephemeral: true,
-              });
-              return;
-            }
-            await i.deferUpdate();
-            await getEmotionData(); // Fetch and display next image
+      collector.on("collect", async (i) => {
+        if (i.customId === "next_emotion") {
+          // Only the original user can get the next image
+          if (i.user.id !== user.id) {
+            await i.reply({
+              content: "Only the command user can request the next image.",
+              ephemeral: true,
+            });
+            return;
           }
-        });
+          await i.deferUpdate();
+          await getEmotionData(); // Fetch and display next image
+        }
+      });
 
-        collector.on("end", async (collected, reason) => {
-          if (reason !== "messageDelete" && message.editable) {
-            try {
-              const latestMessage = await message.channel.messages.fetch(
-                message.id
-              );
-              if (latestMessage.components.length > 0) {
-                await latestMessage.edit({ components: [] });
-              }
-            } catch (error) {
-              console.error(
-                "Failed to remove components on collector end:",
-                error
-              );
+      collector.on("end", async (collected, reason) => {
+        if (reason !== "messageDelete" && message.editable) {
+          try {
+            const latestMessage = await message.channel.messages.fetch(
+              message.id
+            );
+            if (latestMessage.components.length > 0) {
+              await latestMessage.edit({ components: [] });
             }
+          } catch (error) {
+            console.error(
+              "Failed to remove components on collector end:",
+              error
+            );
           }
-        });
-      }
+        }
+      });
     } catch (error) {
       console.error("Error getting emotion data:", error);
       const errorOptions = {
-        content: i18n.__("commands.emotions.negative.imageNotFound"),
+        content: await i18n.__("commands.emotions.negative.imageNotFound"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
-      if (isAiContext) {
-        throw new Error(i18n.__("commands.emotions.negative.imageNotFound"));
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

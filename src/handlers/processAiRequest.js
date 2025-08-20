@@ -1,4 +1,4 @@
-import i18n from "../utils/newI18n.js";
+import i18n from "../utils/i18n.js";
 import CONFIG from "../config/aiConfig.js";
 import { ButtonBuilder, ActionRowBuilder } from "discord.js";
 
@@ -347,7 +347,7 @@ export default async function processAiRequest(
       await interaction.deferUpdate();
       // Show processing state
       await promptMsg.edit({
-        content: i18n.__(
+        content: await i18n.__(
           "events.ai.messages.modelSelectedProcessing",
           { model: selectedModelId },
           effectiveLocale
@@ -386,12 +386,14 @@ export default async function processAiRequest(
   if (!procMsg) {
     channel.sendTyping();
     procMsg = await channel.send(
-      i18n.__("events.ai.messages.processing", { model: prefs.selectedModel })
+      await i18n.__("events.ai.messages.processing", {
+        model: prefs.selectedModel,
+      })
     );
   } else {
     await procMsg
       .edit({
-        content: i18n.__("events.ai.messages.processing", {
+        content: await i18n.__("events.ai.messages.processing", {
           model: prefs.selectedModel,
         }),
         components: [],
@@ -748,7 +750,8 @@ ${
         const stopButton = new ButtonBuilder()
           .setCustomId(`ai_stop_stream_${userId}`)
           .setLabel(
-            i18n.__("events.ai.buttons.stream.stop", effectiveLocale) || "Stop"
+            (await i18n.__("events.ai.buttons.stream.stop", effectiveLocale)) ||
+              "Stop"
           )
           .setStyle(4) // Red button (DANGER)
           .setEmoji("⏹️");
@@ -758,8 +761,10 @@ ${
         // Set up message to show streaming
         await procMsg.edit({
           content:
-            i18n.__("events.ai.messages.streamStart", effectiveLocale) ||
-            "Thinking...",
+            (await i18n.__(
+              "events.ai.messages.streamStart",
+              effectiveLocale
+            )) || "Thinking...",
           components: [stopRow],
         });
         console.log(`[DEBUG] Stream message updated with stop button`);
@@ -772,7 +777,13 @@ ${
         let toolCalls = [];
         let isFirstChunk = true;
         let lastUpdateTime = Date.now();
-        const UPDATE_INTERVAL = 1000; // Update message every 1 second
+        let lastUpdateLength = 0; // Track content length at last update
+        let lastReasoningUpdateTime = Date.now(); // Track reasoning update time
+        let lastReasoningLength = 0; // Track reasoning length at last update
+        const UPDATE_INTERVAL = 3000; // Update message every 3 seconds
+        const REASONING_UPDATE_INTERVAL = 2000; // Update reasoning every 2 seconds
+        const MIN_CONTENT_CHANGE = 50; // Minimum characters added before allowing update
+        const MIN_REASONING_CHANGE = 30; // Minimum reasoning characters before allowing update
         let finalFinishReason = null; // Store the final finish reason
         let needsImmediateExecution = false; // Flag for immediate execution after stream completion
 
@@ -787,8 +798,10 @@ ${
           shouldStop = true;
           await interaction.update({
             content:
-              i18n.__("events.ai.messages.streamStopped", effectiveLocale) ||
-              "Generation stopped.",
+              (await i18n.__(
+                "events.ai.messages.streamStopped",
+                effectiveLocale
+              )) || "Generation stopped.",
             components: [],
           });
           collector.stop("user_stopped");
@@ -890,42 +903,63 @@ ${
               `[DEBUG] Received reasoning chunk: ${reasoning.length} chars`
             );
 
-            // Format reasoning for display with -# at the beginning of each line
-            // Only add -# to lines that actually contain text
-            const sanitizedReasoning = reasoningAccumulator
-              .replace(
-                /<@[!&]?\d+>/g,
-                i18n.__(
-                  "events.ai.buttons.sanitization.mention",
-                  effectiveLocale
-                )
-              )
-              .replace(
-                /@everyone/gi,
-                i18n.__(
-                  "events.ai.buttons.sanitization.everyone",
-                  effectiveLocale
-                )
-              )
-              .replace(
-                /@here/gi,
-                i18n.__("events.ai.buttons.sanitization.here", effectiveLocale)
-              );
-            const formattedReasoning = sanitizedReasoning
-              .split("\n")
-              .map((line) => (line.trim() ? `-# ${line}` : ""))
-              .join("\n");
+            // Throttle reasoning updates to reduce message edit frequency
+            const now = Date.now();
+            const reasoningLengthChange =
+              reasoningAccumulator.length - lastReasoningLength;
+            if (
+              now - lastReasoningUpdateTime > REASONING_UPDATE_INTERVAL &&
+              reasoningLengthChange >= MIN_REASONING_CHANGE
+            ) {
+              lastReasoningUpdateTime = now;
+              lastReasoningLength = reasoningAccumulator.length;
 
-            await procMsg
-              .edit({
-                content: formattedReasoning || "Thinking...",
-                components: [stopRow],
-              })
-              .catch((error) => {
-                console.log(
-                  `[DEBUG] Rate limit hit on reasoning edit: ${error.message}`
+              // Format reasoning for display with -# at the beginning of each line
+              // Only add -# to lines that actually contain text
+              const sanitizedReasoning = reasoningAccumulator
+                .replace(
+                  /<@[!&]?\d+>/g,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.mention",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@everyone/gi,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.everyone",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@here/gi,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.here",
+                    effectiveLocale
+                  )
                 );
-              });
+              let formattedReasoning = sanitizedReasoning
+                .split("\n")
+                .map((line) => (line.trim() ? `-# ${line}` : ""))
+                .join("\n");
+
+              // Limit reasoning display to 500 characters
+              if (formattedReasoning.length > 500) {
+                formattedReasoning =
+                  "-# . . . " + formattedReasoning.slice(-497);
+              }
+
+              await procMsg
+                .edit({
+                  content: formattedReasoning || "Thinking...",
+                  components: [stopRow],
+                })
+                .catch((error) => {
+                  console.log(
+                    `[DEBUG] Rate limit hit on reasoning edit: ${error.message}`
+                  );
+                });
+            }
           }
 
           // Handle content
@@ -939,11 +973,15 @@ ${
 
             // Update the message periodically to avoid rate limits
             const now = Date.now();
+            const contentLengthChange =
+              responseAccumulator.length - lastUpdateLength;
             if (
               !showingReasoning &&
-              (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk)
+              (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk) &&
+              (isFirstChunk || contentLengthChange >= MIN_CONTENT_CHANGE)
             ) {
               lastUpdateTime = now;
+              lastUpdateLength = responseAccumulator.length;
               isFirstChunk = false;
 
               // Sanitize and remove thinking tags
@@ -951,21 +989,21 @@ ${
               sanitizedText = sanitizedText
                 .replace(
                   /<@[!&]?\d+>/g,
-                  i18n.__(
+                  await i18n.__(
                     "events.ai.buttons.sanitization.mention",
                     effectiveLocale
                   )
                 )
                 .replace(
                   /@everyone/gi,
-                  i18n.__(
+                  await i18n.__(
                     "events.ai.buttons.sanitization.everyone",
                     effectiveLocale
                   )
                 )
                 .replace(
                   /@here/gi,
-                  i18n.__(
+                  await i18n.__(
                     "events.ai.buttons.sanitization.here",
                     effectiveLocale
                   )
@@ -979,10 +1017,10 @@ ${
                 .edit({
                   content:
                     sanitizedText ||
-                    i18n.__(
+                    (await i18n.__(
                       "events.ai.messages.streamProcessing",
                       effectiveLocale
-                    ) ||
+                    )) ||
                     "Processing...",
                   components: [stopRow],
                 })
@@ -1086,11 +1124,11 @@ ${
                 // Update message to show tool execution
                 await procMsg.edit({
                   content: `${removeThinkTags(responseAccumulator)}\n\n${
-                    i18n.__(
+                    (await i18n.__(
                       "events.ai.messages.streamToolExecution",
                       { tool: functionCall.function.name },
                       effectiveLocale
-                    ) || `Executing ${functionCall.function.name}...`
+                    )) || `Executing ${functionCall.function.name}...`
                   }`,
                   components: [stopRow],
                 });
@@ -1773,11 +1811,11 @@ ${
               // Update message to show tool execution
               await procMsg.edit({
                 content: `${removeThinkTags(responseAccumulator)}\n\n${
-                  i18n.__(
+                  (await i18n.__(
                     "events.ai.messages.streamToolExecution",
                     { tool: toolCall.function.name },
                     effectiveLocale
-                  ) || `Executing ${toolCall.function.name}...`
+                  )) || `Executing ${toolCall.function.name}...`
                 }`,
                 components: [stopRow],
               });
@@ -2062,10 +2100,10 @@ ${
           try {
             await procMsg.edit({
               content: `${removeThinkTags(responseAccumulator)}\n\n${
-                i18n.__(
+                (await i18n.__(
                   "events.ai.messages.streamContinuation",
                   effectiveLocale
-                ) || "Continuing with tool results..."
+                )) || "Continuing with tool results..."
               }`,
               components: [stopRow],
             });
@@ -2140,8 +2178,10 @@ ${
               followUpError
             );
             responseAccumulator += `\n\n${
-              i18n.__("events.ai.messages.streamToolError", effectiveLocale) ||
-              "Error processing tool results."
+              (await i18n.__(
+                "events.ai.messages.streamToolError",
+                effectiveLocale
+              )) || "Error processing tool results."
             }`;
           }
           internalToolFollowUpDone = true; // Set flag if follow-up happens
@@ -2199,10 +2239,10 @@ ${
           try {
             await procMsg.edit({
               content: `${removeThinkTags(responseAccumulator)}\n\n${
-                i18n.__(
+                (await i18n.__(
                   "events.ai.messages.streamContinuation",
                   effectiveLocale
-                ) || "Continuing after tool calls..."
+                )) || "Continuing after tool calls..."
               }`,
               components: [stopRow],
             });
@@ -2251,8 +2291,10 @@ ${
               followUpError
             );
             responseAccumulator += `\n\n${
-              i18n.__("events.ai.messages.streamToolError", effectiveLocale) ||
-              "Error processing tool results."
+              (await i18n.__(
+                "events.ai.messages.streamToolError",
+                effectiveLocale
+              )) || "Error processing tool results."
             }`;
           }
           internalToolFollowUpDone = true; // Set flag if follow-up happens
@@ -2282,11 +2324,11 @@ ${
         await procMsg
           .edit({
             content:
-              i18n.__(
+              (await i18n.__(
                 "events.ai.messages.streamError",
                 { error: error.message },
                 effectiveLocale
-              ) || `Error: ${error.message}`,
+              )) || `Error: ${error.message}`,
             components: [],
           })
           .catch(() => {});
@@ -2406,7 +2448,10 @@ ${
     finalText = removeThinkTags(finalText);
 
     if (!finalText && !toolCalls.length)
-      finalText = i18n.__("events.ai.messages.noTextResponse", effectiveLocale);
+      finalText = await i18n.__(
+        "events.ai.messages.noTextResponse",
+        effectiveLocale
+      );
 
     // Process tool calls if there are any and tools are enabled
     let anyToolUsedV2 = false; // Declare flag before the loop
@@ -2540,7 +2585,7 @@ ${
         console.log("Final text after tool processing:", finalText);
       }
     } else if (toolCalls.length && !prefs.toolsEnabled) {
-      finalText += `\n\n${i18n.__(
+      finalText += `\n\n${await i18n.__(
         "events.ai.messages.toolsDisabledNote",
         effectiveLocale
       )}`;
@@ -2581,12 +2626,12 @@ ${
           // Format the tool result as a block
           const toolName = fakeToolCall.name;
           const prefix = success
-            ? i18n.__(
+            ? await i18n.__(
                 "events.ai.buttons.toolResult.successPrefix",
                 { command: toolName },
                 effectiveLocale
               )
-            : i18n.__(
+            : await i18n.__(
                 "events.ai.buttons.toolResult.errorPrefix",
                 { command: toolName },
                 effectiveLocale
@@ -2703,7 +2748,7 @@ ${
     }
   } catch (error) {
     console.error(`[DEBUG] Error in processAiRequest:`, error);
-    const errMsg = i18n.__(
+    const errMsg = await i18n.__(
       "events.ai.messages.errorOccurred",
       { error: error.message },
       effectiveLocale

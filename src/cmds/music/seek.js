@@ -77,14 +77,14 @@ export default {
     );
     if (!player) {
       return interaction.editReply({
-        content: i18n.__("commands.music.seek.noMusicPlaying"),
+        content: await i18n.__("commands.music.seek.noMusicPlaying"),
         ephemeral: true,
       });
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
       return interaction.editReply({
-        content: i18n.__("commands.music.seek.notInVoiceChannel"),
+        content: await i18n.__("commands.music.seek.notInVoiceChannel"),
         ephemeral: true,
       });
     }
@@ -94,21 +94,23 @@ export default {
 
     if (timeInMs === null) {
       return interaction.editReply({
-        content: i18n.__("commands.music.seek.invalidTimeFormat"),
+        content: await i18n.__("commands.music.seek.invalidTimeFormat"),
         ephemeral: true,
       });
     }
 
     if (timeInMs > player.queue.current.info.duration) {
       return interaction.editReply({
-        content: i18n.__("commands.music.seek.seekBeyondDuration"),
+        content: await i18n.__("commands.music.seek.seekBeyondDuration"),
         ephemeral: true,
       });
     }
 
     await player.seek(timeInMs);
     return interaction.editReply({
-      content: i18n.__("commands.music.seek.seekedTo", { time: timeString }),
+      content: await i18n.__("commands.music.seek.seekedTo", {
+        time: timeString,
+      }),
       ephemeral: true,
     });
   },
@@ -133,7 +135,7 @@ export default {
     } else {
       return interaction.respond([
         {
-          name: i18n.__("commands.music.seek.invalidTimeFormat"),
+          name: await i18n.__("commands.music.seek.invalidTimeFormat"),
           value: "0:00",
         },
       ]);

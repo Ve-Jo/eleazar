@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import Database from "../database/client.js";
+import hubClient from "../api/hubClient.js";
 import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 export default {
@@ -39,11 +39,10 @@ export default {
           console.log(
             `[Voice XP] Starting voice session for ${member.user.tag}`
           );
-          await Database.createVoiceSession(
-            guildId,
+          await hubClient.createVoiceSession(
             userId,
-            newState.channelId,
-            now
+            guildId,
+            newState.channelId
           );
         } else {
           console.log(`[Voice XP] Not enough users in channel for XP tracking`);
@@ -54,14 +53,15 @@ export default {
       // Handle user leaving voice channel completely
       if (oldState.channelId && !newState.channelId) {
         console.log(`[Voice XP] User left voice channel completely`);
-        const session = await Database.getVoiceSession(guildId, userId);
+        const session = await hubClient.getVoiceSession(guildId, userId);
 
         if (session) {
           console.log(
             `[Voice XP] Found active session for ${member.user.tag}, processing XP`
           );
+          const sessionDuration = Date.now() - session.joinTime;
           const { timeSpent, xpAmount, levelUp } =
-            await Database.calculateAndAddVoiceXP(guildId, userId, session);
+            await hubClient.calculateVoiceXP(guildId, userId, sessionDuration);
           console.log(
             `[Voice XP] Session ended: ${
               timeSpent / 1000
@@ -153,7 +153,7 @@ export default {
             );
           }
 
-          await Database.removeVoiceSession(guildId, userId);
+          await hubClient.removeVoiceSession(guildId, userId);
         } else {
           console.log(
             `[Voice XP] No active session found for ${member.user.tag}`
@@ -170,15 +170,16 @@ export default {
       ) {
         const oldChannel = oldState.channel;
         const newChannel = newState.channel;
-        const session = await Database.getVoiceSession(guildId, userId);
+        const session = await hubClient.getVoiceSession(guildId, userId);
 
         // Process XP for the old channel if there was an active session
         if (session) {
           console.log(
             `[Voice XP] Found active session during channel switch for ${member.user.tag}`
           );
+          const sessionDuration = Date.now() - session.joinTime;
           const { timeSpent, xpAmount, levelUp } =
-            await Database.calculateAndAddVoiceXP(guildId, userId, session);
+            await hubClient.calculateVoiceXP(guildId, userId, sessionDuration);
           console.log(
             `[Voice XP] Channel switch: ${
               timeSpent / 1000
@@ -269,7 +270,7 @@ export default {
           }
 
           // Remove the old session before potentially creating a new one
-          await Database.removeVoiceSession(guildId, userId);
+          await hubClient.removeVoiceSession(guildId, userId);
         }
 
         // Check if new channel has enough users for XP tracking
@@ -278,11 +279,10 @@ export default {
           console.log(
             `[Voice XP] Starting new session in channel ${newChannel.name}`
           );
-          await Database.createVoiceSession(
-            guildId,
+          await hubClient.createVoiceSession(
             userId,
-            newState.channelId,
-            now
+            guildId,
+            newState.channelId
           );
         } else {
           console.log(

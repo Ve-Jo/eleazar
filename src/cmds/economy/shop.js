@@ -8,7 +8,7 @@ import {
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
-import Database, { UPGRADES } from "../../database/client.js";
+import hubClient, { UPGRADES } from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 // Import the UpgradesDisplay component to access its localizations
 import UpgradesDisplay from "../../render-server/components/UpgradesDisplay.jsx";
@@ -111,6 +111,11 @@ export default {
       ru: "Невозможно отменить улучшение уровня 1",
       uk: "Неможливо відмінити покращення рівня 1",
     },
+    description: {
+      en: "View and purchase upgrades",
+      ru: "Просмотреть и купить улучшения",
+      uk: "Переглянути та купити покращення",
+    },
   },
 
   async execute(interaction, i18n) {
@@ -122,9 +127,8 @@ export default {
       // Define upgradeInfo outside the generateShopMessage function
       let upgradeInfo = {};
 
-      // Determine builder mode based on execution context
-      const isAiContext = !!interaction._isAiProxy;
-      const builderMode = isAiContext ? "v1" : "v2";
+      // Always use v2 builder mode
+      const builderMode = "v2";
 
       // Get user locale for translations
       const userLocale = i18n.getUserLocale
@@ -145,39 +149,80 @@ export default {
       const generateShopMessage = async (options = {}) => {
         const { disableInteractions = false } = options;
 
+        // Ensure user exists in database before fetching data
+        await hubClient.ensureGuildUser(guild.id, user.id);
+
         // Get user data with all relations
-        const userData = await Database.getUser(guild.id, user.id);
+        const userData = await hubClient.getUser(guild.id, user.id);
 
         // Get the user's upgrade discount
-        const upgradeDiscount = await Database.getUpgradeDiscount(
-          guild.id,
-          user.id
-        );
+        // Upgrade discount will need to be implemented in hub services
+        const upgradeDiscount = 0; // TODO: Implement upgrade discount API in hub
 
         // Get upgrade info for each type
         upgradeInfo = {
-          daily_bonus: await Database.getUpgradeInfo(
-            "daily_bonus",
-            userData.upgrades.find((u) => u.type === "daily_bonus")?.level || 1
-          ),
-          daily_cooldown: await Database.getUpgradeInfo(
-            "daily_cooldown",
-            userData.upgrades.find((u) => u.type === "daily_cooldown")?.level ||
-              1
-          ),
-          crime: await Database.getUpgradeInfo(
-            "crime",
-            userData.upgrades.find((u) => u.type === "crime")?.level || 1
-          ),
-          bank_rate: await Database.getUpgradeInfo(
-            "bank_rate",
-            userData.upgrades.find((u) => u.type === "bank_rate")?.level || 1
-          ),
-          games_earning: await Database.getUpgradeInfo(
-            "games_earning",
-            userData.upgrades.find((u) => u.type === "games_earning")?.level ||
-              1
-          ),
+          // Upgrade info calculation will need to be implemented in hub services
+          // For now, using basic calculations based on UPGRADES constants
+          daily_bonus: {
+            price: Math.floor(
+              UPGRADES.daily_bonus.basePrice *
+                Math.pow(
+                  UPGRADES.daily_bonus.priceMultiplier,
+                  (userData.upgrades?.daily_bonus?.level || 1) - 1
+                )
+            ),
+            effect:
+              UPGRADES.daily_bonus.effectMultiplier *
+              (userData.upgrades?.daily_bonus?.level || 1),
+          },
+          daily_cooldown: {
+            price: Math.floor(
+              UPGRADES.daily_cooldown.basePrice *
+                Math.pow(
+                  UPGRADES.daily_cooldown.priceMultiplier,
+                  (userData.upgrades?.daily_cooldown?.level || 1) - 1
+                )
+            ),
+            effect:
+              UPGRADES.daily_cooldown.effectValue *
+              (userData.upgrades?.daily_cooldown?.level || 1),
+          },
+          crime: {
+            price: Math.floor(
+              UPGRADES.crime.basePrice *
+                Math.pow(
+                  UPGRADES.crime.priceMultiplier,
+                  (userData.upgrades?.crime?.level || 1) - 1
+                )
+            ),
+            effect:
+              UPGRADES.crime.effectValue *
+              (userData.upgrades?.crime?.level || 1),
+          },
+          bank_rate: {
+            price: Math.floor(
+              UPGRADES.bank_rate.basePrice *
+                Math.pow(
+                  UPGRADES.bank_rate.priceMultiplier,
+                  (userData.upgrades?.bank_rate?.level || 1) - 1
+                )
+            ),
+            effect:
+              UPGRADES.bank_rate.effectValue *
+              (userData.upgrades?.bank_rate?.level || 1),
+          },
+          games_earning: {
+            price: Math.floor(
+              UPGRADES.games_earning.basePrice *
+                Math.pow(
+                  UPGRADES.games_earning.priceMultiplier,
+                  (userData.upgrades?.games_earning?.level || 1) - 1
+                )
+            ),
+            effect:
+              UPGRADES.games_earning.effectMultiplier *
+              (userData.upgrades?.games_earning?.level || 1),
+          },
         };
 
         // Apply discount to all upgrade prices if discount exists
@@ -332,9 +377,9 @@ export default {
           dominantColor,
           mode: builderMode,
         })
-          .addText(i18n.__(`commands.economy.shop.title`), "header3")
+          .addText(await i18n.__(`commands.economy.shop.title`), "header3")
           .addText(
-            i18n.__("commands.economy.shop.description", {
+            await i18n.__("commands.economy.shop.description", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
@@ -343,7 +388,7 @@ export default {
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
-          .setPlaceholder(i18n.__("commands.economy.shop.selectUpgrade"))
+          .setPlaceholder(await i18n.__("commands.economy.shop.selectUpgrade"))
           .addOptions(
             Object.entries(upgradeInfo).map(([key, upgrade], index) => {
               let effectPerLevel, effectValue;
@@ -411,7 +456,7 @@ export default {
 
         const openButton = new ButtonBuilder()
           .setCustomId("purchase")
-          .setLabel(i18n.__("commands.economy.shop.purchaseButton"))
+          .setLabel(await i18n.__("commands.economy.shop.purchaseButton"))
           .setStyle(ButtonStyle.Success);
 
         // Add revert button
@@ -429,14 +474,20 @@ export default {
         if (currentLevel <= 1) {
           // Disable the button for level 1 upgrades
           revertButton
-            .setLabel(i18n.__("commands.economy.shop.revertButton"))
+            .setLabel(await i18n.__("commands.economy.shop.revertButton"))
             .setDisabled(true);
         } else {
           // Calculate refund amount for display (85% of current level price)
-          const currentUpgradeInfo = await Database.getUpgradeInfo(
-            currentUpgradeType,
-            currentLevel
-          );
+          // Calculate upgrade info locally
+          const currentUpgradeInfo = {
+            price: Math.floor(
+              UPGRADES[currentUpgradeType].basePrice *
+                Math.pow(
+                  UPGRADES[currentUpgradeType].priceMultiplier,
+                  currentLevel - 1
+                )
+            ),
+          };
           const refundAmount = currentUpgradeInfo
             ? Math.floor(currentUpgradeInfo.price * 0.85)
             : 0;
@@ -444,9 +495,9 @@ export default {
           // Set the button label with refund amount
           revertButton
             .setLabel(
-              i18n.__("commands.economy.shop.revertButtonWithRefund", {
+              (await i18n.__("commands.economy.shop.revertButtonWithRefund", {
                 refund: refundAmount || 0,
-              }) || i18n.__("commands.economy.shop.revertButton") // Fallback to simple "Revert" text
+              })) || (await i18n.__("commands.economy.shop.revertButton")) // Fallback to simple "Revert" text
             )
             .setDisabled(false);
         }
@@ -467,25 +518,14 @@ export default {
         // Return the reply options using the builder's method
         return shopComponent.toReplyOptions({
           files: [attachment],
-          // Set content only for V1 mode (AI context)
-          content: isAiContext
-            ? i18n.__(`commands.economy.shop.title`)
-            : undefined,
         });
       };
 
       // Initial message send/edit
       const initialMessageOptions = await generateShopMessage();
       let message;
-      if (isAiContext) {
-        // AI context: Use proxy reply
-        message = await interaction.reply(initialMessageOptions); // interaction is proxy
-        // No collector needed for AI context
-        return;
-      } else {
-        // Normal context: Edit deferred reply
-        message = await interaction.editReply(initialMessageOptions);
-      }
+      // Edit deferred reply
+      message = await interaction.editReply(initialMessageOptions);
 
       // Create collector for buttons and select menu (only for normal context)
       const collector = message.createMessageComponentCollector({
@@ -504,40 +544,22 @@ export default {
 
           try {
             // Call the database method
-            const purchaseResult = await Database.purchaseUpgrade(
+            const purchaseResult = await hubClient.purchaseUpgrade(
               guild.id,
               user.id,
               type
             );
 
-            // --- Explicitly invalidate cache AFTER successful purchase ---
-            const userCacheKeyFull = Database._cacheKeyUser(
-              guild.id,
-              user.id,
-              true
-            );
-            const userCacheKeyBasic = Database._cacheKeyUser(
-              guild.id,
-              user.id,
-              false
-            );
-            // purchaseUpgrade already invalidates cooldowns if necessary
-            if (Database.redisClient) {
-              try {
-                const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
-                await Database.redisClient.del(keysToDel);
-                Database._logRedis("del", keysToDel.join(", "), true);
-              } catch (err) {
-                Database._logRedis("del", keysToDel.join(", "), err);
-              }
-            }
+            // Cache invalidation is handled by the hub service
 
             // Show updated shop with new upgrade level
             await i.update(await generateShopMessage());
           } catch (error) {
             if (error.message === "Insufficient balance") {
               await i.reply({
-                content: i18n.__("commands.economy.shop.insufficientFunds"),
+                content: await i18n.__(
+                  "commands.economy.shop.insufficientFunds"
+                ),
                 ephemeral: true,
               });
             } else {
@@ -551,40 +573,12 @@ export default {
 
           try {
             // Revert the upgrade and get the result
-            const revertResult = await Database.revertUpgrade(
-              guild.id,
-              user.id,
-              type
+            // Revert upgrade functionality will need to be implemented in hub services
+            throw new Error(
+              "Revert upgrade not yet implemented in hub services"
             );
 
-            // --- Explicitly invalidate cache AFTER successful revert ---
-            const userCacheKeyFull = Database._cacheKeyUser(
-              guild.id,
-              user.id,
-              true
-            );
-            const userCacheKeyBasic = Database._cacheKeyUser(
-              guild.id,
-              user.id,
-              false
-            );
-            const cooldownCacheKey = Database._cacheKeyCooldown(
-              guild.id,
-              user.id
-            ); // revert sets a cooldown
-            if (Database.redisClient) {
-              try {
-                const keysToDel = [
-                  userCacheKeyFull,
-                  userCacheKeyBasic,
-                  cooldownCacheKey,
-                ];
-                await Database.redisClient.del(keysToDel);
-                Database._logRedis("del", keysToDel.join(", "), true);
-              } catch (err) {
-                Database._logRedis("del", keysToDel.join(", "), err);
-              }
-            }
+            // Cache invalidation is handled by the hub service
 
             // Get the upgrade name from UpgradesDisplay for the success message
             const upgradeName = getUpgradeTranslation(
@@ -597,7 +591,7 @@ export default {
 
             // Now we can use followUp
             await i.followUp({
-              content: i18n.__("commands.economy.shop.revertSuccess", {
+              content: await i18n.__("commands.economy.shop.revertSuccess", {
                 type: upgradeName,
                 level: revertResult.newLevel,
                 refund: revertResult.refundAmount,
@@ -613,14 +607,14 @@ export default {
               const minutesLeft = Math.ceil(cooldownTime / (1000 * 60));
 
               await i.reply({
-                content: i18n.__("commands.economy.shop.revertCooldown", {
+                content: await i18n.__("commands.economy.shop.revertCooldown", {
                   minutes: minutesLeft,
                 }),
                 ephemeral: true,
               });
             } else if (error.message === "Cannot revert a level 1 upgrade") {
               await i.reply({
-                content: i18n.__("commands.economy.shop.cannotRevert"),
+                content: await i18n.__("commands.economy.shop.cannotRevert"),
                 ephemeral: true,
               });
             } else {
@@ -649,19 +643,14 @@ export default {
       console.error("Error in shop command:", error);
       // Send error message
       const errorOptions = {
-        content: i18n.__("commands.economy.shop.error"),
+        content: await i18n.__("commands.economy.shop.error"),
         ephemeral: true,
       };
-      if (!!interaction._isAiProxy) {
-        // AI context: Throw error
-        throw new Error(i18n.__("commands.economy.shop.error"));
+      // Edit reply
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(errorOptions).catch(() => {});
       } else {
-        // Normal context: Edit reply
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorOptions).catch(() => {});
-        } else {
-          await interaction.reply(errorOptions).catch(() => {});
-        }
+        await interaction.reply(errorOptions).catch(() => {});
       }
     }
   },

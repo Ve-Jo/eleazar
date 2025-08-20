@@ -1,5 +1,5 @@
 import { SlashCommandSubcommandBuilder, PermissionsBitField } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 
 export default {
   data: () => {
@@ -158,7 +158,7 @@ export default {
       )
     ) {
       return interaction.reply({
-        content: i18n.__("commands.counting.no_perms"),
+        content: await i18n.__("commands.counting.no_perms"),
         ephemeral: true,
       });
     }
@@ -174,51 +174,19 @@ export default {
     const noUniqueRole =
       interaction.options.getBoolean("no_unique_role") || false;
 
-    // Get current guild settings
-    const guildData = await Database.client.guild.findUnique({
-      where: { id: guild.id },
-      select: { settings: true },
-    });
-
-    // Update guild settings with new counting data
-    await Database.client.guild.upsert({
-      where: { id: guild.id },
-      create: {
-        id: guild.id,
-        settings: {
-          counting: {
-            channel_id: channel.id,
-            message: startNumber,
-            pinoneach: pinOneEach,
-            pinnedrole: pinnedRole.id,
-            only_numbers: onlyNumbers,
-            no_same_user: noSameUser,
-            lastwritter: "0",
-            no_unique_role: noUniqueRole,
-            lastpinnedmember: "0",
-          },
-        },
-      },
-      update: {
-        settings: {
-          ...guildData?.settings,
-          counting: {
-            channel_id: channel.id,
-            message: startNumber,
-            pinoneach: pinOneEach,
-            pinnedrole: pinnedRole.id,
-            only_numbers: onlyNumbers,
-            no_same_user: noSameUser,
-            lastwritter: "0",
-            no_unique_role: noUniqueRole,
-            lastpinnedmember: "0",
-          },
-        },
-      },
-    });
+    await hubClient.setupCounting(
+      interaction.guild.id,
+      channel.id,
+      startNumber,
+      pinOneEach,
+      pinnedRole.id,
+      onlyNumbers,
+      noSameUser,
+      noUniqueRole
+    );
 
     await interaction.reply({
-      content: i18n.__("commands.counting.setup.success", {
+      content: await i18n.__("commands.counting.setup.success", {
         channel: channel.name,
         number: startNumber,
         pinoneach: pinOneEach,

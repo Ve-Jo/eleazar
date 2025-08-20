@@ -7,7 +7,7 @@ import {
   SlashCommandSubcommandBuilder,
   MessageFlags,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import {
   generateImage,
   processImageColors,
@@ -125,9 +125,8 @@ export default {
       let sortedUsers = [];
       const fetchBufferSize = 5; // Fetch a few extra users
 
-      // Determine builder mode based on execution context
-      const isAiContext = !!interaction._isAiProxy;
-      const builderMode = isAiContext ? "v1" : "v2";
+      // Always use v2 builder mode
+      const builderMode = "v2";
 
       async function findMyself() {
         if (highlightedPosition === null) {
@@ -148,35 +147,12 @@ export default {
 
         if (category === "season") {
           // For season category, fetch global users ordered by seasonXp
-          guildUsers = await Database.client.level.findMany({
-            orderBy: {
-              seasonXp: "desc",
-            },
-            take: 250, // Limit to reasonable amount
-            include: {
-              user: true,
-            },
-          });
-
-          // Transform the data to match the expected structure
-          guildUsers = guildUsers.map((level) => ({
-            id: level.user.id,
-            seasonXp: level.seasonXp,
-            guildId: level.guildId,
-          }));
+          guildUsers = await hubClient.getSeasonLeaderboard(
+            250 // Limit to reasonable amount
+          );
         } else {
           // For guild-specific categories
-          guildUsers = await Database.client.user.findMany({
-            where: { guildId: guild.id },
-            select: {
-              id: true,
-              guildId: true,
-              bannerUrl: true,
-              economy: true,
-              stats: true,
-              Level: true,
-            },
-          });
+          guildUsers = await hubClient.getGuildUsers(guild.id);
         }
 
         // Sort users based on category
@@ -205,7 +181,7 @@ export default {
                 break;
               case "level":
                 sortValue = Number(userData.Level?.xp || 0);
-                displayValue = Database.calculateLevel(sortValue).level;
+                displayValue = hubClient.calculateLevel(sortValue).level;
                 break;
               case "games":
                 const gameRecords = userData.stats?.gameRecords
@@ -290,7 +266,7 @@ export default {
           const emptyPageBuilder = new ComponentBuilder({ mode: builderMode });
           emptyPageBuilder
             .addText(
-              i18n.__("commands.economy.leaderboard.noUsersOnPage") ||
+              (await i18n.__("commands.economy.leaderboard.noUsersOnPage")) ||
                 "No valid users found on this page."
             )
             .addButtons(prevButton, nextButton); // Add the navigation buttons
@@ -345,7 +321,7 @@ export default {
                   Number(user.economy?.balance || 0) +
                   Number(user.economy?.bankBalance || 0),
                 xp: Number(user.Level?.xp || 0),
-                level: Database.calculateLevel(Number(user.Level?.xp || 0))
+                level: hubClient.calculateLevel(Number(user.Level?.xp || 0))
                   .level,
                 xpStats: {
                   chat: Number(user.stats?.xpStats?.chat || 0),
@@ -383,7 +359,10 @@ export default {
 
         // Add image and title to the component builder
         leaderboardComponent
-          .addText(i18n.__(`commands.economy.leaderboard.title`), "header3")
+          .addText(
+            await i18n.__(`commands.economy.leaderboard.title`),
+            "header3"
+          )
           .addImage(`attachment://leaderboard.avif`);
 
         // Add navigation buttons using the builder's method (already created earlier)
@@ -394,16 +373,18 @@ export default {
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
             .setPlaceholder(
-              i18n.__("commands.economy.leaderboard.selectCategory")
+              await i18n.__("commands.economy.leaderboard.selectCategory")
             )
             .addOptions([
               {
-                label: i18n.__("commands.economy.leaderboard.categories.total"),
+                label: await i18n.__(
+                  "commands.economy.leaderboard.categories.total"
+                ),
                 value: "total",
                 default: category === "total",
               },
               {
-                label: i18n.__(
+                label: await i18n.__(
                   // Corrected i18n call
                   "commands.economy.leaderboard.categories.balance"
                 ),
@@ -411,22 +392,26 @@ export default {
                 default: category === "balance",
               },
               {
-                label: i18n.__("commands.economy.leaderboard.categories.bank"),
+                label: await i18n.__(
+                  "commands.economy.leaderboard.categories.bank"
+                ),
                 value: "bank",
                 default: category === "bank",
               },
               {
-                label: i18n.__("commands.economy.leaderboard.categories.level"),
+                label: await i18n.__(
+                  "commands.economy.leaderboard.categories.level"
+                ),
                 value: "level",
                 default: category === "level",
               },
               /*{
-                label: i18n.__("commands.economy.leaderboard.categories.games"),
+                label: await i18n.__("commands.economy.leaderboard.categories.games"),
                 value: "games",
                 default: category === "games",
               },
               {
-                label: i18n.__("commands.economy.leaderboard.categories.season"),
+                label: await i18n.__("commands.economy.leaderboard.categories.season"),
                 value: "season",
                 default: category === "season",
               },*/
@@ -439,22 +424,26 @@ export default {
             .done();
 
           // Create user selector based on the final displayed users
-          const selectOptions = usersToDisplayFinal.map((user, index) => {
-            // Use usersToDisplayFinal
-            const originalPosition =
-              sortedUsers.findIndex((su) => su.id === user.id) + 1; // Get original position
-            return {
-              label: `${originalPosition}. ${user.name.slice(0, 20)}`, // Use original position
-              value: originalPosition.toString(), // Use original position as value
-              description: `${i18n.__(
-                `commands.economy.leaderboard.categories.${category}`
-              )}: ${user.displayValue}`.slice(0, 50),
-            };
-          });
+          const selectOptions = await Promise.all(
+            usersToDisplayFinal.map(async (user, index) => {
+              // Use usersToDisplayFinal
+              const originalPosition =
+                sortedUsers.findIndex((su) => su.id === user.id) + 1; // Get original position
+              return {
+                label: `${originalPosition}. ${user.name.slice(0, 20)}`, // Use original position
+                value: originalPosition.toString(), // Use original position as value
+                description: `${await i18n.__(
+                  `commands.economy.leaderboard.categories.${category}`
+                )}: ${user.displayValue}`.slice(0, 50),
+              };
+            })
+          );
 
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId("select_user")
-            .setPlaceholder(i18n.__("commands.economy.leaderboard.selectUser")) // Use localized placeholder
+            .setPlaceholder(
+              await i18n.__("commands.economy.leaderboard.selectUser")
+            ) // Use localized placeholder
             .addOptions(selectOptions);
 
           // Add user selector using the builder (works for both modes)
@@ -489,37 +478,27 @@ export default {
           JSON.stringify(messageOptions, null, 2)
         );
 
-        if (isAiContext) {
-          // AI context: Use proxy's reply method
-          message = await interaction.reply(messageOptions); // interaction is the proxy
-        } else {
-          // Normal context: Edit the deferred reply
-          message = await interaction.editReply(messageOptions);
-        }
+        // Edit the deferred reply
+        message = await interaction.editReply(messageOptions);
       } catch (error) {
         console.error("Error updating leaderboard message:", error);
         const errorOptions = {
-          content: i18n.__("commands.economy.leaderboard.error"),
+          content: await i18n.__("commands.economy.leaderboard.error"),
           ephemeral: true,
           components: [],
           files: [],
           embeds: [], // Ensure embeds are cleared on error
         };
-        if (isAiContext) {
-          // AI context: Throw error for the proxy to handle
-          throw new Error(`Leaderboard command failed: ${error.message}`);
-        } else {
-          // Normal context: Try to edit the deferred reply or send a new reply
-          try {
-            if (interaction.replied || interaction.deferred) {
-              await interaction.editReply(errorOptions);
-            } else {
-              // Fallback if not deferred/replied - unlikely if deferReply was called
-              await interaction.reply(errorOptions);
-            }
-          } catch (finalError) {
-            console.error("Failed to send final error message:", finalError);
+        // Try to edit the deferred reply or send a new reply
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply(errorOptions);
+          } else {
+            // Fallback if not deferred/replied - unlikely if deferReply was called
+            await interaction.reply(errorOptions);
           }
+        } catch (finalError) {
+          console.error("Failed to send final error message:", finalError);
         }
       }
 
@@ -633,29 +612,22 @@ export default {
       console.error("Error executing leaderboard command:", error);
       // Send error message
       const errorOptions = {
-        content: i18n.__("commands.economy.leaderboard.error"),
+        content: await i18n.__("commands.economy.leaderboard.error"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
-      // Check context for error handling
-      const isAiContextCheck = !!interaction._isAiProxy;
-      if (isAiContextCheck) {
-        // AI context: Rethrow the error to be caught by toolExecutor
-        throw error; // Rethrow the original error
-      } else {
-        // Normal context: Try to edit the deferred reply or send a new reply
-        try {
-          if (interaction.replied || interaction.deferred) {
-            await interaction.editReply(errorOptions);
-          } else {
-            // Fallback if not deferred/replied - unlikely if deferReply was called
-            await interaction.reply(errorOptions);
-          }
-        } catch (finalError) {
-          console.error("Failed to send final error message:", finalError);
+      // Try to edit the deferred reply or send a new reply
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorOptions);
+        } else {
+          // Fallback if not deferred/replied - unlikely if deferReply was called
+          await interaction.reply(errorOptions);
         }
+      } catch (finalError) {
+        console.error("Failed to send final error message:", finalError);
       }
     }
   },

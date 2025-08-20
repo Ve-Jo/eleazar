@@ -5,7 +5,7 @@ import {
   MessageFlags,
   EmbedBuilder,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
 import axios from "axios";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
@@ -86,18 +86,11 @@ export async function handleRemoveBanner(interaction) {
   const [, userId, guildId] = interaction.customId.split(":");
 
   try {
+    // Ensure user exists in database before updating
+    await hubClient.ensureGuildUser(guildId, userId);
+
     // Remove the banner
-    await Database.client.user.update({
-      where: {
-        guildId_id: {
-          guildId,
-          id: userId,
-        },
-      },
-      data: {
-        bannerUrl: null,
-      },
-    });
+    await hubClient.updateUser(guildId, userId, { bannerUrl: null });
 
     // Try to notify the user
     const user = await interaction.client.users.fetch(userId);
@@ -215,7 +208,7 @@ export default {
       // Validate attachment
       if (!attachment || !attachment.contentType?.startsWith("image/")) {
         return interaction.editReply({
-          content: i18n.__("commands.images.setbanner.invalidImage"),
+          content: await i18n.__("commands.images.setbanner.invalidImage"),
           ephemeral: true,
         });
       }
@@ -223,7 +216,7 @@ export default {
       const MAX_SIZE = 8 * 1024 * 1024; // 8MB
       if (attachment.size > MAX_SIZE) {
         return interaction.editReply({
-          content: i18n.__("commands.images.setbanner.imageTooLarge"),
+          content: await i18n.__("commands.images.setbanner.imageTooLarge"),
           ephemeral: true,
         });
       }
@@ -234,46 +227,22 @@ export default {
         attachment
       );
 
-      // Save the banner URL to the database
-      await Database.client.user.update({
-        where: {
-          guildId_id: {
-            id: interaction.user.id,
-            guildId: interaction.guild.id,
-          },
-        },
-        data: {
-          bannerUrl: permanentUrl,
-        },
-      });
+      // Ensure user exists in database before updating
+      await hubClient.ensureGuildUser(
+        interaction.guild.id,
+        interaction.user.id
+      );
 
-      // --- Explicitly invalidate cache AFTER update ---
-      const userCacheKeyFull = Database._cacheKeyUser(
-        interaction.guild.id,
-        interaction.user.id,
-        true
-      );
-      const userCacheKeyBasic = Database._cacheKeyUser(
-        interaction.guild.id,
-        interaction.user.id,
-        false
-      );
-      if (Database.redisClient) {
-        try {
-          const keysToDel = [userCacheKeyFull, userCacheKeyBasic];
-          await Database.redisClient.del(keysToDel);
-          Database._logRedis("del", keysToDel.join(", "), true);
-        } catch (err) {
-          Database._logRedis("del", keysToDel.join(", "), err);
-        }
-      }
+      // Save the banner URL to the database
+      await hubClient.updateUser(interaction.guild.id, interaction.user.id, {
+        bannerUrl: permanentUrl,
+      });
 
       // --- Generate preview --- (Optional, but good UX)
       try {
-        const userData = await Database.getUser(
+        const userData = await hubClient.getUser(
           interaction.guild.id,
-          interaction.user.id,
-          true
+          interaction.user.id
         );
 
         const [previewBuffer, dominantColor] = await generateImage(
@@ -315,15 +284,18 @@ export default {
             mode: builderMode,
             color: 0x00ff00, // Green color for success
           })
-            .addText(i18n.__("commands.images.setbanner.title"), "header3")
-            .addText(i18n.__("commands.images.setbanner.success"))
+            .addText(
+              await i18n.__("commands.images.setbanner.title"),
+              "header3"
+            )
+            .addText(await i18n.__("commands.images.setbanner.success"))
             .addImage(permanentUrl) // Use the permanent URL
             .addTimestamp(interaction.locale);
 
           // Reply/edit based on context
           const replyOptions = successComponent.toReplyOptions({
             content: isAiContext
-              ? `${i18n.__(
+              ? `${await i18n.__(
                   "commands.images.setbanner.success"
                 )} Banner URL: ${permanentUrl}`
               : undefined,
@@ -340,14 +312,17 @@ export default {
             mode: builderMode,
             color: 0x00ff00, // Green color for success
           })
-            .addText(i18n.__("commands.images.setbanner.title"), "header3")
-            .addText(i18n.__("commands.images.setbanner.success"))
+            .addText(
+              await i18n.__("commands.images.setbanner.title"),
+              "header3"
+            )
+            .addText(await i18n.__("commands.images.setbanner.success"))
             .addTimestamp(interaction.locale);
 
           // Reply/edit based on context
           const replyOptions = successComponent.toReplyOptions({
             content: isAiContext
-              ? `${i18n.__(
+              ? `${await i18n.__(
                   "commands.images.setbanner.success"
                 )} Banner URL: ${permanentUrl}`
               : undefined,
@@ -366,14 +341,14 @@ export default {
           mode: builderMode,
           color: 0x00ff00, // Green color for success
         })
-          .addText(i18n.__("commands.images.setbanner.title"), "header3")
-          .addText(i18n.__("commands.images.setbanner.success"))
+          .addText(await i18n.__("commands.images.setbanner.title"), "header3")
+          .addText(await i18n.__("commands.images.setbanner.success"))
           .addTimestamp(interaction.locale);
 
         // Reply/edit based on context
         const replyOptions = successComponent.toReplyOptions({
           content: isAiContext
-            ? `${i18n.__(
+            ? `${await i18n.__(
                 "commands.images.setbanner.success"
               )} Banner URL: ${permanentUrl}`
             : undefined,
@@ -388,14 +363,14 @@ export default {
     } catch (error) {
       console.error("Error setting banner:", error);
       const errorOptions = {
-        content: i18n.__("commands.images.setbanner.error"),
+        content: await i18n.__("commands.images.setbanner.error"),
         ephemeral: true,
         components: [],
         embeds: [],
         files: [],
       };
       if (isAiContext) {
-        throw new Error(i18n.__("commands.images.setbanner.error"));
+        throw new Error(await i18n.__("commands.images.setbanner.error"));
       } else {
         if (interaction.replied || interaction.deferred) {
           await interaction.editReply(errorOptions).catch(() => {});

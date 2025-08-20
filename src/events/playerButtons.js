@@ -1,5 +1,5 @@
 import { Events } from "discord.js";
-import i18n from "../utils/newI18n.js";
+import i18n from "../utils/i18n.js";
 import { createOrUpdateMusicPlayerEmbed } from "../utils/musicPlayerEmbed.js";
 
 // Register required localizations for the button handler
@@ -88,7 +88,7 @@ export default {
 
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
         return interaction.reply({
-          content: i18n.__("music.notInVoiceChannel"),
+          content: await i18n.__("music.notInVoiceChannel"),
           ephemeral: true,
         });
       }
@@ -109,7 +109,7 @@ export default {
             const newMode = modes[(currentIndex + 1) % modes.length];
             player.repeatMode = newMode;
             player.emit("playerRepeatModeUpdate", player, newMode);
-            interactionResponseContent = i18n.__("music.loopApplied", {
+            interactionResponseContent = await i18n.__("music.loopApplied", {
               type: newMode,
             });
             break;
@@ -117,38 +117,43 @@ export default {
           case "pause": {
             if (player.paused) {
               await player.resume();
-              interactionResponseContent = i18n.__("music.pauseResumed");
+              interactionResponseContent = await i18n.__("music.pauseResumed");
             } else {
               await player.pause();
-              interactionResponseContent = i18n.__("music.pauseApplied");
+              interactionResponseContent = await i18n.__("music.pauseApplied");
             }
             break;
           }
           case "skip": {
             try {
               await player.skip();
-              interactionResponseContent = i18n.__("music.skipApplied");
+              interactionResponseContent = await i18n.__("music.skipApplied");
             } catch (error) {
               console.error("Skip error:", error);
-              interactionResponseContent = i18n.__("music.skippingSongError", {
-                error: error.message,
-              });
+              interactionResponseContent = await hubClient.getTranslation(
+                "music.skippingSongError",
+                { error: error.message },
+                locale
+              );
             }
             break;
           }
           case "previous": {
             if (!player.queue.previous || player.queue.previous.length === 0) {
-              interactionResponseContent = i18n.__(
-                "music.previous.noPreviousSongs"
+              interactionResponseContent = await hubClient.getTranslation(
+                "music.previous.noPreviousSongs",
+                {},
+                locale
               );
             } else {
               const previousTrack = player.queue.previous[0];
               player.queue.tracks.unshift(previousTrack);
               player.queue.previous.shift();
               await player.skip();
-              interactionResponseContent = i18n.__(
+              interactionResponseContent = await hubClient.getTranslation(
                 "music.previous.addedPreviousToQueue",
-                { title: previousTrack.info.title }
+                { title: previousTrack.info.title },
+                locale
               );
             }
             break;
@@ -160,13 +165,22 @@ export default {
               guildId: player.guildId,
               state: player.state,
             });
-            interactionResponseContent = i18n.__(
+            interactionResponseContent = await hubClient.getTranslation(
               "music.autoplay.autoplayApplied",
               {
                 state: newState
-                  ? i18n.__("music.buttons.on")
-                  : i18n.__("music.buttons.off"),
-              }
+                  ? await hubClient.getTranslation(
+                      "music.buttons.on",
+                      {},
+                      locale
+                    )
+                  : await hubClient.getTranslation(
+                      "music.buttons.off",
+                      {},
+                      locale
+                    ),
+              },
+              locale
             );
             break;
           }
@@ -211,7 +225,11 @@ export default {
         console.error("Error processing music button interaction:", error);
         try {
           await interaction.followUp({
-            content: i18n.__("music.errorOccurred", { error: error.message }),
+            content: await hubClient.getTranslation(
+              "music.errorOccurred",
+              { error: error.message },
+              locale
+            ),
             ephemeral: true,
           });
         } catch (replyError) {

@@ -4,57 +4,10 @@ import {
   MessageFlags,
   EmbedBuilder,
 } from "discord.js";
-import Database from "../../database/client.js";
+import hubClient from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
-import { getTickers } from "../../utils/cryptoApi.js"; // Import for getting current prices
-import { Prisma } from "@prisma/client"; // Import Prisma for Decimal
+// import { getTickers } from "../../utils/cryptoApi.js"; // Import for getting current prices
 import { ComponentBuilder } from "../../utils/componentConverter.js";
-
-// PnL Calculation Helper from crypto2.js
-function calculatePnlPercent(entryPrice, currentPrice, direction, leverage) {
-  entryPrice = parseFloat(entryPrice);
-  currentPrice = parseFloat(currentPrice);
-  leverage = parseInt(leverage);
-
-  if (
-    !entryPrice ||
-    !currentPrice ||
-    !leverage ||
-    isNaN(entryPrice) ||
-    isNaN(currentPrice) ||
-    isNaN(leverage)
-  ) {
-    return 0;
-  }
-
-  let pnlRatio = 0;
-  if (direction === "LONG") {
-    pnlRatio = (currentPrice - entryPrice) / entryPrice;
-  } else if (direction === "SHORT") {
-    pnlRatio = (entryPrice - currentPrice) / entryPrice;
-  }
-
-  // Clamp loss at -100% (liquidation)
-  const pnlPercent = Math.max(-100, pnlRatio * leverage * 100);
-  return pnlPercent;
-}
-
-// PnL Calculation Helper (Amount) from crypto2.js
-function calculatePnlAmount(entryPrice, currentPrice, quantity, direction) {
-  // Ensure inputs are Prisma Decimal or convert strings/numbers
-  const entry = new Prisma.Decimal(entryPrice);
-  const current = new Prisma.Decimal(currentPrice);
-  const qty = new Prisma.Decimal(quantity);
-
-  if (direction === "LONG") {
-    // PnL = (Current Price - Entry Price) * Quantity
-    return current.minus(entry).times(qty);
-  } else if (direction === "SHORT") {
-    // PnL = (Entry Price - Current Price) * Quantity
-    return entry.minus(current).times(qty);
-  }
-  return new Prisma.Decimal(0); // Should not happen
-}
 
 export default {
   data: () => {
@@ -104,69 +57,70 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    // Determine builder mode based on execution context
-    const isAiContext = !!interaction._isAiProxy;
-    const builderMode = isAiContext ? "v1" : "v2";
+    // Always use v2 builder mode
+    const builderMode = "v2";
 
-    // Defer only for normal context
-    if (!isAiContext) {
-      await interaction.deferReply();
-    }
+    // Always defer reply
+    await interaction.deferReply();
 
     const user = interaction.options.getMember("user") || interaction.member;
 
     // --- Marriage Check ---
-    const marriageStatus = await Database.getMarriageStatus(
+    // Marriage functionality will need to be implemented in hub services
+    const marriageStatus = await hubClient.getMarriageStatus(
       interaction.guild.id,
       user.id
     );
+
     let partnerData = null;
-    let combinedBankBalance = new Prisma.Decimal(0);
+    let combinedBankBalance = 0;
     // --- End Marriage Check ---
 
-    const userData = await Database.getUser(
-      interaction.guild.id,
-      user.id,
-      true
-    );
+    // Ensure user exists in database before fetching data
+    await hubClient.ensureGuildUser(interaction.guild.id, user.id);
+    const userData = await hubClient.getUser(interaction.guild.id, user.id);
 
     if (!userData) {
       return interaction.editReply({
-        content: i18n.__("commands.economy.userNotFound"),
+        content: await i18n.__("commands.economy.userNotFound"),
         ephemeral: true,
       });
     }
 
     // Calculate user's bank balance (including interest)
-    let individualBankBalance = new Prisma.Decimal(0); // Initialize
+    let individualBankBalance = 0; // Initialize
     if (userData.economy) {
-      // Calculate and store the individual balance before potentially combining
-      individualBankBalance = new Prisma.Decimal(
-        await Database.calculateBankBalance(userData)
-      );
-      userData.economy.bankBalance = individualBankBalance.toFixed(5); // Keep individual balance here for now
-      combinedBankBalance = combinedBankBalance.plus(individualBankBalance);
+      // Calculate current bank balance with interest
+      individualBankBalance = await hubClient.calculateBankBalance(userData);
+
+      userData.economy.bankBalance = individualBankBalance; // Update with calculated balance
+      combinedBankBalance =
+        Number(combinedBankBalance) + Number(individualBankBalance);
     }
 
     // --- Fetch Partner Data if Married ---
     let partnerDiscordUser = null; // Variable to store fetched Discord user
     if (marriageStatus && marriageStatus.status === "MARRIED") {
-      partnerData = await Database.getUser(
+      // Ensure partner exists in database before fetching data
+      await hubClient.ensureGuildUser(
         interaction.guild.id,
-        marriageStatus.partnerId,
-        true // Include relations for partner
+        marriageStatus.partnerId
+      );
+      partnerData = await hubClient.getUser(
+        interaction.guild.id,
+        marriageStatus.partnerId
       );
       if (partnerData && partnerData.economy) {
-        partnerData.economy.bankBalance = await Database.calculateBankBalance(
+        const partnerBankBalance = await hubClient.calculateBankBalance(
           partnerData
         );
-        combinedBankBalance = combinedBankBalance.plus(
-          new Prisma.Decimal(partnerData.economy.bankBalance)
-        );
+        partnerData.economy.bankBalance = partnerBankBalance;
+        combinedBankBalance =
+          Number(combinedBankBalance) + Number(partnerBankBalance);
       }
       // Store the combined balance for the image generator
-      userData.combinedBankBalance = combinedBankBalance.toFixed(5); // Ensure 5 decimals
-      userData.individualBankBalance = individualBankBalance.toFixed(5); // Pass individual balance too
+      userData.combinedBankBalance = Number(combinedBankBalance).toFixed(5); // Ensure 5 decimals
+      userData.individualBankBalance = Number(individualBankBalance).toFixed(5); // Pass individual balance too
       userData.marriageStatus = marriageStatus; // Pass status to image generator
       // userData.partnerData = partnerData; // Pass partner DB data if needed for other things
 
@@ -194,77 +148,6 @@ export default {
       // --- End Fetch Partner's Discord User ---
     }
     // --- End Fetch Partner Data ---
-
-    // Fetch crypto positions if they exist
-    if (!userData.crypto2) {
-      userData.crypto2 = { openPositions: [] };
-    }
-
-    try {
-      // Get positions from the database
-      const positions = await Database.getUserCryptoPositions(
-        interaction.guild.id,
-        user.id
-      );
-
-      if (positions && positions.length > 0) {
-        // Get current prices for all position symbols
-        const symbols = [...new Set(positions.map((p) => p.symbol))];
-        const currentPrices = await getTickers(symbols);
-
-        if (currentPrices) {
-          // Save timestamp metadata for the UI
-          userData.crypto2.timestamp = currentPrices.timestamp;
-          userData.crypto2.fromCache = currentPrices.fromCache;
-          userData.crypto2.stale = currentPrices.stale;
-
-          // Format positions with calculated PnL values
-          userData.crypto2.openPositions = positions
-            .map((pos) => {
-              const currentPrice =
-                currentPrices[pos.symbol]?.markPrice ||
-                currentPrices[pos.symbol]?.lastPrice;
-
-              if (!currentPrice) return null; // Skip if no price available
-
-              const pnlPercent = calculatePnlPercent(
-                pos.entryPrice,
-                currentPrice,
-                pos.direction,
-                pos.leverage
-              );
-
-              // Calculate PnL amount
-              const pnlAmount = calculatePnlAmount(
-                pos.entryPrice,
-                currentPrice,
-                pos.quantity,
-                pos.direction
-              );
-
-              // Calculate stake value
-              const stakeValue = new Prisma.Decimal(pos.entryPrice)
-                .times(new Prisma.Decimal(pos.quantity))
-                .dividedBy(pos.leverage);
-
-              return {
-                id: pos.id,
-                symbol: pos.symbol,
-                direction: pos.direction,
-                entryPrice: pos.entryPrice.toString(),
-                quantity: pos.quantity.toString(),
-                leverage: pos.leverage,
-                pnlPercent: pnlPercent.toFixed(2),
-                pnlAmount: pnlAmount.toFixed(2),
-                stakeValue: stakeValue.toFixed(2),
-              };
-            })
-            .filter(Boolean); // Remove any null entries
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load crypto positions:", error);
-    }
 
     const [buffer, dominantColor] = await generateImage(
       "Balance",
@@ -300,17 +183,16 @@ export default {
     );
 
     if (!buffer) {
-      console.error("Buffer is undefined or null");
-      // Use editReply for normal interaction, let proxy handle AI context reply
+      console.error("Error in balance command: Buffer is undefined or null");
       const errorOptions = {
-        content: i18n.__("commands.economy.imageError"),
+        content: await i18n.__("commands.economy.balance.error"),
         ephemeral: true,
       };
-      if (!isAiContext) {
-        return interaction.editReply(errorOptions);
+
+      if (interaction.replied || interaction.deferred) {
+        return interaction.editReply(errorOptions).catch(() => {});
       } else {
-        // For AI context, throw error so toolExecutor reports failure
-        throw new Error(i18n.__("commands.economy.imageError"));
+        return interaction.reply(errorOptions).catch(() => {});
       }
     }
 
@@ -323,24 +205,16 @@ export default {
       dominantColor,
       mode: builderMode, // Pass the determined mode
     })
-      .addText(i18n.__("commands.economy.balance.title"), "header3")
+      .addText(await i18n.__("commands.economy.balance.title"), "header3")
       .addImage("attachment://balance.avif")
       .addTimestamp(interaction.locale);
 
     // Prepare reply options using the builder
     const replyOptions = balanceComponent.toReplyOptions({
       files: [attachment],
-      // Add content only for V1 mode (AI context)
-      content: isAiContext
-        ? i18n.__("commands.economy.balance.title")
-        : undefined,
     });
 
-    // Reply/edit based on context
-    if (isAiContext) {
-      await interaction.reply(replyOptions);
-    } else {
-      await interaction.editReply(replyOptions);
-    }
+    // Always edit reply
+    await interaction.editReply(replyOptions);
   },
 };

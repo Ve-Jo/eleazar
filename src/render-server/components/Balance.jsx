@@ -1,18 +1,6 @@
 import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
 
-// Helper to format price values for crypto positions
-const formatPrice = (priceStr, decimals = 2) => {
-  if (!priceStr) return "-";
-  const num = parseFloat(priceStr);
-  return isNaN(num)
-    ? "-"
-    : num.toLocaleString(undefined, {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
-};
-
 const Balance = (props) => {
   const renderBanknotes = (
     amount,
@@ -221,25 +209,6 @@ const Balance = (props) => {
   const combinedBankBalanceProp = database?.combinedBankBalance;
   // --- End Marriage Check ---
 
-  /*database.crypto2 = {};
-  database.crypto2.openPositions = [
-    {
-      id: "cm9xd67nd000596povftodbh2",
-      symbol: "APTUSDT",
-      direction: "LONG",
-      entryPrice: 5.57822764,
-      quantity: 17.926841,
-      leverage: 10,
-      pnlPercent: 0.31,
-      pnlAmount: 0.03,
-      stakeValue: 10,
-    },
-  ];*/
-
-  // Get crypto positions if they exist
-  const cryptoPositions = database?.crypto2?.openPositions || [];
-  const hasCryptoPositions = cryptoPositions.length > 0;
-
   const translations = Object.entries(Balance.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
@@ -257,8 +226,6 @@ const Balance = (props) => {
   } = coloring;
 
   //database.economy.bankBalance = 0;
-  console.log("------------");
-  console.log(props?.database?.crypto2?.openPositions);
 
   const bankStartTime = database?.economy?.bankStartTime || 0;
   const bankRate = database?.economy?.bankRate || 0;
@@ -298,7 +265,7 @@ const Balance = (props) => {
         display: "flex",
         width: "400px",
         height: "auto", // Changed to auto to adapt to content
-        minHeight: hasCryptoPositions ? "300px" : "235px", // Use minHeight instead of fixed height
+        minHeight: isMarried ? "260px" : "235px", // Increase height for married users
         maxHeight: "400px", // Add a reasonable max height
         borderRadius: database?.bannerUrl ? "0px" : "20px",
         padding: "20px",
@@ -755,163 +722,6 @@ const Balance = (props) => {
             #{interaction?.user?.id || "{id}"}
           </div>
         </div>
-
-        {/* Crypto Positions Section */}
-        {hasCryptoPositions && (
-          <div
-            style={{
-              display: "flex",
-              marginTop: "10px",
-              borderRadius: "10px",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "3px",
-              }}
-            >
-              <span style={{ fontSize: "14px", color: secondaryTextColor }}>
-                {translations.crypto.toUpperCase()}
-              </span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: "5px",
-                maxWidth: "370px",
-                flexWrap: "wrap", // Add wrap to handle overflow
-              }}
-            >
-              {cryptoPositions.map((pos, index) => {
-                const isLong = pos.direction === "LONG";
-                const pnl = parseFloat(pos.pnlPercent || 0);
-                const pnlAmount = parseFloat(pos.pnlAmount || 0);
-                const pnlColor = pnl >= 0 ? "#33cc33" : "#ff4d4d"; // Green for profit, red for loss
-
-                return (
-                  <div
-                    key={pos.id || index}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "6px 8px 6px 8px",
-                      backgroundColor: isLong
-                        ? "rgba(51, 204, 51, 0.1)"
-                        : "rgba(255, 77, 77, 0.1)",
-                      borderRadius: "5px",
-                      maxWidth: "210px", // Limit width to fit two per row on mobile
-                      minWidth: "140px", // Ensure minimum size
-                      marginBottom: "2px", // Add spacing between rows
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontWeight: "bold",
-                          marginRight: "5px",
-                          fontSize: "14px",
-                        }}
-                      >
-                        {pos.symbol}
-                      </span>
-                      <span
-                        style={{
-                          display: "flex",
-                          backgroundColor: isLong
-                            ? "rgba(51, 204, 51, 0.3)"
-                            : "rgba(255, 77, 77, 0.3)",
-                          color: textColor,
-                          padding: "2px 5px",
-                          borderRadius: "3px",
-                          marginRight: "3px",
-                          fontSize: "14px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {isLong ? "↑" : "↓"}
-                        {pos.leverage}x
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        marginLeft: "3px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                      >
-                        {(() => {
-                          // Format both the original stake value and current value
-                          const originalValue = formatPrice(pos.stakeValue);
-                          const currentValue = formatPrice(
-                            pos.stakeValue + pnlAmount
-                          );
-
-                          // Get arrays of characters from both formatted values
-                          const originalChars = originalValue.split("");
-                          const currentChars = currentValue.split("");
-
-                          // Find the first differing position
-                          let diffIndex = 0;
-                          while (
-                            diffIndex < originalChars.length &&
-                            diffIndex < currentChars.length &&
-                            originalChars[diffIndex] === currentChars[diffIndex]
-                          ) {
-                            diffIndex++;
-                          }
-
-                          // Create the output with appropriate highlighting
-                          return (
-                            <>
-                              {/* The matching prefix */}
-                              {currentChars.slice(0, diffIndex).join("")}
-
-                              {/* The differing part */}
-                              <span
-                                style={{
-                                  color:
-                                    pnl >= 0
-                                      ? coloring?.isDarkText
-                                        ? "rgba(0, 128, 0, 0.8)"
-                                        : "rgba(144, 238, 144, 0.9)" // Softer green for dark/light modes
-                                      : coloring?.isDarkText
-                                      ? "rgba(128, 0, 0, 0.8)"
-                                      : "rgba(255, 160, 160, 0.9)", // Softer red for dark/light modes
-                                  fontWeight: "bold",
-                                  marginLeft: "-1px",
-                                  fontSize: "14px",
-                                }}
-                              >
-                                {currentChars.slice(diffIndex).join("")}
-                              </span>
-
-                              {/* The currency emoji */}
-                              <span
-                                style={{ marginLeft: "2px", fontSize: "14px" }}
-                              >
-                                💵
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
       <div
         style={{
@@ -933,19 +743,11 @@ const Balance = (props) => {
 Balance.dimensions = {
   width: 400,
   height: (props) => {
-    // Dynamically adjust height based on whether crypto positions exist
-    const cryptoPositions = props?.database?.crypto2?.openPositions || [];
-    const positionCount = cryptoPositions.length;
+    // Check if user is married to adjust height
+    const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
 
-    if (positionCount === 0) return 235;
-
-    // Base height plus additional space for positions
-    // Assume ~40px per row, and 2 positions per row
-    const positionRows = Math.ceil(positionCount / 2);
-    const baseHeight = 265; // Base height with header
-    const heightPerRow = 32;
-
-    return Math.min(400, baseHeight + positionRows * heightPerRow); // Cap at 400px
+    // Return increased height for married users
+    return isMarried ? 300 : 235;
   },
 };
 
@@ -981,11 +783,6 @@ Balance.localization_strings = {
     en: "yours",
     ru: "ваши",
     uk: "ваші",
-  },
-  crypto: {
-    en: "CRYPTO POSITIONS",
-    ru: "КРИПТО ПОЗИЦИИ",
-    uk: "КРИПТО ПОЗИЦІЇ",
   },
 };
 

@@ -1,6 +1,6 @@
 import { Events, Collection } from "discord.js";
-import Database from "../database/client.js";
-import i18n from "../utils/newI18n.js";
+import hubClient from "../api/hubClient.js";
+import { I18n } from "../utils/i18n.js";
 import { handleLevelUp } from "../utils/levelUpHandler.js";
 
 // Cooldown collection for tracking command usage
@@ -92,21 +92,19 @@ export default {
       );
 
       // Create a fresh i18n instance for this interaction to maintain thread safety
-      const commandI18n = i18n;
+      const commandI18n = new I18n();
       commandI18n.setLocale(locale);
 
       // Save the determined locale to the database for future use
       // Do this asynchronously, don't wait for it to finish
-      Database.setUserLocale(
-        interaction.guild.id,
-        interaction.user.id,
-        locale
-      ).catch((err) => {
-        console.error(
-          `Failed to save locale for user ${interaction.user.id}:`,
-          err
-        );
-      });
+      hubClient
+        .setUserLocale(interaction.guild.id, interaction.user.id, locale)
+        .catch((err) => {
+          console.error(
+            `Failed to save locale for user ${interaction.user.id}:`,
+            err
+          );
+        });
 
       // If this is a subcommand
       if (subcommandName && command.subcommands?.[subcommandName]) {
@@ -129,31 +127,32 @@ export default {
       }
 
       // Update user's last activity - with guild creation if needed
-      await Database.ensureGuildUser(interaction.guild.id, interaction.user.id);
+      await hubClient.ensureGuildUser(
+        interaction.user.id,
+        interaction.guild.id
+      );
 
       // Increment command count
-      await Database.incrementCommandCount(
+      await hubClient.updateStats(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
+        "commandCount",
+        1
       );
 
       // Add XP for using a command
       // Get guild settings for XP amount per command
-      const guildSettings = await Database.client.guild.findUnique({
-        where: { id: interaction.guild.id },
-        select: { settings: true },
-      });
+      const guildSettings = await hubClient.getGuild(interaction.guild.id);
 
       // Default XP per command is 5, can be customized in guild settings
       const xpPerCommand = guildSettings?.settings?.xp_per_command || 5;
 
       // Add XP and check for level-up
       if (xpPerCommand > 0) {
-        const xpResult = await Database.addXP(
+        const xpResult = await hubClient.addXP(
           interaction.guild.id,
           interaction.user.id,
-          xpPerCommand,
-          "chat"
+          xpPerCommand
         );
 
         // Handle level-up notification if user leveled up
