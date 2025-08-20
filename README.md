@@ -6,9 +6,10 @@
 
 ## Setup Options
 
-### Standalone Setup (RECOMMENDED)
+### Standalone Setup (RECOMMENDED) based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
 
 🚧 **Work In Progress**
+
 
 ### Setup with Hub/Activities (Harder)
 
