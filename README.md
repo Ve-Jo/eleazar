@@ -1,7 +1,7 @@
 # README
 
-> **⚠️ Work In Progress!** 
-> 
+> **⚠️ Work In Progress!**
+>
 > I'll add all needed information about how to setup and run this project later **DURING THIS DAY**.
 
 ## Setup Options
@@ -9,7 +9,6 @@
 ### Standalone Setup (RECOMMENDED) based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
 
 🚧 **Work In Progress**
-
 
 ### Setup with Hub/Activities (Harder)
 
@@ -37,6 +36,13 @@ I'm tired of working on this project alone until its release state, so I'm stepp
 
 I'm making this project public in case someone on the internet finds it helpful. Maybe together we could potentially finish this amazing project.
 
+## Contact
+
+If you're interested in collaborating or have questions about the project, feel free to reach out:
+
+- **Discord:** @vejoy\_
+- **Telegram:** [VeJoy's Thoughts](https://t.me/vejoysthoughts) (ask about this project in comments somewhere and i'll reach to you and DM you)
+
 ---
 
-*Feel free to contribute or reach out if you're interested in collaborating!*
+_Feel free to contribute or reach out if you're interested in collaborating!_
