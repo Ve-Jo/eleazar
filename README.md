@@ -6,18 +6,14 @@
 
 ## Setup Options
 
-### Hub/Activities Setup (Recommended)
-
-This setup uses a separate hub project that manages activities and database operations.
-
-#### Prerequisites
+### Prerequisites (Common for all setups)
 - **Bun** runtime (v1.0.0 or higher)
 - **PostgreSQL** database server
 - **Redis** server
 - **Lavalink** server (for music functionality)
 - **WSL** (recommended for Windows users)
 
-#### Installation Steps
+### Common Installation Steps
 
 1. **Install Bun Runtime** (if not already installed)
    ```bash
@@ -30,26 +26,11 @@ This setup uses a separate hub project that manages activities and database oper
    cd eleazar
    ```
 
-3. **Install All Dependencies**
-   ```bash
-   bun run install:all
-   ```
-   This command installs dependencies for both the main bot and hub projects.
-
-4. **Set up PostgreSQL Database**
+3. **Set up PostgreSQL Database**
    - Install PostgreSQL on your system
    - Create a new database for the bot
-   - Note: The Prisma database is now located in the hub project
-   - Navigate to the hub directory and run:
-   ```bash
-   cd hub
-   bunx prisma generate
-   bunx prisma db push  # For development
-   # OR for production:
-   bunx prisma migrate deploy
-   ```
 
-5. **Set up Redis Server**
+4. **Set up Redis Server**
    - Install Redis on your system
    - Start Redis server:
    ```bash
@@ -63,13 +44,13 @@ This setup uses a separate hub project that manages activities and database oper
    redis-cli ping
    ```
 
-6. **Create Discord Bot**
+5. **Create Discord Bot**
    - Go to Discord Developer Portal (https://discord.com/developers/applications)
    - Create a new application and bot
    - Copy the bot token
    - **Important:** Enable "Message Content Intent" in the Bot settings
 
-7. **Configure Lavalink**
+6. **Configure Lavalink**
    Choose one of the following options:
    
    **Option 1: Run Your Own Lavalink Server**
@@ -97,7 +78,68 @@ This setup uses a separate hub project that manages activities and database oper
    - Configure the servers in `/src/utils/music.js` (lines 48-78)
    - No need to run your own Lavalink instance
 
-8. **Environment Configuration**
+---
+
+### Standalone Setup (Recommended)
+
+Based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
+
+**After completing the common installation steps above:**
+
+1. **Install Dependencies**
+   ```bash
+   bun install
+   ```
+
+2. **Set up Database with Prisma**
+   ```bash
+   bunx prisma generate
+   bunx prisma db push  # For development
+   # OR for production:
+   bunx prisma migrate deploy
+   ```
+
+3. **Environment Configuration**
+   - Copy `.env.example` to `.env`
+   - Fill in the required environment variables:
+     - Discord bot token
+     - Database connection string (PostgreSQL)
+     - Redis connection details
+     - API keys for AI services
+     - Lavalink server configuration
+
+4. **Run the Bot**
+   ```bash
+   bun run bot
+   ```
+
+---
+
+### Hub/Activities Setup
+
+This setup uses a separate hub project that manages activities and database operations, plus Discord Activities support.
+
+**After completing the common installation steps above:**
+
+1. **Install All Dependencies**
+   ```bash
+   bun run install:all
+   ```
+   This command installs dependencies for both the main bot and hub projects.
+
+2. **Set up Database with Prisma (Hub Project)**
+   - Note: The Prisma database is now located in the hub project
+   - Navigate to the hub directory and run:
+   ```bash
+   cd hub
+   bunx prisma generate
+   bunx prisma db push  # For development
+   # OR for production:
+   bunx prisma migrate deploy
+   cd ..
+   ```
+
+3. **Environment Configuration**
    - Copy `.env.example` to `.env` in both main and hub directories
    - Fill in the required environment variables:
      - Discord bot token
@@ -106,7 +148,7 @@ This setup uses a separate hub project that manages activities and database oper
      - API keys for AI services
      - Lavalink server configuration
 
-9. **Set up Activities Project** (Optional - for Discord Activities)
+4. **Set up Activities Project** (Optional - for Discord Activities)
    The activities project provides multiplayer games and interactive features through Discord Activities.
    
    - Navigate to the activities directory:
@@ -167,156 +209,16 @@ This setup uses a separate hub project that manages activities and database oper
    # Terminal 5: Cloudflared tunnel for Colyseus (already running from step above)
    ```
 
-10. **Run the Hub and Bot**
-    ```bash
-    # Start the hub server
-    bun run start
-    
-    # In a separate terminal, start the main bot
-    bun run bot
-    ```
-
-### Standalone Setup (RECOMMENDED) based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
-
-#### Prerequisites
-
-- **Bun Runtime** (Node.js won't work)
-- **PostgreSQL** database
-- **Redis** server
-- **Lavalink** music node
-- **Windows users:** This project is developed and tested on WSL (Windows Subsystem for Linux), so WSL is recommended for Windows users (for music features)
-
-#### Required API Keys
-
-- **OpenRouter** API key (for AI text-to-text models)
-- **Groq** API key (for AI text-to-text models)
-- **HuggingFace** OR **DeepInfra** OR **Replicate** API key (for image generation)
-
-#### Installation Steps
-
-1. **Install Bun Runtime**
-
+5. **Run the Hub and Bot**
    ```bash
-   curl -fsSL https://bun.sh/install | bash
+   # Start the hub server
+   bun run start
+   
+   # In a separate terminal, start the main bot
+   bun run bot
    ```
 
-2. **Clone the Repository**
-
-   ```bash
-   git clone https://github.com/Ve-Jo/eleazar.git
-   cd eleazar
-   ```
-
-3. **Install Dependencies**
-
-   ```bash
-   bun install
-   ```
-
-4. **Setup PostgreSQL**
-
-   - Install PostgreSQL on your system
-   - Create a database for the bot
-   - Note down the connection details in .env
-   - Set up the database schema using Prisma:
-
-     ```bash
-     # Generate Prisma client
-     bunx prisma generate
-
-     # Push schema to database (for development)
-     bunx prisma db push
-
-     # OR run migrations (for production)
-     bunx prisma migrate deploy
-     ```
-
-5. **Setup Redis**
-   - Install Redis on your system
-   - Start the Redis server:
-     ```bash
-     # On Ubuntu/Debian
-     sudo systemctl start redis-server
-     
-     # Or run directly
-     redis-server
-     
-     # Verify Redis is running
-     redis-cli ping
-     ```
-   - Default port: 6379
-
-6. **Setup Discord Bot**
-
-   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
-   - Create a new application and bot
-   - Copy the bot token
-   - **Important:** Enable "Message Content Intent" in Bot settings
-   - Invite the bot to your server with appropriate permissions
-
-7. **Setup Lavalink**
-   - **Option 1: Run your own Lavalink server**
-     - Download Lavalink from [official releases](https://github.com/lavalink-devs/Lavalink/releases)
-     - Use the provided configuration file from `eleazar-lavalink/application.yml`
-     - Start Lavalink server:
-       ```bash
-     java -jar Lavalink.jar
-     ```
-     
-     **Recommended Lavalink Plugins:**
-     For enhanced functionality, consider adding these plugins to your `plugins/` folder:
-     - **lavalink-2.6.1.jar** - Core Lavalink server
-     - **lavalyrics-plugin-1.0.0.jar** - Lyrics support
-     - **lavasearch-plugin-1.0.0.jar** - Enhanced search capabilities
-     - **lavasrc-plugin-4.3.0.jar** - Additional audio sources
-     - **skybot-lavalink-plugin-1.7.0.jar** - Extended platform support
-     - **sponsorblock-plugin-3.0.1.jar** - SponsorBlock integration
-     - **youtube-plugin-1.11.3.jar** - YouTube source support
-
-   - **Option 2: Use external Lavalink servers (Recommended for beginners)**
-     - Find free Lavalink servers at: https://lavalink-list.darrennathanael.com/
-     - Configure external servers in `/src/utils/music.js` (lines 48-78)
-     - No need to run your own Lavalink instance
-
-8. **Environment Configuration**
-
-   - Copy `.env.example` to `.env`
-   - Fill in all required environment variables:
-
-     ```env
-     # Database
-     DATABASE_URL=postgresql://username:password@localhost:5432/eleazar
-
-     # Redis
-     REDIS_URL=redis://localhost:6379
-
-     # Discord
-     DISCORD_TOKEN=your_discord_bot_token
-
-     # AI APIs
-     OPENROUTER_API_KEY=your_openrouter_key
-     GROQ_API_KEY=your_groq_key
-
-     # Image Generation
-     HUGGINGFACE_API_KEY=your_huggingface_key
-     DEEPINFRA_API_KEY=your_deepinfra_key
-     # OR
-     REPLICATE_API_KEY=your_replicate_key
-
-     # Lavalink
-     LAVALINK_HOST=localhost
-     LAVALINK_PORT=2333
-     LAVALINK_PASSWORD=youshallnotpass
-     ```
-
-9. **Run the Bot**
-   ```bash
-   bun run bot.js
-   ```
-
-### Setup with Hub/Activities (Harder)
-
-🚧 **Work In Progress**
+---
 
 ## Requirements
 
