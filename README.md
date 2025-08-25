@@ -24,17 +24,15 @@ Currently, the latest commit of this project is being split up into three reposi
 - [eleazar-activities](https://github.com/Ve-Jo/eleazar-activities) - Voice activity repo
 - [eleazar-hub](https://github.com/Ve-Jo/eleazar-hub) - Eleazar's hub module (where i migrate all main things for future scaling)
 
-## Development Notes
+## Development Notes!!!
 
-> **Note:** Most of this code has been AI-generated without specific plans or progression checking, so many things may look "messy" or overcomplicated and could be simplified significantly.
-
-## Project Status
-
-I'm tired of working on this project alone until its release state, so I'm stepping away from making Discord bots and planning to work on something else. That means that currently this project is not in his final releasable state, so it can break and look broken.
-
-I'm making this project public in case someone on the internet finds it helpful. Maybe together we could potentially finish this amazing project. I just need someones help to make this project to its end...
-
-My contants are in the bottom of this README
+> Most of this code has been AI-generated without specific plans or progression checking, so many things may look "messy" or overcomplicated and could be simplified significantly.
+> 
+> I'm tired of working on this project alone until its release state, so I'm stepping away from making Discord bots and planning to work on something else. That means that currently this project is not in his final releasable state, so it can break and look broken.
+> 
+> I'm making this project public in case someone on the internet finds it helpful. Maybe together we could potentially finish this amazing project. I just need someones help to make this project to its end...
+> 
+> My contacts are in the bottom of this README
 
 ## Setup Options
 
@@ -59,6 +57,10 @@ My contants are in the bottom of this README
   - Possibilities in implementing other things to infrastructure (like websites or else)
 - **Note:** Requires additional setup and configuration steps
 
+> I'm also planning to add more simplier Docker or Railway template setup quide in future for this project.
+
+---
+
 ### Prerequisites (Common for all setups)
 - **Bun** runtime (v1.0.0 or higher)
 - **PostgreSQL** database server
@@ -72,6 +74,8 @@ My contants are in the bottom of this README
 - **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
 - **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
 - **CoinMarketCap** for the bot's Crypto game support to show coin prices.
+
+---
 
 ### Common Installation Steps
 
