@@ -4,6 +4,10 @@
 
 **Eleazar** is a multifunctional Discord bot featuring AI capabilities (text transcription, image generation, chatting), games, economy system, music playback, counting games, and image filters.
 
+The main reason why this project is unique because of the vision how the things has to be looking. Its easy to use, has a lot of features and unique styling.
+
+It supports localization to English, Ukraine and Russian.
+
 <img width="3056" height="1127" alt="Frame 69" src="https://github.com/user-attachments/assets/66a1bc5e-9c66-43a1-88f6-d8fc32bd8c26" />
 
 <img width="2718" height="2573" alt="Frame 37" src="https://github.com/user-attachments/assets/3b60ad87-eb77-445d-85e8-50896755b335" />
@@ -12,6 +16,25 @@
 
 <img width="2690" height="990" alt="image" src="https://github.com/user-attachments/assets/e56d66dc-2e4f-4e3a-b47f-f9ebf186363d" />
 
+## Project Structure
+
+Currently, the latest commit of this project is being split up into three repositories:
+
+- [eleazar](https://github.com/Ve-Jo/eleazar) - Main bot repository
+- [eleazar-activities](https://github.com/Ve-Jo/eleazar-activities) - Voice activity repo
+- [eleazar-hub](https://github.com/Ve-Jo/eleazar-hub) - Eleazar's hub module (where i migrate all main things for future scaling)
+
+## Development Notes
+
+> **Note:** Most of this code has been AI-generated without specific plans or progression checking, so many things may look "messy" or overcomplicated and could be simplified significantly.
+
+## Project Status
+
+I'm tired of working on this project alone until its release state, so I'm stepping away from making Discord bots and planning to work on something else. That means that currently this project is not in his final releasable state, so it can break and look broken.
+
+I'm making this project public in case someone on the internet finds it helpful. Maybe together we could potentially finish this amazing project. I just need someones help to make this project to its end...
+
+My contants are in the bottom of this README
 
 ## Setup Options
 
@@ -295,31 +318,11 @@ You'll need to obtain and configure these API keys in your `.env` file:
 
 ---
 
-## Project Structure
-
-Currently, the latest commit of this project is being split up into three repositories:
-
-- [eleazar](https://github.com/Ve-Jo/eleazar) - Main bot repository
-- [eleazar-activities](https://github.com/Ve-Jo/eleazar-activities) - Voice activity repo
-- [eleazar-hub](https://github.com/Ve-Jo/eleazar-hub) - Eleazar's hub module (where i migrate all main things for future scaling)
-
-## Development Notes
-
-> **Note:** Most of this code has been AI-generated without specific plans or progression checking, so many things may look "messy" or overcomplicated and could be simplified significantly.
-
-## Project Status
-
-I'm tired of working on this project alone until its release state, so I'm stepping away from making Discord bots and planning to work on something else.
-
-I'm making this project public in case someone on the internet finds it helpful. Maybe together we could potentially finish this amazing project.
-
-## Contact
+### Contact
 
 If you're interested in collaborating or have questions about the project, feel free to reach out:
 
 - **Discord:** @vejoy\_
 - **Telegram:** [VeJoy's Thoughts](https://t.me/vejoysthoughts) (ask about this project in comments somewhere and i'll reach to you and DM you)
-
----
 
 _Feel free to contribute or reach out if you're interested in collaborating!_
