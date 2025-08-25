@@ -52,8 +52,8 @@ My contants are in the bottom of this README
 ### Hub/Activities Setup
 - **Advanced:** Recommended for production environments
 - **Features:**
-  - Fully 3D 2048 game implementation, but its only one
-  - More easier code on eleazar's side, because other things gets moved separately
+  - 3D 2048 game implementation, but ITS ONLY ONE (standalone has more games, but they're 2D and simplier)
+  - More easier code on eleazar's bot side, because other things gets moved separately
   - Multiplayer support via Colyseus
   - Production-ready scalable architecture
   - Possibilities in implementing other things to infrastructure (like websites or else)
