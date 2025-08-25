@@ -1,6 +1,17 @@
 # Eleazar Discord Bot
 
+<img width="2523" height="866" alt="Untitled" src="https://github.com/user-attachments/assets/716e630a-fe5a-489d-82d4-c6bfb3386728" />
+
 **Eleazar** is a multifunctional Discord bot featuring AI capabilities (text transcription, image generation, chatting), games, economy system, music playback, counting games, and image filters.
+
+<img width="3056" height="1127" alt="Frame 69" src="https://github.com/user-attachments/assets/66a1bc5e-9c66-43a1-88f6-d8fc32bd8c26" />
+
+<img width="2718" height="2573" alt="Frame 37" src="https://github.com/user-attachments/assets/3b60ad87-eb77-445d-85e8-50896755b335" />
+
+<img width="3338" height="2301" alt="Frame 70" src="https://github.com/user-attachments/assets/6cf75a67-8a5a-4c5c-a984-ec23c1c5e4ac" />
+
+<img width="2690" height="990" alt="image" src="https://github.com/user-attachments/assets/e56d66dc-2e4f-4e3a-b47f-f9ebf186363d" />
+
 
 ## Setup Options
 
