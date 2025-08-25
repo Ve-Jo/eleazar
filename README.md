@@ -1,10 +1,29 @@
-# README
+# Eleazar Discord Bot
 
-> **⚠️ Work In Progress!**
->
-> I'll add all needed information about how to setup and run this project later **DURING THIS DAY**.
+**Eleazar** is a multifunctional Discord bot featuring AI capabilities (text transcription, image generation, chatting), games, economy system, music playback, counting games, and image filters.
 
 ## Setup Options
+
+**Choose the setup method that best fits your needs:**
+
+### Standalone Setup
+- **Simple:** Single-project setup with all features in one place
+- **Features:**
+  - Complete functionality preset
+  - Multiple built-in games, but they're simplier and can be demanding on scale
+  - Games accessible via `/work` command
+  - Interactive button-based updates
+- **Note:** Slightly outdated but fully functional
+
+### Hub/Activities Setup
+- **Advanced:** Recommended for production environments
+- **Features:**
+  - Fully 3D 2048 game implementation, but its only one
+  - More easier code on eleazar's side, because other things gets moved separately
+  - Multiplayer support via Colyseus
+  - Production-ready scalable architecture
+  - Possibilities in implementing other things to infrastructure (like websites or else)
+- **Note:** Requires additional setup and configuration steps
 
 ### Prerequisites (Common for all setups)
 - **Bun** runtime (v1.0.0 or higher)
@@ -12,6 +31,13 @@
 - **Redis** server
 - **Lavalink** server (for music functionality)
 - **WSL** (recommended for Windows users)
+
+### API Services Requirements
+
+- **Discord Bot Token** (from Discord Developer Portal)
+- **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
+- **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
+- **CoinMarketCap** for the bot's Crypto game support to show coin prices.
 
 ### Common Installation Steps
 
@@ -84,6 +110,13 @@
 
 Based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
 
+**API Services Requirements:**
+You'll need to obtain and configure these API keys in your `.env` file:
+- **Discord Bot Token** (from Discord Developer Portal)
+- **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
+- **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
+- **CoinMarketCap** for the bot's Crypto game support to show coin prices.
+
 **After completing the common installation steps above:**
 
 1. **Install Dependencies**
@@ -115,15 +148,24 @@ Based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e
 
 ---
 
-### Hub/Activities Setup
+### Hub Setup
 
-This setup uses a separate hub project that manages activities and database operations, plus Discord Activities support.
+This setup uses a separate hub project that manages database operations and provides API endpoints for the bot.
+
+**API Services Requirements:**
+You'll need to obtain and configure these API keys in your `.env` file:
+- **Discord Bot Token** (from Discord Developer Portal)
+- **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
+- **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
+- **CoinMarketCap** for the bot's Crypto game support to show coin prices.
 
 **After completing the common installation steps above:**
 
 1. **Install All Dependencies**
    ```bash
+   cd hub
    bun run install:all
+   cd ..
    ```
    This command installs dependencies for both the main bot and hub projects.
 
@@ -148,68 +190,7 @@ This setup uses a separate hub project that manages activities and database oper
      - API keys for AI services
      - Lavalink server configuration
 
-4. **Set up Activities Project** (Optional - for Discord Activities)
-   The activities project provides multiplayer games and interactive features through Discord Activities.
-   
-   - Navigate to the activities directory:
-   ```bash
-   cd ../eleazar-activities  # Assuming it's in a sibling directory
-   ```
-   
-   - Install dependencies:
-   ```bash
-   bun install
-   ```
-   
-   - Set up environment variables in `.env`:
-   ```bash
-   VITE_DISCORD_CLIENT_ID=your_discord_client_id
-   VITE_DISCORD_CLIENT_SECRET=your_discord_client_secret
-   VITE_BOT_API_URL=http://localhost:3003
-   ```
-   
-   - Install and set up Cloudflared tunnels:
-   ```bash
-   # Install cloudflared (Ubuntu/Debian)
-   wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-   sudo dpkg -i cloudflared-linux-amd64.deb
-   
-   # Create tunnel for Vite client (port 5173) - Terminal 4
-   cloudflared tunnel --url http://localhost:5173
-   
-   # Create tunnel for Colyseus server (port 2567) - Terminal 5
-   cloudflared tunnel --url http://localhost:2567
-   ```
-   
-   **Important:** Note the generated tunnel URLs (e.g., `random-name.trycloudflare.com`) as you'll need them for Discord Activity URL mappings.
-   
-   - Configure Discord Activity URL Mappings:
-     1. Go to Discord Developer Portal: https://discord.com/developers/applications
-     2. Select your application → Embedded App → URL Mappings
-     3. Set up the mappings:
-        - **Root Mapping:**
-          - Prefix: `/`
-          - Target: `your-vite-tunnel.trycloudflare.com` (from Vite tunnel)
-        - **Proxy Path Mapping:**
-          - Prefix: `/colyseus`
-          - Target: `your-colyseus-tunnel.trycloudflare.com` (from Colyseus tunnel)
-   
-   - Run the activities services (requires 5 separate terminals):
-   ```bash
-   # Terminal 1: Start Colyseus multiplayer server
-   bun run dev:colyseus
-   
-   # Terminal 2: Start activities API server
-   bun run dev:server
-   
-   # Terminal 3: Start Vite client development server
-   bun run dev:client
-   
-   # Terminal 4: Cloudflared tunnel for Vite (already running from step above)
-   # Terminal 5: Cloudflared tunnel for Colyseus (already running from step above)
-   ```
-
-5. **Run the Hub and Bot**
+4. **Run the Hub and Bot**
    ```bash
    # Start the hub server
    bun run start
@@ -220,22 +201,88 @@ This setup uses a separate hub project that manages activities and database oper
 
 ---
 
-## Requirements
+### Activities Setup (Optional)
 
-### System Requirements
+The activities project provides multiplayer games and interactive features through Discord Activities. This is completely separate from the Hub setup.
 
-- **Bun Runtime** (latest version)
-- **PostgreSQL** 12+
-- **Redis** 6+
-- **Java** 17+ (for Lavalink)
+**Prerequisites:**
+- Hub setup must be completed first
+- **Cloudflared** (for tunneling)
+- Access to the `eleazar-activities` project
 
-### API Services
-
+**API Services Requirements:**
+You'll need to obtain and configure these API keys in your `.env` file:
 - **Discord Bot Token** (from Discord Developer Portal)
-- **OpenRouter** account and API key
-- **Groq** account and API key
-- **HuggingFace** account and API key
-- **DeepInfra** or **Replicate** account and API key
+- **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
+- **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
+- **CoinMarketCap** for the bot's Crypto game support to show coin prices.
+
+**Setup Steps:**
+
+1. **Navigate to Activities Directory**
+   ```bash
+   cd ../eleazar-activities  # Assuming it's in a sibling directory
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   bun install
+   ```
+
+3. **Environment Configuration**
+   Set up environment variables in `.env`:
+   ```bash
+   VITE_DISCORD_CLIENT_ID=your_discord_client_id
+   VITE_DISCORD_CLIENT_SECRET=your_discord_client_secret
+   VITE_BOT_API_URL=http://localhost:3003
+   ```
+
+4. **Install and Configure Cloudflared**
+   ```bash
+   # Install cloudflared (Ubuntu/Debian)
+   wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+   sudo dpkg -i cloudflared-linux-amd64.deb
+   ```
+
+5. **Set up Cloudflared Tunnels**
+   ```bash
+   # Create tunnel for Vite client (port 5173) - Terminal 4
+   cloudflared tunnel --url http://localhost:5173
+   
+   # Create tunnel for Colyseus server (port 2567) - Terminal 5
+   cloudflared tunnel --url http://localhost:2567
+   ```
+   
+   **Important:** Note the generated tunnel URLs (e.g., `random-name.trycloudflare.com`) as you'll need them for Discord Activity URL mappings.
+
+6. **Configure Discord Activity URL Mappings**
+   1. Go to Discord Developer Portal: https://discord.com/developers/applications
+   2. Select your application → Embedded App → URL Mappings
+   3. Set up the mappings:
+      - **Root Mapping:**
+        - Prefix: `/`
+        - Target: `your-vite-tunnel.trycloudflare.com` (from Vite tunnel)
+      - **Proxy Path Mapping:**
+        - Prefix: `/colyseus`
+        - Target: `your-colyseus-tunnel.trycloudflare.com` (from Colyseus tunnel)
+
+7. **Run Activities Services**
+   Run the following commands in separate terminals (requires 5 total terminals):
+   ```bash
+   # Terminal 1: Start Colyseus multiplayer server
+   bun run dev:colyseus
+   
+   # Terminal 2: Start activities API server
+   bun run dev:server
+   
+   # Terminal 3: Start Vite client development server
+   bun run dev:client
+   
+   # Terminal 4: Cloudflared tunnel for Vite (already running from step 5)
+   # Terminal 5: Cloudflared tunnel for Colyseus (already running from step 5)
+   ```
+
+---
 
 ## Project Structure
 
