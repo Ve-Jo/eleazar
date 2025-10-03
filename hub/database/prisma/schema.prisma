@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id       String @id @map("guild_id")
+  settings Json   @default("{}")
+  users    User[]
+
+  @@map("guilds")
+}
+
+model User {
+  id              String           @map("user_id")
+  guildId         String           @map("guild_id")
+  bannerUrl       String?          @map("banner_url")
+  lastActivity    BigInt           @default(0) @map("last_activity")
+  locale          String?          @map("locale")
+  cooldowns       Cooldown?
+  crates          Crate[]
+  cryptoPositions CryptoPosition[]
+  economy         Economy?
+
+  Level           Level?
+  stats           Statistics?
+  upgrades        Upgrade[]
+  guild           Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  VoiceSession    VoiceSession?
+
+  @@id([guildId, id])
+  @@index([guildId])
+  @@index([lastActivity])
+  @@map("users")
+}
+
+model Economy {
+  id              String  @id @default(cuid())
+  userId          String
+  guildId         String
+  balance         Decimal @default(0) @db.Decimal(30, 5)
+  bankBalance     Decimal @default(0) @db.Decimal(30, 5)
+  bankRate        Decimal @default(0) @db.Decimal(10, 5)
+  bankStartTime   BigInt  @default(0)
+  upgradeDiscount Decimal @default(0) @map("upgrade_discount") @db.Decimal(5, 2)
+  user            User    @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([userId])
+  @@index([guildId])
+  @@map("economy")
+}
+
+model Level {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  guildId  String @map("guild_id")
+  xp       BigInt @default(0)
+  gameXp   BigInt @default(0)
+  seasonXp BigInt @default(0) @map("season_xp")
+  user     User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([xp])
+  @@index([gameXp])
+  @@index([seasonXp])
+  @@map("levels")
+}
+
+model Statistics {
+  id                    String  @id @default(cuid())
+  userId                String  @map("user_id")
+  guildId               String  @map("guild_id")
+  totalEarned           Decimal @default(0) @map("total_earned") @db.Decimal(30, 5)
+  messageCount          Int     @default(0) @map("message_count")
+  commandCount          Int     @default(0) @map("command_count")
+  lastUpdated           BigInt  @default(0) @map("last_updated")
+  gameRecords           Json    @default("{\"2048\": {\"highScore\": 0}, \"snake\": {\"highScore\": 0}}") @map("game_records")
+  xpStats               Json    @default("{\"chat\": 0, \"voice\": 0}") @map("xp_stats")
+  gameXpStats           Json    @default("{\"2048\": 0, \"snake\": 0}") @map("game_xp_stats")
+  interactionStats      Json    @default("{\"modals\": {}, \"buttons\": {}, \"commands\": {}, \"selectMenus\": {}}") @map("interaction_stats")
+  voiceTime             BigInt  @default(0) @map("voice_time")
+  crypto2DisclaimerSeen Boolean @default(false) @map("crypto2_disclaimer_seen")
+  user                  User    @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([totalEarned])
+  @@index([messageCount])
+  @@index([commandCount])
+  @@map("statistics")
+}
+
+model Cooldown {
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  data    Json   @default("{}")
+  user    User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@map("cooldowns")
+}
+
+model Upgrade {
+  id      String @id @default(cuid())
+  userId  String @map("user_id")
+  guildId String @map("guild_id")
+  type    String
+  level   Int    @default(1)
+  user    User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId, type])
+  @@index([type])
+  @@map("upgrades")
+}
+
+model Analytics {
+  id        Int    @id @default(autoincrement())
+  timestamp BigInt @default(0)
+  type      String
+  data      Json
+
+  @@index([timestamp])
+  @@index([type])
+  @@map("analytics")
+}
+
+model MusicPlayer {
+  id             String   @id @map("guild_id")
+  voiceChannelId String   @map("voice_channel_id")
+  textChannelId  String   @map("text_channel_id")
+  queue          Json     @default("[]") @map("queue")
+  currentTrack   Json?    @map("current_track")
+  position       Int      @default(0) @map("position")
+  volume         Int      @default(100) @map("volume")
+  repeatMode     String   @default("off") @map("repeat_mode")
+  autoplay       Boolean  @default(false) @map("autoplay")
+  filters        Json     @default("{}") @map("filters")
+  lastUpdated    DateTime @updatedAt @map("last_updated")
+
+  @@map("music_players")
+}
+
+model Seasons {
+  id           String @id @default("current")
+  seasonEnds   BigInt @map("season_ends")
+  seasonNumber Int    @default(1) @map("season_number")
+
+  @@map("seasons")
+}
+
+model VoiceSession {
+  id        String @id @default(cuid())
+  userId    String @map("user_id")
+  guildId   String @map("guild_id")
+  channelId String @map("channel_id")
+  joinedAt  BigInt @map("joined_at")
+  user      User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId])
+  @@index([channelId])
+  @@index([joinedAt])
+  @@map("voice_sessions")
+}
+
+model Crate {
+  id         String @id @default(cuid())
+  userId     String @map("user_id")
+  guildId    String @map("guild_id")
+  type       String
+  count      Int    @default(1)
+  properties Json   @default("{}")
+  acquired   BigInt @default(0)
+  user       User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@unique([guildId, userId, type])
+  @@index([type])
+  @@map("crates")
+}
+
+
+
+model CryptoPosition {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  guildId         String   @map("guild_id")
+  symbol          String
+  direction       String
+  entryPrice      Decimal  @map("entry_price") @db.Decimal(30, 8)
+  quantity        Decimal  @db.Decimal(30, 8)
+  leverage        Int
+  takeProfitPrice Decimal? @map("take_profit_price") @db.Decimal(30, 8)
+  stopLossPrice   Decimal? @map("stop_loss_price") @db.Decimal(30, 8)
+  createdAt       DateTime @default(now()) @map("created_at")
+  user            User     @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
+
+  @@index([guildId, userId])
+  @@index([symbol])
+  @@map("crypto_positions")
+}
+
+model Marriage {
+  id        String   @id @default(cuid())
+  guildId   String   @map("guild_id")
+  userId1   String   @map("user_id1")
+  userId2   String   @map("user_id2")
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([guildId, userId1, userId2])
+  @@index([guildId, userId1])
+  @@index([guildId, userId2])
+  @@index([status])
+  @@map("marriages")
+}
+
+model LevelRole {
+  id            String @id @default(cuid())
+  guildId       String @map("guild_id")
+  roleId        String @map("role_id")
+  requiredLevel Int    @map("required_level")
+
+  @@unique([guildId, roleId])
+  @@unique([guildId, requiredLevel])
+  @@index([guildId])
+  @@map("level_roles")
+}

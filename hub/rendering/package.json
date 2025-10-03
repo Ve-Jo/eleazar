@@ -1,0 +1,35 @@
+{
+  "name": "@eleazar-hub/rendering",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "bun src/server.js",
+    "dev": "bun --watch src/server.js",
+    "build": "echo \"Rendering service build complete\"",
+    "preview": "bun src/preview.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@twemoji/api": "^15.1.0",
+    "chokidar": "^4.0.1",
+    "color-thief-bun": "^1.0.3",
+    "cors": "^2.8.5",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^7.0.0",
+    "pretty-ms": "^9.2.0",
+    "react": "^18.3.1",
+    "satori": "^0.12.1",
+    "sharp": "^0.33.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "private": true,
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

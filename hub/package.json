@@ -1,0 +1,40 @@
+{
+  "name": "eleazar-hub",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "database",
+    "rendering",
+    "shared",
+    "localization",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"bun run dev:database\" \"bun run dev:rendering\" \"bun run dev:localization\" \"bun run dev:client\"",
+    "dev:database": "cd database && bun run dev",
+    "dev:rendering": "cd rendering && bun run dev",
+    "dev:localization": "cd localization && bun run dev",
+    "dev:client": "cd client && bun run dev",
+    "start": "concurrently \"bun run start:database\" \"bun run start:rendering\" \"bun run start:localization\" \"bun run start:client\"",
+    "start:database": "cd database && bun start",
+    "start:rendering": "cd rendering && bun start",
+    "start:localization": "cd localization && bun start",
+    "start:client": "cd client && bun start",
+    "install:all": "bun install && bun run install:services",
+    "install:services": "cd database && bun install && cd ../rendering && bun install && cd ../shared && bun install && cd ../localization && bun install && cd ../client && bun install",
+    "build": "bun run build:database && bun run build:rendering && bun run build:localization && bun run build:client",
+    "build:database": "cd database && bun run build",
+    "build:rendering": "cd rendering && bun run build",
+    "build:localization": "cd localization && bun run build",
+    "build:client": "cd client && bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "concurrently": "^8.2.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

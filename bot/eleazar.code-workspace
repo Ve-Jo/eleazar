@@ -7,7 +7,11 @@
       "path": "../eleazar-activities"
     },
     {
+      "path": "../eleazar-hub"
+    },
+    {
       "path": "../eleazar-lavalink"
     }
-  ]
+  ],
+  "settings": {}
 }

@@ -1,0 +1,832 @@
+{
+  "commands": {
+    "economy": {
+      "crime": {
+        "command": {
+          "name": "crime",
+          "description": "Attempt to steal money from another user"
+        },
+        "cooldown": "You need to wait before committing another crime",
+        "selectTarget": "Select a user to steal from",
+        "noValidTargets": "No valid targets found (users must have coins to steal)",
+        "noSelection": "No target selected",
+        "title": "Crime",
+        "successTarget": "You successfully stole {{amount}} coins from {{target}}!",
+        "failTarget": "You were caught and had to pay a fine of {{amount}} coins!",
+        "error": "An error occurred while processing your crime attempt"
+      },
+      "imageError": "Error generating image",
+      "userNotFound": "User not found",
+      "error": "An error occurred while processing your request",
+      "notEnoughMoney": "You don't have enough money",
+      "invalidAmount": "Please enter a valid amount",
+      "cooldownActive": "This command is on cooldown",
+      "cases": {
+        "title": "Cases",
+        "selectCrate": "Select a case to open",
+        "openButton": "Open Case",
+        "cooldownActive": "This case is on cooldown for {{time}}",
+        "balance": "Your balance: {{balance}} coins",
+        "backButton": "Back to Crates",
+        "backToCrates": "Back to Crates",
+        "noCratesAvailable": "You don't have any of these crates",
+        "rewardIntro": "You opened a {{crate}} crate and received:\n",
+        "rewardCoins": "• {{amount}} coins\n",
+        "rewardXp": "• {{amount}} XP\n",
+        "rewardDiscount": "• {{amount}}% discount\n",
+        "error": "An error occurred while processing your request."
+      },
+      "balance": {
+        "title": "Balance"
+      },
+      "leaderboard": {
+        "title": "Server Leaderboard",
+        "selectUser": "Select a user to view details",
+        "selectCategory": "Select category to view",
+        "categories": {
+          "total": "Total Balance",
+          "balance": "Balance",
+          "bank": "Bank Balance",
+          "level": "Level"
+        },
+        "selectedUser": "Selected user at position {{position}}",
+        "error": "An error occurred while processing your leaderboard request",
+        "noUsersOnPage": "No valid users found on this page."
+      },
+      "work": {
+        "options": {
+          "game": {
+            "choices": {
+              "crypto2": {
+                "name": "Crypto 2.0"
+              }
+            }
+          }
+        },
+        "standardGamesCategory": "Standard Games",
+        "riskyGamesCategory": "Risky Games",
+        "oldGamesCategory": "Legacy Games",
+        "title": "Game Selection",
+        "selectCategory": "Select a game category",
+        "playGame": "Play",
+        "gameStarted": "Starting {{game}}...",
+        "error": "An error occurred while processing your work request",
+        "gameError": "Error starting {{game}}. Please try again.",
+        "noGamesAvailable": "No games are currently available.",
+        "gameNotFound": "The selected game was not found."
+      },
+      "deposit": {
+        "title": "Deposit",
+        "depositSuccess": "Successfully deposited {{amount}} to your bank account.",
+        "amountGreaterThanZero": "Amount must be greater than 0",
+        "insufficientFunds": "Insufficient funds",
+        "notEnoughMoney": "You don't have enough money to deposit",
+        "imageError": "Failed to generate the image. Please try again.",
+        "invalidAmount": "Invalid amount",
+        "noBankAccount": "You don't have a bank account",
+        "error": "An error occurred while processing your deposit",
+        "partnerDepositDM": "🏧 Your partner {{user}} deposited {{amount}} into your shared bank balance in {{guild}}."
+      },
+      "shop": {
+        "command": {
+          "name": "shop",
+          "description": "View and purchase upgrades"
+        },
+        "title": "Shop",
+        "selectUpgrade": "Select an upgrade to view",
+        "purchaseButton": "Purchase",
+        "insufficientFunds": "You don't have enough coins for this upgrade",
+        "noSelection": "No upgrade selected",
+        "purchaseTitle": "Purchase Successful",
+        "purchaseSuccess": "Successfully upgraded {{type}} to level {{level}} for {{cost}} coins",
+        "error": "An error occurred while processing your shop request",
+        "category_economy": "Economy Upgrades",
+        "category_cooldowns": "Cooldown Upgrades",
+        "revertButton": "Revert",
+        "revertButtonWithRefund": "Revert (-1 lvl, +{{refund}} coins)",
+        "revertSuccess": "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
+        "revertCooldown": "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
+        "cannotRevert": "Cannot revert a level 1 upgrade",
+        "description": "View and purchase upgrades"
+      },
+      "withdraw": {
+        "insufficientFunds": "Insufficient funds",
+        "amountGreaterThanZero": "Amount must be greater than zero",
+        "invalidAmount": "Invalid amount",
+        "noBankAccount": "You don't have a bank account",
+        "error": "An error occurred while processing your withdrawal",
+        "title": "Withdraw",
+        "partnerWithdrawDM": "🏧 Your partner {{user}} withdrew {{amount}} from your shared bank balance in {{guild}}. Your contribution to this withdrawal was {{partnerAmount}}."
+      },
+      "transfer": {
+        "cannotTransferToSelf": "You cannot transfer money to yourself",
+        "insufficientFunds": "Insufficient funds",
+        "amountGreaterThanZero": "Amount must be greater than zero",
+        "invalidAmount": "Invalid amount",
+        "error": "An error occurred while processing your transfer",
+        "title": "Transfer"
+      },
+      "level": {
+        "title": "Level",
+        "level": "Level",
+        "nextLevel": "Next level",
+        "xp": "XP",
+        "userNotFound": "User not found",
+        "imageError": "Failed to generate the image. Please try again.",
+        "error": "An error occurred while processing your request"
+      }
+    },
+    "emotions": {
+      "name": "emotions",
+      "description": "Commands for emotions",
+      "myself": {
+        "blush": {
+          "title": "Blush",
+          "description": "<@{{user}}> is blushing!"
+        },
+        "smug": {
+          "title": "Smug",
+          "description": "<@{{user}}> looks smug!"
+        },
+        "happy": {
+          "title": "Happy",
+          "description": "<@{{user}}> is happy!"
+        },
+        "smile": {
+          "title": "Smile",
+          "description": "<@{{user}}> smiles!"
+        },
+        "dance": {
+          "title": "Dance",
+          "description": "<@{{user}}> is dancing!"
+        },
+        "like": {
+          "title": "Like",
+          "description": "<@{{user}}> likes this!"
+        },
+        "cry": {
+          "title": "Cry",
+          "description": "<@{{user}}> is crying!"
+        },
+        "nosebleed": {
+          "title": "Nosebleed",
+          "description": "<@{{user}}> has a nosebleed!"
+        },
+        "depression": {
+          "title": "Depression",
+          "description": "<@{{user}}> is depressed!"
+        },
+        "tea": {
+          "title": "Tea",
+          "description": "<@{{user}}> drinks tea!"
+        },
+        "nom": {
+          "title": "Nom",
+          "description": "<@{{user}}> is eating!"
+        },
+        "lick": {
+          "title": "Lick",
+          "description": "<@{{user}}> licks their lips!"
+        },
+        "sleep": {
+          "title": "Sleep",
+          "description": "<@{{user}}> is sleeping!"
+        },
+        "coffee": {
+          "title": "Coffee",
+          "description": "<@{{user}}> drinks coffee!"
+        },
+        "gah": {
+          "title": "Gah",
+          "description": "<@{{user}}> is surprised!"
+        },
+        "imageNotFound": "Image not found"
+      },
+      "negative": {
+        "bonk": {
+          "title": "Bonk",
+          "description": "<@{{user}}> bonks <@{{targetUser}}>!"
+        },
+        "punch": {
+          "title": "Punch",
+          "description": "<@{{user}}> punches <@{{targetUser}}>!"
+        },
+        "poke": {
+          "title": "Poke",
+          "description": "<@{{user}}> pokes <@{{targetUser}}>!"
+        },
+        "bully": {
+          "title": "Bully",
+          "description": "<@{{user}}> bullies <@{{targetUser}}>!"
+        },
+        "kick": {
+          "title": "Kick",
+          "description": "<@{{user}}> kicks <@{{targetUser}}>!"
+        },
+        "slap": {
+          "title": "Slap",
+          "description": "<@{{user}}> slaps <@{{targetUser}}>!"
+        },
+        "throw": {
+          "title": "Throw",
+          "description": "<@{{user}}> throws something at <@{{targetUser}}>!"
+        },
+        "bite": {
+          "title": "Bite",
+          "description": "<@{{user}}> bites <@{{targetUser}}>!"
+        },
+        "kill": {
+          "title": "Kill",
+          "description": "<@{{user}}> kills <@{{targetUser}}>!"
+        },
+        "threaten": {
+          "title": "Threaten",
+          "description": "<@{{user}}> threatens <@{{targetUser}}>!"
+        },
+        "tickle": {
+          "title": "Tickle",
+          "description": "<@{{user}}> tickles <@{{targetUser}}>!"
+        },
+        "imageNotFound": "Image not found",
+        "cannotSelectSelf": "You cannot select yourself",
+        "cannotSelectBot": "You cannot select a bot"
+      },
+      "positive": {
+        "wave": {
+          "title": "Wave",
+          "description": "<@{{user}}> waves at <@{{targetUser}}>!"
+        },
+        "wink": {
+          "title": "Wink",
+          "description": "<@{{user}}> winks at <@{{targetUser}}>!"
+        },
+        "pat": {
+          "title": "Pat",
+          "description": "<@{{user}}> pats <@{{targetUser}}>!"
+        },
+        "kiss": {
+          "title": "Kiss",
+          "description": "<@{{user}}> kisses <@{{targetUser}}>!"
+        },
+        "feed": {
+          "title": "Feed",
+          "description": "<@{{user}}> feeds <@{{targetUser}}>!"
+        },
+        "hug": {
+          "title": "Hug",
+          "description": "<@{{user}}> hugs <@{{targetUser}}>!"
+        },
+        "cuddle": {
+          "title": "Cuddle",
+          "description": "<@{{user}}> cuddles with <@{{targetUser}}>!"
+        },
+        "five": {
+          "title": "High Five",
+          "description": "<@{{user}}> high fives <@{{targetUser}}>!"
+        },
+        "glomp": {
+          "title": "Glomp",
+          "description": "<@{{user}}> glomps <@{{targetUser}}>!"
+        },
+        "hold": {
+          "title": "Hold",
+          "description": "<@{{user}}> holds hands with <@{{targetUser}}>!"
+        },
+        "boop": {
+          "title": "Boop",
+          "description": "<@{{user}}> boops <@{{targetUser}}>!"
+        },
+        "imageNotFound": "Image not found",
+        "cannotSelectSelf": "You cannot select yourself",
+        "cannotSelectBot": "You cannot select a bot",
+        "returnEmotion": "Return the emotion",
+        "onlyTargetUserCanRespond": "Only the target user can respond",
+        "next": "Next"
+      }
+    },
+    "filters": {
+      "image_memer": {
+        "noText": "No text provided",
+        "noUsername": "No username provided",
+        "errorApplyingFilter": "Error applying meme filter"
+      },
+      "text_memer": {
+        "errorApplyingFilter": "Error applying meme filter"
+      }
+    },
+    "help": {
+      "name": "help",
+      "description": "Get help with the bot",
+      "commands": {
+        "categoryMenu": {
+          "placeholder": "Select a category"
+        },
+        "subcommandMenu": {
+          "placeholder": "Select a command"
+        },
+        "next": "Next",
+        "previous": "Previous",
+        "title": "Commands list",
+        "youCannotUseThisMenu": "You cannot use this menu.",
+        "noCommandsAvailable": "No commands available"
+      }
+    },
+    "images": {
+      "setbanner": {
+        "title": "Banner Set",
+        "success": "Your banner has been set successfully!",
+        "error": "An error occurred while setting the banner",
+        "invalidImage": "Please provide a valid image file",
+        "imageTooLarge": "The image file is too large (max 8MB)",
+        "bannerPreview": "Banner Preview"
+      },
+      "removebanner": {
+        "title": "Banner Removed",
+        "success": "Your banner has been removed successfully!",
+        "error": "An error occurred while removing the banner"
+      },
+      "sfw": {
+        "notFound": "Image not found"
+      },
+      "nsfw": {
+        "notFound": "Image not found",
+        "nsfwChannelOnly": "This command can only be used in NSFW channels"
+      }
+    },
+    "ai": {
+      "help": "Use one of the AI subcommands to access different AI features.",
+      "transcribe_audio": {
+        "command": {
+          "name": "transcribe",
+          "description": "Transcribe audio to text"
+        },
+        "invalid_file": "Please provide a valid audio file.",
+        "generated": "Transcription:\n\n{{transcription}}",
+        "failed": "Failed to transcribe the audio. Please try again.",
+        "error": "An error occurred while transcribing the audio. Please try again later.",
+        "too_long": "The transcription is too long to display. Here's a text file with the result:",
+        "no_attachment": "Please provide an audio file to transcribe.",
+        "invalid_attachment_type": "The provided file is not a supported audio format. Supported formats: {{accepted_types}}. Received: {{received_type}}",
+        "file_too_large": "The audio file is too large (max 25MB).",
+        "downloading": "Downloading audio file...",
+        "transcribing": "Transcribing audio...",
+        "result": "Transcription:\n\n{{transcription}}"
+      },
+      "generate_image": {
+        "command": {
+          "name": "generate",
+          "description": "Generate beautiful image by prompt"
+        },
+        "generated": "Generated image with prompt: {{prompt}}\nSeed: {{seed}}\nSteps: {{steps}}",
+        "failed": "Failed to generate the image. Please try again.",
+        "error": "An error occurred while generating the image. Please try again later.",
+        "gradio_error": "There was an error with the image generation service. Please try again later.",
+        "generating": "Generating image with prompt: {{prompt}}..."
+      }
+    },
+    "music": {
+      "noMusicPlaying": "No music is currently playing",
+      "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+      "connectionTimeout": "There was a connection timeout to the music node",
+      "noAvailableNode": "There's no a available node to connect to, please retry again later",
+      "errorOccurred": "An error occurred while working with the music player: {{error}}",
+      "skippingSongError": "There was an error while skipping the song",
+      "player": {
+        "footerText": "Requested by {{author}}"
+      },
+      "autoplay": {
+        "autoplayApplied": "Autoplay state was set to {{enabled}}",
+        "command": {
+          "name": "autoplay",
+          "description": "Toggle autoplay mode"
+        },
+        "autoplayToggled": "Autoplay mode has been toggled {{enabled}}",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "pauseApplied": "Music has been paused",
+      "pauseResumed": "Music has been resumed",
+      "loopApplied": "Loop mode has been set to {{type}}",
+      "skipApplied": "Skipped to the next track",
+      "filters": {
+        "command": {
+          "name": "filters",
+          "description": "Set the music filters"
+        },
+        "filterApplied": "Filter {{filter}} has been applied",
+        "invalidFilterProperty": "Invalid filter property",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "loop": {
+        "command": {
+          "name": "loop",
+          "description": "Loop the current song/queue"
+        },
+        "loopApplied": "Loop type has been set to {{type}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "play": {
+        "command": {
+          "name": "play",
+          "description": "Play a song"
+        },
+        "noMatchesFound": "No matches found",
+        "addedToQueue": "Added to queue: {{title}}",
+        "addedPlaylist": "Added playlist: {{name}} ({{count}} of {{total}}, max: {{max}})",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)",
+        "loopApplied": "Loop type has been set to {{type}}",
+        "noLavalinkNode": "No Lavalink node available",
+        "connectionTimeout": "Connection timed out",
+        "noAvailableNode": "No available Node was found"
+      },
+      "seek": {
+        "command": {
+          "name": "seek",
+          "description": "Seek to a specific time in the current track"
+        },
+        "invalidTimeFormat": "Invalid time format. Use m:ss or ss",
+        "seekBeyondDuration": "You can't seek beyond the duration of the current track",
+        "seekedTo": "Seeked to {{time}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "queue": {
+        "command": {
+          "name": "queue",
+          "description": "Show the music queue"
+        },
+        "currentPlaying": "Currently playing: {{title}}",
+        "nextInQueue": "Next in queue: {{tracks}}",
+        "currentQueue": "Current queue",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "previous": {
+        "command": {
+          "name": "previous",
+          "description": "Play the previous song"
+        },
+        "noPreviousSongs": "There are no previous songs in the queue",
+        "addedPreviousToQueue": "Added previous song to queue: {{title}}",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in the same voice channel as the player"
+      },
+      "stop": {
+        "command": {
+          "name": "stop",
+          "description": "Stop the music"
+        },
+        "musicStopped": "Music stopped",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      },
+      "skip": {
+        "command": {
+          "name": "skip",
+          "description": "Skip the current song"
+        },
+        "skippedSong": "Skipped the current song",
+        "skippingSongError": "Failed to skip the current song",
+        "noMusicPlaying": "No music is currently playing",
+        "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
+      }
+    },
+    "counting": {
+      "no_perms": "You don't have permissions to manage channels",
+      "no_channel": "No counting channel is set up",
+      "setup": {
+        "command": {
+          "name": "setup",
+          "description": "Setup counting channel"
+        },
+        "success": "Counting channel setup successfully"
+      },
+      "status": {
+        "command": {
+          "name": "status",
+          "description": "Show counting channel status"
+        },
+        "status": "Counting channel status:\nChannel: {{channel}}\nCurrent number: {{number}}\nPin on each: {{pinoneach}}\nPinned role: {{pinnedrole}}\nOnly numbers: {{only_numbers}}\nNo same user: {{no_same_user}}\nNo unique role: {{no_unique_role}}"
+      },
+      "remove": {
+        "command": {
+          "name": "remove",
+          "description": "Remove counting channel"
+        },
+        "success": "Counting channel has been removed"
+      }
+    },
+    "marriage": {
+      "proposeSuccess": "💍 You have proposed marriage to {{user}}! He/She needs to use /marriage accept to accept.",
+      "cannotMarrySelf": "You cannot marry yourself.",
+      "cannotMarryBot": "You cannot marry a bot.",
+      "alreadyMarried": "You are already married or have a pending proposal.",
+      "targetAlreadyMarried": "{{user}} is already married or has a pending proposal.",
+      "proposalError": "An error occurred while proposing marriage.",
+      "proposalDM": "💍 You have received a marriage proposal from {{user}} in {{guild}}! Use /marriage accept or /marriage reject in that server.",
+      "cannotSendDM": "(Could not send a DM to the user.)",
+      "acceptSuccess": "💖 Congratulations! You are now married to {{user}}!",
+      "noProposalToAccept": "You do not have a pending marriage proposal from {{user}}.",
+      "acceptError": "An error occurred while accepting the marriage proposal.",
+      "rejectSuccess": "💔 You have rejected the marriage proposal from {{user}}.",
+      "noProposalToReject": "You do not have a pending marriage proposal from {{user}}.",
+      "rejectError": "An error occurred while rejecting the marriage proposal.",
+      "divorceSuccess": "💔 You have successfully divorced {{user}}.",
+      "notMarried": "You are not currently married.",
+      "divorceError": "An error occurred while processing the divorce.",
+      "divorceDM": "💔 You have been divorced from {{user}} in {{guild}}."
+    },
+    "settings": {
+      "command": {
+        "name": "settings",
+        "description": "Configure bot settings (level roles, etc.)"
+      },
+      "subcommands": {
+        "levelroles": {
+          "name": "levelroles",
+          "description": "Configure roles awarded for reaching chat levels",
+          "add": {
+            "name": "add",
+            "description": "Assign a role to be awarded at a specific chat level",
+            "options": {
+              "role": {
+                "name": "role",
+                "description": "The role to award"
+              },
+              "level": {
+                "name": "level",
+                "description": "The chat level required to receive this role"
+              }
+            },
+            "success": "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+            "error_level_exists": "Error: Another role ({{existingRoleName}}) is already assigned to level {{level}}.",
+            "error_role_exists": "Error: Role {{roleName}} is already assigned to level {{existingLevel}}. Remove it first.",
+            "error_level_invalid": "Error: Required level must be 1 or higher.",
+            "error_role_unmanageable": "Error: I cannot assign the role {{roleName}} because it is higher than my highest role."
+          },
+          "remove": {
+            "name": "remove",
+            "description": "Remove a role reward associated with a level",
+            "options": {
+              "role": {
+                "name": "role",
+                "description": "The role reward to remove"
+              }
+            },
+            "success": "Successfully removed role reward {{roleName}}.",
+            "error_not_found": "Error: Role {{roleName}} is not configured as a level reward."
+          },
+          "list": {
+            "name": "list",
+            "description": "List all configured level role rewards",
+            "title": "Configured Level Roles",
+            "no_roles": "No level roles configured yet.",
+            "entry": "Level {{level}}: {{roleMention}}"
+          }
+        }
+      },
+      "error_permissions": "You need the Administrator permission to manage level roles.",
+      "error_generic": "An error occurred while managing level roles."
+    }
+  },
+  "levelUp": {
+    "": {
+      "chat": {
+        "title": "Level Up!",
+        "description": "You've leveled up from {oldLevel} to {newLevel}!",
+        "footer": "Keep chatting to gain more XP!"
+      },
+      "game": {
+        "title": "Game Level Up!",
+        "description": "You've leveled up your gaming skill from {oldLevel} to {newLevel} playing {game}!",
+        "footer": "Keep playing games to gain more Game XP!"
+      }
+    }
+  },
+  "events": {
+    "message": {
+      "transcription": {
+        "success": "Transcription of voice message:\n\n{text}",
+        "failed": "Sorry, I couldn't transcribe that voice message."
+      }
+    },
+    "ai": {
+      "messages": {
+        "processing": "Processing your request with `{model}`...",
+        "rateLimited": "Model `{model}` is currently rate-limited. Please try again in about {minutes} minute(s) or select a different model.",
+        "streamStart": "Thinking...",
+        "streamProcessing": "Processing...",
+        "streamStopped": "Generation stopped.",
+        "streamError": "Error during streaming: {error}",
+        "visionMismatch": "Model `{model}` does not support image input. Please select a model with 'Vision' capability for this request.",
+        "errorOccurred": "😥 An error occurred: {error}",
+        "modelDetailsError": "😥 Error checking model details: {error}",
+        "noModelsFound": "Sorry, I couldn't find any suitable AI models to use right now{vision, select, vision { for image analysis} other {}}.",
+        "selectModelPrompt": "Please select an AI model to use for this chat. You can also configure context memory and tool usage below.",
+        "modelSelectedProcessing": "Model selected: `{model}`. Processing your request...",
+        "selectionTimeout": "Model selection timed out.",
+        "selectionError": "Sorry, I encountered an error while preparing model selection options.",
+        "toolComplete": "Tool actions completed.",
+        "noTextResponse": "I didn't get a text response for that.",
+        "noTextResponseInternal": "(No text response received)",
+        "emptyResponseInternal": "(Received an empty response from the AI)",
+        "toolsDisabledNote": "*(AI tried to use tools, but they are currently disabled.)*",
+        "reasoningDisabled": "*(AI tried to use reasoning, but it is currently disabled.)*"
+      },
+      "buttons": {
+        "systemPrompt": {
+          "on": "System Prompt: ON",
+          "off": "System Prompt: OFF",
+          "tools": {
+            "on": "Tools: ON",
+            "off": "Tools: OFF",
+            "offModel": "Tools: OFF (Model)"
+          },
+          "reasoning": {
+            "on": "Reasoning: ON",
+            "off": "Reasoning: OFF",
+            "offModel": "Reasoning: OFF (Model)"
+          },
+          "clearContext": "Context ({current}/{max})"
+        },
+        "menus": {
+          "modelSelect": {
+            "placeholder": "Select an AI model",
+            "visionSupport": "Images",
+            "reasoningSupport": "Reasoning"
+          },
+          "settingsSelect": {
+            "placeholder": "Settings",
+            "systemPrompt": "System Prompt",
+            "systemPromptEnabled": "System instructions enabled",
+            "systemPromptDisabled": "System instructions disabled",
+            "tools": "AI Tools",
+            "toolsEnabled": "Tools enabled",
+            "toolsDisabled": "Tools disabled",
+            "webSearch": "Web Search",
+            "webSearchEnabled": "Web search enabled",
+            "webSearchDisabled": "Web search disabled",
+            "reasoning": "AI Reasoning",
+            "reasoningOff": "Reasoning disabled"
+          },
+          "settingsOptions": {
+            "systemPrompt": "Toggle system instructions for AI",
+            "tools": "Toggle AI tools functionality",
+            "reasoning": "Toggle AI reasoning capabilities",
+            "clearContext": "Clear conversation history",
+            "finetune": "Adjust AI generation parameters",
+            "switchModel": {
+              "label": "Switch Model",
+              "description": "Change the AI model"
+            },
+            "reasoningSettings": "Configure AI reasoning parameters"
+          }
+        },
+        "toolResult": {
+          "successPrefix": "🔧 **Tool Result ({command}):**",
+          "errorPrefix": "⚠️ **Tool Error ({command}):**"
+        },
+        "toolExec": {
+          "parseError": "Error: Could not parse the arguments provided for the command {command}. Please ensure arguments are a valid JSON string. Received: {args}",
+          "commandNotFound": "Command \"{command}\" not found.",
+          "dmRestricted": "Error: This command can only be used in servers, not in DMs.",
+          "economyDepositError": "The 'deposit' command is for your own bank. Use 'transfer' to send money to someone else.",
+          "economyTransferError": "To put money in your bank, use the 'deposit' command.",
+          "economyWithdrawError": "The 'withdraw' command is only for your own bank.",
+          "missingParams": "Error: Missing required parameters for command '{command}': {missing}. Required: {required}. Please provide values for these.",
+          "userNotFound": "Error: Could not find the user specified: {user}. Please provide a valid user mention, ID, or username.",
+          "missingPermissions": "I seem to be missing the required permissions to do that.",
+          "errorGeneric": "An error occurred while running the command: {error}",
+          "successGeneric": "Command executed successfully."
+        },
+        "collector": {
+          "contextClear": {
+            "success": "Conversation context cleared!"
+          },
+          "modelChange": {
+            "success": "Model changed to `{model}`. This will be used for your next request."
+          }
+        },
+        "sanitization": {
+          "mention": "(mention)",
+          "everyone": "@ everyone",
+          "here": "@ here"
+        },
+        "finetune": {
+          "buttonLabel": "Fine-tune Settings",
+          "selectParameter": "Select parameter to adjust",
+          "selectParameterPrompt": "Select an AI parameter to adjust:",
+          "parameterUpdated": "{parameter} updated to {value}.",
+          "selectionTimeout": "Parameter selection timed out.",
+          "modalTitle": "Fine-tune AI Parameters",
+          "modalTitlePage2": "Fine-tune AI Parameters (Page 2)",
+          "processingFirstSet": "Processing first set of parameters... Please fill in the remaining parameters.",
+          "chooseOption": "Please choose an option below:",
+          "configureMore": "Configure More Parameters",
+          "saveCurrentSettings": "Save Current Settings",
+          "resetToDefaults": "Reset to Defaults",
+          "allParametersUpdated": "All AI parameters updated successfully!",
+          "firstSetUpdated": "First set of parameters saved successfully!",
+          "parametersReset": "All AI parameters have been reset to default values!",
+          "error": "An error occurred while processing your parameters.",
+          "defaultUpdated": "First set of parameters updated by default since no further action was taken.",
+          "parameters": {
+            "temperature": {
+              "label": "Temperature",
+              "description": "Controls randomness: higher values produce more creative results"
+            },
+            "top_p": {
+              "label": "Top P",
+              "description": "Nucleus sampling: considers tokens with top_p probability mass"
+            },
+            "top_k": {
+              "label": "Top K",
+              "description": "Only sample from the K most likely tokens"
+            },
+            "frequency_penalty": {
+              "label": "Frequency Penalty",
+              "description": "Decreases repetition of frequent tokens"
+            },
+            "presence_penalty": {
+              "label": "Presence Penalty",
+              "description": "Decreases repetition of used tokens"
+            },
+            "repetition_penalty": {
+              "label": "Repetition Penalty",
+              "description": "Higher values prevent repetition"
+            },
+            "min_p": {
+              "label": "Min P",
+              "description": "Only tokens with at least this probability are considered"
+            },
+            "top_a": {
+              "label": "Top A",
+              "description": "Dynamic nucleus sampling threshold"
+            },
+            "max_completion_tokens": {
+              "label": "Max Tokens",
+              "description": "Maximum number of tokens to generate"
+            }
+          }
+        },
+        "reasoning": {
+          "buttonLabel": "Reasoning Settings",
+          "selectParameter": "Configure reasoning",
+          "settingsUpdated": "Reasoning settings updated: Effort={effort}, Max Tokens={maxTokens}, Exclude={exclude}",
+          "error": "An error occurred while updating reasoning settings.",
+          "parameters": {
+            "effort": {
+              "label": "Reasoning Effort",
+              "description": "Controls how much reasoning the model should do"
+            },
+            "maxTokens": {
+              "label": "Max Reasoning Tokens",
+              "description": "Maximum tokens to use for reasoning"
+            },
+            "exclude": {
+              "label": "Exclude Reasoning",
+              "description": "Whether to exclude reasoning from the response"
+            }
+          }
+        },
+        "stream": {
+          "stop": "Stop"
+        }
+      }
+    }
+  },
+  "music": {
+    "buttons": {
+      "previous": "Previous",
+      "loop": "Loop",
+      "pause": "Pause",
+      "play": "Play",
+      "autoplay": "Autoplay",
+      "on": "ON",
+      "off": "OFF",
+      "skip": "Skip"
+    },
+    "player": {
+      "title": "Now Playing",
+      "footerText": "Requested by {author}",
+      "additionalTracks": "Additional tracks",
+      "andMoreTracks": "And {count} more tracks",
+      "noTitle": "Unknown Title",
+      "noArtist": "Unknown Artist",
+      "duration": "Duration",
+      "queue": "Queue",
+      "emptyQueue": "Queue is empty",
+      "filters": "Filters",
+      "noFilters": "No filters"
+    },
+    "previous": {
+      "noPreviousSongs": "There are no previous songs in the queue",
+      "addedPreviousToQueue": "Added previous song to queue: {{title}}"
+    },
+    "autoplay": {
+      "autoplayApplied": "Autoplay is now {{state}}"
+    }
+  }
+}

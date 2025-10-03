@@ -70,7 +70,8 @@
   "scripts": {
     "start": "bun --expose-gc ."
   },
-  "author": "",
-  "license": "ISC",
+  "author": "VeJoy",
+  "license": "Eleazar Discord Bot License",
   "description": ""
 }
+
