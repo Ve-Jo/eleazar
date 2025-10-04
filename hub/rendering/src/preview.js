@@ -810,108 +810,20 @@ app.get("/:componentName", async (req, res) => {
       return res.status(404).send(`Component ${componentName} not found`);
     }
 
-    // --- Import component to check for controls ---
+    // --- Import component ---
     let Component = null;
-    let previewControlsHtml = "";
-    let previewControlStateInit = "";
-    let controlChangeHandlers = "";
-    let dynamicControlUrlParams = ""; // For refreshImage
-    let dynamicControlInitCode = ""; // For window.onload
-
     try {
       delete require.cache[componentPath];
       const imported = await import(`file://${componentPath}?t=${Date.now()}`);
       Component = imported.default;
-
-      if (
-        Component &&
-        Component.previewControls &&
-        Array.isArray(Component.previewControls)
-      ) {
-        previewControlsHtml += '<div class="dynamic-controls">';
-        Component.previewControls.forEach((control) => {
-          previewControlsHtml += `<div class="control-group">`;
-          previewControlsHtml += `<label for="ctrl-${control.name}">${control.label}:</label>`;
-
-          const defaultValue = JSON.stringify(control.defaultValue);
-          const stateVarName = `current_${control.name}`;
-          const storageKey = `control_${componentName}_${control.name}`;
-          const changeFuncName = `handle_${control.name}_Change`;
-
-          previewControlStateInit += `let ${stateVarName} = storage.get('${storageKey}', ${defaultValue});\n`;
-          dynamicControlUrlParams += `url += '&${control.name}=' + encodeURIComponent(${stateVarName});\n`;
-
-          if (control.type === "select") {
-            previewControlsHtml += `<select id="ctrl-${control.name}" name="${control.name}" onchange="${changeFuncName}(this.value)">`;
-            control.options.forEach((opt) => {
-              previewControlsHtml += `<option value="${opt.value}">${
-                opt.label || opt.value
-              }</option>`;
-            });
-            previewControlsHtml += `</select>`;
-            controlChangeHandlers += `
-              function ${changeFuncName}(value) {
-                ${stateVarName} = value;
-                storage.set('${storageKey}', value);
-                refreshImage();
-              }
-            `;
-            dynamicControlInitCode += `
-              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
-              if (ctrl_${control.name}) { ctrl_${control.name}.value = ${stateVarName}; }
-            `;
-          } else if (control.type === "range") {
-            previewControlsHtml += `<input type="range" id="ctrl-${control.name}" name="${control.name}" 
-                     min="${control.min}" max="${control.max}" step="${control.step}" 
-                     oninput="document.getElementById('val-${control.name}').textContent=this.value" 
-                     onchange="${changeFuncName}(this.value)" 
-                     value="" />`;
-            previewControlsHtml += `<span class="range-value" id="val-${control.name}"></span>`;
-            controlChangeHandlers += `
-              function ${changeFuncName}(value) {
-                ${stateVarName} = parseFloat(value);
-                storage.set('${storageKey}', value);
-                // Update display value explicitly on final change too, just in case
-                const valElem = document.getElementById('val-${control.name}');
-                if (valElem) valElem.textContent = value;
-                refreshImage(); // Refresh only on final change
-              }
-            `;
-            dynamicControlInitCode += `
-              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
-              if (ctrl_${control.name}) {
-                ctrl_${control.name}.value = ${stateVarName};
-                const valElem = document.getElementById('val-${control.name}');
-                if (valElem) valElem.textContent = ${stateVarName};
-              }
-            `;
-          } else if (control.type === "text") {
-            previewControlsHtml += `<input type="text" id="ctrl-${control.name}" name="${control.name}" 
-                     oninput="${changeFuncName}(this.value)" 
-                     value="" />`;
-            controlChangeHandlers += `
-              function ${changeFuncName}(value) {
-                ${stateVarName} = value;
-                storage.set('${storageKey}', value);
-                refreshImage();
-              }
-            `;
-            dynamicControlInitCode += `
-              const ctrl_${control.name} = document.getElementById('ctrl-${control.name}');
-              if (ctrl_${control.name}) { ctrl_${control.name}.value = ${stateVarName}; }
-            `;
-          }
-          previewControlsHtml += `</div>`;
-        });
-        previewControlsHtml += "</div>";
-      }
     } catch (importError) {
-      console.error(
-        `Could not import ${componentName} to check controls:`,
-        importError
-      );
+      console.error(`Could not import ${componentName}:`, importError);
     }
-    // --- End Control Check ---
+    // --- End Component Import ---
+    // Generate initial mock data for client fallback
+    const lang = "en";
+    const initialMockData = await createMockData(lang, Component);
+    const fallbackMockDataString = JSON.stringify(initialMockData, null, 2);
 
     // Add specific controls for Transfer and LevelUp (keep existing logic)
     let additionalControls = "";
@@ -942,63 +854,120 @@ app.get("/:componentName", async (req, res) => {
       <head>
         <title>${componentName} Preview</title>
         <script>
-          const storage = {
-            get: (key, defaultValue) => { try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } catch(e) { return defaultValue; } },
-            set: (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) {} }
-          };
-          
           const ws = new WebSocket('ws://' + window.location.host);
           
-          let currentLang = storage.get('previewLang', 'en');
-          let debugMode = storage.get('debugMode', false);
-          let darkTheme = storage.get('darkTheme', true);
-          let currentMode = storage.get('transferMode', 'transfer'); 
-          let currentType = storage.get('levelUpType', 'chat');
+          let currentLang = localStorage.getItem('previewLang') || 'en';
+          let debugMode = localStorage.getItem('debugMode') === 'true';
+          let darkTheme = localStorage.getItem('darkTheme') !== 'false';
+          let currentMode = localStorage.getItem('transferMode') || 'transfer';
+          let currentType = localStorage.getItem('levelUpType') || 'chat';
           
-          ${previewControlStateInit}
-
-          ${controlChangeHandlers.replace(
-            // Find the modelType handler specifically
-            /function\s+handle_modelType_Change\s*\(\s*value\s*\)\s*\{\s*current_modelType\s*=\s*value;\s*storage\.set\(\s*'control_ThreeDObject_modelType'\s*,\s*value\s*\);\s*refreshImage\(\s*\);\s*\}/,
-            // Replace it with one that adds forceInit=true
-            `function handle_modelType_Change(value) {
-               current_modelType = value;
-               storage.set('control_ThreeDObject_modelType', value);
-               refreshImage(true); // Pass true to indicate forceInit
-             }`
-          )}
+          // Get mock data from localStorage or use initial data from server
+          let mockDataJson = localStorage.getItem('mockDataJson');
+          if (mockDataJson === null) {
+              mockDataJson = fallbackMockDataString;
+          }
           
-          function toggleDebug() { debugMode = !debugMode; storage.set('debugMode', debugMode); document.getElementById('debugButton').classList.toggle('active', debugMode); refreshImage(); }
-          function toggleTheme() { darkTheme = !darkTheme; storage.set('darkTheme', darkTheme); document.getElementById('themeButton').classList.toggle('active', darkTheme); document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme'; refreshImage(); }
-          function changeLang(lang) { currentLang = lang; storage.set('previewLang', lang); document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang)); refreshImage(); }
-          function changeMode(mode) { if ('${componentName}' !== 'Transfer') return; currentMode = mode; storage.set('transferMode', mode); document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode)); refreshImage(); }
-          function changeType(type) { if ('${componentName}' !== 'LevelUp') return; currentType = type; storage.set('levelUpType', type); document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type)); refreshImage(); }
+          function toggleDebug() {
+            debugMode = !debugMode;
+            localStorage.setItem('debugMode', debugMode);
+            document.getElementById('debugButton').classList.toggle('active', debugMode);
+            refreshImage();
+          }
+          
+          function toggleTheme() {
+            darkTheme = !darkTheme;
+            localStorage.setItem('darkTheme', darkTheme);
+            document.getElementById('themeButton').classList.toggle('active', darkTheme);
+            document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
+            refreshImage();
+          }
+          
+          function changeLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('previewLang', lang);
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
+            refreshImage();
+          }
+          
+          function changeMode(mode) {
+            if ('${componentName}' !== 'Transfer') return;
+            currentMode = mode;
+            localStorage.setItem('transferMode', mode);
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+            refreshImage();
+          }
+          
+          function changeType(type) {
+            if ('${componentName}' !== 'LevelUp') return;
+            currentType = type;
+            localStorage.setItem('levelUpType', type);
+            document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+            refreshImage();
+          }
 
-          function refreshImage(forceInit = false) { 
+          function updateMockData() {
+            const editor = document.getElementById('mockDataEditor');
+            if (!editor) return;
+            
+            try {
+              // Validate JSON first
+              JSON.parse(editor.value);
+              // Update the mockDataJson variable with the editor content
+              mockDataJson = editor.value;
+              localStorage.setItem('mockDataJson', mockDataJson);
+              console.log('Mock data updated, refreshing image with:', mockDataJson);
+              refreshImage();
+            } catch (error) {
+              console.error('Invalid JSON:', error);
+              // Keep the invalid JSON but don't refresh
+            }
+          }
+
+          function refreshImage(forceInit = false) {
             const img = document.querySelector('.preview img');
             if (!img) return;
             let url = '/${componentName}/image?lang=' + currentLang;
             url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light');
             if ('${componentName}' === 'Transfer') { url += '&mode=' + currentMode; }
             if ('${componentName}' === 'LevelUp') { url += '&type=' + currentType; }
-            ${dynamicControlUrlParams}
-            if (forceInit) { 
-                url += '&forceInit=true'; // Add the flag to the URL
+            url += '&mockData=' + encodeURIComponent(mockDataJson);
+            if (forceInit) {
+                url += '&forceInit=true';
             }
             url += '&t=' + Date.now();
             img.src = url;
           }
+
+          function resetMockData() {
+            fetch('/${componentName}/mockData?lang=' + currentLang +
+                  '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light') +
+                  ('${componentName}' === 'Transfer' ? '&mode=' + currentMode : '') +
+                  ('${componentName}' === 'LevelUp' ? '&type=' + currentType : ''))
+              .then(response => response.text())
+              .then(data => {
+                // Update mock data editor with the fresh data
+                const editor = document.getElementById('mockDataEditor');
+                if (editor && data) {
+                  mockDataJson = data;
+                  localStorage.setItem('mockDataJson', data);
+                  editor.value = data;
+                  refreshImage();
+                }
+              })
+              .catch(error => console.error('Error resetting mock data:', error));
+          }
           
-          ws.onopen = () => { console.log('WS Open'); /* Send initial state if needed */ };
+          ws.onopen = () => { console.log('WS Open'); };
           ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'reload') {
                   console.log('Reload triggered by server');
-                  refreshImage(); // Or maybe location.reload() if backend changed drastically
+                  refreshImage();
                 }
             } catch(e) { console.error('WS message error', e); }
-           }; // Added semicolon here
+           };
 
           window.onload = () => {
             // Init standard controls
@@ -1008,14 +977,18 @@ app.get("/:componentName", async (req, res) => {
             if ('${componentName}' === 'Transfer') { document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === currentMode)); }
             if ('${componentName}' === 'LevelUp') { document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === currentType)); }
             
-            // Init dynamic controls
-            ${dynamicControlInitCode}
-          }; // Added semicolon here
+            // Init JSON editor
+            const editor = document.getElementById('mockDataEditor');
+            if (editor) {
+              editor.value = mockDataJson;
+            }
+          };
+          
         </script>
         <style>
-          body { 
+          body {
             font-family: -apple-system, system-ui, sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 40px auto;
             padding: 0 20px;
             display: flex;
@@ -1126,23 +1099,32 @@ app.get("/:componentName", async (req, res) => {
             border-radius: 0 0 0 4px;
             font-size: 12px;
           }
-          .dynamic-controls { 
-            display: flex; 
-            flex-wrap: wrap; 
-            gap: 15px; 
-            margin-bottom: 15px; 
-            padding: 10px; 
-            background: #eee; 
-            border-radius: 5px; 
+          .json-editor {
+            width: 100%;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
           }
-          .control-group { display: flex; align-items: center; gap: 8px; }
-          .control-group label { font-weight: 500; }
-          .control-group select, .control-group input {
-            padding: 5px;
+          .json-editor textarea {
+            width: 100%;
+            height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            resize: vertical;
           }
-          .range-value { font-style: italic; color: #555; min-width: 30px; text-align: right; }
+          .json-editor button {
+            align-self: flex-start;
+            padding: 8px 16px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          }
         </style>
       </head>
       <body>
@@ -1159,8 +1141,13 @@ app.get("/:componentName", async (req, res) => {
            <button id="themeButton" onclick="toggleTheme()">Theme</button>
            ${additionalControls}
         </div>
-        ${previewControlsHtml} 
         <div class="preview"> <img src="#" alt="Loading preview..."> <div class="dimensions"></div> </div>
+        <div class="json-editor">
+          <h3>Mock Data Editor</h3>
+          <textarea id="mockDataEditor" placeholder="Enter JSON mock data here..."></textarea>
+          <button onclick="updateMockData()">Update Mock Data</button>
+          <button onclick="resetMockData()">Reset Mock Data</button>
+        </div>
         <script>
           // Trigger initial load after setting up listeners
           if (document.readyState === 'complete') { refreshImage(); } else { window.addEventListener('load', refreshImage); }
@@ -1199,63 +1186,84 @@ app.get("/:componentName/image", async (req, res) => {
     const Component = imported.default;
     if (!Component) throw new Error(`Component not found in ${componentPath}`);
 
-    // --- Parse Dynamic Controls from Query ---
-    const controlValues = {};
-    if (Component.previewControls && Array.isArray(Component.previewControls)) {
-      Component.previewControls.forEach((control) => {
-        if (req.query[control.name] !== undefined) {
-          // Parse based on type defined in component
-          switch (control.type) {
-            case "range":
-            case "number": // Assuming a future number type
-              controlValues[control.name] =
-                parseFloat(req.query[control.name]) || control.defaultValue;
-              break;
-            case "checkbox": // Assuming a future checkbox type
-              controlValues[control.name] = req.query[control.name] === "true";
-              break;
-            case "select":
-            case "text":
-            default:
-              controlValues[control.name] =
-                req.query[control.name] || control.defaultValue;
-          }
-        } else {
-          controlValues[control.name] = control.defaultValue;
-        }
-      });
+    // --- Parse Mock Data from Query ---
+    let customMockData = {};
+    if (req.query.mockData) {
+      try {
+        customMockData = JSON.parse(req.query.mockData);
+        console.log("Parsed custom mock data:", customMockData);
+      } catch (error) {
+        console.error("Error parsing mockData parameter:", error);
+      }
     }
-    console.log("Parsed control values:", controlValues);
-    // --- End Dynamic Controls Parsing ---
 
     console.log(
       `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}`
     );
 
-    // Generate mock data
-    const mockData = await createMockData(lang, Component);
+    // Use custom mock data if provided, otherwise generate default
+    let mockData;
+    if (req.query.mockData) {
+      console.log("Using custom mock data as base");
+      mockData = customMockData;
+      // Ensure locale and debug are set for custom data
+      mockData.locale = lang;
+      mockData.debug = debug;
 
-    // Apply mode/type/theme/debug settings AND dynamic controls to mockData
-    if (componentName === "Transfer" && mockData) {
-      mockData.isDeposit = mode === "deposit";
-      mockData.isTransfer = mode === "transfer";
+      // Apply mode/type/theme settings to custom mock data
+      if (componentName === "Transfer" && mockData) {
+        mockData.isDeposit = mode === "deposit";
+        mockData.isTransfer = mode === "transfer";
+      }
+      if (componentName === "LevelUp" && mockData) {
+        mockData.type = type;
+      }
+      if (componentName === "UpgradesDisplay" && mockData) {
+        // Apply theme settings for specific components if needed
+        mockData.coloring = isDarkTheme
+          ? {
+              /* dark theme colors */
+            }
+          : {
+              /* light theme colors */
+            };
+      }
+
+      // Ensure i18n is properly set for custom data
+      if (!mockData.i18n || typeof mockData.i18n.__ !== "function") {
+        mockData.i18n = createI18nMock(lang, Component);
+      }
+      if (mockData.i18n) mockData.i18n.initialized = true;
+    } else {
+      console.log("Using generated mock data as base");
+      mockData = await createMockData(lang, Component);
+
+      // Apply mode/type/theme/debug settings to mockData
+      if (componentName === "Transfer" && mockData) {
+        mockData.isDeposit = mode === "deposit";
+        mockData.isTransfer = mode === "transfer";
+      }
+      if (componentName === "LevelUp" && mockData) {
+        mockData.type = type;
+      }
+      mockData.debug = debug;
+      if (componentName === "UpgradesDisplay" && mockData) {
+        // Apply theme settings for specific components if needed
+        mockData.coloring = isDarkTheme
+          ? {
+              /* dark theme colors */
+            }
+          : {
+              /* light theme colors */
+            };
+      }
     }
-    if (componentName === "LevelUp" && mockData) {
-      mockData.type = type;
-    }
-    mockData.debug = debug;
-    if (componentName === "UpgradesDisplay" && mockData) {
-      // Apply theme settings for specific components if needed
-      mockData.coloring = isDarkTheme
-        ? {
-            /* dark theme colors */
-          }
-        : {
-            /* light theme colors */
-          };
-    }
-    // Merge dynamic control values into mockData
-    Object.assign(mockData, controlValues);
+
+    // Log the mock data that will be passed to generateImage
+    console.log(
+      "Mock data to be used in generateImage:",
+      JSON.stringify(mockData, null, 2)
+    );
 
     // --- 3D Rendering Check ---
     let threeDImageData = null;
@@ -1340,7 +1348,7 @@ app.get("/:componentName/image", async (req, res) => {
       mockData.i18n = createI18nMock(lang, Component);
     if (mockData.i18n) mockData.i18n.initialized = true;
 
-    // Generate final image (Satori step)
+    // Generate final image via external rendering service
     let buffer;
     try {
       buffer = await generateImage(
@@ -1353,12 +1361,12 @@ app.get("/:componentName/image", async (req, res) => {
       if (!buffer || !Buffer.isBuffer(buffer))
         throw new Error("Generated image invalid");
     } catch (renderError) {
-      // ... (error image generation logic) ...
-      console.error("Satori/Resvg render error:", renderError);
-      // Simplified error image generation
-      const errorMsg = `Render Error: ${renderError.message.slice(0, 100)}`;
-      res.status(500).send(errorMsg); // Send text error for simplicity
-      return; // Stop execution
+      console.error(
+        "Error fetching rendered image from render service:",
+        renderError
+      );
+      res.status(500).send(`Render service failed: ${renderError.message}`);
+      return;
     }
 
     // Send response
@@ -1370,6 +1378,149 @@ app.get("/:componentName/image", async (req, res) => {
     console.error("Error in /image route:", error);
     // No explicit session closing needed here - timeout handles it
     res.status(500).send(`Error rendering component image: ${error.message}`);
+  }
+});
+
+// Add endpoint to get the mock data used for rendering
+app.get("/:componentName/mockData", async (req, res) => {
+  try {
+    const { componentName } = req.params;
+    const lang = req.query.lang || "en";
+    const mode = req.query.mode || "transfer";
+    const type = req.query.type || "chat";
+    const debug = req.query.debug === "true";
+    const theme = req.query.theme || "dark";
+    const isDarkTheme = theme === "dark";
+    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+
+    // Import component
+    delete require.cache[componentPath];
+    const imported = await import(`file://${componentPath}?t=${Date.now()}`);
+    const Component = imported.default;
+    if (!Component) throw new Error(`Component not found in ${componentPath}`);
+
+    // Parse Mock Data from Query
+    let customMockData = {};
+    if (req.query.mockData) {
+      try {
+        customMockData = JSON.parse(req.query.mockData);
+        console.log("Parsed custom mock data:", customMockData);
+      } catch (error) {
+        console.error("Error parsing mockData parameter:", error);
+      }
+    }
+
+    // Use custom mock data if provided, otherwise generate default
+    let mockData;
+    if (Object.keys(customMockData).length > 0) {
+      console.log("Using custom mock data as base");
+      mockData = customMockData;
+    } else {
+      console.log("Using generated mock data as base");
+      mockData = await createMockData(lang, Component);
+    }
+
+    // Apply mode/type/theme/debug settings to mockData
+    if (componentName === "Transfer" && mockData) {
+      mockData.isDeposit = mode === "deposit";
+      mockData.isTransfer = mode === "transfer";
+    }
+    if (componentName === "LevelUp" && mockData) {
+      mockData.type = type;
+    }
+    mockData.debug = debug;
+
+    // Return the mock data as JSON
+    res.setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify(mockData, null, 2));
+  } catch (error) {
+    console.error("Error in /mockData route:", error);
+    res.status(500).send(`Error retrieving mock data: ${error.message}`);
+  }
+});
+
+// Add endpoint to get component configuration
+app.get("/components/config", async (req, res) => {
+  try {
+    const components = await getAvailableComponents();
+    const configs = {};
+
+    for (const componentName of components) {
+      const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+
+      try {
+        delete require.cache[componentPath];
+        const imported = await import(
+          `file://${componentPath}?t=${Date.now()}`
+        );
+        const Component = imported.default;
+
+        if (Component && Component.previewControls) {
+          configs[componentName] = {
+            name: componentName,
+            previewControls: Component.previewControls,
+          };
+        }
+      } catch (error) {
+        console.error(`Error loading component ${componentName}:`, error);
+        // Skip this component but continue with others
+      }
+    }
+
+    res.json({
+      components: configs,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in /components/config route:", error);
+    res.status(500).json({
+      error: `Error getting component configurations: ${error.message}`,
+    });
+  }
+});
+
+// Add endpoint to get specific component configuration
+app.get("/components/:componentName/config", async (req, res) => {
+  try {
+    const { componentName } = req.params;
+    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+
+    try {
+      await fs.access(componentPath);
+    } catch {
+      return res
+        .status(404)
+        .json({ error: `Component ${componentName} not found` });
+    }
+
+    let Component = null;
+    try {
+      delete require.cache[componentPath];
+      const imported = await import(`file://${componentPath}?t=${Date.now()}`);
+      Component = imported.default;
+    } catch (importError) {
+      return res
+        .status(500)
+        .json({ error: `Error importing component: ${importError.message}` });
+    }
+
+    if (!Component) {
+      return res
+        .status(500)
+        .json({ error: `Component not found in ${componentPath}` });
+    }
+
+    const config = {
+      name: componentName,
+      previewControls: Component.previewControls || [],
+    };
+
+    res.json(config);
+  } catch (error) {
+    console.error("Error in /components/:componentName/config route:", error);
+    res
+      .status(500)
+      .json({ error: `Error getting component config: ${error.message}` });
   }
 });
 
