@@ -1,12 +1,11 @@
 import express from "express";
-import { generateImage, processImageColors } from "../utils/imageGenerator.js";
+import { generateImage, processImageColors } from "./utils/imageGenerator.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
 import { watch } from "fs";
 import React from "react";
 import { WebSocketServer } from "ws";
-import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1337,7 +1336,7 @@ app.get("/:componentName/image", async (req, res) => {
     // --- End 3D Rendering Check ---
 
     // Validate i18n
-    if (!mockData.i18n || typeof mockData.await i18n.__ !== "function")
+    if (!mockData.i18n || typeof mockData.i18n.__ !== "function")
       mockData.i18n = createI18nMock(lang, Component);
     if (mockData.i18n) mockData.i18n.initialized = true;
 
@@ -1374,15 +1373,31 @@ app.get("/:componentName/image", async (req, res) => {
   }
 });
 
-// Export both app and WebSocket setup
-export default {
-  app,
-  handleUpgrade: (request, socket, head) => {
+// Add health check endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    service: "preview",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Start server if run directly
+if (import.meta.main) {
+  const PORT = process.env.PREVIEW_PORT || 3003;
+  const server = app.listen(PORT, () => {
+    console.log(`🔧 Component preview server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🖼️  Preview: http://localhost:${PORT}`);
+  });
+
+  // Handle WebSocket upgrades
+  server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit("connection", ws, request);
     });
-  },
-};
+  });
+}
 
 // Handle WebSocket connections
 wss.on("connection", (ws) => {
