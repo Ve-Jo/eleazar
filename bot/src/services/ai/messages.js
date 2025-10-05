@@ -253,28 +253,6 @@ export async function buildInteractionComponents(
       });
     }*/
 
-    // Only show reasoning toggle for capable models
-    if (
-      prefs.selectedModel &&
-      supportsReasoning(prefs.selectedModel) &&
-      !selectedModelDetails?.capabilities?.vision
-    ) {
-      options.push({
-        label: await i18n.__(
-          "events.ai.buttons.menus.settingsSelect.reasoning"
-        ),
-        description:
-          prefs.reasoningLevel === "off"
-            ? await i18n.__(
-                "events.ai.buttons.menus.settingsSelect.reasoningOff"
-              )
-            : `${getReasoningEmoji(prefs.reasoningLevel)} ${
-                prefs.reasoningLevel
-              }`,
-        value: "reasoning",
-      });
-    }
-
     // Clear context option
     const current = prefs.messageHistory.length;
     options.push({
@@ -458,51 +436,6 @@ export async function sendResponse(
               });
               break;
 
-            case "reasoning":
-              // Show reasoning levels menu
-              const reasoningMenu = new StringSelectMenuBuilder()
-                .setCustomId(`ai_reasoning_level_${userId}`)
-                .setPlaceholder("Select reasoning level");
-
-              // Add options for different reasoning levels
-              reasoningMenu.addOptions([
-                {
-                  label: "Reasoning: OFF",
-                  value: "off",
-                  description: "Disable reasoning completely",
-                  emoji: "❌",
-                  default: prefs.reasoningLevel === "off",
-                },
-                {
-                  label: "Reasoning: LOW",
-                  value: "low",
-                  description: "Minimal reasoning",
-                  emoji: "🤔",
-                  default: prefs.reasoningLevel === "low",
-                },
-                {
-                  label: "Reasoning: MEDIUM",
-                  value: "medium",
-                  description: "Standard reasoning",
-                  emoji: "🧠",
-                  default: prefs.reasoningLevel === "medium",
-                },
-                {
-                  label: "Reasoning: HIGH",
-                  value: "high",
-                  description: "Extensive reasoning",
-                  emoji: "🔬",
-                  default: prefs.reasoningLevel === "high",
-                },
-              ]);
-
-              await interaction.update({
-                components: [
-                  new ActionRowBuilder().addComponents(reasoningMenu),
-                ],
-              });
-              return; // Return early to prevent updating components
-
             case "clear_context":
               // Clear context
               clearUserHistory(userId);
@@ -546,57 +479,6 @@ export async function sendResponse(
               });
               return; // Return early to prevent updating components
           }
-        }
-        // Handle reasoning level menu selection
-        else if (
-          interaction.isStringSelectMenu() &&
-          interaction.customId === `ai_reasoning_level_${userId}`
-        ) {
-          const selectedLevel = interaction.values[0];
-          const prefs = getUserPreferences(userId);
-
-          // Update the reasoning level
-          updateUserPreference(userId, "reasoningLevel", selectedLevel);
-          // Set reasoningEnabled based on the level - 'off' disables reasoning
-          updateUserPreference(
-            userId,
-            "reasoningEnabled",
-            selectedLevel !== "off"
-          );
-
-          // Show confirmation message with ephemeral reply
-          await interaction.deferUpdate();
-
-          // Rebuild components with updated preferences after a short delay
-          setTimeout(async () => {
-            try {
-              const isVisionRequest =
-                message.attachments.size > 0 &&
-                message.attachments.first().contentType?.startsWith("image/");
-              const models = await getAvailableModels(
-                message.client,
-                isVisionRequest ? "vision" : null
-              );
-              const newComponents = await buildInteractionComponents(
-                userId,
-                models,
-                isVisionRequest,
-                false,
-                locale,
-                message.client
-              );
-
-              // Update original message with new components
-              await interaction.editReply({ components: newComponents });
-            } catch (error) {
-              console.error(
-                "Error updating components after reasoning level change:",
-                error
-              );
-            }
-          }, 500);
-
-          return; // Return early
         }
         // Handle original model select menu
         else if (
