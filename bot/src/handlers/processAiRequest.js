@@ -779,13 +779,19 @@ ${
         let lastUpdateTime = Date.now();
         let lastUpdateLength = 0; // Track content length at last update
         let lastReasoningUpdateTime = Date.now(); // Track reasoning update time
-        let lastReasoningLength = 0; // Track reasoning length at last update
-        const UPDATE_INTERVAL = 3000; // Update message every 3 seconds
-        const REASONING_UPDATE_INTERVAL = 2000; // Update reasoning every 2 seconds
-        const MIN_CONTENT_CHANGE = 50; // Minimum characters added before allowing update
-        const MIN_REASONING_CHANGE = 30; // Minimum reasoning characters before allowing update
+        let lastReasoningLength = 0; // Track reasoning length at last update (now uses same logic as content)
+        const UPDATE_INTERVAL = 1000; // Update message every 1 second
+        const MIN_CONTENT_CHANGE = 20; // Minimum characters added before allowing update
         let finalFinishReason = null; // Store the final finish reason
         let needsImmediateExecution = false; // Flag for immediate execution after stream completion
+
+        // Flags for nanogpt thinking handling
+        let isInThinkingMode = false; // Are we currently in thinking mode?
+        let thinkingStarted = false; // Has thinking started?
+        let thinkingEnded = false; // Has thinking ended?
+        let finalResponseStarted = false; // Has final response started?
+        let thinkingContent = ""; // Accumulate thinking content
+        let finalResponseContent = ""; // Accumulate final response content
 
         // Set up collector for stop button
         const collector = procMsg.createMessageComponentCollector({
@@ -896,20 +902,21 @@ ${
             showingReasoning = false;
           }
 
-          // Handle reasoning content
+          // Handle reasoning content - for providers that support separate reasoning field
           if (reasoning) {
             reasoningAccumulator += reasoning;
             console.log(
               `[DEBUG] Received reasoning chunk: ${reasoning.length} chars`
             );
 
-            // Throttle reasoning updates to reduce message edit frequency
+            // Use same update logic as nanogpt thinking - every 1 second if at least 20 characters changed
             const now = Date.now();
             const reasoningLengthChange =
               reasoningAccumulator.length - lastReasoningLength;
             if (
-              now - lastReasoningUpdateTime > REASONING_UPDATE_INTERVAL &&
-              reasoningLengthChange >= MIN_REASONING_CHANGE
+              (now - lastReasoningUpdateTime > UPDATE_INTERVAL ||
+                isFirstChunk) &&
+              (isFirstChunk || reasoningLengthChange >= MIN_CONTENT_CHANGE)
             ) {
               lastReasoningUpdateTime = now;
               lastReasoningLength = reasoningAccumulator.length;
@@ -962,8 +969,250 @@ ${
             }
           }
 
-          // Handle content
-          if (content) {
+          // Handle nanogpt-style thinking (embedded in content)
+          if (content && provider === "nanogpt") {
+            responseAccumulator += content;
+
+            // Check for thinking tags in the accumulated content
+            const thinkingMatch = responseAccumulator.match(
+              /<think>([\s\S]*?)<\/think>/i
+            );
+
+            if (thinkingMatch && !thinkingEnded) {
+              // We found a thinking block
+              if (!thinkingStarted) {
+                // First thinking block - start thinking mode
+                thinkingStarted = true;
+                isInThinkingMode = true;
+                console.log(`[DEBUG] Thinking block started`);
+              }
+
+              // Extract thinking content (everything between <think> and </think>)
+              thinkingContent = thinkingMatch[1] || "";
+              console.log(
+                `[DEBUG] Extracted thinking content: "${thinkingContent.substring(
+                  0,
+                  50
+                )}${thinkingContent.length > 50 ? "..." : ""}" (${
+                  thinkingContent.length
+                } chars)`
+              );
+
+              // Check if this thinking block has ended (we have the complete closing tag)
+              if (thinkingMatch[0].includes("</think>")) {
+                thinkingEnded = true;
+                isInThinkingMode = false;
+                finalResponseStarted = true;
+                console.log(
+                  `[DEBUG] Thinking block ended, final response started`
+                );
+
+                // Extract final response content (everything after the complete thinking block)
+                const finalResponseMatch = responseAccumulator.split(
+                  thinkingMatch[0]
+                );
+                if (finalResponseMatch.length > 1) {
+                  finalResponseContent = finalResponseMatch[1] || "";
+                } else {
+                  // If no content after thinking block, use empty string
+                  finalResponseContent = "";
+                }
+
+                // Also update thinkingContent to include only content before closing tag
+                const thinkingParts = thinkingMatch[0].split(/<\/think>/i);
+                if (thinkingParts.length > 0) {
+                  thinkingContent =
+                    thinkingParts[0].replace(/<think>/i, "") || "";
+                }
+
+                // Force immediate update to show the end of thinking
+                lastUpdateTime = 0; // Reset update time to force immediate update
+                console.log(
+                  `[DEBUG] Forced immediate update to show end of thinking`
+                );
+              }
+            } else if (!thinkingMatch && thinkingStarted && !thinkingEnded) {
+              // We're in thinking mode but haven't found complete block yet
+              // Extract content after <think> tag
+              const thinkStartMatch =
+                responseAccumulator.match(/<think>([\s\S]*)/i);
+              if (thinkStartMatch) {
+                thinkingContent = thinkStartMatch[1] || "";
+                console.log(
+                  `[DEBUG] Partial thinking content: "${thinkingContent.substring(
+                    0,
+                    50
+                  )}${thinkingContent.length > 50 ? "..." : ""}" (${
+                    thinkingContent.length
+                  } chars)`
+                );
+              }
+            } else if (thinkingEnded && finalResponseStarted) {
+              // After thinking ended, accumulate final response content
+              finalResponseContent += content;
+              console.log(
+                `[DEBUG] Final response content updated: "${finalResponseContent.substring(
+                  0,
+                  50
+                )}${finalResponseContent.length > 50 ? "..." : ""}" (${
+                  finalResponseContent.length
+                } chars)`
+              );
+            }
+
+            // Determine what to show based on the current state
+            let contentToShow = "";
+            let shouldShowReasoning = showingReasoning;
+
+            // Check if we have a complete thinking block in the response
+            const hasCompleteThinkingBlock =
+              thinkingMatch && thinkingMatch[0].includes("</think>");
+
+            if (
+              thinkingStarted &&
+              !thinkingEnded &&
+              !hasCompleteThinkingBlock
+            ) {
+              // Still in thinking mode - show thinking content
+              contentToShow = thinkingContent;
+              shouldShowReasoning = true;
+            } else if (thinkingEnded && finalResponseStarted) {
+              // Thinking ended, show final response with streaming effect
+              contentToShow = finalResponseContent;
+              shouldShowReasoning = false;
+            } else if (hasCompleteThinkingBlock) {
+              // We have a complete thinking block, show final response with streaming effect
+              contentToShow =
+                finalResponseContent ||
+                responseAccumulator.replace(thinkingMatch[0], "").trim();
+              shouldShowReasoning = false;
+            } else if (
+              !thinkingStarted &&
+              responseAccumulator.includes("<think>")
+            ) {
+              // We found a thinking tag but haven't started processing yet
+              // This handles cases where thinking tag appears mid-stream
+              thinkingStarted = true;
+              isInThinkingMode = true;
+              const newThinkingMatch = responseAccumulator.match(
+                /<think>([\s\S]*?)<\/think>/i
+              );
+              if (newThinkingMatch) {
+                thinkingContent = newThinkingMatch[1] || "";
+                contentToShow = thinkingContent;
+                shouldShowReasoning = true;
+
+                if (newThinkingMatch[0].includes("</think>")) {
+                  thinkingEnded = true;
+                  isInThinkingMode = false;
+                  finalResponseStarted = true;
+                  const finalMatch = responseAccumulator.split(
+                    newThinkingMatch[0]
+                  );
+                  finalResponseContent =
+                    finalMatch.length > 1 ? finalMatch[1] : "";
+                  contentToShow = finalResponseContent;
+                  shouldShowReasoning = false;
+                }
+              } else {
+                contentToShow = responseAccumulator;
+                shouldShowReasoning = true;
+              }
+            } else {
+              // No thinking detected yet, show accumulated content
+              contentToShow = responseAccumulator;
+              shouldShowReasoning = false;
+            }
+
+            // Update the message periodically to avoid rate limits
+            const now = Date.now();
+            const contentLengthChange = contentToShow.length - lastUpdateLength;
+
+            // Use consistent update logic for all modes - every 1 second if at least 20 characters changed
+            const shouldUpdate =
+              (now - lastUpdateTime > UPDATE_INTERVAL || isFirstChunk) &&
+              (isFirstChunk || contentLengthChange >= MIN_CONTENT_CHANGE);
+
+            if (shouldUpdate) {
+              lastUpdateTime = now;
+              lastUpdateLength = contentToShow.length;
+              isFirstChunk = false;
+
+              // Sanitize and remove thinking tags if we're showing final response
+              let sanitizedText = contentToShow;
+              if (!shouldShowReasoning || thinkingEnded) {
+                sanitizedText = removeThinkTags(contentToShow);
+              }
+
+              sanitizedText = sanitizedText
+                .replace(
+                  /<@[!&]?\d+>/g,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.mention",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@everyone/gi,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.everyone",
+                    effectiveLocale
+                  )
+                )
+                .replace(
+                  /@here/gi,
+                  await i18n.__(
+                    "events.ai.buttons.sanitization.here",
+                    effectiveLocale
+                  )
+                );
+
+              console.log(
+                `[DEBUG] Updating message with content (${contentToShow.length} chars), thinkingStarted: ${thinkingStarted}, thinkingEnded: ${thinkingEnded}, shouldShowReasoning: ${shouldShowReasoning}`
+              );
+
+              // Format content for display
+              let formattedContent = sanitizedText;
+              if (shouldShowReasoning && thinkingStarted && !thinkingEnded) {
+                // Format thinking content with -# prefix
+                formattedContent = sanitizedText
+                  .split("\n")
+                  .map((line) => (line.trim() ? `-# ${line}` : ""))
+                  .join("\n");
+
+                // Limit thinking display to 500 characters
+                if (formattedContent.length > 500) {
+                  formattedContent = "-# . . . " + formattedContent.slice(-497);
+                }
+              } else if (thinkingEnded && finalResponseStarted) {
+                // Show final response content as it's being generated (streaming effect)
+                // No special formatting, just show the content as it comes
+                formattedContent = sanitizedText;
+              }
+
+              // Show periodic updates
+              await procMsg
+                .edit({
+                  content:
+                    formattedContent ||
+                    (await i18n.__(
+                      "events.ai.messages.streamProcessing",
+                      effectiveLocale
+                    )) ||
+                    "Processing...",
+                  components: [stopRow],
+                })
+                .catch((error) => {
+                  // Handle potential edit errors due to rate limits
+                  console.log(
+                    `[DEBUG] Rate limit hit on message edit: ${error.message}`
+                  );
+                });
+            }
+          }
+
+          // Handle content for non-nanogpt providers
+          if (content && provider !== "nanogpt") {
             responseAccumulator += content;
             if (content.length > 50) {
               console.log(
