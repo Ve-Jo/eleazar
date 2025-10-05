@@ -1,6 +1,8 @@
 import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { Client } from "@gradio/client";
+import OpenAI from "openai";
+import CONFIG from "../../config/aiConfig.js";
 
 export default {
   data: () => {
@@ -8,6 +10,23 @@ export default {
     const builder = new SlashCommandSubcommandBuilder()
       .setName("generate_image")
       .setDescription("Generate beautiful image by prompt")
+      .addStringOption((option) =>
+        option
+          .setName("model")
+          .setDescription("Select image generation model")
+          .setRequired(true)
+          .addChoices(
+            { name: "Qwen Image (NanoGPT)", value: "qwen-image" },
+            { name: "HiDream (NanoGPT)", value: "hidream" },
+            { name: "Chroma (NanoGPT)", value: "chroma" },
+            {
+              name: "ArtiWaifu Diffusion (NanoGPT)",
+              value: "artiwaifu-diffusion",
+            },
+
+            { name: "FLUX.1 Schnell (Gradio)", value: "gradio" }
+          )
+      )
       .addStringOption((option) =>
         option
           .setName("prompt")
@@ -49,8 +68,8 @@ export default {
             "Number of inference steps (higher = better quality but slower)"
           )
           .setRequired(false)
-          .setMinValue(2)
-          .setMaxValue(5)
+          .setMinValue(4)
+          .setMaxValue(50)
       )
       .addIntegerOption((option) =>
         option
@@ -77,6 +96,16 @@ export default {
       },
     },
     options: {
+      model: {
+        name: {
+          ru: "модель",
+          uk: "модель",
+        },
+        description: {
+          ru: "Выберите модель генерации изображений",
+          uk: "Виберіть модель генерації зображень",
+        },
+      },
       prompt: {
         name: {
           ru: "промпт",
@@ -158,149 +187,288 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
 
+    let modelId = interaction.options.getString("model");
     let prompt = interaction.options.getString("prompt");
     let width = interaction.options.getInteger("width") || 1024;
     let height = interaction.options.getInteger("height") || 1024;
     let interferenceSteps =
-      interaction.options.getInteger("interference_steps") || 4;
+      interaction.options.getInteger("interference_steps") || 10;
     let seed = interaction.options.getInteger("seed") || 0;
-    console.log(JSON.stringify({ prompt, width, height }, null, 2));
+    console.log(JSON.stringify({ modelId, prompt, width, height }, null, 2));
 
     // Validate interference steps - if outside range, clamp to valid range
-    if (interferenceSteps > 5) {
+    /*if (interferenceSteps > 5) {
       console.log(`Clamping interference steps from ${interferenceSteps} to 5`);
       interferenceSteps = 5;
     } else if (interferenceSteps < 2) {
       console.log(`Clamping interference steps from ${interferenceSteps} to 2`);
       interferenceSteps = 2;
-    }
+    }*/
 
-    // Send a status update even if the original interaction was deferred
+    // Generate image with selected model
+    await this.generateImage(
+      interaction,
+      i18n,
+      prompt,
+      width,
+      height,
+      interferenceSteps,
+      seed,
+      modelId
+    );
+  },
+
+  async generateImage(
+    interaction,
+    i18n,
+    prompt,
+    width,
+    height,
+    interferenceSteps,
+    seed,
+    modelId
+  ) {
     try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: await i18n.__("commands.ai.generate_image.generating", {
-            prompt,
-          }),
-          ephemeral: false,
-        });
-      } else if (interaction.deferred) {
-        await interaction.editReply({
-          content: await i18n.__("commands.ai.generate_image.generating", {
-            prompt,
-          }),
-        });
-      }
-
-      // First try using Gradio client
-      try {
-        const client = await Client.connect("black-forest-labs/FLUX.1-schnell");
-
-        const progressUpdate = setInterval(async () => {
-          try {
-            if (!interaction.replied && !interaction.deferred) return;
-            await interaction.editReply({
-              content: await i18n.__("commands.ai.generate_image.generating", {
-                prompt,
-              }),
-            });
-          } catch (e) {
-            console.error("Error updating progress:", e);
-            clearInterval(progressUpdate);
-          }
-        }, 8000);
-
-        const output = await client.predict("/infer", [
+      // Update status
+      await interaction.editReply({
+        content: await i18n.__("commands.ai.generate_image.generating", {
           prompt,
-          seed,
-          !seed,
+        }),
+      });
+
+      let imageBuffer;
+      let usedSeed = seed;
+
+      // Try NanoGPT models first if selected
+      if (modelId !== "gradio") {
+        try {
+          imageBuffer = await this.generateWithNanoGPT(
+            prompt,
+            width,
+            height,
+            interferenceSteps,
+            seed,
+            modelId
+          );
+          console.log(
+            `Successfully generated image with NanoGPT model: ${modelId}`
+          );
+        } catch (nanoGptError) {
+          console.error(
+            `NanoGPT generation failed for model ${modelId}:`,
+            nanoGptError
+          );
+          // Fallback to Gradio
+          console.log("Falling back to Gradio model...");
+          imageBuffer = await this.generateWithGradio(
+            prompt,
+            width,
+            height,
+            interferenceSteps,
+            seed
+          );
+          modelId = "gradio"; // Update model ID to reflect fallback
+        }
+      } else {
+        // Use Gradio directly
+        imageBuffer = await this.generateWithGradio(
+          prompt,
           width,
           height,
           interferenceSteps,
-        ]);
-
-        clearInterval(progressUpdate);
-
-        console.log("Gradio output:", output);
-
-        if (output.data && output.data.length > 0) {
-          const imageUrl = output.data[0].url; // Access url property from the file data object
-          const response = await fetch(imageUrl);
-          if (!response.ok)
-            throw new Error(`Failed to fetch image: ${response.statusText}`);
-          const imageBuffer = await response.arrayBuffer();
-
-          const attachment = new AttachmentBuilder(
-            Buffer.from(imageBuffer)
-          ).setName("generated_image.png");
-
-          const responseContent = await i18n.__(
-            "commands.ai.generate_image.generated",
-            {
-              prompt,
-              seed: output.data[1] || "random", // Use the seed from output data
-              steps: interferenceSteps,
-            }
-          );
-
-          if (interaction.replied || interaction.deferred) {
-            await interaction.editReply({
-              content: responseContent,
-              files: [attachment],
-            });
-          } else {
-            await interaction.reply({
-              content: responseContent,
-              files: [attachment],
-            });
-          }
-          return;
-        }
-        throw new Error("No image in response");
-      } catch (gradioError) {
-        console.error("Gradio client error:", gradioError);
-        const errorMessage = await i18n.__(
-          "commands.ai.generate_image.gradio_error"
+          seed
         );
-
-        if (interaction.replied || interaction.deferred) {
-          return interaction.editReply({
-            content: errorMessage,
-          });
-        } else {
-          return interaction.reply({
-            content: errorMessage,
-          });
-        }
       }
+
+      // Create attachment and send result
+      const attachment = new AttachmentBuilder(imageBuffer).setName(
+        "generated_image.png"
+      );
+
+      const responseContent = await i18n.__(
+        "commands.ai.generate_image.generated",
+        {
+          prompt,
+          seed: usedSeed || "random",
+          steps: interferenceSteps,
+        }
+      );
+
+      await interaction.editReply({
+        content: responseContent,
+        files: [attachment],
+      });
     } catch (error) {
       console.error("Error generating image:", error);
       const errorMessage = await i18n.__("commands.ai.generate_image.error");
 
       try {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply({
-            content: errorMessage,
-          });
-        } else {
-          await interaction.reply({
-            content: errorMessage,
-          });
-        }
+        await interaction.editReply({
+          content: errorMessage,
+        });
       } catch (replyError) {
         console.error("Error sending error response:", replyError);
-        // As a last resort, try sending a new message
-        try {
-          await interaction.channel.send({
-            content: await i18n.__("commands.ai.generate_image.error", {
-              user: interaction.user,
-              error: errorMessage,
-            }),
-          });
-        } catch (e) {
-          console.error("Failed to send any error message:", e);
-        }
       }
     }
+  },
+
+  async generateWithNanoGPT(prompt, width, height, steps, seed, modelId) {
+    if (!CONFIG.nanogpt.apiKey) {
+      throw new Error("NanoGPT API key not configured");
+    }
+
+    // Try both endpoints - first the OpenAI-compatible one, then the direct one
+    const endpoints = [
+      "https://nano-gpt.com/v1/images/generations",
+      "https://nano-gpt.com/api/generate-image",
+    ];
+
+    let lastError;
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying NanoGPT endpoint: ${endpoint}`);
+
+        const requestBody = endpoint.includes("/v1/images/generations")
+          ? {
+              model: modelId,
+              prompt: prompt,
+              n: 1,
+              size: `${width}x${height}`,
+              response_format: "url",
+              num_inference_steps: steps,
+              ...(seed !== 0 && { seed: seed }),
+            }
+          : {
+              model: modelId,
+              prompt: prompt,
+              width: width,
+              height: height,
+              steps: steps,
+              seed: seed || 0,
+            };
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${CONFIG.nanogpt.apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(
+            `NanoGPT API error: ${response.status} - ${errorText}`
+          );
+        }
+
+        // Check content type to determine if response is JSON or binary image
+        const contentType = response.headers.get("content-type");
+        console.log(`Response content-type: ${contentType}`);
+
+        if (contentType && contentType.includes("application/json")) {
+          // JSON response - parse it
+          const result = await response.json();
+          console.log(
+            `NanoGPT JSON response from ${endpoint}:`,
+            JSON.stringify(result, null, 2)
+          );
+
+          let imageUrl;
+          let base64Data;
+
+          // Handle different response formats
+          if (endpoint.includes("/v1/images/generations")) {
+            // OpenAI-compatible format
+            if (!result.data || !result.data[0]) {
+              throw new Error("No data in NanoGPT response (OpenAI format)");
+            }
+
+            // Try URL first, then base64
+            if (result.data[0].url) {
+              imageUrl = result.data[0].url;
+            } else if (result.data[0].b64_json) {
+              base64Data = result.data[0].b64_json;
+            } else {
+              throw new Error(
+                "No image URL or base64 data in NanoGPT response"
+              );
+            }
+          } else {
+            // Direct API format
+            if (result.imageUrl) {
+              imageUrl = result.imageUrl;
+            } else if (result.b64_json) {
+              base64Data = result.b64_json;
+            } else {
+              throw new Error(
+                "No image URL or base64 data in NanoGPT response"
+              );
+            }
+          }
+
+          if (base64Data) {
+            // Decode base64 data directly
+            return Buffer.from(base64Data, "base64");
+          } else {
+            // Fetch image from URL
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+              throw new Error(
+                `Failed to fetch image from NanoGPT: ${imageResponse.statusText}`
+              );
+            }
+            return Buffer.from(await imageResponse.arrayBuffer());
+          }
+        } else {
+          // Binary response - assume it's the image data directly
+          console.log(
+            `Received binary response from ${endpoint}, size: ${response.headers.get(
+              "content-length"
+            )} bytes`
+          );
+          return Buffer.from(await response.arrayBuffer());
+        }
+      } catch (error) {
+        lastError = error;
+        console.log(`Endpoint ${endpoint} failed:`, error.message);
+        // Continue to next endpoint
+      }
+    }
+
+    // If we get here, all endpoints failed
+    throw new Error(
+      `All NanoGPT endpoints failed. Last error: ${lastError.message}`
+    );
+  },
+
+  async generateWithGradio(prompt, width, height, steps, seed) {
+    const client = await Client.connect("black-forest-labs/FLUX.1-schnell");
+
+    const output = await client.predict("/infer", [
+      prompt,
+      seed,
+      !seed,
+      width,
+      height,
+      steps,
+    ]);
+
+    console.log("Gradio output:", output);
+
+    if (output.data && output.data.length > 0) {
+      const imageUrl = output.data[0].url;
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch image from Gradio: ${response.statusText}`
+        );
+      }
+      return Buffer.from(await response.arrayBuffer());
+    }
+
+    throw new Error("No image in Gradio response");
   },
 };
