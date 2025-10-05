@@ -24,7 +24,7 @@ function formatModelName(model, provider) {
  * @returns {Object} Object containing initialization status for each provider
  */
 export async function initializeApiClients(client) {
-  const results = { groq: false, openrouter: false };
+  const results = { groq: false, openrouter: false, nanogpt: false };
 
   // Initialize Groq client if configured
   if (CONFIG.groq.apiKey) {
@@ -67,6 +67,26 @@ export async function initializeApiClients(client) {
         `✅ OpenRouter client already exists at client.${clientPath}`
       );
       results.openrouter = true;
+    }
+  }
+
+  // Initialize NanoGPT client if configured
+  if (CONFIG.nanogpt.apiKey) {
+    const clientPath = CONFIG.nanogpt.clientPath;
+    if (!client[clientPath]) {
+      try {
+        client[clientPath] = new OpenAI({
+          apiKey: CONFIG.nanogpt.apiKey,
+          baseURL: CONFIG.nanogpt.baseURL,
+        });
+        console.log("✅ Successfully initialized NanoGPT client");
+        results.nanogpt = true;
+      } catch (error) {
+        console.error("❌ Failed to initialize NanoGPT client:", error.message);
+      }
+    } else {
+      console.log(`✅ NanoGPT client already exists at client.${clientPath}`);
+      results.nanogpt = true;
     }
   }
 
@@ -245,8 +265,73 @@ async function fetchOpenRouterModelsFromApi(openRouterClient) {
 }
 
 /**
+ * Fetch models from NanoGPT API
+ * @param {Object} nanoGptClient - Initialized NanoGPT client
+ * @returns {Array} Array of available models
+ */
+async function fetchNanoGPTModelsFromApi(nanoGptClient) {
+  if (!nanoGptClient) {
+    console.warn(
+      "Attempted to fetch NanoGPT models without an initialized client."
+    );
+    return [];
+  }
+
+  try {
+    const preferredTextModels = new Set(
+      CONFIG.nanogpt.preferredModels?.text || []
+    );
+    const preferredVisionModels = new Set(
+      CONFIG.nanogpt.preferredModels?.vision || []
+    );
+
+    // NanoGPT API может не иметь стандартного endpoint для получения моделей
+    // Используем модели из конфигурации как fallback
+    console.log("Fetching NanoGPT models from configuration");
+
+    const models = [];
+
+    // Добавляем текстовые модели
+    CONFIG.nanogpt.preferredModels?.text?.forEach((id) => {
+      models.push({
+        id,
+        name: `nanogpt/${id}`,
+        provider: "nanogpt",
+        capabilities: {
+          vision: false,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    // Добавляем vision модели
+    CONFIG.nanogpt.preferredModels?.vision?.forEach((id) => {
+      models.push({
+        id,
+        name: `nanogpt/${id}`,
+        provider: "nanogpt",
+        capabilities: {
+          vision: true,
+          tools: true,
+          maxContext: 8192,
+        },
+      });
+    });
+
+    console.log(`Found ${models.length} NanoGPT models from configuration`);
+    return models;
+  } catch (error) {
+    console.error("Error fetching NanoGPT models:", error.message);
+
+    // Fallback to config if API call fails
+    return createFallbackModels("nanogpt");
+  }
+}
+
+/**
  * Create fallback models from config when API calls fail
- * @param {string} provider - Provider name ('groq' or 'openrouter')
+ * @param {string} provider - Provider name ('groq', 'openrouter', or 'nanogpt')
  * @returns {Array} Array of fallback models
  */
 function createFallbackModels(provider) {
@@ -295,17 +380,19 @@ async function fetchAllModels(client) {
     cachedModels &&
     now - lastFetchTime < CACHE_DURATION &&
     cachedModels.groq?.length &&
-    cachedModels.openrouter?.length
+    cachedModels.openrouter?.length &&
+    cachedModels.nanogpt?.length
   ) {
     console.log("Using cached AI models.");
     return cachedModels;
   }
 
   console.log("Fetching fresh AI models...");
-  cachedModels = { groq: [], openrouter: [] }; // Reset cache
+  cachedModels = { groq: [], openrouter: [], nanogpt: [] }; // Reset cache
 
   const groqClient = client[CONFIG.groq.clientPath];
   const openRouterClient = client[CONFIG.openrouter.clientPath];
+  const nanoGptClient = client[CONFIG.nanogpt.clientPath];
 
   const fetchPromises = [];
   if (groqClient) {
@@ -330,12 +417,27 @@ async function fetchAllModels(client) {
     cachedModels.openrouter = createFallbackModels("openrouter");
   }
 
+  if (nanoGptClient) {
+    fetchPromises.push(
+      fetchNanoGPTModelsFromApi(nanoGptClient).then((models) => {
+        cachedModels.nanogpt = models;
+      })
+    );
+  } else {
+    console.warn("NanoGPT client not available, using fallback models.");
+    cachedModels.nanogpt = createFallbackModels("nanogpt");
+  }
+
   await Promise.all(fetchPromises);
 
   lastFetchTime = now;
 
   // Store model capabilities in the cache for future reference
-  [...cachedModels.groq, ...cachedModels.openrouter].forEach((model) => {
+  [
+    ...cachedModels.groq,
+    ...cachedModels.openrouter,
+    ...cachedModels.nanogpt,
+  ].forEach((model) => {
     if (model && model.id) {
       const cacheKey = `${model.provider}/${model.id}`;
       state.modelStatus.modelCapabilitiesCache.set(cacheKey, model);
@@ -343,7 +445,7 @@ async function fetchAllModels(client) {
   });
 
   console.log(
-    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length})`
+    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length}), NanoGPT (${cachedModels.nanogpt.length})`
   );
   return cachedModels;
 }
@@ -361,7 +463,11 @@ export async function getAvailableModels(client, capabilityFilter = null) {
 
   // Create a map of all models for quick lookup
   const availableModelsMap = new Map();
-  [...allModelsData.groq, ...allModelsData.openrouter].forEach((model) => {
+  [
+    ...allModelsData.groq,
+    ...allModelsData.openrouter,
+    ...allModelsData.nanogpt,
+  ].forEach((model) => {
     const baseName = `${model.provider}/${model.id}`;
     availableModelsMap.set(baseName, model);
   });
@@ -377,6 +483,9 @@ export async function getAvailableModels(client, capabilityFilter = null) {
       ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
       ...(CONFIG.openrouter.preferredModels?.vision || []).map(
         (id) => `openrouter/${id}`
+      ),
+      ...(CONFIG.nanogpt.preferredModels?.vision || []).map(
+        (id) => `nanogpt/${id}`
       ),
     ];
     console.log("Filtering for VISION models based on config.");
@@ -397,6 +506,9 @@ export async function getAvailableModels(client, capabilityFilter = null) {
       ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
       ...(CONFIG.openrouter.preferredModels?.text || []).map(
         (id) => `openrouter/${id}`
+      ),
+      ...(CONFIG.nanogpt.preferredModels?.text || []).map(
+        (id) => `nanogpt/${id}`
       ),
     ];
     console.log("Prioritizing TEXT models based on config.");
@@ -429,7 +541,11 @@ export async function getAvailableModels(client, capabilityFilter = null) {
  */
 export async function getModelDetails(client, prefixedModelId) {
   const allModels = await fetchAllModels(client);
-  const allCombined = [...allModels.groq, ...allModels.openrouter];
+  const allCombined = [
+    ...allModels.groq,
+    ...allModels.openrouter,
+    ...allModels.nanogpt,
+  ];
 
   // Find model by its prefixed name
   let model = allCombined.find((m) => m.name === prefixedModelId);
@@ -610,6 +726,14 @@ export function supportsReasoning(modelId) {
 
   // For OpenRouter models, check if the model name contains reasoning keywords
   if (provider === "openrouter") {
+    const reasoningKeywords = ["reason", "ration", "logic", "think"];
+    return reasoningKeywords.some((keyword) =>
+      baseModelId.toLowerCase().includes(keyword)
+    );
+  }
+
+  // For NanoGPT models, check if the model name contains reasoning keywords
+  if (provider === "nanogpt") {
     const reasoningKeywords = ["reason", "ration", "logic", "think"];
     return reasoningKeywords.some((keyword) =>
       baseModelId.toLowerCase().includes(keyword)

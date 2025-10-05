@@ -9,13 +9,13 @@ const CONFIG = {
     clientPath: "groq",
     preferredModels: {
       text: [
-        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        /*"meta-llama/llama-4-maverick-17b-128e-instruct",
         "meta-llama/llama-4-scout-17b-16e-instruct",
-        "deepseek-r1-distill-llama-70b",
+        "deepseek-r1-distill-llama-70b",*/
       ],
       vision: [
-        "meta-llama/llama-4-maverick-17b-128e-instruct",
-        "meta-llama/llama-4-scout-17b-16e-instruct",
+        /*"meta-llama/llama-4-maverick-17b-128e-instruct",
+        "meta-llama/llama-4-scout-17b-16e-instruct",*/
       ],
     },
   },
@@ -27,7 +27,7 @@ const CONFIG = {
     baseURL: "https://openrouter.ai/api/v1",
     preferredModels: {
       text: [
-        "openai/gpt-4.1-nano",
+        /*"openai/gpt-4.1-nano",
         "qwen/qwen3-235b-a22b-thinking-2507",
         "qwen/qwen3-235b-a22b",
         "moonshotai/kimi-k2",
@@ -36,14 +36,42 @@ const CONFIG = {
         "x-ai/grok-3-mini-beta",
         "google/gemini-2.5-flash-lite-preview-06-17",
         "google/gemma-3-27b-it",
-        "qwen/qwen-vl-plus",
+        "qwen/qwen-vl-plus",*/
       ],
       vision: [
-        "openai/gpt-4.1-nano",
+        /*"openai/gpt-4.1-nano",
         "minimax/minimax-01",
         "google/gemma-3-27b-it",
-        "qwen/qwen-vl-plus",
+        "qwen/qwen-vl-plus",*/
       ],
+    },
+  },
+
+  nanogpt: {
+    provider: "nanogpt",
+    apiKey: process.env.NANOGPT_API_KEY,
+    clientPath: "nanogpt",
+    baseURL: "https://nano-gpt.com/api/v1",
+    preferredModels: {
+      text: [
+        "moonshotai/Kimi-K2-Instruct-0905",
+        "z-ai/glm-4.6:thinking",
+        "zai-org/GLM-4.5-FP8:thinking",
+        "deepseek-ai/deepseek-v3.2-exp-thinking",
+        "deepseek-ai/DeepSeek-V3.1-Terminus:thinking",
+        "deepseek-ai/DeepSeek-V3.1:thinking",
+        "Qwen/Qwen3-Next-80B-A3B-Instruct",
+        "qwen3-vl-235b-a22b-thinking",
+        "qvq-max",
+        "nousresearch/hermes-4-405b:thinking",
+        "nvidia/Llama-3.1-Nemotron-Ultra-253B-v1",
+        "openai/gpt-oss-120b",
+        "minimax/minimax-01",
+        "Gemma-3-27B-it-Abliterated",
+        "meta-llama/llama-4-maverick",
+        "meta-llama/llama-4-scout",
+      ],
+      vision: ["qwen3-vl-235b-a22b-thinking"],
     },
   },
 
