@@ -190,9 +190,20 @@ export function addConversationToHistory(userId, userMessage, aiResponse) {
   prefs.messageHistory.push({ role: "user", content: userMessage });
   prefs.messageHistory.push({ role: "assistant", content: aiResponse });
 
-  // Trim history if it exceeds the maximum context length
-  const maxPairs = CONFIG.maxContextLength || 4;
-  if (prefs.messageHistory.length > maxPairs * 2) {
+  // Calculate current token usage
+  const currentTokens = prefs.messageHistory.reduce((total, msg) => {
+    return total + (msg.content ? msg.content.length * 0.75 : 0); // Rough estimate: 0.75 tokens per character
+  }, 0);
+
+  // Get model context window
+  const modelContextWindow =
+    prefs.selectedModel && CONFIG.modelContextWindows
+      ? CONFIG.modelContextWindows[prefs.selectedModel] || 8192
+      : 8192;
+
+  // Trim history if it exceeds the model's context window (with 10% safety margin)
+  const maxTokens = modelContextWindow * 0.9;
+  if (currentTokens > maxTokens) {
     // Determine if we have a system message to preserve
     const hasSystemMessage =
       prefs.systemPromptEnabled &&
@@ -200,5 +211,9 @@ export function addConversationToHistory(userId, userMessage, aiResponse) {
 
     // Remove oldest user-assistant pair, preserving system message if present
     prefs.messageHistory.splice(hasSystemMessage ? 1 : 0, 2);
+
+    console.log(
+      `[DEBUG] Trimmed context for user ${userId}: ${currentTokens} tokens > ${maxTokens} max tokens`
+    );
   }
 }

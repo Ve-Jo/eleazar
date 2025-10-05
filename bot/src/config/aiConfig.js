@@ -91,6 +91,44 @@ const CONFIG = {
     exclude: false,
   },
 
+  // Context window sizes for models (in tokens)
+  modelContextWindows: {
+    // Groq models
+    "groq/meta-llama/llama-4-maverick-17b-128e-instruct": 128000,
+    "groq/meta-llama/llama-4-scout-17b-16e-instruct": 16000,
+    "groq/deepseek-r1-distill-llama-70b": 32000,
+
+    // OpenRouter models
+    "openrouter/openai/gpt-4.1-nano": 128000,
+    "openrouter/qwen/qwen3-235b-a22b-thinking-2507": 32000,
+    "openrouter/qwen/qwen3-235b-a22b": 32000,
+    "openrouter/moonshotai/kimi-k2": 200000,
+    "openrouter/minimax/minimax-01": 4000000,
+    "openrouter/mistralai/magistral-small-2506": 32000,
+    "openrouter/x-ai/grok-3-mini-beta": 32000,
+    "openrouter/google/gemini-2.5-flash-lite-preview-06-17": 1000000,
+    "openrouter/google/gemma-3-27b-it": 32000,
+    "openrouter/qwen/qwen-vl-plus": 32000,
+
+    // NanoGPT models
+    "nanogpt/moonshotai/Kimi-K2-Instruct-0905": 200000,
+    "nanogpt/z-ai/glm-4.6:thinking": 32000,
+    "nanogpt/zai-org/GLM-4.5-FP8:thinking": 32000,
+    "nanogpt/deepseek-ai/deepseek-v3.2-exp-thinking": 128000,
+    "nanogpt/deepseek-ai/DeepSeek-V3.1-Terminus:thinking": 128000,
+    "nanogpt/deepseek-ai/DeepSeek-V3.1:thinking": 128000,
+    "nanogpt/Qwen/Qwen3-Next-80B-A3B-Instruct": 32000,
+    "nanogpt/qwen3-vl-235b-a22b-thinking": 32000,
+    "nanogpt/qvq-max": 32000,
+    "nanogpt/nousresearch/hermes-4-405b:thinking": 32000,
+    "nanogpt/nvidia/Llama-3.1-Nemotron-Ultra-253B-v1": 128000,
+    "nanogpt/openai/gpt-oss-120b": 32000,
+    "nanogpt/minimax/minimax-01": 4000000,
+    "nanogpt/Gemma-3-27B-it-Abliterated": 32000,
+    "nanogpt/meta-llama/llama-4-maverick": 128000,
+    "nanogpt/meta-llama/llama-4-scout": 16000,
+  },
+
   // Context and system configuration
   maxContextLength: 4,
   disableSystemPromptFor: [],

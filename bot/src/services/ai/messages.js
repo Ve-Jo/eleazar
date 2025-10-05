@@ -122,6 +122,8 @@ export async function buildInteractionComponents(
   const prefs = getUserPreferences(userId);
   let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2; // Default
   let selectedModelDetails = null;
+  let modelContextWindow = 8192; // Default context window
+
   if (prefs.selectedModel && client) {
     try {
       selectedModelDetails = await getModelDetails(client, prefs.selectedModel);
@@ -130,9 +132,20 @@ export async function buildInteractionComponents(
           `Model details for ${prefs.selectedModel}:`,
           selectedModelDetails
         );
-        if (selectedModelDetails.provider === "openrouter") {
-          effectiveMaxContext = 4 * 2; // 4 pairs for OpenRouter
-        }
+
+        // Get the actual context window from config
+        modelContextWindow =
+          CONFIG.modelContextWindows?.[prefs.selectedModel] ||
+          selectedModelDetails.capabilities?.maxContext ||
+          8192;
+
+        // Calculate effective max context based on token limit (rough estimate: 4 chars per token)
+        const maxTokens = modelContextWindow * 0.9; // 90% safety margin
+        effectiveMaxContext = Math.floor(maxTokens / 4); // Convert to characters
+
+        console.log(
+          `[DEBUG] Context window for ${prefs.selectedModel}: ${modelContextWindow} tokens, effective max: ${effectiveMaxContext} chars`
+        );
       } else {
         console.log(
           `No selected model details available for ${prefs.selectedModel}, disabling tools button`
@@ -253,19 +266,27 @@ export async function buildInteractionComponents(
       });
     }*/
 
-    // Clear context option
+    // Clear context option with token usage display
     const current = prefs.messageHistory.length;
+    const modelContextWindow =
+      CONFIG.modelContextWindows?.[prefs.selectedModel] ||
+      selectedModelDetails?.capabilities?.maxContext ||
+      8192;
+    const estimatedTokens = prefs.messageHistory.reduce((total, msg) => {
+      return total + (msg.content ? msg.content.length * 0.75 : 0); // Rough estimate: 0.75 tokens per character
+    }, 0);
+
     options.push({
       label: await i18n.__("events.ai.buttons.systemPrompt.clearContext", {
         current,
         max: effectiveMaxContext,
       }),
       value: "clear_context",
-      description:
-        (await i18n.__(
-          "events.ai.buttons.menus.settingsOptions.clearContext",
-          locale
-        )) || "Clear conversation history",
+      description: `Tokens: ${Math.round(
+        estimatedTokens
+      ).toLocaleString()} / ${modelContextWindow.toLocaleString()} (${Math.round(
+        (estimatedTokens / modelContextWindow) * 100
+      )}%)`,
       emoji: "🗑️",
       disabled: current === 0,
       default: false,
