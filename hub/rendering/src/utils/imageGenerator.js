@@ -11,7 +11,7 @@ import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
 
 // Load environment variables
-dotenv.config({ path: '../../.env' });
+dotenv.config({ path: "../../.env" });
 
 // Configure Bun's garbage collector if available
 if (typeof Bun !== "undefined" && Bun.gc) {
@@ -363,6 +363,8 @@ function processColors(dominantColorRgbArray, options = {}) {
     isDarkText,
     // Use adjusted secondary color for gradient
     backgroundGradient: `linear-gradient(${gradientAngle}deg, ${dominantColor}, ${secondaryColor})`,
+    dominantColor: dominantColor,
+    secondaryColor: secondaryColor,
     overlayBackground: isDarkText
       ? "rgba(0, 0, 0, 0.1)"
       : "rgba(255, 255, 255, 0.2)",
@@ -684,12 +686,12 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       formattedProps.debug = scaling.debug;
     }
     if (formattedProps.locale && i18n) {
-      if (typeof i18n.setLocale === 'function') {
+      if (typeof i18n.setLocale === "function") {
         i18n.setLocale(formattedProps.locale);
       }
       formattedProps.i18n = i18n;
       formattedProps.t = async (key) => {
-        if (typeof i18n.__ === 'function') {
+        if (typeof i18n.__ === "function") {
           return await i18n.__(`components.${component}.${key}`);
         }
         return key; // fallback to key if translation function not available

@@ -1,8 +1,6 @@
 import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
 
-
-
 const Balance = (props) => {
   const renderBanknotes = (
     amount,
@@ -211,6 +209,27 @@ const Balance = (props) => {
   const combinedBankBalanceProp = database?.combinedBankBalance;
   // --- End Marriage Check ---
 
+  // --- XP Data for Level Bars ---
+  // Use the pre-calculated level data from hubClient.calculateLevel (passed via levelProgress)
+  const chatLevelData = database?.levelProgress?.chat;
+  const gameLevelData = database?.levelProgress?.game;
+
+  // --- Level Data ---
+  const chattingLevel = chatLevelData?.level || 1;
+  const gamingLevel = gameLevelData?.level || 1;
+  const cachesCount = database?.caches?.count || 2;
+
+  console.log(chattingLevel, gamingLevel);
+
+  // Extract XP data for fill calculations (similar to Level2 component)
+  const chatFillRatio = chatLevelData
+    ? Math.min(chatLevelData.currentXP / chatLevelData.requiredXP, 1)
+    : 0;
+  const gameFillRatio = gameLevelData
+    ? Math.min(gameLevelData.currentXP / gameLevelData.requiredXP, 1)
+    : 0;
+  // --- End XP Data ---
+
   /*database.crypto2 = {};
   database.crypto2.openPositions = [
     {
@@ -225,8 +244,6 @@ const Balance = (props) => {
       stakeValue: 10,
     },
   ];*/
-
-
 
   const translations = Object.entries(Balance.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -280,6 +297,7 @@ const Balance = (props) => {
   const mainBackground = database?.bannerUrl
     ? "transparent"
     : backgroundGradient;
+
   return (
     <div
       style={{
@@ -296,10 +314,10 @@ const Balance = (props) => {
       }}
     >
       {/* Define wallet container bounds */}
-      {renderBanknotes(walletBalance, 95, 115, "banknotes", 50, 18, {
-        left: 20,
+      {renderBanknotes(walletBalance, 145, 115, "banknotes", 50, 18, {
+        left: 70,
         top: 45,
-        right: 180 + (visualwallet - 3) * 20,
+        right: 230 + (visualwallet - 3) * 20,
         bottom: 130,
         padding: 5,
       })}
@@ -344,7 +362,12 @@ const Balance = (props) => {
       >
         <div style={{ display: "flex" }}>
           <div
-            style={{ width: "260px", display: "flex", flexDirection: "column" }}
+            style={{
+              width: "260px",
+              display: "flex",
+              flexDirection: "column",
+              marginLeft: "0px",
+            }}
           >
             <div
               style={{
@@ -352,6 +375,7 @@ const Balance = (props) => {
                 flexDirection: "row",
                 alignItems: "center",
                 gap: "10px",
+                left: "1px",
               }}
             >
               <img
@@ -369,24 +393,40 @@ const Balance = (props) => {
                   margin: "0",
                   fontSize: "24px",
                   display: "flex",
+                  marginLeft: "10px",
                   color: textColor,
+                  alignItems: "center",
                 }}
               >
                 {translations.title}
+                <span
+                  style={{
+                    fontSize: "14px",
+                    opacity: "0.5",
+                    marginLeft: "8px",
+                    lineHeight: "24px",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {interaction?.user?.username ||
+                    interaction?.user?.displayName ||
+                    "{username}"}
+                </span>
               </h2>
             </div>
             {/* Define bank container bounds - use the amount used for visuals */}
             {renderBanknotes(
               visualBankBalanceAmount,
-              95,
+              150,
               161,
               "bars",
               100,
               18,
               {
-                left: 0,
+                left: 50,
                 top: 90,
-                right: 190 + (visualbank - 3) * 20,
+                right: 235 + (visualbank - 3) * 20,
                 bottom: 180,
                 padding: 5,
               }
@@ -397,6 +437,7 @@ const Balance = (props) => {
                 flexDirection: "column",
                 marginTop: "10px",
                 gap: "5px",
+                marginLeft: "45px",
               }}
             >
               <div
@@ -672,8 +713,8 @@ const Balance = (props) => {
           <div
             style={{
               display: "flex",
-              width: "110px",
-              height: "110px",
+              width: "90px",
+              height: "90px",
               borderRadius: "25px",
               overflow: "hidden",
               backgroundColor: "rgba(0, 0, 0, 0.3)",
@@ -697,52 +738,36 @@ const Balance = (props) => {
                   "https://cdn.discordapp.com/embed/avatars/0.png"
                 }
                 alt="User"
-                width="110"
-                height="110"
+                width="90"
+                height="90"
                 style={{
                   objectFit: "cover",
                   borderRadius: "25px",
+                  border: `1px solid ${coloring.overlayBackground}`,
                 }}
               />
             </div>
-          </div>
-          <div
-            style={{
-              position: "absolute",
-              display: "flex",
-              fontSize: "16px",
-              top: "120px",
-              right: "5px",
-              textAlign: "center",
-              color: textColor,
-              width: "110px",
-              justifyContent: "center",
-            }}
-          >
-            {interaction?.user?.username ||
-              interaction?.user?.displayName ||
-              "{username}"}
           </div>
 
           <div
             style={{
               position: "absolute",
               textAlign: "center",
-              top: "140px",
+              top: "98px",
               right: "5px",
               display: "flex",
               fontSize: "8px",
               opacity: "0.4",
               color: tertiaryTextColor,
-              width: "110px",
+              width: "90px",
               justifyContent: "center",
+              alignItems: "center",
+              height: "12px",
             }}
           >
             #{interaction?.user?.id || "{id}"}
           </div>
         </div>
-
-
       </div>
       <div
         style={{
@@ -755,6 +780,289 @@ const Balance = (props) => {
           right: "6%",
         }}
       ></div>
+      {/* Level Bars - Positioned on the left side */}
+      <div
+        style={{
+          position: "absolute",
+          left: "22px",
+          top: "59px",
+          width: "36px",
+          height: "156px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          zIndex: 1,
+        }}
+      >
+        {/* Hard-limited total height with proportional bar distribution */}
+        {(() => {
+          const maxLevel = Math.max(chattingLevel, gamingLevel, 1); // Ensure at least 1 to avoid division by zero
+          const totalMaxHeight = 152; // Hard limit for combined height of both bars
+          const minBarHeight = 55; // Minimum height for each bar
+
+          // Calculate level ratios
+          const chattingRatio = chattingLevel / maxLevel;
+          const gamingRatio = gamingLevel / maxLevel;
+
+          // Calculate ideal heights based on levels
+          const idealChattingHeight =
+            minBarHeight + (totalMaxHeight - minBarHeight * 2) * chattingRatio;
+          const idealGamingHeight =
+            minBarHeight + (totalMaxHeight - minBarHeight * 2) * gamingRatio;
+
+          // Ensure minimum heights and cap total
+          const totalIdealHeight = idealChattingHeight + idealGamingHeight;
+
+          if (totalIdealHeight <= totalMaxHeight) {
+            // If total fits within limit, use ideal heights
+            var chattingHeight = Math.max(minBarHeight, idealChattingHeight);
+            var gamingHeight = Math.max(minBarHeight, idealGamingHeight);
+          } else {
+            // If total exceeds limit, scale down proportionally
+            const scaleFactor = totalMaxHeight / totalIdealHeight;
+            var chattingHeight = Math.max(
+              minBarHeight,
+              idealChattingHeight * scaleFactor
+            );
+            var gamingHeight = Math.max(
+              minBarHeight,
+              idealGamingHeight * scaleFactor
+            );
+          }
+
+          return [
+            /* Chatting Level - Dynamic height */
+            <div
+              key="chatting-level"
+              style={{
+                width: "36px",
+                height: `${chattingHeight}px`,
+                backgroundColor: "rgba(146, 73, 189, 0.5)",
+                borderRadius: "10px 10px 0 0",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                paddingTop: "2px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "6px",
+                  color: secondaryTextColor,
+                  marginTop: "3px",
+                  textTransform: "uppercase",
+                  fontFamily: "Inter600",
+                  marginBottom: "2px",
+                  display: "flex",
+                }}
+              >
+                {translations.chatting || "ЧАТТИНГ"}
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: `${Math.max(0, chattingHeight * chatFillRatio)}px`, // XP-based fill height
+                  backgroundColor: "#bd4eff",
+                  position: "absolute",
+                  bottom: "0",
+                  left: "0",
+                  borderRadius: "0 0 0 0",
+                  display: "flex",
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "24px",
+                  color: textColor,
+                  fontFamily: "Inter600",
+                  position: "absolute",
+                  bottom: "8px",
+                  display: "flex",
+                  alignItems: "baseline",
+                }}
+              >
+                <span>{chattingLevel}</span>
+                <span
+                  style={{
+                    fontSize: "8px",
+                    marginLeft: "1px",
+                    top: "-3px",
+                  }}
+                >
+                  lvl
+                </span>
+              </div>
+            </div>,
+
+            /* Gaming Level - Dynamic height */
+            <div
+              key="gaming-level"
+              style={{
+                width: "36px",
+                height: `${gamingHeight}px`,
+                backgroundColor: "rgba(213, 86, 86, 0.5)",
+                borderRadius: "0 0 12px 12px",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                paddingTop: "2px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "6px",
+                  color: secondaryTextColor,
+                  marginTop: "3px",
+                  textTransform: "uppercase",
+                  fontFamily: "Inter600",
+                  marginBottom: "2px",
+                  display: "flex",
+                }}
+              >
+                {translations.gaming || "ГЕЙМИНГ"}
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: `${Math.max(0, gamingHeight * gameFillRatio)}px`, // XP-based fill height
+                  backgroundColor: "#d55656",
+                  position: "absolute",
+                  bottom: "0",
+                  left: "0",
+                  borderRadius: "0 0 12px 12px",
+                  display: "flex",
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "24px",
+                  color: textColor,
+                  fontFamily: "Inter600",
+                  position: "absolute",
+                  bottom: "12px",
+                  display: "flex",
+                  alignItems: "baseline",
+                }}
+              >
+                <span>{gamingLevel}</span>
+                <span
+                  style={{ fontSize: "8px", marginLeft: "1px", top: "-3px" }}
+                >
+                  lvl
+                </span>
+              </div>
+            </div>,
+          ];
+        })()}
+      </div>
+
+      {/*
+      <div
+        style={{
+          position: "absolute",
+          right: "20px",
+          top: "187px",
+          width: "63px",
+          height: "31px",
+          background: coloring.overlayBackground,
+          borderRadius: "10px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "6.5px",
+            top: "5.5px",
+            width: "19px",
+            height: "19px",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          📦
+        </div>
+        <div
+          style={{
+            fontSize: "20px",
+            color: textColor,
+            fontFamily: "Inter600",
+            marginLeft: "20px",
+            display: "flex",
+          }}
+        >
+          {cachesCount}
+        </div>
+      </div> WIP*/}
+
+      {/* Marriage Status - Repositioned to bottom area - moved right */}
+      <div
+        style={{
+          position: "absolute",
+          left: "80px",
+          top: "238px",
+          width: "171px",
+          height: "31px",
+          backgroundColor: "#bb3d36",
+          borderRadius: "0 0 10px 10px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "6px",
+            top: "6px",
+            width: "19.5px",
+            height: "19.5px",
+            fontSize: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          💍
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: "30px",
+            top: "6px",
+            width: "19px",
+            height: "19px",
+            backgroundColor: "#B1B2B5",
+            borderRadius: "50%",
+            display: "flex",
+          }}
+        />
+        <div
+          style={{
+            fontSize: "14px",
+            color: textColor,
+            fontWeight: "400",
+            fontFamily: "Inter, sans-serif",
+            marginLeft: "27px",
+            display: "flex",
+          }}
+        >
+          {isMarried && marriageCreatedAt
+            ? `${translations.married} (${prettyMilliseconds(
+                Date.now() - new Date(marriageCreatedAt).getTime()
+              )})`
+            : translations.married}
+        </div>
+      </div>
+
       {/* Render banknotes above the Balance rectangle */}
     </div>
   );
@@ -764,8 +1072,8 @@ const Balance = (props) => {
 Balance.dimensions = {
   width: 400,
   height: (props) => {
-    console.log("PROPS")
-    console.log(props)
+    console.log("PROPS");
+    console.log(props);
     const isMarried = props?.database?.marriageStatus?.status;
     return isMarried ? 260 : 235;
   },
@@ -804,7 +1112,16 @@ Balance.localization_strings = {
     ru: "ваши",
     uk: "ваші",
   },
-
+  chatting: {
+    en: "CHATTING",
+    ru: "ЧАТТИНГ",
+    uk: "ЧАТТІНГ",
+  },
+  gaming: {
+    en: "GAMING",
+    ru: "ГЕЙМИНГ",
+    uk: "ГЕЙМІНГ",
+  },
 };
 
 export default Balance;

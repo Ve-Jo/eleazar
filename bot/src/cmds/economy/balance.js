@@ -149,6 +149,22 @@ export default {
     }
     // --- End Fetch Partner Data ---
 
+    // --- Calculate Level Progress for XP Bars ---
+    let chatLevelData = null;
+    let gameLevelData = null;
+
+    if (userData.Level) {
+      // Calculate level progress using the same method as level.js
+      const chatXP = Number(userData.Level.xp || 0);
+      chatLevelData = hubClient.calculateLevel(chatXP);
+
+      const gameXP = Number(userData.Level.gameXp || 0);
+      gameLevelData = hubClient.calculateLevel(gameXP);
+    }
+    // --- End Calculate Level Progress ---
+
+    console.log(userData);
+
     const [buffer, dominantColor] = await generateImage(
       "Balance",
       {
@@ -175,6 +191,11 @@ export default {
         returnDominant: true,
         database: {
           ...userData,
+          // Add XP data for level bars
+          levelProgress: {
+            chat: chatLevelData,
+            game: gameLevelData,
+          },
           // partnerData: partnerData // Pass partner data if needed by image gen
         },
       },
