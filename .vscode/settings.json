@@ -1,1 +1,28 @@
-{}
+{
+  "folder-customization.folders": [
+    {
+      "path": "eleazar/bot/",
+      "color": "foldercustomization.AnsiColor195"
+    },
+    {
+      "path": "eleazar/hub/",
+      "color": "foldercustomization.AnsiColor210"
+    },
+    {
+      "path": "eleazar/bot/src/cmds/",
+      "color": "foldercustomization.AnsiColor22"
+    },
+    {
+      "path": "eleazar/bot/src/events/",
+      "color": "foldercustomization.AnsiColor220"
+    },
+    {
+      "path": "eleazar/bot/src/render-server/components/",
+      "color": "foldercustomization.AnsiColor53"
+    },
+    {
+      "path": "eleazar/bot/src/utils/",
+      "color": "foldercustomization.AnsiColor32"
+    }
+  ]
+}

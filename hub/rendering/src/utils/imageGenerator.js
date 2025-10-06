@@ -22,6 +22,7 @@ if (typeof Bun !== "undefined" && Bun.gc) {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const TEMP_DIR = join(__dirname, "..", "temp");
+const EMOJI_DIR = join(TEMP_DIR, "emoji");
 const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5MB limit
 const BANNER_TIMEOUT = 5000; // 5 seconds
 
@@ -60,6 +61,13 @@ export async function ensureTempDir() {
     await fs.stat(TEMP_DIR);
   } catch {
     await fs.mkdir(TEMP_DIR, { recursive: true });
+  }
+
+  // Ensure emoji directory exists
+  try {
+    await fs.stat(EMOJI_DIR);
+  } catch {
+    await fs.mkdir(EMOJI_DIR, { recursive: true });
   }
 }
 
@@ -103,7 +111,7 @@ function manageColorCache() {
   }
 }
 
-// Enhanced emoji handling with proper resource cleanup
+// Enhanced emoji handling with proper resource cleanup and file storage
 export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
   // Handle undefined/null emoji
   if (!emoji) return null;
@@ -114,9 +122,25 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
   // Validate scaling factor
   const validatedScaling = Math.min(Math.max(emojiScaling, 0.5), 3);
   const cacheKey = `${emojiCode}-${validatedScaling}`;
+  const emojiFileName = `${emojiCode}-${validatedScaling}.png`;
+  const emojiFilePath = join(EMOJI_DIR, emojiFileName);
 
+  // Check in-memory cache first
   if (emojiCache.has(cacheKey)) {
     return emojiCache.get(cacheKey);
+  }
+
+  // Check if emoji file exists on disk
+  try {
+    await fs.stat(emojiFilePath);
+    // File exists, read it and add to cache
+    const fileBuffer = await fs.readFile(emojiFilePath);
+    const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+    emojiCache.set(cacheKey, base64);
+    return base64;
+  } catch (fileError) {
+    // File doesn't exist, continue with fetching
+    console.log(`Emoji file not found, fetching from CDN: ${emojiFileName}`);
   }
 
   try {
@@ -152,6 +176,7 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
     let resvg = null;
     let pngData = null;
     let base64 = null;
+    let pngBuffer = null;
 
     try {
       resvg = new Resvg(scaledSvg, {
@@ -161,7 +186,7 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
         },
       });
       pngData = resvg.render();
-      const pngBuffer = pngData.asPng();
+      pngBuffer = pngData.asPng();
 
       base64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
     } catch (error) {
@@ -171,6 +196,17 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
       // Ensure resources are freed even if there's an error
       if (pngData) pngData.free?.();
       if (resvg) resvg.free?.();
+    }
+
+    // Save emoji to disk for future use
+    if (pngBuffer) {
+      try {
+        await fs.writeFile(emojiFilePath, pngBuffer);
+        console.log(`Saved emoji to disk: ${emojiFileName}`);
+      } catch (saveError) {
+        console.warn(`Failed to save emoji to disk: ${saveError.message}`);
+        // Continue even if save fails - we still have the base64
+      }
     }
 
     if (emojiCache.size > 100) {
@@ -258,42 +294,172 @@ function rgbToDiscordColor(r, g, b) {
   return "#" + hexValue.padStart(6, "0");
 }
 
-// Color processing utilities
-function rgbToHsl(r, g, b) {
-  // Validate RGB values
-  if (!validateRGB(r, g, b)) {
-    console.error("Invalid RGB values:", { r, g, b });
-    return [0, 0, 0]; // Return black as fallback
+// LAB color space utilities for perceptually uniform color processing
+function rgbToXyz(r, g, b) {
+  // Convert RGB to XYZ color space
+  r = r / 255;
+  g = g / 255;
+  b = b / 255;
+
+  // Apply gamma correction
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+  // Convert to XYZ using sRGB matrix
+  const x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+  const y = r * 0.2126729 + g * 0.7151522 + b * 0.072175;
+  const z = r * 0.0193339 + g * 0.119192 + b * 0.9503041;
+
+  return [x, y, z];
+}
+
+function xyzToLab(x, y, z) {
+  // Normalize by D65 illuminant
+  x = x / 0.95047;
+  y = y / 1.0;
+  z = z / 1.08883;
+
+  // Apply non-linear transformation
+  x = x > 0.008856 ? Math.pow(x, 1 / 3) : 7.787 * x + 16 / 116;
+  y = y > 0.008856 ? Math.pow(y, 1 / 3) : 7.787 * y + 16 / 116;
+  z = z > 0.008856 ? Math.pow(z, 1 / 3) : 7.787 * z + 16 / 116;
+
+  const l = 116 * y - 16;
+  const a = 500 * (x - y);
+  const b = 200 * (y - z);
+
+  return [l, a, b];
+}
+
+function labToXyz(l, a, b) {
+  // Convert LAB back to XYZ
+  let y = (l + 16) / 116;
+  let x = a / 500 + y;
+  let z = y - b / 200;
+
+  // Reverse non-linear transformation
+  x = x * x * x > 0.008856 ? x * x * x : (x - 16 / 116) / 7.787;
+  y = y * y * y > 0.008856 ? y * y * y : (y - 16 / 116) / 7.787;
+  z = z * z * z > 0.008856 ? z * z * z : (z - 16 / 116) / 7.787;
+
+  // Denormalize
+  x = x * 0.95047;
+  y = y * 1.0;
+  z = z * 1.08883;
+
+  return [x, y, z];
+}
+
+function xyzToRgb(x, y, z) {
+  // Convert XYZ to RGB using inverse sRGB matrix
+  let r = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
+  let g = x * -0.969266 + y * 1.8760108 + z * 0.041556;
+  let b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
+
+  // Apply inverse gamma correction
+  r = r > 0.0031308 ? 1.055 * Math.pow(r, 1 / 2.4) - 0.055 : 12.92 * r;
+  g = g > 0.0031308 ? 1.055 * Math.pow(g, 1 / 2.4) - 0.055 : 12.92 * g;
+  b = b > 0.0031308 ? 1.055 * Math.pow(b, 1 / 2.4) - 0.055 : 12.92 * b;
+
+  // Clamp to valid RGB range
+  r = Math.max(0, Math.min(1, r));
+  g = Math.max(0, Math.min(1, g));
+  b = Math.max(0, Math.min(1, b));
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+function rgbToLab(r, g, b) {
+  const [x, y, z] = rgbToXyz(r, g, b);
+  return xyzToLab(x, y, z);
+}
+
+function labToRgb(l, a, b) {
+  const [x, y, z] = labToXyz(l, a, b);
+  return xyzToRgb(x, y, z);
+}
+
+// Ultra-strict color enhancement algorithm - preserves pure whites and blacks
+function enhanceColorSaturation(r, g, b) {
+  // Ultra-strict handling for pure white - return exact white
+  if (r >= 252 && g >= 252 && b >= 252) {
+    return { r: 255, g: 255, b: 255 };
   }
 
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b),
-    min = Math.min(r, g, b);
-  let h,
-    s,
-    l = (max + min) / 2;
+  // Ultra-strict handling for pure black - return exact black
+  if (r <= 8 && g <= 8 && b <= 8) {
+    return { r: 0, g: 0, b: 0 };
+  }
 
-  if (max === min) {
-    h = s = 0;
+  // Strict handling for near-white colors - minimal processing
+  const isNearWhite = r > 245 && g > 245 && b > 245;
+  if (isNearWhite) {
+    // Use average to maintain neutral white, minimal adjustment
+    const avg = Math.round((r + g + b) / 3);
+    return {
+      r: Math.min(255, avg + 1),
+      g: Math.min(255, avg + 1),
+      b: Math.min(255, avg + 1),
+    };
+  }
+
+  // Strict handling for near-black colors - minimal processing
+  const isNearBlack = r < 20 && g < 20 && b < 20;
+  if (isNearBlack) {
+    // Use average to maintain neutral black, minimal adjustment
+    const avg = Math.round((r + g + b) / 3);
+    return {
+      r: Math.max(0, avg - 1),
+      g: Math.max(0, avg - 1),
+      b: Math.max(0, avg - 1),
+    };
+  }
+
+  // For all other colors, use minimal LAB processing
+  const [l, a, b_lab] = rgbToLab(r, g, b);
+
+  // Ultra-subtle lightness adjustment
+  let enhancedL = l;
+  let enhancedA = a;
+  let enhancedB_lab = b_lab;
+
+  if (l > 50) {
+    enhancedL = Math.min(98, l + 2); // Very slight lightening
   } else {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0);
-        break;
-      case g:
-        h = (b - r) / d + 2;
-        break;
-      case b:
-        h = (r - g) / d + 4;
-        break;
-    }
-    h /= 6;
+    enhancedL = Math.max(2, l - 2); // Very slight darkening
   }
-  return [h, s, l];
+
+  // Ultra-conservative chroma handling
+  const chroma = Math.sqrt(a * a + b_lab * b_lab);
+  if (chroma > 15) {
+    // Only for clearly colored content
+    const chromaBoost = 1.02; // 2% boost maximum
+    enhancedA = a * chromaBoost;
+    enhancedB_lab = b_lab * chromaBoost;
+
+    // Strict limits to prevent color casts
+    const maxChroma = 25; // Very conservative
+    const currentChroma = Math.sqrt(
+      enhancedA * enhancedA + enhancedB_lab * enhancedB_lab
+    );
+    if (currentChroma > maxChroma) {
+      const scale = maxChroma / currentChroma;
+      enhancedA *= scale;
+      enhancedB_lab *= scale;
+    }
+  } else {
+    // For near-grays, reduce chroma to prevent casts
+    enhancedA = a * 0.95;
+    enhancedB_lab = b_lab * 0.95;
+  }
+
+  const [enhancedR, enhancedG, enhancedB] = labToRgb(
+    enhancedL,
+    enhancedA,
+    enhancedB_lab
+  );
+  return { r: enhancedR, g: enhancedG, b: enhancedB };
 }
 
 function getLuminance(r, g, b) {
@@ -304,7 +470,7 @@ function getLuminance(r, g, b) {
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
 }
 
-// Updated processColors - minor tweaks for clarity
+// Softer processColors - reduced intensity for more pleasant color schemes
 function processColors(dominantColorRgbArray, options = {}) {
   const { gradientAngle = Math.floor(Math.random() * 360) } = options;
 
@@ -321,35 +487,52 @@ function processColors(dominantColorRgbArray, options = {}) {
   }
 
   const [r, g, b] = dominantColorRgbArray;
-  const dominantColor = `rgb(${r}, ${g}, ${b})`; // Keep rgb string for gradient
-  const luminance = getLuminance(r, g, b);
+
+  // Enhance saturation and contrast of the dominant color (now softer)
+  const enhancedRgb = enhanceColorSaturation(r, g, b);
+  const enhancedColor = `rgb(${enhancedRgb.r}, ${enhancedRgb.g}, ${enhancedRgb.b})`;
+
+  const luminance = getLuminance(enhancedRgb.r, enhancedRgb.g, enhancedRgb.b);
   const isDarkText = luminance > 0.5;
 
-  // Generate secondary color based on HSL adjustments (similar logic as before)
-  const primaryHsl = rgbToHsl(r, g, b);
-  const secondaryHSL = [...primaryHsl];
-  secondaryHSL[1] = Math.max(0.1, primaryHsl[1] * 0.9); // Slightly desaturate
-  secondaryHSL[2] = Math.max(
-    0.15,
-    Math.min(0.85, primaryHsl[2] * (primaryHsl[2] > 0.5 ? 0.9 : 1.1))
-  ); // Adjust lightness
+  // Generate secondary color using LAB color space for harmonious variations
+  const [primaryL, primaryA, primaryB] = rgbToLab(
+    enhancedRgb.r,
+    enhancedRgb.g,
+    enhancedRgb.b
+  );
 
-  const hueToRgb = (p, q, t) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
+  // Create harmonious variations in LAB space
+  let secondaryL = primaryL;
+  let secondaryA = primaryA;
+  let secondaryB_lab = primaryB;
 
-  const [h, s, l] = secondaryHSL;
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
+  // Subtle lightness variation (complementary lightness)
+  if (primaryL > 50) {
+    secondaryL = Math.max(20, primaryL - 15); // Make secondary slightly darker
+  } else {
+    secondaryL = Math.min(80, primaryL + 15); // Make secondary slightly lighter
+  }
 
-  const secondaryR = Math.round(hueToRgb(p, q, h + 1 / 3) * 255);
-  const secondaryG = Math.round(hueToRgb(p, q, h) * 255);
-  const secondaryB = Math.round(hueToRgb(p, q, h - 1 / 3) * 255);
+  // Gentle chroma variation - create subtle color harmony
+  const primaryChroma = Math.sqrt(primaryA * primaryA + primaryB * primaryB);
+  if (primaryChroma > 5) {
+    // Only if there's noticeable color
+    // Rotate the color slightly in LAB space for harmony
+    const angle = Math.atan2(primaryB, primaryA);
+    const newAngle = angle + Math.PI / 6; // 30 degree rotation for harmony
+    const newChroma = primaryChroma * 0.9; // Slightly reduce chroma for softness
+
+    secondaryA = Math.cos(newAngle) * newChroma;
+    secondaryB_lab = Math.sin(newAngle) * newChroma;
+  }
+
+  // Convert secondary LAB back to RGB
+  const [secondaryR, secondaryG, secondaryB] = labToRgb(
+    secondaryL,
+    secondaryA,
+    secondaryB_lab
+  );
   const secondaryColor = `rgb(${secondaryR}, ${secondaryG}, ${secondaryB})`;
 
   return {
@@ -361,14 +544,14 @@ function processColors(dominantColorRgbArray, options = {}) {
       ? "rgba(0, 0, 0, 0.4)"
       : "rgba(255, 255, 255, 0.4)",
     isDarkText,
-    // Use adjusted secondary color for gradient
-    backgroundGradient: `linear-gradient(${gradientAngle}deg, ${dominantColor}, ${secondaryColor})`,
-    dominantColor: dominantColor,
+    // Use enhanced colors for gradient
+    backgroundGradient: `linear-gradient(${gradientAngle}deg, ${enhancedColor}, ${secondaryColor})`,
+    dominantColor: enhancedColor,
     secondaryColor: secondaryColor,
     overlayBackground: isDarkText
       ? "rgba(0, 0, 0, 0.1)"
       : "rgba(255, 255, 255, 0.2)",
-    embedColor: rgbToDiscordColor(r, g, b), // Embed color based on primary dominant
+    embedColor: rgbToDiscordColor(enhancedRgb.r, enhancedRgb.g, enhancedRgb.b), // Embed color based on enhanced dominant
   };
 }
 
@@ -714,9 +897,12 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
         fonts,
         debug: scaling.debug,
         loadAdditionalAsset: async (code, segment) => {
-          if (code === "emoji")
+          if (code === "emoji") {
             return await fetchEmojiSvg(segment, scaling.emoji);
-          if (code === "image") return await loadImageAsset(segment);
+          }
+          if (code === "image") {
+            return await loadImageAsset(segment);
+          }
           return null;
         },
       });
@@ -746,36 +932,29 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       }
     }
 
-    // --- Image Output Generation (e.g., AVIF) ---
-    try {
-      if (!svg || typeof svg !== "string") {
-        throw new Error("Invalid SVG generated by satori");
-      }
-      pngBuffer = await sharp(Buffer.from(svg))
-        .resize(
-          Math.round(dimensions.width * scaling.image),
-          Math.round(dimensions.height * scaling.image)
-        )
-        .avif({
-          quality: 70,
-          chromaSubsampling: "4:2:0",
-          effort: 0,
-        })
-        .toBuffer();
-      console.log(
-        "AVIF Buffer created via sharp:",
-        pngBuffer?.length ?? 0,
-        "bytes"
-      );
-    } catch (sharpError) {
-      console.error("Sharp AVIF conversion failed:", sharpError);
-      throw sharpError;
-    } finally {
-      svg = null; // Release SVG memory
-    }
+    const resvg = new Resvg(svg, {
+      fitTo: {
+        mode: "width",
+        value: Math.round(dimensions.width * scaling.image),
+      },
+      background: "transparent",
+      shapeRendering: 2,
+      textRendering: 2,
+      imageRendering: 1,
+    });
+
+    const pngData = resvg.render();
+    pngBuffer = pngData.asPng();
+
+    console.log(
+      "PNG Buffer created via resvg-js:",
+      pngBuffer?.length ?? 0,
+      "bytes"
+    );
+    console.timeEnd("resvg-js rendering");
 
     // Return final result
-    const finalBuffer = Buffer.from(pngBuffer); // Ensure it's a Buffer
+    const finalBuffer = pngBuffer;
     console.log(
       ">>> DEBUG: In performActualGenerationLogic - props.returnDominant:",
       props.returnDominant
