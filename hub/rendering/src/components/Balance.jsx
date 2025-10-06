@@ -272,6 +272,76 @@ const Balance = (props) => {
   const individualBankBalance = database?.individualBankBalance // Get individual balance prop
     ? new Decimal(database.individualBankBalance)
     : new Decimal(0);
+
+  // Calculate optimal container width based on both bank and annual rate content
+  const calculateOptimalWidth = () => {
+    // Base width for minimum content - increased to prevent emoji overlap
+    const baseWidth = 125;
+    const maxWidth = 350;
+
+    // Calculate bank content width needs - enhanced to prevent left-side overflow
+    const bankBalanceLength = bankBalanceForDisplay.toFixed(2).length;
+    const bankLabelLength = translations.bank.length;
+
+    // Enhanced width calculation to prevent overlap with emoji
+    let bankContentWidth = baseWidth;
+
+    // Handle very large balances that push into emoji area
+    if (bankBalanceLength > 10) {
+      // Very large balances (e.g., 1234567890.12) need significant extra space
+      bankContentWidth = baseWidth + (bankBalanceLength - 10) * 18; // Increased scaling
+    } else if (bankBalanceLength > 8) {
+      // Large balances (e.g., 12345678.90) need substantial extra space
+      bankContentWidth = baseWidth + (bankBalanceLength - 8) * 15;
+    } else if (bankBalanceLength > 6) {
+      // Medium-large balances (e.g., 123456.78) need moderate extra space
+      bankContentWidth = baseWidth + (bankBalanceLength - 6) * 12;
+    }
+
+    if (bankLabelLength > 4) {
+      // Longer labels need more space (e.g., "BANK" vs "БАНК")
+      bankContentWidth += (bankLabelLength - 4) * 8;
+    }
+
+    // Add substantial space for emoji (24px) + margins (30px total) + internal spacing (40px)
+    // Increased from 40 to 94 to prevent overlap with emoji area
+    bankContentWidth += 84;
+
+    // Calculate annual rate content width needs - enhanced approach
+    let annualContentWidth = baseWidth;
+    if (bankStartTime > 0 && bankRate > 0) {
+      const timeText = prettyMilliseconds(Date.now() - Number(bankStartTime), {
+        colonNotation: true,
+        secondsDecimalDigits: 0,
+      });
+      const annualTextLength =
+        `${bankRate}% ${translations.annual} (${timeText})`.length;
+
+      // Enhanced calculation for annual rate text with better scaling
+      if (annualTextLength > 35) {
+        // Very long annual rate text - increased scaling
+        annualContentWidth = baseWidth + (annualTextLength - 35) * 10;
+      } else if (annualTextLength > 30) {
+        // Long annual rate text - increased scaling
+        annualContentWidth = baseWidth + (annualTextLength - 30) * 8;
+      } else if (annualTextLength > 25) {
+        // Medium-long annual rate text
+        annualContentWidth = baseWidth + (annualTextLength - 25) * 6;
+      }
+      // Add increased space for padding and margins (from 30 to 50)
+      annualContentWidth += 50;
+    }
+
+    // Return the maximum width needed for both containers, but cap at maxWidth
+    const optimalWidth = Math.max(
+      bankContentWidth,
+      annualContentWidth,
+      baseWidth
+    );
+    return Math.min(optimalWidth, maxWidth);
+  };
+
+  const optimalWidth = calculateOptimalWidth();
   // --- Use props passed from balance.js ---
   const partnerAvatarUrl =
     database?.partnerAvatarUrl ||
@@ -315,9 +385,9 @@ const Balance = (props) => {
     >
       {/* Define wallet container bounds */}
       {renderBanknotes(walletBalance, 145, 115, "banknotes", 50, 18, {
-        left: 70,
+        left: 60,
         top: 45,
-        right: 230 + (visualwallet - 3) * 20,
+        right: 220 + (visualwallet - 3) * 20,
         bottom: 130,
         padding: 5,
       })}
@@ -418,15 +488,15 @@ const Balance = (props) => {
             {/* Define bank container bounds - use the amount used for visuals */}
             {renderBanknotes(
               visualBankBalanceAmount,
-              150,
+              145,
               161,
               "bars",
               100,
               18,
               {
-                left: 50,
+                left: 40,
                 top: 90,
-                right: 235 + (visualbank - 3) * 20,
+                right: 255 + (visualbank - 3) * 5,
                 bottom: 180,
                 padding: 5,
               }
@@ -437,7 +507,7 @@ const Balance = (props) => {
                 flexDirection: "column",
                 marginTop: "10px",
                 gap: "5px",
-                marginLeft: "45px",
+                marginLeft: "42px",
               }}
             >
               <div
@@ -498,7 +568,7 @@ const Balance = (props) => {
                   backgroundColor: overlayBackground,
                   borderRadius:
                     bankStartTime > 0 && bankRate > 0
-                      ? "0 10px 10px 0"
+                      ? "0 10px 0px 0"
                       : "0 10px 10px 10px",
                   padding: "5px 15px",
                   alignItems: "center",
@@ -507,6 +577,8 @@ const Balance = (props) => {
                   maxWidth: "300px",
                   position: "relative", // Added for proper positioning context
                   overflow: "hidden", // Added to clip overflowing banknotes
+                  boxSizing: "border-box", // Ensure padding is included in width calculation
+                  width: `${optimalWidth}px`, // Dynamic width based on content
                 }}
               >
                 <div
@@ -518,7 +590,12 @@ const Balance = (props) => {
                 >
                   💳
                 </div>
-                <div style={{ display: "flex", flexDirection: "column" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
@@ -629,23 +706,50 @@ const Balance = (props) => {
                       : "rgba(255, 166, 0, 1)",
                     color: coloring?.isDarkText ? "#000" : "#FFF",
                     borderRadius: isMarried
-                      ? "0 10px 10px 0"
-                      : "0 10px 10px 10px",
+                      ? "0 0px 10px 0"
+                      : "0 0px 10px 10px",
                     padding: "5px 15px",
                     marginTop: "-5px",
                     alignItems: "center",
                     alignSelf: "flex-start",
-                    minWidth: "150px",
-                    maxWidth: "300px",
+                    width: `${optimalWidth}px`, // Dynamic width to match bank container
+                    position: "relative", // Match bank container
+                    overflow: "hidden", // Match bank container
+                    boxSizing: "border-box", // Ensure padding is included in width calculation
                   }}
                 >
                   <div
                     style={{
                       display: "flex",
-                      fontSize: "14px",
+                      width: "100%", // Take full width of container
+                      fontSize: (() => {
+                        // Calculate dynamic font size based on text length for Satori
+                        const timeText = prettyMilliseconds(
+                          Date.now() - Number(bankStartTime),
+                          {
+                            colonNotation: true,
+                            secondsDecimalDigits: 0,
+                          }
+                        );
+                        const annualText = `${
+                          bankRate || "{holdingPercentage}"
+                        }% ${translations.annual} (${timeText})`;
+                        const textLength = annualText.length;
+
+                        // Scale font size based on text length (shorter text = larger font)
+                        // These thresholds work well for the 150px min width
+                        if (textLength <= 22) return "14px";
+                        if (textLength <= 26) return "13px";
+                        if (textLength <= 30) return "12px";
+                        if (textLength <= 34) return "11px";
+                        return "10px"; // Minimum font size for very long text
+                      })(),
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
+                      justifyContent: "center", // Center the text
+                      alignItems: "center", // Ensure vertical centering consistency
+                      boxSizing: "border-box", // Include padding in width calculation
                     }}
                   >
                     {bankRate || "{holdingPercentage}"}
@@ -797,7 +901,7 @@ const Balance = (props) => {
         {/* Hard-limited total height with proportional bar distribution */}
         {(() => {
           const maxLevel = Math.max(chattingLevel, gamingLevel, 1); // Ensure at least 1 to avoid division by zero
-          const totalMaxHeight = 152; // Hard limit for combined height of both bars
+          const totalMaxHeight = 147; // Hard limit for combined height of both bars
           const minBarHeight = 55; // Minimum height for each bar
 
           // Calculate level ratios
