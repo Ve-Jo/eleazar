@@ -7,3 +7,5 @@ chrome/*
 temp/*
 **/bun.lockb
 **/bun.lock
+
+**/temp/emoji/*
