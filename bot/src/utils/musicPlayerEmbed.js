@@ -263,7 +263,7 @@ export async function createOrUpdateMusicPlayerEmbed(
   }
 
   const attachment = new AttachmentBuilder(lastGeneratedImage.buffer, {
-    name: `musicplayer.avif`,
+    name: `musicplayer.png`,
   });
 
   // Create the main component using ComponentBuilder

@@ -555,7 +555,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: `commands.avif`,
+        name: `commands.png`,
       });
 
       return [attachment, dominantColor];
@@ -574,7 +574,7 @@ export default {
           await getTranslation("commands.help.commands.title"),
           "header3"
         )
-        .addImage("attachment://commands.avif");
+        .addImage("attachment://commands.png");
 
       // Only add interactive components if not disabled
       if (!disableInteractions) {

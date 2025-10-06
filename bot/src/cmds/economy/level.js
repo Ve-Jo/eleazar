@@ -203,7 +203,7 @@ export default {
       }
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `level.avif`,
+        name: `level.png`,
       });
 
       // Use the new ComponentBuilder with automatic color handling
@@ -212,7 +212,7 @@ export default {
         mode: builderMode,
       })
         .addText(await i18n.__("commands.economy.level.title"), "header3")
-        .addImage("attachment://level.avif")
+        .addImage("attachment://level.png")
         .addTimestamp(interaction.locale);
 
       // Prepare the reply options using the builder

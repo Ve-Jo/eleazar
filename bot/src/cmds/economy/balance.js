@@ -199,7 +199,7 @@ export default {
           // partnerData: partnerData // Pass partner data if needed by image gen
         },
       },
-      { image: 2, emoji: 1 },
+      { image: 2, emoji: 2 },
       i18n
     );
 
@@ -218,7 +218,7 @@ export default {
     }
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: `balance.avif`,
+      name: `balance.png`,
     });
 
     // Use the new ComponentBuilder
@@ -227,7 +227,7 @@ export default {
       mode: builderMode, // Pass the determined mode
     })
       .addText(await i18n.__("commands.economy.balance.title"), "header3")
-      .addImage("attachment://balance.avif")
+      .addImage("attachment://balance.png")
       .addTimestamp(interaction.locale);
 
     // Prepare reply options using the builder

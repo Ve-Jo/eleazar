@@ -243,7 +243,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `transfer_receipt.avif`,
+        name: `transfer_receipt.png`,
       });
 
       const transferComponent = new ComponentBuilder({
@@ -251,7 +251,7 @@ export default {
         mode: builderMode,
       })
         .addText(await i18n.__("commands.economy.transfer.title"), "header3")
-        .addImage("attachment://transfer_receipt.avif")
+        .addImage("attachment://transfer_receipt.png")
         .addTimestamp(interaction.locale);
 
       // Prepare reply options
