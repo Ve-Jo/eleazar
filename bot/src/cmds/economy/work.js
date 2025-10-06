@@ -370,7 +370,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `work_games.png`,
+          name: `work_games.avif`,
         });
 
         // Create game launcher component
@@ -380,7 +380,7 @@ export default {
         })
           .setColor(dominantColor?.embedColor)
           .addText(await i18n.__(`commands.economy.work.title`), "header3")
-          .addImage(`attachment://work_games.png`);
+          .addImage(`attachment://work_games.avif`);
 
         // Create category select menu
         const selectMenu = new StringSelectMenuBuilder()

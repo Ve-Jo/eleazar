@@ -247,7 +247,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `withdraw_receipt.png`,
+        name: `withdraw_receipt.avif`,
       });
 
       const receiptComponent = new ComponentBuilder({
@@ -255,7 +255,7 @@ export default {
         mode: builderMode,
       })
         .addText(await i18n.__("commands.economy.withdraw.title"), "header3")
-        .addImage("attachment://withdraw_receipt.png")
+        .addImage("attachment://withdraw_receipt.avif")
         .addTimestamp(interaction.locale);
 
       const replyOptions = receiptComponent.toReplyOptions({

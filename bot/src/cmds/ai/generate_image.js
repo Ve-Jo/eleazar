@@ -282,7 +282,7 @@ export default {
 
       // Create attachment and send result
       const attachment = new AttachmentBuilder(imageBuffer).setName(
-        "generated_image.png"
+        "generated_image.avif"
       );
 
       const responseContent = await i18n.__(

@@ -277,7 +277,7 @@ export default {
 
         if (previewBuffer) {
           const previewAttachment = new AttachmentBuilder(previewBuffer, {
-            name: `banner_preview.png`,
+            name: `banner_preview.avif`,
           });
 
           const successComponent = new ComponentBuilder({

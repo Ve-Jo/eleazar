@@ -260,7 +260,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: `deposit_receipt.png`,
+        name: `deposit_receipt.avif`,
       });
 
       const receiptComponent = new ComponentBuilder({
@@ -273,7 +273,7 @@ export default {
             amount: amountToDeposit.toFixed(2),
           })
         )
-        .addImage("attachment://deposit_receipt.png")
+        .addImage("attachment://deposit_receipt.avif")
         .addTimestamp(interaction.locale);
 
       const replyOptions = receiptComponent.toReplyOptions({

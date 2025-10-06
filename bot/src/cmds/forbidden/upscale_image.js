@@ -222,7 +222,7 @@ export default {
       // Send the result
       const resultAttachment = new AttachmentBuilder(
         Buffer.from(upscaledImageBuffer)
-      ).setName("upscaled_image.png");
+      ).setName("upscaled_image.avif");
 
       await interaction.editReply({
         content: await i18n.__("success"),

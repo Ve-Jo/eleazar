@@ -367,7 +367,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `shop_upgrades.png`,
+          name: `shop_upgrades.avif`,
         });
 
         console.log(upgradeInfo);
@@ -383,7 +383,7 @@ export default {
               balance: Math.round(Number(userData.economy?.balance || 0)),
             })
           )
-          .addImage(`attachment://shop_upgrades.png`);
+          .addImage(`attachment://shop_upgrades.avif`);
 
         // Create selection menu for switching upgrades
         const selectMenu = new StringSelectMenuBuilder()

@@ -145,7 +145,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime_cooldown.png`,
+          name: `crime_cooldown.avif`,
         });
 
         // Create cooldown component
@@ -155,7 +155,7 @@ export default {
         })
           .addText(await i18n.__("commands.economy.crime.title"), "header3")
           .addText(await i18n.__("commands.economy.crime.cooldown"))
-          .addImage("attachment://crime_cooldown.png");
+          .addImage("attachment://crime_cooldown.avif");
 
         return interaction.editReply({
           ...cooldownComponent.toReplyOptions({ files: [attachment] }),
@@ -346,7 +346,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `crime_result.png`,
+          name: `crime_result.avif`,
         });
 
         // Create result component
@@ -363,7 +363,7 @@ export default {
                 })
               : await i18n.__("commands.economy.crime.failTarget", { amount })
           )
-          .addImage(`attachment://crime_result.png`);
+          .addImage(`attachment://crime_result.avif`);
 
         // Final reply logic for normal context (updates the message with results)
         const resultOptions = resultComponent.toReplyOptions({

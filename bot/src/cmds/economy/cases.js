@@ -257,7 +257,7 @@ export default {
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "crates.png",
+        name: "crates.avif",
       });
 
       const cratesComponent = new ComponentBuilder({
@@ -270,7 +270,7 @@ export default {
             balance: Math.round(Number(userData.economy?.balance || 0)),
           })
         )
-        .addImage("attachment://crates.png");
+        .addImage("attachment://crates.avif");
 
       if (!disableInteractions) {
         const selectMenu = await this.createSelectMenu(
@@ -598,13 +598,13 @@ export default {
     );
 
     const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-      name: "reward.png",
+      name: "reward.avif",
     });
 
     const rewardComponent = new ComponentBuilder({
       dominantColor,
       mode: builderMode,
-    }).addImage("attachment://reward.png");
+    }).addImage("attachment://reward.avif");
 
     const backButton = new ButtonBuilder()
       .setCustomId("back_to_crates")

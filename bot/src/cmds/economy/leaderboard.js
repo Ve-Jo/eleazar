@@ -348,7 +348,7 @@ export default {
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: `leaderboard.png`,
+          name: `leaderboard.avif`,
         });
 
         // Create leaderboard component builder now that we have users and the dominant color
@@ -363,7 +363,7 @@ export default {
             await i18n.__(`commands.economy.leaderboard.title`),
             "header3"
           )
-          .addImage(`attachment://leaderboard.png`);
+          .addImage(`attachment://leaderboard.avif`);
 
         // Add navigation buttons using the builder's method (already created earlier)
         leaderboardComponent.addButtons(prevButton, nextButton);
