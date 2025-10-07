@@ -1,16 +1,16 @@
-import express from 'express';
-import { generateImage, processImageColors } from './utils/imageGenerator.js';
-import { fileURLToPath } from 'url';
-import path from 'path';
-import fs from 'fs/promises';
-import { watch } from 'fs';
-import React from 'react';
-import { WebSocketServer } from 'ws';
+import express from "express";
+import { generateImage, processImageColors } from "./utils/imageGenerator.js";
+import { fileURLToPath } from "url";
+import path from "path";
+import fs from "fs/promises";
+import { watch } from "fs";
+import React from "react";
+import { WebSocketServer } from "ws";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const COMPONENTS_DIR = path.join(__dirname, 'components');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const COMPONENTS_DIR = path.join(__dirname, "components");
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 const app = express();
 
@@ -36,12 +36,12 @@ async function watchComponents() {
 
     const watcher = watch(absolutePath, { recursive: true });
 
-    watcher.on('change', async (eventType, filename) => {
+    watcher.on("change", async (eventType, filename) => {
       console.log(`File change detected: ${filename}`);
-      if (filename && filename.endsWith('.jsx')) {
+      if (filename && filename.endsWith(".jsx")) {
         // Handle both absolute and relative paths
         const baseName = path.basename(filename);
-        const componentName = baseName.replace('.jsx', '');
+        const componentName = baseName.replace(".jsx", "");
 
         console.log(`Component ${componentName} changed, notifying clients...`);
 
@@ -53,7 +53,7 @@ async function watchComponents() {
             try {
               ws.send(
                 JSON.stringify({
-                  type: 'reload',
+                  type: "reload",
                   timestamp: Date.now(),
                 })
               );
@@ -71,13 +71,13 @@ async function watchComponents() {
       }
     });
 
-    watcher.on('error', (error) => {
-      console.error('Watcher error:', error);
+    watcher.on("error", (error) => {
+      console.error("Watcher error:", error);
     });
 
     return watcher;
   } catch (error) {
-    console.error('Failed to set up file watcher:', error);
+    console.error("Failed to set up file watcher:", error);
     throw error;
   }
 }
@@ -85,14 +85,14 @@ async function watchComponents() {
 let componentWatcher;
 try {
   componentWatcher = await watchComponents();
-  console.log('File watcher initialized successfully');
+  console.log("File watcher initialized successfully");
 } catch (error) {
-  console.error('Failed to initialize file watcher:', error);
+  console.error("Failed to initialize file watcher:", error);
   process.exit(1);
 }
 
 // Cleanup watcher on process exit
-process.on('SIGINT', () => {
+process.on("SIGINT", () => {
   componentWatcher.close();
   process.exit(0);
 });
@@ -111,7 +111,7 @@ function createI18nMock(lang, Component) {
     __: function (key, replacements = {}) {
       try {
         // Handle nested keys with dot notation (e.g., "levelUp.chat.title")
-        const keyParts = key.split('.');
+        const keyParts = key.split(".");
 
         // Check if Component has localization_strings
         if (Component && Component.localization_strings) {
@@ -133,7 +133,7 @@ function createI18nMock(lang, Component) {
               let currentObj = Component.localization_strings[firstKey];
 
               // Handle single-level nesting (most common case)
-              if (keyParts.length === 2 && typeof currentObj === 'object') {
+              if (keyParts.length === 2 && typeof currentObj === "object") {
                 // Check if it's a direct language map
                 if (currentObj[lang] || currentObj.en) {
                   return applyReplacements(
@@ -156,7 +156,7 @@ function createI18nMock(lang, Component) {
               // Handle multiple levels of nesting (e.g., levelUp.chat.title)
               // This traverses deeper into the structure
               for (let i = 1; i < keyParts.length; i++) {
-                if (currentObj && typeof currentObj === 'object') {
+                if (currentObj && typeof currentObj === "object") {
                   currentObj = currentObj[keyParts[i]];
                 } else {
                   break;
@@ -178,7 +178,7 @@ function createI18nMock(lang, Component) {
         console.log(`Translation not found for key: ${key}`);
         return applyReplacements(key, replacements);
       } catch (e) {
-        console.error('Translation error:', e);
+        console.error("Translation error:", e);
         return key;
       }
     },
@@ -188,7 +188,7 @@ function createI18nMock(lang, Component) {
     },
     getNestedValue: function (obj, path) {
       if (!obj || !path) return undefined;
-      const parts = path.split('.');
+      const parts = path.split(".");
       let current = obj;
       for (const part of parts) {
         if (current === undefined || current === null) return undefined;
@@ -208,7 +208,7 @@ function createI18nMock(lang, Component) {
       return this;
     },
     initialized: true,
-    supportedLocales: ['en', 'ru', 'uk'],
+    supportedLocales: ["en", "ru", "uk"],
     translations: {},
   };
 
@@ -217,7 +217,7 @@ function createI18nMock(lang, Component) {
 
 // Helper function to apply replacements to translation strings
 function applyReplacements(text, replacements) {
-  if (!replacements || typeof replacements !== 'object' || !text) {
+  if (!replacements || typeof replacements !== "object" || !text) {
     return text;
   }
 
@@ -233,34 +233,34 @@ function applyReplacements(text, replacements) {
 
     // Replace {{key}} pattern (double braces)
     const doublePattern = `{{${key}}}`;
-    result = result.replace(new RegExp(doublePattern, 'g'), stringValue);
+    result = result.replace(new RegExp(doublePattern, "g"), stringValue);
 
     // Replace {key} pattern (single braces)
     const singlePattern = `{${key}}`;
-    result = result.replace(new RegExp(singlePattern, 'g'), stringValue);
+    result = result.replace(new RegExp(singlePattern, "g"), stringValue);
   }
 
   return result;
 }
 
 // Function to create mockData with specified language
-async function createMockData(lang = 'en', Component = null) {
+async function createMockData(lang = "en", Component = null) {
   // Create i18n mock for this component
   const i18nMock = createI18nMock(lang, Component);
 
   // Mock data for Leaderboard component
-  if (Component?.name === 'Leaderboard') {
+  if (Component?.name === "Leaderboard") {
     const usernames = [
-      'DragonSlayer',
-      'StarLight',
-      'NightOwl',
-      'CyberNinja',
-      'PixelMaster',
-      'ShadowWalker',
-      'MoonKnight',
-      'SunChaser',
-      'StormBringer',
-      'FirePhoenix',
+      "DragonSlayer",
+      "StarLight",
+      "NightOwl",
+      "CyberNinja",
+      "PixelMaster",
+      "ShadowWalker",
+      "MoonKnight",
+      "SunChaser",
+      "StormBringer",
+      "FirePhoenix",
     ];
 
     const generateEconomyData = () => {
@@ -322,63 +322,63 @@ async function createMockData(lang = 'en', Component = null) {
       currentPage: 1,
       totalPages: 3,
       highlightedPosition: 2,
-      category: 'total',
+      category: "total",
       interaction: {
         user: {
-          id: '123456789',
-          username: 'Test User',
-          displayName: 'Test User',
-          avatarURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
-      dominantColor: 'user',
+      dominantColor: "user",
     };
   }
 
   // Mock data for LevelUp component
-  if (Component?.name === 'LevelUp') {
+  if (Component?.name === "LevelUp") {
     return {
       locale: lang,
       i18n: i18nMock,
       interaction: {
         user: {
-          id: '123456789',
-          username: 'Test User',
-          displayName: 'Test User',
-          avatarURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
         guild: {
-          id: '987654321',
-          name: 'Test Guild',
-          iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
       // LevelUp specific properties
-      type: 'chat', // chat or game
+      type: "chat", // chat or game
       currentXP: 75,
       requiredXP: 100,
       level: 5,
       oldLevel: 4,
-      dominantColor: 'user',
+      dominantColor: "user",
     };
   }
 
   // Mock data for CratesDisplay component
-  if (Component?.name === 'CratesDisplay') {
+  if (Component?.name === "CratesDisplay") {
     return {
       locale: lang,
       i18n: i18nMock,
       interaction: {
         user: {
-          id: '123456789',
-          username: 'Test User',
-          displayName: 'Test User',
-          avatarURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
         guild: {
-          id: '987654321',
-          name: 'Test Guild',
-          iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
       database: {
@@ -387,64 +387,64 @@ async function createMockData(lang = 'en', Component = null) {
       },
       crates: [
         {
-          type: 'daily',
-          name: 'Daily Crate',
-          emoji: '🎁',
-          description: 'Open once every 24 hours for daily rewards',
+          type: "daily",
+          name: "Daily Crate",
+          emoji: "🎁",
+          description: "Open once every 24 hours for daily rewards",
           available: true,
           count: 0,
           cooldown: 0,
         },
         {
-          type: 'weekly',
-          name: 'Weekly Crate',
-          emoji: '📦',
-          description: 'Contains better rewards than daily crates',
+          type: "weekly",
+          name: "Weekly Crate",
+          emoji: "📦",
+          description: "Contains better rewards than daily crates",
           available: false,
           count: 0,
           cooldown: 120000, // 2 minutes for testing
         },
         {
-          type: 'rare',
-          name: 'Rare Crate',
-          emoji: '🧰',
+          type: "rare",
+          name: "Rare Crate",
+          emoji: "🧰",
           description:
-            'Contains rare items and higher chances for good rewards',
+            "Contains rare items and higher chances for good rewards",
           available: true,
           count: 2,
           cooldown: 0,
         },
         {
-          type: 'seasonal',
-          name: 'Seasonal Crate',
-          emoji: '🎄',
-          description: 'Special limited-time rewards for the current season',
+          type: "seasonal",
+          name: "Seasonal Crate",
+          emoji: "🎄",
+          description: "Special limited-time rewards for the current season",
           available: false,
           count: 0,
           cooldown: 360000, // 6 minutes for testing
         },
       ],
       selectedCrate: 0,
-      dominantColor: 'user',
+      dominantColor: "user",
     };
   }
 
   // Mock data for CrateRewards component
-  if (Component?.name === 'CrateRewards') {
+  if (Component?.name === "CrateRewards") {
     return {
       locale: lang,
       i18n: i18nMock,
       interaction: {
         user: {
-          id: '123456789',
-          username: 'Test User',
-          displayName: 'Test User',
-          avatarURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
-      crateType: 'daily',
-      crateEmoji: '🎁',
-      crateName: 'Daily Crate',
+      crateType: "daily",
+      crateEmoji: "🎁",
+      crateName: "Daily Crate",
       rewards: {
         coins: 75,
         xp: 50,
@@ -455,18 +455,18 @@ async function createMockData(lang = 'en', Component = null) {
           work: 1800000, // 30 minutes
         },
       },
-      dominantColor: 'user',
+      dominantColor: "user",
     };
   }
 
   // Mock data for Transfer component with user-to-user transfer support
-  if (Component?.name === 'Transfer') {
+  if (Component?.name === "Transfer") {
     // Create a recipient user for transfer visualization
     const recipientUser = {
-      id: '987654321',
-      username: 'RecipientUser',
-      displayName: 'Recipient User',
-      avatarURL: 'https://cdn.discordapp.com/embed/avatars/3.png',
+      id: "987654321",
+      username: "RecipientUser",
+      displayName: "Recipient User",
+      avatarURL: "https://cdn.discordapp.com/embed/avatars/3.png",
       balance: 750.25,
     };
 
@@ -475,16 +475,16 @@ async function createMockData(lang = 'en', Component = null) {
       i18n: i18nMock,
       interaction: {
         user: {
-          id: '123456789',
-          username: 'SenderUser',
-          displayName: 'Sender User',
+          id: "123456789",
+          username: "SenderUser",
+          displayName: "Sender User",
           avatarURL:
-            'https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048',
+            "https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048",
         },
         guild: {
-          id: '987654321',
-          name: 'Test Guild',
-          iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
       database: {
@@ -500,7 +500,7 @@ async function createMockData(lang = 'en', Component = null) {
       isDeposit: false,
       isTransfer: true, // Set to true to test transfer mode
       recipient: recipientUser, // Include recipient data
-      dominantColor: 'user',
+      dominantColor: "user",
     };
   }
 
@@ -510,16 +510,16 @@ async function createMockData(lang = 'en', Component = null) {
     i18n: i18nMock, // Add the i18n mock object
     interaction: {
       user: {
-        id: '123456789',
-        username: 'Test User',
-        displayName: 'Test User',
+        id: "123456789",
+        username: "Test User",
+        displayName: "Test User",
         avatarURL:
-          'https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048',
+          "https://cdn.discordapp.com/avatars/888384053735194644/dfc83402e6e67f14949a56a10c6a6706.png?size=2048",
       },
       guild: {
-        id: '987654321',
-        name: 'Test Guild',
-        iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+        id: "987654321",
+        name: "Test Guild",
+        iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
       },
       bot: {
         shards: Array(4)
@@ -533,7 +533,7 @@ async function createMockData(lang = 'en', Component = null) {
           })),
       },
     },
-    dominantColor: 'user',
+    dominantColor: "user",
     database: {
       //bannerUrl: null,
       economy: {
@@ -542,7 +542,16 @@ async function createMockData(lang = 'en', Component = null) {
         bankRate: 25,
         bankStartTime: 25,
       },
-      avatar_url: 'https://cdn.discordapp.com/embed/avatars/0.png',
+      // Add marriage status data for testing dynamic height
+      marriageStatus: {
+        status: "MARRIED",
+        createdAt: new Date(Date.now() - 86400000 * 30).toISOString(), // 30 days ago
+      },
+      partnerUsername: "Partner User",
+      partnerAvatarUrl: "https://cdn.discordapp.com/embed/avatars/3.png",
+      combinedBankBalance: 7500.75,
+      individualBankBalance: 5000.75,
+      avatar_url: "https://cdn.discordapp.com/embed/avatars/0.png",
       bot_stats: {
         guilds_stats: Array(100)
           .fill()
@@ -559,10 +568,10 @@ async function createMockData(lang = 'en', Component = null) {
       },
     },
     currentSong: {
-      title: 'Example Song',
-      artist: 'Example Artist',
+      title: "Example Song",
+      artist: "Example Artist",
       duration: 271000,
-      thumbnail: 'https://cdn.discordapp.com/embed/avatars/0.png',
+      thumbnail: "https://cdn.discordapp.com/embed/avatars/0.png",
     },
     nextSongs: Array(3)
       .fill()
@@ -570,29 +579,29 @@ async function createMockData(lang = 'en', Component = null) {
         title: `Next Song ${i + 1}`,
         artist: `Artist ${i + 1}`,
         duration: 240000,
-        thumbnail: 'https://cdn.discordapp.com/embed/avatars/0.png',
+        thumbnail: "https://cdn.discordapp.com/embed/avatars/0.png",
         user: {
-          avatarURL: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       })),
     currentTime: 65000,
     duration: 271000,
     amount: 100,
     nextDaily: 3600000,
-    emoji: '🎁',
+    emoji: "🎁",
     victim: {
       user: {
-        id: '111111111',
-        username: 'Victim User',
-        avatarURL: 'https://cdn.discordapp.com/embed/avatars/1.png',
+        id: "111111111",
+        username: "Victim User",
+        avatarURL: "https://cdn.discordapp.com/embed/avatars/1.png",
       },
       balance: 500,
     },
     robber: {
       user: {
-        id: '222222222',
-        username: 'Robber User',
-        avatarURL: 'https://cdn.discordapp.com/embed/avatars/2.png',
+        id: "222222222",
+        username: "Robber User",
+        avatarURL: "https://cdn.discordapp.com/embed/avatars/2.png",
       },
       balance: 1000,
     },
@@ -617,112 +626,112 @@ async function createMockData(lang = 'en', Component = null) {
     },
     // Add upgrades data for UpgradesDisplay component
     upgrades:
-      Component?.name === 'UpgradesDisplay'
+      Component?.name === "UpgradesDisplay"
         ? [
             {
-              emoji: '🎁',
+              emoji: "🎁",
               title:
-                lang === 'ru'
-                  ? 'Ежедневный бонус'
-                  : lang === 'uk'
-                  ? 'Щоденний бонус'
-                  : 'Daily Bonus',
+                lang === "ru"
+                  ? "Ежедневный бонус"
+                  : lang === "uk"
+                  ? "Щоденний бонус"
+                  : "Daily Bonus",
               description:
-                lang === 'ru'
-                  ? '+15% к ежедневной награде'
-                  : lang === 'uk'
-                  ? '+15% до щоденної нагороди'
-                  : '+15% daily reward bonus',
+                lang === "ru"
+                  ? "+15% к ежедневной награде"
+                  : lang === "uk"
+                  ? "+15% до щоденної нагороди"
+                  : "+15% daily reward bonus",
               currentLevel: 1,
               nextLevel: 2,
               price: 20,
               progress: 50,
               id: 0,
-              category: 'economy',
+              category: "economy",
             },
             {
-              emoji: '⏳',
+              emoji: "⏳",
               title:
-                lang === 'ru'
-                  ? 'Преступление'
-                  : lang === 'uk'
-                  ? 'Злочин'
-                  : 'Crime Cooldown',
+                lang === "ru"
+                  ? "Преступление"
+                  : lang === "uk"
+                  ? "Злочин"
+                  : "Crime Cooldown",
               description:
-                lang === 'ru'
-                  ? '-20 мин. перезарядки'
-                  : lang === 'uk'
-                  ? '-20 хв. перезарядки'
-                  : '-20 min crime cooldown',
+                lang === "ru"
+                  ? "-20 мин. перезарядки"
+                  : lang === "uk"
+                  ? "-20 хв. перезарядки"
+                  : "-20 min crime cooldown",
               currentLevel: 1,
               nextLevel: 2,
               price: 50,
               progress: 50,
               id: 1,
-              category: 'economy',
+              category: "economy",
             },
             {
-              emoji: '🏦',
+              emoji: "🏦",
               title:
-                lang === 'ru'
-                  ? 'Банк. процент'
-                  : lang === 'uk'
-                  ? 'Банк. відсоток'
-                  : 'Bank Rate',
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
               description:
-                lang === 'ru'
-                  ? '+0.5% к ставке банка'
-                  : lang === 'uk'
-                  ? '+0.5% до ставки банку'
-                  : '+0.5% bank interest rate',
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
               currentLevel: 1,
               nextLevel: 2,
               price: 100,
               progress: 50,
               id: 2,
-              category: 'economy',
+              category: "economy",
             },
             {
-              emoji: '🏦',
+              emoji: "🏦",
               title:
-                lang === 'ru'
-                  ? 'Банк. процент'
-                  : lang === 'uk'
-                  ? 'Банк. відсоток'
-                  : 'Bank Rate',
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
               description:
-                lang === 'ru'
-                  ? '+0.5% к ставке банка'
-                  : lang === 'uk'
-                  ? '+0.5% до ставки банку'
-                  : '+0.5% bank interest rate',
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
               currentLevel: 1,
               nextLevel: 2,
               price: 100,
               progress: 50,
               id: 2,
-              category: 'cooldown',
+              category: "cooldown",
             },
             {
-              emoji: '🏦',
+              emoji: "🏦",
               title:
-                lang === 'ru'
-                  ? 'Банк. процент'
-                  : lang === 'uk'
-                  ? 'Банк. відсоток'
-                  : 'Bank Rate',
+                lang === "ru"
+                  ? "Банк. процент"
+                  : lang === "uk"
+                  ? "Банк. відсоток"
+                  : "Bank Rate",
               description:
-                lang === 'ru'
-                  ? '+0.5% к ставке банка'
-                  : lang === 'uk'
-                  ? '+0.5% до ставки банку'
-                  : '+0.5% bank interest rate',
+                lang === "ru"
+                  ? "+0.5% к ставке банка"
+                  : lang === "uk"
+                  ? "+0.5% до ставки банку"
+                  : "+0.5% bank interest rate",
               currentLevel: 1,
               nextLevel: 2,
               price: 100,
               progress: 50,
               id: 2,
-              category: 'cooldown',
+              category: "cooldown",
             },
           ]
         : undefined,
@@ -736,12 +745,12 @@ async function createMockData(lang = 'en', Component = null) {
 async function getAvailableComponents() {
   const files = await fs.readdir(COMPONENTS_DIR);
   return files
-    .filter((f) => f.endsWith('.jsx'))
-    .map((f) => f.replace('.jsx', ''));
+    .filter((f) => f.endsWith(".jsx"))
+    .map((f) => f.replace(".jsx", ""));
 }
 
 // Create index page that lists all components with links
-app.get('/', async (req, res) => {
+app.get("/", async (req, res) => {
   const components = await getAvailableComponents();
 
   const html = `
@@ -789,7 +798,7 @@ app.get('/', async (req, res) => {
           <a href="/${name}" class="component-link">${name}</a>
         `
           )
-          .join('')}
+          .join("")}
       </div>
     </body>
     </html>
@@ -799,7 +808,7 @@ app.get('/', async (req, res) => {
 });
 
 // Handle component preview requests
-app.get('/:componentName', async (req, res) => {
+app.get("/:componentName", async (req, res) => {
   try {
     const { componentName } = req.params;
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
@@ -821,13 +830,13 @@ app.get('/:componentName', async (req, res) => {
     }
     // --- End Component Import ---
     // Generate initial mock data for client fallback
-    const lang = 'en';
+    const lang = "en";
     const initialMockData = await createMockData(lang, Component);
     const fallbackMockDataString = JSON.stringify(initialMockData, null, 2);
 
     // Add specific controls for Transfer and LevelUp (keep existing logic)
-    let additionalControls = '';
-    if (componentName === 'Transfer') {
+    let additionalControls = "";
+    if (componentName === "Transfer") {
       additionalControls = `
         <div class="mode-controls">
           <span>Mode: </span>
@@ -837,7 +846,7 @@ app.get('/:componentName', async (req, res) => {
         </div>
       `;
     }
-    if (componentName === 'LevelUp') {
+    if (componentName === "LevelUp") {
       additionalControls = `
         <div class="type-controls">
           <span>Type: </span>
@@ -861,6 +870,7 @@ app.get('/:componentName', async (req, res) => {
           let darkTheme = localStorage.getItem('darkTheme') !== 'false';
           let currentMode = localStorage.getItem('transferMode') || 'transfer';
           let currentType = localStorage.getItem('levelUpType') || 'chat';
+          let isMarried = localStorage.getItem('isMarried') !== 'false';
           
           // Get mock data from localStorage or use initial data from server
           let mockDataJson = localStorage.getItem('mockDataJson');
@@ -906,6 +916,14 @@ app.get('/:componentName', async (req, res) => {
             refreshImage();
           }
 
+          function changeMarried(married) {
+            if ('${componentName}' !== 'Balance') return;
+            isMarried = married;
+            localStorage.setItem('isMarried', married);
+            document.querySelectorAll('.marriage-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.married === String(married)));
+            refreshImage();
+          }
+
           function updateMockData() {
             const editor = document.getElementById('mockDataEditor');
             if (!editor) return;
@@ -931,6 +949,31 @@ app.get('/:componentName', async (req, res) => {
             url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light');
             if ('${componentName}' === 'Transfer') { url += '&mode=' + currentMode; }
             if ('${componentName}' === 'LevelUp') { url += '&type=' + currentType; }
+            if ('${componentName}' === 'Balance') {
+              // Update mock data to include/exclude marriage status
+              try {
+                const mockData = JSON.parse(mockDataJson);
+                if (isMarried) {
+                  mockData.database.marriageStatus = {
+                    status: "MARRIED",
+                    createdAt: new Date(Date.now() - 86400000 * 30).toISOString()
+                  };
+                  mockData.database.partnerUsername = "Partner User";
+                  mockData.database.partnerAvatarUrl = "https://cdn.discordapp.com/embed/avatars/3.png";
+                  mockData.database.combinedBankBalance = 7500.75;
+                } else {
+                  delete mockData.database.marriageStatus;
+                  delete mockData.database.partnerUsername;
+                  delete mockData.database.partnerAvatarUrl;
+                  delete mockData.database.combinedBankBalance;
+                }
+                mockDataJson = JSON.stringify(mockData, null, 2);
+                const editor = document.getElementById('mockDataEditor');
+                if (editor) editor.value = mockDataJson;
+              } catch (e) {
+                console.error('Error updating marriage status in mock data:', e);
+              }
+            }
             url += '&mockData=' + encodeURIComponent(mockDataJson);
             if (forceInit) {
                 url += '&forceInit=true';
@@ -976,6 +1019,7 @@ app.get('/:componentName', async (req, res) => {
             if (document.getElementById('themeButton')) { document.getElementById('themeButton').classList.toggle('active', darkTheme); document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme'; }
             if ('${componentName}' === 'Transfer') { document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === currentMode)); }
             if ('${componentName}' === 'LevelUp') { document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === currentType)); }
+            if ('${componentName}' === 'Balance') { document.querySelectorAll('.marriage-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.married === String(isMarried))); }
             
             // Init JSON editor
             const editor = document.getElementById('mockDataEditor');
@@ -1089,6 +1133,42 @@ app.get('/:componentName', async (req, res) => {
           .type-btn[data-type="game"].active {
             background: #1DB935;
           }
+          .marriage-controls {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+            align-items: center;
+          }
+          .marriage-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #e0e0e0;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .marriage-btn.active {
+            background: #E91E63;
+            color: white;
+          }
+          .marriage-controls {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+            align-items: center;
+          }
+          .marriage-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #e0e0e0;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .marriage-btn.active {
+            background: #E91E63;
+            color: white;
+          }
           .dimensions {
             position: absolute;
             top: 0;
@@ -1158,26 +1238,26 @@ app.get('/:componentName', async (req, res) => {
 
     res.send(html);
   } catch (error) {
-    console.error('Error rendering component preview page:', error);
+    console.error("Error rendering component preview page:", error);
     res.status(500).send(`Error rendering component preview: ${error.message}`);
   }
 });
 
 // Serve component image separately
-app.get('/:componentName/image', async (req, res) => {
+app.get("/:componentName/image", async (req, res) => {
   try {
     const { componentName } = req.params;
     // --- Log Received Query Parameters ---
-    console.log('Received query parameters:', req.query);
-    const forceInit = req.query.forceInit === 'true';
+    console.log("Received query parameters:", req.query);
+    const forceInit = req.query.forceInit === "true";
     console.log(`Parsed forceInit flag: ${forceInit}`); // Log parsed value
     // --- End Logging ---
-    const lang = req.query.lang || 'en';
-    const mode = req.query.mode || 'transfer';
-    const type = req.query.type || 'chat';
-    const debug = req.query.debug === 'true';
-    const theme = req.query.theme || 'dark';
-    const isDarkTheme = theme === 'dark';
+    const lang = req.query.lang || "en";
+    const mode = req.query.mode || "transfer";
+    const type = req.query.type || "chat";
+    const debug = req.query.debug === "true";
+    const theme = req.query.theme || "dark";
+    const isDarkTheme = theme === "dark";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
     // --- Import Component ---
@@ -1191,9 +1271,9 @@ app.get('/:componentName/image', async (req, res) => {
     if (req.query.mockData) {
       try {
         customMockData = JSON.parse(req.query.mockData);
-        console.log('Parsed custom mock data:', customMockData);
+        console.log("Parsed custom mock data:", customMockData);
       } catch (error) {
-        console.error('Error parsing mockData parameter:', error);
+        console.error("Error parsing mockData parameter:", error);
       }
     }
 
@@ -1204,21 +1284,21 @@ app.get('/:componentName/image', async (req, res) => {
     // Use custom mock data if provided, otherwise generate default
     let mockData;
     if (req.query.mockData) {
-      console.log('Using custom mock data as base');
+      console.log("Using custom mock data as base");
       mockData = customMockData;
       // Ensure locale and debug are set for custom data
       mockData.locale = lang;
       mockData.debug = debug;
 
       // Apply mode/type/theme settings to custom mock data
-      if (componentName === 'Transfer' && mockData) {
-        mockData.isDeposit = mode === 'deposit';
-        mockData.isTransfer = mode === 'transfer';
+      if (componentName === "Transfer" && mockData) {
+        mockData.isDeposit = mode === "deposit";
+        mockData.isTransfer = mode === "transfer";
       }
-      if (componentName === 'LevelUp' && mockData) {
+      if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
       }
-      if (componentName === 'UpgradesDisplay' && mockData) {
+      if (componentName === "UpgradesDisplay" && mockData) {
         // Apply theme settings for specific components if needed
         mockData.coloring = isDarkTheme
           ? {
@@ -1230,24 +1310,24 @@ app.get('/:componentName/image', async (req, res) => {
       }
 
       // Ensure i18n is properly set for custom data
-      if (!mockData.i18n || typeof mockData.i18n.__ !== 'function') {
+      if (!mockData.i18n || typeof mockData.i18n.__ !== "function") {
         mockData.i18n = createI18nMock(lang, Component);
       }
       if (mockData.i18n) mockData.i18n.initialized = true;
     } else {
-      console.log('Using generated mock data as base');
+      console.log("Using generated mock data as base");
       mockData = await createMockData(lang, Component);
 
       // Apply mode/type/theme/debug settings to mockData
-      if (componentName === 'Transfer' && mockData) {
-        mockData.isDeposit = mode === 'deposit';
-        mockData.isTransfer = mode === 'transfer';
+      if (componentName === "Transfer" && mockData) {
+        mockData.isDeposit = mode === "deposit";
+        mockData.isTransfer = mode === "transfer";
       }
-      if (componentName === 'LevelUp' && mockData) {
+      if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
       }
       mockData.debug = debug;
-      if (componentName === 'UpgradesDisplay' && mockData) {
+      if (componentName === "UpgradesDisplay" && mockData) {
         // Apply theme settings for specific components if needed
         mockData.coloring = isDarkTheme
           ? {
@@ -1261,7 +1341,7 @@ app.get('/:componentName/image', async (req, res) => {
 
     // Log the mock data that will be passed to generateImage
     console.log(
-      'Mock data to be used in generateImage:',
+      "Mock data to be used in generateImage:",
       JSON.stringify(mockData, null, 2)
     );
 
@@ -1270,7 +1350,7 @@ app.get('/:componentName/image', async (req, res) => {
     if (Component.requires3D) {
       console.log(`Using fixed session ID for ${componentName}: ${sessionId}`);
 
-      const threeScriptPath = componentPath.replace('.jsx', '.three.js');
+      const threeScriptPath = componentPath.replace(".jsx", ".three.js");
       let getScriptContent = null;
       try {
         delete require.cache[threeScriptPath];
@@ -1278,8 +1358,8 @@ app.get('/:componentName/image', async (req, res) => {
           `file://${threeScriptPath}?t=${Date.now()}`
         );
         getScriptContent = scriptModule.default;
-        if (typeof getScriptContent !== 'function')
-          throw new Error('.three.js must export default func');
+        if (typeof getScriptContent !== "function")
+          throw new Error(".three.js must export default func");
       } catch (scriptError) {
         throw new Error(`Could not load 3D script: ${scriptError.message}`);
       }
@@ -1287,13 +1367,13 @@ app.get('/:componentName/image', async (req, res) => {
       // Prepare options for Puppeteer, using controlValues
       const userAvatarUrl = mockData.interaction?.user?.avatarURL;
       let modelColor = null,
-        backgroundColorHex = '#2B2D31',
+        backgroundColorHex = "#2B2D31",
         ambientLightIntensity = 0.5,
         directionalLightIntensity = 0.8;
       if (userAvatarUrl) {
         try {
           const colorData = await processImageColors(userAvatarUrl);
-          if (colorData.embedColor && colorData.embedColor.startsWith('#')) {
+          if (colorData.embedColor && colorData.embedColor.startsWith("#")) {
             const hex = colorData.embedColor.slice(1);
             const r = parseInt(hex.slice(0, 2), 16);
             const g = parseInt(hex.slice(2, 4), 16);
@@ -1317,7 +1397,7 @@ app.get('/:componentName/image', async (req, res) => {
 
       const renderOptions = {
         // Use values from controls or defaults
-        modelType: controlValues.modelType || 'cube',
+        modelType: controlValues.modelType || "cube",
         rotationX: controlValues.rotationX ?? 0.5, // Use ?? for 0 value
         rotationY: controlValues.rotationY ?? 0.5,
         width: Component.dimensions?.width || 600,
@@ -1334,17 +1414,17 @@ app.get('/:componentName/image', async (req, res) => {
       renderOptions.initializationScript = getScriptContent(renderOptions);
 
       console.log(
-        'Calling Puppeteer renderUpdate with options:',
+        "Calling Puppeteer renderUpdate with options:",
         renderOptions
       );
       threeDImageData = await renderUpdate(sessionId, renderOptions);
-      console.log('Puppeteer rendering complete for preview.');
+      console.log("Puppeteer rendering complete for preview.");
       mockData.imageData = threeDImageData;
     }
     // --- End 3D Rendering Check ---
 
     // Validate i18n
-    if (!mockData.i18n || typeof mockData.i18n.__ !== 'function')
+    if (!mockData.i18n || typeof mockData.i18n.__ !== "function")
       mockData.i18n = createI18nMock(lang, Component);
     if (mockData.i18n) mockData.i18n.initialized = true;
 
@@ -1359,10 +1439,10 @@ app.get('/:componentName/image', async (req, res) => {
         { disableThrottle: true }
       );
       if (!buffer || !Buffer.isBuffer(buffer))
-        throw new Error('Generated image invalid');
+        throw new Error("Generated image invalid");
     } catch (renderError) {
       console.error(
-        'Error fetching rendered image from render service:',
+        "Error fetching rendered image from render service:",
         renderError
       );
       res.status(500).send(`Render service failed: ${renderError.message}`);
@@ -1372,25 +1452,25 @@ app.get('/:componentName/image', async (req, res) => {
     // Send response
     const isGif =
       buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
-    res.setHeader('Content-Type', isGif ? 'image/gif' : 'image/avif');
+    res.setHeader("Content-Type", isGif ? "image/gif" : "image/avif");
     res.send(buffer);
   } catch (error) {
-    console.error('Error in /image route:', error);
+    console.error("Error in /image route:", error);
     // No explicit session closing needed here - timeout handles it
     res.status(500).send(`Error rendering component image: ${error.message}`);
   }
 });
 
 // Add endpoint to get the mock data used for rendering
-app.get('/:componentName/mockData', async (req, res) => {
+app.get("/:componentName/mockData", async (req, res) => {
   try {
     const { componentName } = req.params;
-    const lang = req.query.lang || 'en';
-    const mode = req.query.mode || 'transfer';
-    const type = req.query.type || 'chat';
-    const debug = req.query.debug === 'true';
-    const theme = req.query.theme || 'dark';
-    const isDarkTheme = theme === 'dark';
+    const lang = req.query.lang || "en";
+    const mode = req.query.mode || "transfer";
+    const type = req.query.type || "chat";
+    const debug = req.query.debug === "true";
+    const theme = req.query.theme || "dark";
+    const isDarkTheme = theme === "dark";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
     // Import component
@@ -1404,43 +1484,43 @@ app.get('/:componentName/mockData', async (req, res) => {
     if (req.query.mockData) {
       try {
         customMockData = JSON.parse(req.query.mockData);
-        console.log('Parsed custom mock data:', customMockData);
+        console.log("Parsed custom mock data:", customMockData);
       } catch (error) {
-        console.error('Error parsing mockData parameter:', error);
+        console.error("Error parsing mockData parameter:", error);
       }
     }
 
     // Use custom mock data if provided, otherwise generate default
     let mockData;
     if (Object.keys(customMockData).length > 0) {
-      console.log('Using custom mock data as base');
+      console.log("Using custom mock data as base");
       mockData = customMockData;
     } else {
-      console.log('Using generated mock data as base');
+      console.log("Using generated mock data as base");
       mockData = await createMockData(lang, Component);
     }
 
     // Apply mode/type/theme/debug settings to mockData
-    if (componentName === 'Transfer' && mockData) {
-      mockData.isDeposit = mode === 'deposit';
-      mockData.isTransfer = mode === 'transfer';
+    if (componentName === "Transfer" && mockData) {
+      mockData.isDeposit = mode === "deposit";
+      mockData.isTransfer = mode === "transfer";
     }
-    if (componentName === 'LevelUp' && mockData) {
+    if (componentName === "LevelUp" && mockData) {
       mockData.type = type;
     }
     mockData.debug = debug;
 
     // Return the mock data as JSON
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader("Content-Type", "application/json");
     res.send(JSON.stringify(mockData, null, 2));
   } catch (error) {
-    console.error('Error in /mockData route:', error);
+    console.error("Error in /mockData route:", error);
     res.status(500).send(`Error retrieving mock data: ${error.message}`);
   }
 });
 
 // Add endpoint to get component configuration
-app.get('/components/config', async (req, res) => {
+app.get("/components/config", async (req, res) => {
   try {
     const components = await getAvailableComponents();
     const configs = {};
@@ -1472,7 +1552,7 @@ app.get('/components/config', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error in /components/config route:', error);
+    console.error("Error in /components/config route:", error);
     res.status(500).json({
       error: `Error getting component configurations: ${error.message}`,
     });
@@ -1480,7 +1560,7 @@ app.get('/components/config', async (req, res) => {
 });
 
 // Add endpoint to get specific component configuration
-app.get('/components/:componentName/config', async (req, res) => {
+app.get("/components/:componentName/config", async (req, res) => {
   try {
     const { componentName } = req.params;
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
@@ -1517,7 +1597,7 @@ app.get('/components/:componentName/config', async (req, res) => {
 
     res.json(config);
   } catch (error) {
-    console.error('Error in /components/:componentName/config route:', error);
+    console.error("Error in /components/:componentName/config route:", error);
     res
       .status(500)
       .json({ error: `Error getting component config: ${error.message}` });
@@ -1525,10 +1605,10 @@ app.get('/components/:componentName/config', async (req, res) => {
 });
 
 // Add health check endpoint
-app.get('/health', (req, res) => {
+app.get("/health", (req, res) => {
   res.json({
-    status: 'healthy',
-    service: 'preview',
+    status: "healthy",
+    service: "preview",
     timestamp: new Date().toISOString(),
   });
 });
@@ -1543,39 +1623,39 @@ if (import.meta.main) {
   });
 
   // Handle WebSocket upgrades
-  server.on('upgrade', (request, socket, head) => {
+  server.on("upgrade", (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
+      wss.emit("connection", ws, request);
     });
   });
 }
 
 // Handle WebSocket connections
-wss.on('connection', (ws) => {
-  console.log('New WebSocket connection established');
+wss.on("connection", (ws) => {
+  console.log("New WebSocket connection established");
 
   // Initialize client data with defaults
   clients.set(ws, {
     component: null,
-    lang: 'en',
-    mode: 'transfer',
+    lang: "en",
+    mode: "transfer",
     debug: false,
     darkTheme: true,
-    levelType: 'chat',
+    levelType: "chat",
   });
 
-  ws.on('message', (message) => {
+  ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
-      console.log('Received message:', data);
+      console.log("Received message:", data);
 
       if (
-        data.type === 'viewing' ||
-        data.type === 'langChange' ||
-        data.type === 'modeChange' ||
-        data.type === 'debugChange' ||
-        data.type === 'themeChange' ||
-        data.type === 'typeChange'
+        data.type === "viewing" ||
+        data.type === "langChange" ||
+        data.type === "modeChange" ||
+        data.type === "debugChange" ||
+        data.type === "themeChange" ||
+        data.type === "typeChange"
       ) {
         // Update which component, language, and mode this client is viewing
         const clientData = clients.get(ws);
@@ -1594,16 +1674,16 @@ wss.on('connection', (ws) => {
           clientData.levelType = data.levelType;
         }
 
-        if (data.type === 'debugChange') {
+        if (data.type === "debugChange") {
           clientData.debug = data.debug;
           console.log(`Debug mode changed to: ${data.debug}`);
-          ws.send(JSON.stringify({ type: 'debugChange' }));
+          ws.send(JSON.stringify({ type: "debugChange" }));
         }
 
-        if (data.type === 'themeChange') {
+        if (data.type === "themeChange") {
           clientData.darkTheme = data.darkTheme;
-          console.log(`Theme changed to: ${data.darkTheme ? 'dark' : 'light'}`);
-          ws.send(JSON.stringify({ type: 'themeChange' }));
+          console.log(`Theme changed to: ${data.darkTheme ? "dark" : "light"}`);
+          ws.send(JSON.stringify({ type: "themeChange" }));
         }
 
         console.log(
@@ -1612,40 +1692,40 @@ wss.on('connection', (ws) => {
           }, mode=${clientData.mode}, levelType=${
             clientData.levelType
           }, debug=${clientData.debug}, theme=${
-            clientData.darkTheme ? 'dark' : 'light'
+            clientData.darkTheme ? "dark" : "light"
           }`
         );
 
-        if (data.type === 'viewing' && oldComponent !== data.component) {
+        if (data.type === "viewing" && oldComponent !== data.component) {
           console.log(`Client now viewing: ${data.component}`);
         }
 
         // For language or mode changes, notify the client to refresh
-        if (data.type === 'langChange') {
+        if (data.type === "langChange") {
           console.log(`Language changed to: ${data.lang}`);
-          ws.send(JSON.stringify({ type: 'langChange' }));
+          ws.send(JSON.stringify({ type: "langChange" }));
         }
 
-        if (data.type === 'modeChange') {
+        if (data.type === "modeChange") {
           console.log(`Mode changed to: ${data.mode}`);
-          ws.send(JSON.stringify({ type: 'modeChange' }));
+          ws.send(JSON.stringify({ type: "modeChange" }));
         }
 
-        if (data.type === 'typeChange') {
+        if (data.type === "typeChange") {
           console.log(`Type changed to: ${data.levelType}`);
-          ws.send(JSON.stringify({ type: 'typeChange' }));
+          ws.send(JSON.stringify({ type: "typeChange" }));
         }
       }
     } catch (e) {
-      console.error('WebSocket message error:', e);
+      console.error("WebSocket message error:", e);
     }
   });
 
   // Handle client disconnection
-  ws.on('close', () => {
+  ws.on("close", () => {
     const clientData = clients.get(ws);
     console.log(
-      `Client disconnected, was viewing: ${clientData?.component || 'none'}`
+      `Client disconnected, was viewing: ${clientData?.component || "none"}`
     );
     clients.delete(ws);
   });
@@ -1657,5 +1737,5 @@ wss.on('connection', (ws) => {
     }
   }, 30000);
 
-  ws.on('close', () => clearInterval(pingInterval));
+  ws.on("close", () => clearInterval(pingInterval));
 });

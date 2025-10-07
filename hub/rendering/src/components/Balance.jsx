@@ -2,6 +2,8 @@ import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
 
 const Balance = (props) => {
+  const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
+
   const renderBanknotes = (
     amount,
     startX,
@@ -25,8 +27,8 @@ const Balance = (props) => {
     const bounds = containerBounds || {
       left: 0,
       top: 0,
-      right: 400, // Component width
-      bottom: 235, // Component height
+      right: 400, // Increased width when married
+      bottom: isMarried ? 260 : 235, // Component height
       padding: 0,
     };
 
@@ -205,7 +207,7 @@ const Balance = (props) => {
   const { interaction, database, i18n, coloring } = props;
 
   // --- Marriage Check ---
-  const isMarried = database?.marriageStatus?.status === "MARRIED";
+
   const combinedBankBalanceProp = database?.combinedBankBalance;
   // --- End Marriage Check ---
 
@@ -276,14 +278,19 @@ const Balance = (props) => {
   // Calculate optimal container width based on both bank and annual rate content
   const calculateOptimalWidth = () => {
     // Universal width calculation with reduced scaling for last 3 digits
+    // Now properly handles combined bank balance when married
 
     const baseWidth = 47; // Base width for minimum viable content
     const maxWidth = 350;
 
     // Calculate bank content width needs
+    // Use combined balance when married, individual balance when single
     const displayDecimalPlaces = bankStartTime > 0 || isMarried ? 5 : 2;
+    const balanceToCalculate = isMarried
+      ? combinedBankBalanceProp
+      : bankBalanceForDisplay;
     const bankBalanceLength =
-      bankBalanceForDisplay.toFixed(displayDecimalPlaces).length;
+      balanceToCalculate.toFixed(displayDecimalPlaces).length;
     const bankLabelLength = translations.bank.length;
 
     // Universal formula: full scaling for most digits, reduced scaling for last 3
@@ -304,7 +311,7 @@ const Balance = (props) => {
       baseWidth +
       balanceWidth + // Character width calculation with reduced scaling for last 3
       Math.max(0, bankLabelLength - 4) * 6 + // Label width
-      (isMarried ? 55 : 0) + // Married indicator
+      (isMarried ? 15 : 0) + // Married indicator (already accounted for in your original code)
       40; // Emoji and margins buffer
 
     // Calculate annual rate content width needs
@@ -359,693 +366,652 @@ const Balance = (props) => {
     <div
       style={{
         display: "flex",
-        width: "400px",
-        height: isMarried ? "260px" : "235px", // Use minHeight instead of fixed height
-        borderRadius: database?.bannerUrl ? "0px" : "20px",
-        padding: "20px",
-        color: textColor,
-        fontFamily: "Inter600, sans-serif",
-        position: "relative",
-        overflow: "hidden",
-        background: mainBackground,
       }}
     >
-      {/* Define wallet container bounds */}
-      {renderBanknotes(walletBalance, 145, 115, "banknotes", 50, 18, {
-        left: 60,
-        top: 45,
-        right: 220 + (visualwallet - 3) * 20,
-        bottom: 130,
-        padding: 5,
-      })}
-
-      {/* Banner Background */}
-      {database?.bannerUrl && (
-        <div
-          style={{
-            position: "absolute",
-            display: "flex",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 0,
-            overflow: "hidden",
-          }}
-        >
-          <img
-            src={database.bannerUrl}
-            alt="Banner"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center",
-              filter: "blur(8px)",
-              transform: "scale(1.1)",
-            }}
-          />
-        </div>
-      )}
-      {/* Content */}
       <div
         style={{
-          position: "relative",
-          zIndex: 1,
-          width: "100%",
           display: "flex",
-          flexDirection: "column",
+          width: "400px", // Keep original width
+          height: "235px", // Only height changes when married
+          borderRadius: database?.bannerUrl ? "0px" : "20px",
+          padding: "20px",
+          color: textColor,
+          fontFamily: "Inter600, sans-serif",
+          position: "relative",
+          overflow: "hidden",
+          background: mainBackground,
         }}
       >
-        <div style={{ display: "flex" }}>
+        {/* Define wallet container bounds - adjusted for increased width when married */}
+        {renderBanknotes(walletBalance, 145, 115, "banknotes", 50, 18, {
+          left: 60,
+          top: 45,
+          right: 220 + (visualwallet - 3) * 20,
+          bottom: 130,
+          padding: 5,
+        })}
+
+        {/* Banner Background */}
+        {database?.bannerUrl && (
           <div
             style={{
-              width: "260px",
+              position: "absolute",
               display: "flex",
-              flexDirection: "column",
-              marginLeft: "0px",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 0,
+              overflow: "hidden",
             }}
           >
+            <img
+              src={database.bannerUrl}
+              alt="Banner"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+                filter: "blur(8px)",
+                transform: "scale(1.1)",
+              }}
+            />
+          </div>
+        )}
+        {/* Content */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex" }}>
             <div
               style={{
+                width: "260px", // Keep original width
                 display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: "10px",
-                left: "1px",
+                flexDirection: "column",
+                marginLeft: "0px",
               }}
             >
-              <img
-                src={
-                  interaction?.guild?.iconURL ||
-                  "https://cdn.discordapp.com/embed/avatars/0.png"
-                }
-                alt="Guild Icon"
-                width={24}
-                height={24}
-                style={{ borderRadius: "5px" }}
-              />
-              <h2
+              <div
                 style={{
-                  margin: "0",
-                  fontSize: "24px",
                   display: "flex",
-                  marginLeft: "10px",
-                  color: textColor,
+                  flexDirection: "row",
                   alignItems: "center",
+                  gap: "10px",
+                  left: "1px",
                 }}
               >
-                {translations.title}
-                <span
+                <img
+                  src={
+                    interaction?.guild?.iconURL ||
+                    "https://cdn.discordapp.com/embed/avatars/0.png"
+                  }
+                  alt="Guild Icon"
+                  width={24}
+                  height={24}
+                  style={{ borderRadius: "5px" }}
+                />
+                <h2
                   style={{
-                    fontSize: "14px",
-                    opacity: "0.5",
-                    marginLeft: "8px",
-                    lineHeight: "24px",
+                    margin: "0",
+                    fontSize: "24px",
                     display: "flex",
+                    marginLeft: "10px",
+                    color: textColor,
                     alignItems: "center",
                   }}
                 >
-                  {interaction?.user?.username ||
-                    interaction?.user?.displayName ||
-                    "{username}"}
-                </span>
-              </h2>
-            </div>
-            {/* Define bank container bounds - use the amount used for visuals */}
-            {renderBanknotes(
-              visualBankBalanceAmount,
-              145,
-              161,
-              "bars",
-              100,
-              18,
-              {
-                left: 40,
-                top: 90,
-                right: 255 + (visualbank - 3) * 5,
-                bottom: 180,
-                padding: 5,
-              }
-            )}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                marginTop: "10px",
-                gap: "5px",
-                marginLeft: "42px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  backgroundColor: overlayBackground,
-                  borderRadius: "10px 10px 10px 0",
-                  padding: "5px 15px",
-                  alignItems: "center",
-                  alignSelf: "flex-start",
-                  minWidth: "150px",
-                  position: "relative", // Added for proper positioning context
-                  overflow: "hidden", // Added to clip overflowing banknotes
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: "24px",
-                    marginRight: "15px",
-                  }}
-                >
-                  💵
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                  }}
-                >
-                  <div
+                  {translations.title}
+                  <span
                     style={{
-                      display: "flex",
                       fontSize: "14px",
-                      color: secondaryTextColor,
-                      opacity: "0.8",
-                    }}
-                  >
-                    {translations.wallet.toUpperCase()}
-                  </div>
-                  <div
-                    style={{
+                      opacity: "0.5",
+                      marginLeft: "8px",
+                      lineHeight: "24px",
                       display: "flex",
-                      fontSize: "28px",
-                      fontWeight: "bold",
-                      color: textColor,
+                      alignItems: "center",
                     }}
                   >
-                    {/* Use Decimal for formatting wallet */}
-                    {walletBalance.toFixed(2) || "{balance}"}
-                  </div>
-                </div>
+                    {interaction?.user?.username ||
+                      interaction?.user?.displayName ||
+                      "{username}"}
+                  </span>
+                </h2>
               </div>
-
+              {/* Define bank container bounds - use the amount used for visuals - adjusted for increased width */}
+              {renderBanknotes(
+                visualBankBalanceAmount,
+                145,
+                161,
+                "bars",
+                100,
+                18,
+                {
+                  left: 40,
+                  top: 90,
+                  right: 255 + (visualbank - 3) * 5,
+                  bottom: 180,
+                  padding: 5,
+                }
+              )}
               <div
                 style={{
                   display: "flex",
-                  backgroundColor: overlayBackground,
-                  borderRadius: "0 10px 0px 0",
-                  padding: "5px 15px",
-                  alignItems: "center",
-                  alignSelf: "flex-start",
-                  minWidth: "150px",
-                  maxWidth: "300px",
-                  position: "relative", // Added for proper positioning context
-                  overflow: "hidden", // Added to clip overflowing banknotes
-                  boxSizing: "border-box", // Ensure padding is included in width calculation
-                  width: `${optimalWidth}px`, // Dynamic width based on content
+                  flexDirection: "column",
+                  marginTop: "10px",
+                  gap: "5px",
+                  marginLeft: "42px",
                 }}
               >
                 <div
                   style={{
                     display: "flex",
-                    fontSize: "24px",
-                    marginRight: "15px",
-                  }}
-                >
-                  💳
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
+                    backgroundColor: overlayBackground,
+                    borderRadius: "10px 10px 10px 0",
+                    padding: "5px 15px",
+                    alignItems: "center",
+                    alignSelf: "flex-start",
+                    minWidth: "150px",
+                    position: "relative", // Added for proper positioning context
+                    overflow: "hidden", // Added to clip overflowing banknotes
                   }}
                 >
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      width: "100%",
+                      fontSize: "24px",
+                      marginRight: "15px",
+                    }}
+                  >
+                    💵
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
                         fontSize: "14px",
-                        opacity: "0.8",
                         color: secondaryTextColor,
+                        opacity: "0.8",
                       }}
                     >
-                      {translations.bank.toUpperCase()}
-                      {/* Add clarification if married */}
-                      {isMarried && (
-                        <span
-                          style={{
-                            opacity: 0.7,
-                            marginLeft: "2px",
-                            marginTop: "4px",
-                            fontSize: "8px",
-                          }}
-                        >
-                          ({translations.yours}:{" "}
-                          {individualBankBalance.toFixed(2)})
-                        </span>
-                      )}
+                      {translations.wallet.toUpperCase()}
                     </div>
-                    {/* Show user's bank rate even if balance is combined */}
-                    {bankStartTime > 0 && bankRate > 0 ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          fontSize: "14px",
-                          opacity: "0.6",
-                          color: textColor,
-                        }}
-                      >
-                        ≈
-                        {(() => {
-                          const MS_PER_HOUR = 60 * 60 * 1000;
-                          const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
-                          const hourlyRate =
-                            (bankRate / 100) * (MS_PER_HOUR / MS_PER_YEAR);
-                          return bankBalanceForDisplay
-                            .mul(hourlyRate)
-                            .toFixed(3);
-                        })()}
-                        /h
-                      </div>
-                    ) : null}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      fontSize: "28px",
-                      fontWeight: "bold",
-                      alignItems: "baseline",
-                      width: "100%",
-                    }}
-                  >
-                    {/* Display logic using bankBalanceForDisplay */}
-                    {bankStartTime > 0 || isMarried ? ( // Show detailed format if interest running OR married
-                      <div style={{ display: "flex", alignItems: "baseline" }}>
-                        <div style={{ display: "flex" }}>
-                          {Math.floor(bankBalanceForDisplay.toNumber())}
-                        </div>
-                        <div style={{ display: "flex" }}>.</div>
-                        <div style={{ display: "flex" }}>
-                          {(bankBalanceForDisplay.toNumber() % 1)
-                            .toFixed(5)
-                            .substring(2)
-                            .split("")
-                            .map((digit, i) => (
-                              <div
-                                key={i}
-                                style={{
-                                  display: "flex",
-                                  fontSize: i < 2 ? 28 : 18,
-                                  paddingTop: i < 2 ? 0 : 10,
-                                }}
-                              >
-                                {digit}
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex" }}>
-                        {/* Fallback simple format */}
-                        {bankBalanceForDisplay.toFixed(2) || "{bank}"}
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "28px",
+                        fontWeight: "bold",
+                        color: textColor,
+                      }}
+                    >
+                      {/* Use Decimal for formatting wallet */}
+                      {walletBalance.toFixed(2) || "{balance}"}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {/* Bank Annual Rate Display */}
 
-              <div
-                style={{
-                  display: "flex",
-                  backgroundColor:
-                    bankStartTime == 0
-                      ? "rgba(137, 137, 137, 0.5)"
-                      : coloring?.isDarkText
-                      ? "rgba(255, 166, 0, 0.3)"
-                      : "rgba(255, 166, 0, 1)",
-                  color: coloring?.isDarkText ? "#000" : "#FFF",
-                  borderRadius: isMarried ? "0 0px 10px 0" : "0 0px 10px 10px",
-                  padding: "5px 15px",
-                  marginTop: "-5px",
-                  alignItems: "center",
-                  alignSelf: "flex-start",
-                  width: `${optimalWidth}px`, // Dynamic width to match bank container
-                  position: "relative", // Match bank container
-                  overflow: "hidden", // Match bank container
-                  boxSizing: "border-box", // Ensure padding is included in width calculation
-                }}
-              >
                 <div
                   style={{
                     display: "flex",
-                    width: "100%", // Take full width of container
-                    fontSize: (() => {
-                      // Calculate dynamic font size based on text length for Satori
-                      const timeText = prettyMilliseconds(
-                        Date.now() - Number(bankStartTime),
-                        {
-                          colonNotation: true,
-                          secondsDecimalDigits: 0,
-                        }
-                      );
-                      const annualText = `${bankRate}% ${translations.annual} (${timeText})`;
-                      const textLength = annualText.length;
-
-                      // Scale font size based on text length (shorter text = larger font)
-                      // These thresholds work well for the 150px min width
-                      if (textLength <= 22) return "14px";
-                      if (textLength <= 26) return "13px";
-                      if (textLength <= 30) return "12px";
-                      if (textLength <= 34) return "11px";
-                      return "10px"; // Minimum font size for very long text
-                    })(),
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    justifyContent: "center", // Center the text
-                    alignItems: "center", // Ensure vertical centering consistency
-                    boxSizing: "border-box", // Include padding in width calculation
-                  }}
-                >
-                  {bankRate}
-                  {"% "}
-                  {translations.annual}{" "}
-                  {bankStartTime > 0
-                    ? prettyMilliseconds(Date.now() - Number(bankStartTime), {
-                        colonNotation: true,
-                        secondsDecimalDigits: 0,
-                      })
-                    : ""}
-                </div>
-              </div>
-
-              {/* NEW: Marriage Status Display */}
-              {isMarried && marriageCreatedAt && (
-                <div
-                  style={{
-                    display: "flex",
-                    backgroundColor: coloring?.isDarkText
-                      ? "rgba(255, 100, 100, 0.3)" // Light red for dark text
-                      : "rgba(200, 50, 50, 0.8)", // Darker red for light text
-                    color: coloring?.isDarkText ? "#000" : "#FFF",
-                    borderRadius:
-                      bankStartTime > 0 && bankRate > 0
-                        ? "0px 10px 10px 10px"
-                        : "10px",
-                    padding: "5px 10px", // Adjusted padding
-                    marginTop: "-5px", // Overlap slightly if annual rate exists
+                    backgroundColor: overlayBackground,
+                    borderRadius: "0 10px 0px 0",
+                    padding: "5px 15px",
                     alignItems: "center",
                     alignSelf: "flex-start",
                     minWidth: "150px",
                     maxWidth: "300px",
-                    gap: "8px", // Add gap between items
+                    position: "relative", // Added for proper positioning context
+                    overflow: "hidden", // Added to clip overflowing banknotes
+                    boxSizing: "border-box", // Ensure padding is included in width calculation
+                    width: `${optimalWidth}px`, // Dynamic width based on content
                   }}
                 >
-                  <span style={{ fontSize: "18px" }}>💍</span>
-                  {/* Use the passed avatar URL and username */}
-                  <img
-                    src={partnerAvatarUrl}
-                    alt={partnerUsername}
-                    width={18} // Smaller avatar
-                    height={18}
-                    style={{ borderRadius: "50%" }} // Circular avatar
-                  />
                   <div
                     style={{
                       display: "flex",
-                      fontSize: "14px",
+                      fontSize: "24px",
+                      marginRight: "15px",
+                    }}
+                  >
+                    💳
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          fontSize: "14px",
+                          opacity: "0.8",
+                          color: secondaryTextColor,
+                        }}
+                      >
+                        {translations.bank.toUpperCase()}
+                        {/* Add clarification if married */}
+                        {isMarried && (
+                          <span
+                            style={{
+                              opacity: 0.7,
+                              marginLeft: "2px",
+                              marginTop: "4px",
+                              fontSize: "8px",
+                            }}
+                          >
+                            ({translations.yours}:{" "}
+                            {individualBankBalance.toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                      {/* Show user's bank rate even if balance is combined */}
+                      {bankStartTime > 0 && bankRate > 0 ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            fontSize: "14px",
+                            opacity: "0.6",
+                            color: textColor,
+                          }}
+                        >
+                          ≈
+                          {(() => {
+                            const MS_PER_HOUR = 60 * 60 * 1000;
+                            const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
+                            const hourlyRate =
+                              (bankRate / 100) * (MS_PER_HOUR / MS_PER_YEAR);
+                            return bankBalanceForDisplay
+                              .mul(hourlyRate)
+                              .toFixed(3);
+                          })()}
+                          /h
+                        </div>
+                      ) : null}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "28px",
+                        fontWeight: "bold",
+                        alignItems: "baseline",
+                        width: "100%",
+                      }}
+                    >
+                      {/* Display logic using bankBalanceForDisplay */}
+                      {bankStartTime > 0 || isMarried ? ( // Show detailed format if interest running OR married
+                        <div
+                          style={{ display: "flex", alignItems: "baseline" }}
+                        >
+                          <div style={{ display: "flex" }}>
+                            {Math.floor(bankBalanceForDisplay.toNumber())}
+                          </div>
+                          <div style={{ display: "flex" }}>.</div>
+                          <div style={{ display: "flex" }}>
+                            {(bankBalanceForDisplay.toNumber() % 1)
+                              .toFixed(5)
+                              .substring(2)
+                              .split("")
+                              .map((digit, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    display: "flex",
+                                    fontSize: i < 2 ? 28 : 18,
+                                    paddingTop: i < 2 ? 0 : 10,
+                                  }}
+                                >
+                                  {digit}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex" }}>
+                          {/* Fallback simple format */}
+                          {bankBalanceForDisplay.toFixed(2) || "{bank}"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {/* Bank Annual Rate Display */}
+
+                <div
+                  style={{
+                    display: "flex",
+                    backgroundColor:
+                      bankStartTime == 0
+                        ? "rgba(137, 137, 137, 0.5)"
+                        : coloring?.isDarkText
+                        ? "rgba(255, 166, 0, 0.3)"
+                        : "rgba(255, 166, 0, 1)",
+                    color: coloring?.isDarkText ? "#000" : "#FFF",
+                    borderRadius: "0 0px 10px 10px",
+                    padding: "5px 15px",
+                    marginTop: "-5px",
+                    alignItems: "center",
+                    alignSelf: "flex-start",
+                    width: `${optimalWidth}px`, // Dynamic width to match bank container
+                    position: "relative", // Match bank container
+                    overflow: "hidden", // Match bank container
+                    boxSizing: "border-box", // Ensure padding is included in width calculation
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      width: "100%", // Take full width of container
+                      fontSize: (() => {
+                        // Calculate dynamic font size based on text length for Satori
+                        const timeText = prettyMilliseconds(
+                          Date.now() - Number(bankStartTime),
+                          {
+                            colonNotation: true,
+                            secondsDecimalDigits: 0,
+                          }
+                        );
+                        const annualText = `${bankRate}% ${translations.annual} (${timeText})`;
+                        const textLength = annualText.length;
+
+                        // Scale font size based on text length (shorter text = larger font)
+                        // These thresholds work well for the 150px min width
+                        if (textLength <= 22) return "14px";
+                        if (textLength <= 26) return "13px";
+                        if (textLength <= 30) return "12px";
+                        if (textLength <= 34) return "11px";
+                        return "10px"; // Minimum font size for very long text
+                      })(),
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
+                      justifyContent: "center", // Center the text
+                      alignItems: "center", // Ensure vertical centering consistency
+                      boxSizing: "border-box", // Include padding in width calculation
                     }}
                   >
-                    {translations.married} (
-                    {prettyMilliseconds(
-                      Date.now() - new Date(marriageCreatedAt).getTime()
-                    )}
-                    )
+                    {bankRate}
+                    {"% "}
+                    {translations.annual}{" "}
+                    {bankStartTime > 0
+                      ? prettyMilliseconds(Date.now() - Number(bankStartTime), {
+                          colonNotation: true,
+                          secondsDecimalDigits: 0,
+                        })
+                      : ""}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              width: "90px",
-              height: "90px",
-              borderRadius: "25px",
-              overflow: "hidden",
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
-              position: "absolute",
-              top: "5px",
-              right: "5px",
-            }}
-          >
             <div
               style={{
                 display: "flex",
-                width: "100%",
-                height: "100%",
+                width: "90px",
+                height: "90px",
+                borderRadius: "25px",
+                overflow: "hidden",
+                backgroundColor: "rgba(0, 0, 0, 0.3)",
+                position: "absolute",
+                top: "5px",
+                right: "5px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  height: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <img
+                  src={
+                    interaction?.user?.avatarURL ||
+                    "https://cdn.discordapp.com/embed/avatars/0.png"
+                  }
+                  alt="User"
+                  width="90"
+                  height="90"
+                  style={{
+                    objectFit: "cover",
+                    borderRadius: "25px",
+                    border: `1px solid ${coloring.overlayBackground}`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                position: "absolute",
+                textAlign: "center",
+                top: "98px",
+                right: "5px",
+                display: "flex",
+                fontSize: "8px",
+                opacity: "0.4",
+                color: tertiaryTextColor,
+                width: "90px",
                 justifyContent: "center",
                 alignItems: "center",
+                height: "12px",
               }}
             >
-              <img
-                src={
-                  interaction?.user?.avatarURL ||
-                  "https://cdn.discordapp.com/embed/avatars/0.png"
-                }
-                alt="User"
-                width="90"
-                height="90"
-                style={{
-                  objectFit: "cover",
-                  borderRadius: "25px",
-                  border: `1px solid ${coloring.overlayBackground}`,
-                }}
-              />
+              #{interaction?.user?.id || "{id}"}
             </div>
           </div>
-
-          <div
-            style={{
-              position: "absolute",
-              textAlign: "center",
-              top: "98px",
-              right: "5px",
-              display: "flex",
-              fontSize: "8px",
-              opacity: "0.4",
-              color: tertiaryTextColor,
-              width: "90px",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "12px",
-            }}
-          >
-            #{interaction?.user?.id || "{id}"}
-          </div>
         </div>
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          zIndex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          bottom: "10%",
-          right: "6%",
-        }}
-      ></div>
-      {/* Level Bars - Positioned on the left side */}
-      <div
-        style={{
-          position: "absolute",
-          left: "22px",
-          top: "59px",
-          width: "36px",
-          height: "156px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-          zIndex: 1,
-        }}
-      >
-        {/* Hard-limited total height with proportional bar distribution */}
-        {(() => {
-          const maxLevel = Math.max(chattingLevel, gamingLevel, 1); // Ensure at least 1 to avoid division by zero
-          const totalMaxHeight = 147; // Hard limit for combined height of both bars
-          const minBarHeight = 55; // Minimum height for each bar
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            bottom: "10%",
+            right: "6%",
+          }}
+        ></div>
+        {/* Level Bars - Positioned on the left side */}
+        <div
+          style={{
+            position: "absolute",
+            left: "22px",
+            top: "59px",
+            width: "36px",
+            height: "156px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            zIndex: 1,
+          }}
+        >
+          {/* Hard-limited total height with proportional bar distribution */}
+          {(() => {
+            const maxLevel = Math.max(chattingLevel, gamingLevel, 1); // Ensure at least 1 to avoid division by zero
+            const totalMaxHeight = 147; // Hard limit for combined height of both bars
+            const minBarHeight = 55; // Minimum height for each bar
 
-          // Calculate level ratios
-          const chattingRatio = chattingLevel / maxLevel;
-          const gamingRatio = gamingLevel / maxLevel;
+            // Calculate level ratios
+            const chattingRatio = chattingLevel / maxLevel;
+            const gamingRatio = gamingLevel / maxLevel;
 
-          // Calculate ideal heights based on levels
-          const idealChattingHeight =
-            minBarHeight + (totalMaxHeight - minBarHeight * 2) * chattingRatio;
-          const idealGamingHeight =
-            minBarHeight + (totalMaxHeight - minBarHeight * 2) * gamingRatio;
+            // Calculate ideal heights based on levels
+            const idealChattingHeight =
+              minBarHeight +
+              (totalMaxHeight - minBarHeight * 2) * chattingRatio;
+            const idealGamingHeight =
+              minBarHeight + (totalMaxHeight - minBarHeight * 2) * gamingRatio;
 
-          // Ensure minimum heights and cap total
-          const totalIdealHeight = idealChattingHeight + idealGamingHeight;
+            // Ensure minimum heights and cap total
+            const totalIdealHeight = idealChattingHeight + idealGamingHeight;
 
-          if (totalIdealHeight <= totalMaxHeight) {
-            // If total fits within limit, use ideal heights
-            var chattingHeight = Math.max(minBarHeight, idealChattingHeight);
-            var gamingHeight = Math.max(minBarHeight, idealGamingHeight);
-          } else {
-            // If total exceeds limit, scale down proportionally
-            const scaleFactor = totalMaxHeight / totalIdealHeight;
-            var chattingHeight = Math.max(
-              minBarHeight,
-              idealChattingHeight * scaleFactor
-            );
-            var gamingHeight = Math.max(
-              minBarHeight,
-              idealGamingHeight * scaleFactor
-            );
-          }
+            if (totalIdealHeight <= totalMaxHeight) {
+              // If total fits within limit, use ideal heights
+              var chattingHeight = Math.max(minBarHeight, idealChattingHeight);
+              var gamingHeight = Math.max(minBarHeight, idealGamingHeight);
+            } else {
+              // If total exceeds limit, scale down proportionally
+              const scaleFactor = totalMaxHeight / totalIdealHeight;
+              var chattingHeight = Math.max(
+                minBarHeight,
+                idealChattingHeight * scaleFactor
+              );
+              var gamingHeight = Math.max(
+                minBarHeight,
+                idealGamingHeight * scaleFactor
+              );
+            }
 
-          return [
-            /* Chatting Level - Dynamic height */
-            <div
-              key="chatting-level"
-              style={{
-                width: "36px",
-                height: `${chattingHeight}px`,
-                background: `linear-gradient(to bottom, ${overlayBackground}, rgba(193, 86, 255, 0.5))`,
-                borderRadius: "10px 10px 0 0",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                paddingTop: "2px",
-              }}
-            >
+            return [
+              /* Chatting Level - Dynamic height */
               <div
+                key="chatting-level"
                 style={{
-                  fontSize: "6px",
-                  color: secondaryTextColor,
-                  marginTop: "3px",
-                  textTransform: "uppercase",
-                  fontFamily: "Inter600",
-                  marginBottom: "2px",
+                  width: "36px",
+                  height: `${chattingHeight}px`,
+                  background: `linear-gradient(to bottom, ${overlayBackground}, rgba(193, 86, 255, 0.5))`,
+                  borderRadius: "10px 10px 0 0",
+                  position: "relative",
                   display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  paddingTop: "2px",
                 }}
               >
-                {translations.chatting || "ЧАТТИНГ"}
-              </div>
-              <div
-                style={{
-                  width: "100%",
-                  height: `${Math.max(0, chattingHeight * chatFillRatio)}px`, // XP-based fill height
-                  background: "#bd4eff",
-                  position: "absolute",
-                  bottom: "0",
-                  left: "0",
-                  borderRadius: "0 0 0 0",
-                  display: "flex",
-                }}
-              />
-              <div
-                style={{
-                  fontSize: "24px",
-                  color: textColor,
-                  fontFamily: "Inter600",
-                  position: "absolute",
-                  bottom: "8px",
-                  display: "flex",
-                  alignItems: "baseline",
-                }}
-              >
-                <span>{chattingLevel}</span>
-                <span
+                <div
                   style={{
-                    fontSize: "8px",
-                    marginLeft: "1px",
-                    top: "-3px",
+                    fontSize: "6px",
+                    color: secondaryTextColor,
+                    marginTop: "3px",
+                    textTransform: "uppercase",
+                    fontFamily: "Inter600",
+                    marginBottom: "2px",
+                    display: "flex",
                   }}
                 >
-                  lvl
-                </span>
-              </div>
-            </div>,
-
-            /* Gaming Level - Dynamic height */
-            <div
-              key="gaming-level"
-              style={{
-                width: "36px",
-                height: `${gamingHeight}px`,
-                background: `linear-gradient(to bottom, ${overlayBackground}, rgba(255, 90, 90, 0.5))`,
-                borderRadius: "0 0 12px 12px",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                paddingTop: "2px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "6px",
-                  color: secondaryTextColor,
-                  marginTop: "3px",
-                  textTransform: "uppercase",
-                  fontFamily: "Inter600",
-                  marginBottom: "2px",
-                  display: "flex",
-                }}
-              >
-                {translations.gaming || "ГЕЙМИНГ"}
-              </div>
-              <div
-                style={{
-                  width: "100%",
-                  height: `${Math.max(0, gamingHeight * gameFillRatio)}px`, // XP-based fill height
-                  background: "#d55656",
-                  position: "absolute",
-                  bottom: "0",
-                  left: "0",
-                  borderRadius: "0 0 12px 12px",
-                  display: "flex",
-                }}
-              />
-              <div
-                style={{
-                  fontSize: "24px",
-                  color: textColor,
-                  fontFamily: "Inter600",
-                  position: "absolute",
-                  bottom: "12px",
-                  display: "flex",
-                  alignItems: "baseline",
-                }}
-              >
-                <span>{gamingLevel}</span>
-                <span
-                  style={{ fontSize: "8px", marginLeft: "1px", top: "-3px" }}
+                  {translations.chatting || "ЧАТТИНГ"}
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: `${Math.max(0, chattingHeight * chatFillRatio)}px`, // XP-based fill height
+                    background: "#bd4eff",
+                    position: "absolute",
+                    bottom: "0",
+                    left: "0",
+                    borderRadius: "0 0 0 0",
+                    display: "flex",
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: "24px",
+                    color: textColor,
+                    fontFamily: "Inter600",
+                    position: "absolute",
+                    bottom: "8px",
+                    display: "flex",
+                    alignItems: "baseline",
+                  }}
                 >
-                  lvl
-                </span>
-              </div>
-            </div>,
-          ];
-        })()}
-      </div>
+                  <span>{chattingLevel}</span>
+                  <span
+                    style={{
+                      fontSize: "8px",
+                      marginLeft: "1px",
+                      top: "-3px",
+                    }}
+                  >
+                    lvl
+                  </span>
+                </div>
+              </div>,
 
-      {/*
+              /* Gaming Level - Dynamic height */
+              <div
+                key="gaming-level"
+                style={{
+                  width: "36px",
+                  height: `${gamingHeight}px`,
+                  background: `linear-gradient(to bottom, ${overlayBackground}, rgba(255, 90, 90, 0.5))`,
+                  borderRadius: "0 0 12px 12px",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  paddingTop: "2px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "6px",
+                    color: secondaryTextColor,
+                    marginTop: "3px",
+                    textTransform: "uppercase",
+                    fontFamily: "Inter600",
+                    marginBottom: "2px",
+                    display: "flex",
+                  }}
+                >
+                  {translations.gaming || "ГЕЙМИНГ"}
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: `${Math.max(0, gamingHeight * gameFillRatio)}px`, // XP-based fill height
+                    background: "#d55656",
+                    position: "absolute",
+                    bottom: "0",
+                    left: "0",
+                    borderRadius: "0 0 12px 12px",
+                    display: "flex",
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: "24px",
+                    color: textColor,
+                    fontFamily: "Inter600",
+                    position: "absolute",
+                    bottom: "12px",
+                    display: "flex",
+                    alignItems: "baseline",
+                  }}
+                >
+                  <span>{gamingLevel}</span>
+                  <span
+                    style={{ fontSize: "8px", marginLeft: "1px", top: "-3px" }}
+                  >
+                    lvl
+                  </span>
+                </div>
+              </div>,
+            ];
+          })()}
+        </div>
+
+        {/*
       <div
         style={{
           position: "absolute",
@@ -1089,80 +1055,88 @@ const Balance = (props) => {
         </div>
       </div> WIP*/}
 
-      {/* Marriage Status - Repositioned to bottom area - moved right */}
-      <div
-        style={{
-          position: "absolute",
-          left: "80px",
-          top: "238px",
-          width: "171px",
-          height: "31px",
-          backgroundColor: "#bb3d36",
-          borderRadius: "0 0 10px 10px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            left: "6px",
-            top: "6px",
-            width: "19.5px",
-            height: "19.5px",
-            fontSize: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          💍
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            left: "30px",
-            top: "6px",
-            width: "19px",
-            height: "19px",
-            backgroundColor: "#B1B2B5",
-            borderRadius: "50%",
-            display: "flex",
-          }}
-        />
-        <div
-          style={{
-            fontSize: "14px",
-            color: textColor,
-            fontWeight: "400",
-            fontFamily: "Inter, sans-serif",
-            marginLeft: "27px",
-            display: "flex",
-          }}
-        >
-          {isMarried && marriageCreatedAt
-            ? `${translations.married} (${prettyMilliseconds(
-                Date.now() - new Date(marriageCreatedAt).getTime()
-              )})`
-            : translations.married}
-        </div>
+        {/* Marriage Status - Bottom banner - only show when married - original positioning */}
+
+        {/* Render banknotes above the Balance rectangle */}
       </div>
 
-      {/* Render banknotes above the Balance rectangle */}
+      {isMarried && (
+        <div
+          style={{
+            position: "absolute",
+            left: "25px",
+            top: "235px",
+            minWidth: "160px",
+            width: "auto",
+            maxWidth: "280px",
+            height: "31px",
+
+            backgroundColor: "#bb3d36",
+            borderRadius: "0 0 10px 10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            zIndex: 1,
+            padding: "0 12px 0 8px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: "8px",
+              flexShrink: "0",
+            }}
+          >
+            💍
+          </div>
+          <img
+            src={partnerAvatarUrl}
+            alt={partnerUsername}
+            width={19}
+            height={19}
+            style={{
+              borderRadius: "50%",
+              display: "flex",
+              flexShrink: "0",
+              marginRight: "8px",
+              objectFit: "cover",
+            }}
+          />
+          <div
+            style={{
+              fontSize: "14px",
+              color: textColor,
+              fontFamily: "Inter600",
+              display: "flex",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              flex: "1",
+              minWidth: "0",
+            }}
+          >
+            {marriageCreatedAt
+              ? `${translations.married} (${prettyMilliseconds(
+                  Date.now() - new Date(marriageCreatedAt).getTime()
+                )})`
+              : translations.married}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Update the dimensions calculation
+// Update the dimensions calculation - make width dynamic too
 Balance.dimensions = {
   width: 400,
-  height: (props) => {
-    console.log("PROPS");
-    console.log(props);
-    const isMarried = props?.database?.marriageStatus?.status;
-    return isMarried ? 260 : 235;
+  height: function (props) {
+    const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
+    return isMarried ? 267 : 235;
   },
 };
 
