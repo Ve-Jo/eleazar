@@ -934,10 +934,9 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
           Math.round(dimensions.height * scaling.image)
         )
         .avif({
-          quality: 85,
+          quality: 90,
           effort: 4,
           chromaSubsampling: "4:2:0",
-          bitdepth: 8,
         })
         .toBuffer();
       console.log(
