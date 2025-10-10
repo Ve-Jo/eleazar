@@ -459,6 +459,8 @@ const Leaderboard = (props) => {
             {user.bannerUrl && (
               <img
                 src={user.bannerUrl}
+                width="100"
+                height="100"
                 style={{
                   position: "absolute",
                   top: "0",
@@ -499,8 +501,8 @@ const Leaderboard = (props) => {
                     "https://cdn.discordapp.com/embed/avatars/0.png"
                   }
                   alt="User Avatar"
-                  width={40}
-                  height={40}
+                  width="40"
+                  height="40"
                   style={{ borderRadius: "15%", display: "block" }}
                 />
               </div>
