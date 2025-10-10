@@ -10,7 +10,6 @@ import {
 import hubClient, { CRATE_TYPES } from "../../api/hubClient.js";
 import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.js";
-import CratesDisplay from "../../render-server/components/CratesDisplay.jsx";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
@@ -125,6 +124,39 @@ export default {
       ru: "Произошла ошибка при обработке вашего запроса.",
       uk: "Сталася помилка під час обробки вашого запиту.",
     },
+    types: {
+      daily: {
+        name: {
+          en: "Daily Crate",
+          ru: "Ежедневный ящик",
+          uk: "Щоденна скриня",
+        },
+        description: {
+          en: "A crate you can open once every 24 hours",
+          ru: "Ящик, который можно открыть раз в 24 часа",
+          uk: "Скриня, яку можна відкрити раз на 24 години",
+        },
+      },
+      weekly: {
+        name: {
+          en: "Weekly Crate",
+          ru: "Еженедельный ящик",
+          uk: "Щотижнева скриня",
+        },
+        description: {
+          en: "A crate you can open once every 7 days",
+          ru: "Ящик, который можно открыть раз в 7 дней",
+          uk: "Скриня, яку можна відкрити раз на 7 днів",
+        },
+      },
+      special: {
+        description: {
+          en: "A special crate with unique rewards",
+          ru: "Особый ящик с уникальными наградами",
+          uk: "Особлива скриня з унікальними нагородами",
+        },
+      },
+    },
   },
 
   async execute(interaction, i18n) {
@@ -184,7 +216,10 @@ export default {
     }
 
     try {
-      const { crateName, crateEmoji } = this.getCrateInfo(requestedCase, i18n);
+      const { crateName, crateEmoji } = this.getCrateInfo(
+        requestedCase,
+        interaction.locale
+      );
       const rewardMessage = await this.openCaseAndCreateMessage(
         interaction,
         i18n,
@@ -356,11 +391,15 @@ export default {
     const cratesList = [
       {
         id: "daily",
-        name: this.getCrateTranslation("types.daily.name", "Daily Crate", i18n),
+        name: this.getCrateTranslation(
+          "types.daily.name",
+          "Daily Crate",
+          interaction.locale
+        ),
         description: this.getCrateTranslation(
           "types.daily.description",
           "A crate you can open once every 24 hours",
-          i18n
+          interaction.locale
         ),
         emoji: CRATE_TYPES.daily.emoji,
         available: dailyCooldown <= 0,
@@ -372,12 +411,12 @@ export default {
         name: this.getCrateTranslation(
           "types.weekly.name",
           "Weekly Crate",
-          i18n
+          interaction.locale
         ),
         description: this.getCrateTranslation(
           "types.weekly.description",
           "A crate you can open once every 7 days",
-          i18n
+          interaction.locale
         ),
         emoji: CRATE_TYPES.weekly.emoji,
         available: weeklyCooldown <= 0,
@@ -394,12 +433,12 @@ export default {
           name: this.getCrateTranslation(
             `types.${crate.type}.name`,
             crate.type,
-            i18n
+            interaction.locale
           ),
           description: this.getCrateTranslation(
             `types.${crate.type}.description`,
             "A special crate with unique rewards",
-            i18n
+            interaction.locale
           ),
           emoji: "🎁",
           available: true,
@@ -425,11 +464,14 @@ export default {
       : 0;
   },
 
-  getCrateTranslation(path, defaultValue, i18n) {
-    const userLocale = i18n.getUserLocale ? i18n.getUserLocale() : "en";
+  getCrateTranslation(path, defaultValue, interactionLocale) {
+    // Use the interaction locale directly, falling back to English
+    const userLocale = interactionLocale
+      ? interactionLocale.split("-")[0]
+      : "en";
 
     const pathParts = path.split(".");
-    let result = CratesDisplay.localization_strings;
+    let result = this.localization_strings;
 
     for (const part of pathParts) {
       if (!result[part]) return defaultValue;
@@ -439,11 +481,11 @@ export default {
     return result[userLocale] || result.en || defaultValue;
   },
 
-  getCrateInfo(requestedCase, i18n) {
+  getCrateInfo(requestedCase, interactionLocale) {
     const crateName = this.getCrateTranslation(
       `types.${requestedCase}.name`,
       requestedCase,
-      i18n
+      interactionLocale
     );
     const crateEmoji = CRATE_TYPES[requestedCase]?.emoji || "🎁";
 
@@ -507,7 +549,7 @@ export default {
         interaction,
         i18n,
         selectedCrateInfo.id,
-        selectedCrateInfo.name,
+        selectedCrateInfo.name, // This is already localized from buildCratesList
         selectedCrateInfo.emoji,
         builderMode,
         "INTERACTIVE CASE OPENING"

@@ -10,8 +10,6 @@ import {
 } from "discord.js";
 import hubClient, { UPGRADES } from "../../api/hubClient.js";
 import { generateImage } from "../../utils/imageGenerator.js";
-// Import the UpgradesDisplay component to access its localizations
-import UpgradesDisplay from "../../render-server/components/UpgradesDisplay.jsx";
 import { ComponentBuilder } from "../../utils/componentConverter.js";
 
 export default {
@@ -116,6 +114,68 @@ export default {
       ru: "Просмотреть и купить улучшения",
       uk: "Переглянути та купити покращення",
     },
+    upgrades: {
+      daily_bonus: {
+        name: {
+          en: "Daily Bonus",
+          ru: "Ежедн. Бонус",
+          uk: "Щоденний Бонус",
+        },
+        description: {
+          en: "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      daily_cooldown: {
+        name: {
+          en: "Daily Cooldown",
+          ru: "Перезарядка Ежедн.",
+          uk: "Перезарядка Щоденного",
+        },
+        description: {
+          en: "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+          ru: "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+          uk: "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+        },
+      },
+      crime: {
+        name: {
+          en: "Crime Cooldown",
+          ru: "Преступления",
+          uk: "Крадіжка",
+        },
+        description: {
+          en: "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+          ru: "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+          uk: "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+        },
+      },
+      bank_rate: {
+        name: {
+          en: "Bank Interest",
+          ru: "Банк. Процент",
+          uk: "Банк. Відсоток",
+        },
+        description: {
+          en: "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      games_earning: {
+        name: {
+          en: "Games Earnings",
+          ru: "Доход от Игр",
+          uk: "Дохід від Ігор",
+        },
+        description: {
+          en: "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+    },
   },
 
   async execute(interaction, i18n) {
@@ -135,10 +195,10 @@ export default {
         ? i18n.getUserLocale()
         : interaction.locale.split("-")[0].toLowerCase();
 
-      // Helper function to get translations from UpgradesDisplay
+      // Helper function to get translations from command localization strings
       const getUpgradeTranslation = (path, defaultValue) => {
         const pathParts = path.split(".");
-        let result = UpgradesDisplay.localization_strings;
+        let result = this.localization_strings;
         for (const part of pathParts) {
           if (!result[part]) return defaultValue;
           result = result[part];
@@ -413,7 +473,7 @@ export default {
                 effectValue = upgrade.effect * 100;
               }
 
-              // Get upgrade name and description from UpgradesDisplay
+              // Get upgrade name and description from command localization strings
               const upgradeName = getUpgradeTranslation(
                 `upgrades.${key}.name`,
                 key
@@ -580,7 +640,7 @@ export default {
 
             // Cache invalidation is handled by the hub service
 
-            // Get the upgrade name from UpgradesDisplay for the success message
+            // Get the upgrade name from command localization strings for the success message
             const upgradeName = getUpgradeTranslation(
               `upgrades.${type}.name`,
               type
