@@ -46,7 +46,20 @@
         "rewardCoins": "• {{amount}} монет\n",
         "rewardXp": "• {{amount}} досвіду\n",
         "rewardDiscount": "• {{amount}}% знижки\n",
-        "error": "Сталася помилка під час обробки вашого запиту."
+        "error": "Сталася помилка під час обробки вашого запиту.",
+        "types": {
+          "daily": {
+            "name": "Щоденна скриня",
+            "description": "Скриня, яку можна відкрити раз на 24 години"
+          },
+          "weekly": {
+            "name": "Щотижнева скриня",
+            "description": "Скриня, яку можна відкрити раз на 7 днів"
+          },
+          "special": {
+            "description": "Особлива скриня з унікальними нагородами"
+          }
+        }
       },
       "balance": {
         "command": {
@@ -149,7 +162,29 @@
         "revertSuccess": "Успішно відмінено покращення {{type}} до рівня {{level}} і отримано {{refund}} монет (85% повернення)",
         "revertCooldown": "Перезарядка активна. Ви можете відмінити інше покращення через {{minutes}} хвилин",
         "cannotRevert": "Неможливо відмінити покращення рівня 1",
-        "description": "Переглянути та купити покращення"
+        "description": "Переглянути та купити покращення",
+        "upgrades": {
+          "daily_bonus": {
+            "name": "Щоденний Бонус",
+            "description": "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "daily_cooldown": {
+            "name": "Перезарядка Щоденного",
+            "description": "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)"
+          },
+          "crime": {
+            "name": "Крадіжка",
+            "description": "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)"
+          },
+          "bank_rate": {
+            "name": "Банк. Відсоток",
+            "description": "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "games_earning": {
+            "name": "Дохід від Ігор",
+            "description": "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)"
+          }
+        }
       },
       "withdraw": {
         "command": {

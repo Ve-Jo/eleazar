@@ -34,7 +34,20 @@
         "rewardCoins": "• {{amount}} coins\n",
         "rewardXp": "• {{amount}} XP\n",
         "rewardDiscount": "• {{amount}}% discount\n",
-        "error": "An error occurred while processing your request."
+        "error": "An error occurred while processing your request.",
+        "types": {
+          "daily": {
+            "name": "Daily Crate",
+            "description": "A crate you can open once every 24 hours"
+          },
+          "weekly": {
+            "name": "Weekly Crate",
+            "description": "A crate you can open once every 7 days"
+          },
+          "special": {
+            "description": "A special crate with unique rewards"
+          }
+        }
       },
       "balance": {
         "title": "Balance"
@@ -107,7 +120,29 @@
         "revertSuccess": "Successfully reverted {{type}} to level {{level}} and received {{refund}} coins (85% refund)",
         "revertCooldown": "Cooldown active. You can revert another upgrade in {{minutes}} minutes",
         "cannotRevert": "Cannot revert a level 1 upgrade",
-        "description": "View and purchase upgrades"
+        "description": "View and purchase upgrades",
+        "upgrades": {
+          "daily_bonus": {
+            "name": "Daily Bonus",
+            "description": "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "daily_cooldown": {
+            "name": "Daily Cooldown",
+            "description": "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+          },
+          "crime": {
+            "name": "Crime Cooldown",
+            "description": "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+          },
+          "bank_rate": {
+            "name": "Bank Interest",
+            "description": "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "games_earning": {
+            "name": "Games Earnings",
+            "description": "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)"
+          }
+        }
       },
       "withdraw": {
         "insufficientFunds": "Insufficient funds",
