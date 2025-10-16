@@ -32,14 +32,6 @@ export default {
               value: "2048",
             },
             {
-              name: "rpg_clicker2",
-              value: "rpg_clicker2",
-            },
-            /*{
-              name: "mining2",
-              value: "mining2",
-            },*/
-            {
               name: "coinflip",
               value: "coinflip",
             },
@@ -147,10 +139,6 @@ export default {
   },
 
   async execute(interaction, i18n) {
-    return interaction.reply({
-      content: "Команда устарела",
-      ephemeral: true,
-    });
     // Always use v2 builder mode
     const builderMode = "v2";
 
@@ -167,17 +155,12 @@ export default {
       const gamesArray = Array.from(gamesMap.values());
       console.log(
         `[work] Loaded ${gamesArray.length} games with titles:`,
-        gamesArray.map((g) => `${g.id}: "${g.title}"`)
+        gamesArray.map((g) => `${g.id}: "${g.title}" (${typeof g.title})`)
       );
-
-      // Add legacy RPG Clicker game manually
-      gamesMap.set("rpg_clicker2", {
-        id: "rpg_clicker2",
-        title: "RPG Clicker",
-        emoji: "⚔️",
-        file: "../games/ported/rpg_clicker2.js",
-        isLegacy: true,
-      });
+      console.log(
+        `[work] First game structure:`,
+        JSON.stringify(gamesArray[0], null, 2)
+      );
 
       if (gamesMap.size === 0) {
         throw new Error("No games found");
@@ -198,7 +181,7 @@ export default {
         console.log(`[work] Specific game requested: ${requestedGame}`);
         // Use getGameModule to get the game with enhanced i18n support
         const gameModule = await getGameModule(requestedGame, i18n);
-        if (!gameModule?.default) {
+        if (!gameModule) {
           await interaction.editReply({
             content: await i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
@@ -206,14 +189,8 @@ export default {
           return;
         }
 
-        // Execute the game - handle legacy vs non-legacy
-        if (gameModule.default.isLegacy) {
-          // Pass legacy DB for legacy games
-          //await gameModule.default.execute(interaction, legacyDb);
-        } else {
-          // Pass i18n for non-legacy games
-          await gameModule.default.execute(interaction, i18n);
-        }
+        // Execute the game - all games now use hub client and i18n
+        await gameModule.execute(interaction, i18n);
         return;
       }
 
@@ -226,15 +203,11 @@ export default {
       // Filter games into categories
       const standardGamesArray = gamesArray.filter(
         (game) =>
-          !game.isLegacy &&
           !game.file.startsWith("games/risky/") &&
-          !game.file.startsWith("games/ported/") // Ensure ported are not standard
+          !game.file.startsWith("games/ported/") // Standard games only
       );
       const riskyGamesArray = gamesArray.filter((game) =>
         game.file.startsWith("games/risky/")
-      );
-      const legacyGamesArray = gamesArray.filter(
-        (game) => game.isLegacy || game.file.startsWith("games/ported/")
       );
 
       // Use translated category names
@@ -243,9 +216,6 @@ export default {
       );
       const riskyCategoryName = await i18n.__(
         "commands.economy.work.riskyGamesCategory"
-      );
-      const legacyCategoryName = await i18n.__(
-        "commands.economy.work.oldGamesCategory"
       );
 
       const games = {};
@@ -259,7 +229,7 @@ export default {
           }),
           games_list: standardGamesArray.map((game) => ({
             ...game,
-            highScore: gameRecords[game.id]?.highScore || 0,
+            highScore: (gameRecords && gameRecords[game.id]?.highScore) || 0,
           })),
         };
       }
@@ -273,20 +243,7 @@ export default {
           games_list: riskyGamesArray.map((game) => ({
             ...game,
             // Risky games might not track high score in the same way, adjust if needed
-            highScore: gameRecords[game.id]?.highScore || "-", // Or keep 0
-          })),
-        };
-      }
-
-      if (legacyGamesArray.length > 0) {
-        games[legacyCategoryName] = {
-          avatar: interaction.client.user.displayAvatarURL({
-            extension: "png",
-            size: 1024,
-          }),
-          games_list: legacyGamesArray.map((game) => ({
-            ...game,
-            highScore: "-", // Legacy games might not have scores tracked
+            highScore: (gameRecords && gameRecords[game.id]?.highScore) || "-", // Or keep 0
           })),
         };
       }
@@ -328,7 +285,13 @@ export default {
 
         if (currentGame) {
           console.log(
-            `[work] Current highlighted game: ${currentGame.id} - "${currentGame.title}"`
+            `[work] Current highlighted game: ${currentGame.id} - "${
+              currentGame.title
+            }" (${typeof currentGame.title})`
+          );
+          console.log(
+            `[work] Current game full structure:`,
+            JSON.stringify(currentGame, null, 2)
           );
         }
 
@@ -356,14 +319,19 @@ export default {
               },
             },
             locale: i18n.getLocale(),
-            database: userData,
-            games: games,
+            database: userData || {},
+            games: games || {},
+            // Add explicit structure check
+            _debug: {
+              gamesKeys: Object.keys(games || {}),
+              gamesStructure: JSON.stringify(games, null, 2).substring(0, 500),
+            },
             selectedGame,
             currentLocale: i18n.getLocale(),
             highlightedGame,
             highlightedCategory: currentCategory,
             returnDominant: true,
-            gameStats: currentGameRecords, // Use existing game records
+            gameStats: currentGameRecords || {}, // Use existing game records
           },
           { image: 2, emoji: 1 },
           i18n
@@ -527,28 +495,16 @@ export default {
             );
             const gameModule = await getGameModule(game.id, i18n);
 
-            if (!gameModule?.default?.execute) {
+            if (!gameModule?.execute) {
               // Check if execute function exists
               throw new Error(
                 `Game module ${game.id} missing execute function`
               );
             }
 
-            // Execute based on legacy status
-            if (game.isLegacy) {
-              console.log(`[work-collect] Executing legacy game: ${game.id}`);
-              // Assuming legacy game execute signature is (client, message)
-              // We need to adapt or pass legacyDb somehow.
-              // Let's pass interaction and legacyDb for now.
-              // IMPORTANT: The legacy game file rpg_clicker2.js needs modification
-              // to accept (interaction, legacyDb) and use legacyDb for db calls.
-              //await gameModule.default.execute(interaction, legacyDb); // Pass interaction and legacy DB
-            } else {
-              console.log(`[work-collect] Executing standard game: ${game.id}`);
-              // For non-legacy games like Tower
-              // Pass the ORIGINAL interaction from the work command's scope
-              await gameModule.default.execute(interaction, i18n);
-            }
+            // Execute the game - all games now use hub client and i18n
+            console.log(`[work-collect] Executing game: ${game.id}`);
+            await gameModule.execute(interaction, i18n);
           } catch (error) {
             console.error(`Error executing game ${game.id}:`, error);
             // Use followUp as update was already sent to remove components
