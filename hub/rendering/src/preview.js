@@ -36,20 +36,126 @@ async function watchComponents() {
 
     const watcher = watch(absolutePath, { recursive: true });
 
+    // Helper function to resolve import path to component name
+    const resolveImportToComponent = (importPath, currentComponentDir) => {
+      // Handle relative imports
+      if (importPath.startsWith("./") || importPath.startsWith("../")) {
+        const currentDir = currentComponentDir || COMPONENTS_DIR;
+        const resolvedPath = path.resolve(currentDir, importPath);
+
+        // Check if it's a JSX file in our components directory
+        if (
+          resolvedPath.startsWith(absolutePath) &&
+          resolvedPath.endsWith(".jsx")
+        ) {
+          // Return relative path from components directory, not just basename
+          const relativePath = path.relative(COMPONENTS_DIR, resolvedPath);
+          return relativePath.replace(".jsx", "");
+        }
+
+        // Try adding .jsx extension if not present
+        if (!resolvedPath.endsWith(".jsx")) {
+          const jsxPath = resolvedPath + ".jsx";
+          if (jsxPath.startsWith(absolutePath)) {
+            const relativePath = path.relative(COMPONENTS_DIR, jsxPath);
+            return relativePath.replace(".jsx", "");
+          }
+        }
+      }
+
+      return null;
+    };
+
+    // Helper function to get all dependencies for a component
+    const getComponentDependencies = async (componentName) => {
+      const dependencies = new Set([componentName]);
+
+      try {
+        // Handle components in subdirectories (e.g., "unified/UserCard")
+        let componentPath;
+        if (componentName.includes("/")) {
+          componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+        } else {
+          componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+        }
+
+        const currentComponentDir = path.dirname(componentPath);
+        const content = await fs.readFile(componentPath, "utf-8");
+
+        // Find all import statements
+        const importRegex = /import\s+.*?\s+from\s+['"]([^'"]+)['"]/g;
+        let match;
+
+        while ((match = importRegex.exec(content)) !== null) {
+          const importPath = match[1];
+          const depComponentName = resolveImportToComponent(
+            importPath,
+            currentComponentDir
+          );
+
+          if (depComponentName) {
+            dependencies.add(depComponentName);
+
+            // Recursively get dependencies of this dependency
+            const subDeps = await getComponentDependencies(depComponentName);
+            subDeps.forEach((dep) => dependencies.add(dep));
+          }
+        }
+      } catch (error) {
+        console.error(
+          `Error getting dependencies for ${componentName}:`,
+          error
+        );
+      }
+
+      return dependencies;
+    };
+
     watcher.on("change", async (eventType, filename) => {
       console.log(`File change detected: ${filename}`);
       if (filename && filename.endsWith(".jsx")) {
         // Handle both absolute and relative paths
-        const baseName = path.basename(filename);
-        const componentName = baseName.replace(".jsx", "");
+        let changedComponentName;
 
-        console.log(`Component ${componentName} changed, notifying clients...`);
+        if (filename.includes("/")) {
+          // Handle relative paths like "unified/UserCard.jsx"
+          const relativePath = filename.replace(/^.*components[/\\]/, "");
+          changedComponentName = relativePath.replace(".jsx", "");
+        } else {
+          // Handle simple filenames
+          const baseName = path.basename(filename);
+          changedComponentName = baseName.replace(".jsx", "");
+        }
+
+        console.log(
+          `Component ${changedComponentName} changed, checking dependencies...`
+        );
+
+        // Get all components that depend on this changed component
+        const allComponents = await getAvailableComponents();
+        const affectedComponents = new Set([changedComponentName]);
+
+        for (const componentName of allComponents) {
+          if (componentName === changedComponentName) continue;
+
+          const dependencies = await getComponentDependencies(componentName);
+          if (dependencies.has(changedComponentName)) {
+            affectedComponents.add(componentName);
+            console.log(
+              `Component ${componentName} depends on ${changedComponentName}`
+            );
+          }
+        }
+
+        console.log(
+          `Affected components: ${Array.from(affectedComponents).join(", ")}`
+        );
 
         let clientsNotified = 0;
-        // Notify all clients viewing this component
+        // Notify all clients viewing affected components
         for (const [ws, data] of clients.entries()) {
-          if (data.component === componentName) {
-            console.log(`Notifying client watching ${componentName}`);
+          if (affectedComponents.has(data.component)) {
+            console.log(`Notifying client watching ${data.component}`);
             try {
               ws.send(
                 JSON.stringify({
@@ -66,7 +172,9 @@ async function watchComponents() {
           }
         }
         console.log(
-          `Notified ${clientsNotified} clients about ${componentName} update`
+          `Notified ${clientsNotified} clients about updates to ${Array.from(
+            affectedComponents
+          ).join(", ")}`
         );
       }
     });
@@ -819,19 +927,38 @@ app.get("/:componentName", async (req, res) => {
       return res.status(404).send(`Component ${componentName} not found`);
     }
 
-    // --- Import component ---
-    let Component = null;
+    // --- Import component with aggressive cache clearing ---
+    let ReactComponent = null;
     try {
+      // Clear require cache for the component
       delete require.cache[componentPath];
-      const imported = await import(`file://${componentPath}?t=${Date.now()}`);
-      Component = imported.default;
+
+      // Clear all related module caches to prevent stale dependencies
+      const moduleKeys = Object.keys(require.cache);
+      for (const key of moduleKeys) {
+        if (key.includes("components") && key.endsWith(".jsx")) {
+          delete require.cache[key];
+        }
+      }
+
+      // Use a more aggressive cache-busting approach with unique identifier
+      const uniqueId = Date.now() + Math.random();
+      const imported = await import(
+        `file://${componentPath}?t=${uniqueId}&cache=${uniqueId}`
+      );
+      ReactComponent = imported.default;
+
+      // Force garbage collection if available (optional)
+      if (global.gc) {
+        global.gc();
+      }
     } catch (importError) {
       console.error(`Could not import ${componentName}:`, importError);
     }
     // --- End Component Import ---
     // Generate initial mock data for client fallback
     const lang = "en";
-    const initialMockData = await createMockData(lang, Component);
+    const initialMockData = await createMockData(lang, ReactComponent);
     const fallbackMockDataString = JSON.stringify(initialMockData, null, 2);
 
     // Add specific controls for Transfer and LevelUp (keep existing logic)
@@ -979,7 +1106,66 @@ app.get("/:componentName", async (req, res) => {
                 url += '&forceInit=true';
             }
             url += '&t=' + Date.now();
-            img.src = url;
+            
+            // Clear any previous error display
+            const errorContainer = document.getElementById('errorContainer');
+            if (errorContainer) {
+              errorContainer.style.display = 'none';
+            }
+            
+            // Use fetch to handle errors properly
+            fetch(url)
+              .then(response => {
+                if (!response.ok) {
+                  return response.json().then(errorData => {
+                    throw errorData;
+                  });
+                }
+                return response.blob();
+              })
+              .then(blob => {
+                const objectUrl = URL.createObjectURL(blob);
+                img.src = objectUrl;
+                img.onload = () => URL.revokeObjectURL(objectUrl);
+              })
+              .catch(errorData => {
+                console.error('Image generation error:', errorData);
+                displayError(errorData);
+              });
+          }
+          
+          function displayError(errorData) {
+            const errorContainer = document.getElementById('errorContainer');
+            const errorDetails = document.getElementById('errorDetails');
+            const formattedPropsDisplay = document.getElementById('formattedPropsDisplay');
+            
+            if (!errorContainer || !errorDetails || !formattedPropsDisplay) return;
+            
+            // Display error message
+            errorDetails.innerHTML =
+              '<h3>🚨 Error Details</h3>' +
+              '<div class="error-message">' +
+                '<strong>Message:</strong> ' + (errorData.message || 'Unknown error') + '<br>' +
+                '<strong>Error:</strong> ' + (errorData.error || 'Unknown error type') + '<br>' +
+                (errorData.stack ? '<strong>Stack:</strong><pre>' + errorData.stack + '</pre>' : '') +
+              '</div>';
+            
+            // Display formatted props if available
+            if (errorData.formattedProps) {
+              formattedPropsDisplay.innerHTML =
+                '<h3>📋 Formatted Props</h3>' +
+                '<div class="props-content">' +
+                  '<pre>' + JSON.stringify(errorData.formattedProps, null, 2) + '</pre>' +
+                '</div>';
+            } else {
+              formattedPropsDisplay.innerHTML =
+                '<h3>📋 Formatted Props</h3>' +
+                '<div class="props-content">' +
+                  '<em>No formatted props available</em>' +
+                '</div>';
+            }
+            
+            errorContainer.style.display = 'flex';
           }
 
           function resetMockData() {
@@ -1205,6 +1391,72 @@ app.get("/:componentName", async (req, res) => {
             border-radius: 4px;
             cursor: pointer;
           }
+          /* Error Display Styles */
+          .error-container {
+            display: none;
+            width: 100%;
+            margin: 20px 0;
+            gap: 20px;
+            flex-direction: row;
+          }
+          .error-panel {
+            flex: 1;
+            background: white;
+            border: 2px solid #ff0000;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 300px;
+          }
+          .props-panel {
+            flex: 2;
+            background: white;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-width: 500px;
+          }
+          .error-message {
+            background: #fff5f5;
+            border: 1px solid #feb2b2;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .props-content {
+            background: #f7fafc;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 600px;
+            overflow-y: auto;
+            overflow-x: auto;
+          }
+          .props-content pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre;
+            word-break: normal;
+            min-width: 100%;
+          }
+          .error-container h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 16px;
+          }
+          .error-container h3:first-child {
+            color: #ff0000;
+          }
+          .error-container h3:last-child {
+            color: #2196f3;
+          }
         </style>
       </head>
       <body>
@@ -1222,6 +1474,14 @@ app.get("/:componentName", async (req, res) => {
            ${additionalControls}
         </div>
         <div class="preview"> <img src="#" alt="Loading preview..."> <div class="dimensions"></div> </div>
+        
+        <!-- Error Display Container -->
+        <div id="errorContainer" class="error-container" style="display: none;">
+          <div class="error-panel">
+            <div id="errorDetails"></div>
+          </div>
+        </div>
+        
         <div class="json-editor">
           <h3>Mock Data Editor</h3>
           <textarea id="mockDataEditor" placeholder="Enter JSON mock data here..."></textarea>
@@ -1260,8 +1520,19 @@ app.get("/:componentName/image", async (req, res) => {
     const isDarkTheme = theme === "dark";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
-    // --- Import Component ---
+    // --- Import Component with aggressive cache clearing ---
+    // Clear require cache for the component
     delete require.cache[componentPath];
+
+    // Clear all related module caches to prevent stale dependencies
+    const moduleKeys = Object.keys(require.cache);
+    for (const key of moduleKeys) {
+      if (key.includes("components") && key.endsWith(".jsx")) {
+        delete require.cache[key];
+      }
+    }
+
+    // Also clear ES module cache by using dynamic import with timestamp
     const imported = await import(`file://${componentPath}?t=${Date.now()}`);
     const Component = imported.default;
     if (!Component) throw new Error(`Component not found in ${componentPath}`);
@@ -1353,9 +1624,13 @@ app.get("/:componentName/image", async (req, res) => {
       const threeScriptPath = componentPath.replace(".jsx", ".three.js");
       let getScriptContent = null;
       try {
+        // Clear cache for 3D script as well
         delete require.cache[threeScriptPath];
+
+        // Use aggressive cache busting for 3D scripts too
+        const uniqueId = Date.now() + Math.random();
         const scriptModule = await import(
-          `file://${threeScriptPath}?t=${Date.now()}`
+          `file://${threeScriptPath}?t=${uniqueId}&cache=${uniqueId}`
         );
         getScriptContent = scriptModule.default;
         if (typeof getScriptContent !== "function")
@@ -1430,6 +1705,7 @@ app.get("/:componentName/image", async (req, res) => {
 
     // Generate final image via external rendering service
     let buffer;
+    let formattedProps = null;
     try {
       buffer = await generateImage(
         Component,
@@ -1445,7 +1721,20 @@ app.get("/:componentName/image", async (req, res) => {
         "Error fetching rendered image from render service:",
         renderError
       );
-      res.status(500).send(`Render service failed: ${renderError.message}`);
+
+      // Extract formattedProps from enhanced error object
+      if (renderError.formattedProps) {
+        formattedProps = renderError.formattedProps;
+      }
+
+      // Send enhanced error response with formattedProps
+      res.status(500).json({
+        error: "Render service failed",
+        message:
+          renderError.message || renderError.error?.message || "Unknown error",
+        formattedProps: formattedProps,
+        stack: renderError.stack || renderError.error?.stack,
+      });
       return;
     }
 
