@@ -734,6 +734,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
   // This function contains the original core logic of generateImage
   let pngBuffer = null;
   let svg = null;
+  let formattedProps = null; // Store formattedProps for error reporting
 
   try {
     await ensureTempDir();
@@ -853,7 +854,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
         typeof value === "bigint" ? Number(value) : value
       )
     );
-    const formattedProps = {
+    formattedProps = {
       ...formatValue(sanitizedProps),
       style: { display: "flex" },
     };
@@ -991,7 +992,12 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
     svg = null;
     // Note: props/component are passed by value/reference, cleanup might not be effective here
     // await cleanup(true); // Consider if cleanup is needed here or only in the outer function
-    throw error; // Re-throw the error to be handled by the calling function (executeGeneration)
+    throw {
+      error: error,
+      formattedProps: formattedProps,
+      message: error.message,
+      stack: error.stack,
+    }; // Re-throw enhanced error with formattedProps
   }
 }
 // --- End Core Image Generation Logic ---
@@ -1076,7 +1082,7 @@ export async function generateImage(
     } catch (error) {
       console.error("Direct image generation failed:", error);
       await cleanup(true);
-      throw error;
+      throw error; // Now includes formattedProps if available
     }
   }
   // --- End direct execution block ---
@@ -1132,7 +1138,7 @@ export async function generateImage(
         error
       );
       await cleanup(true);
-      throw error;
+      throw error; // Now includes formattedProps if available
     }
   }
 
