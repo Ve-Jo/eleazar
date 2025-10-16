@@ -1,10 +1,12 @@
+import UserCard from "./unified/UserCard.jsx";
+
 const Snake = (props) => {
-  let { grid, score, earning, interaction, i18n } = props;
+  let { grid, score, earning, interaction, i18n, database, coloring } = props;
 
   const translations = Object.entries(Snake.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
+      [key]: translations[i18n?.getLocale?.()] || translations.en,
     }),
     {}
   );
@@ -53,26 +55,28 @@ const Snake = (props) => {
   };
 
   const containerStyle = {
-    width: "400px",
-    height: "490px",
-    background: "#4CAF50",
+    width: "540px",
+    height: "661px",
+    backgroundColor: "#4CAF50",
+    borderRadius: "25px",
     fontFamily: "Inter600",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+  };
+
+  const gameScreenStyle = {
+    position: "absolute",
+    left: "0px",
+    top: "0px",
+    width: "540px",
+    height: "558px",
+    background: "transparent",
+    borderRadius: "25px 25px 0 0",
+    padding: "25px",
     display: "flex",
     flexDirection: "column",
     gap: "10px",
-    borderRadius: "15px",
-    position: "relative",
-    padding: "0 0 10px 0", // Only bottom padding
-  };
-
-  const gridContainerStyle = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-start", // Align to top
-    alignItems: "center",
-    borderRadius: "10px 10px 0 0", // Round top corners only
-    overflow: "hidden", // Ensure grid lines don't overflow
   };
 
   const tileStyle = (value, row, col) => ({
@@ -85,39 +89,14 @@ const Snake = (props) => {
     transform: value === 2 ? "scale(1.05)" : "scale(1)",
   });
 
-  const statsContainerStyle = {
-    margin: "0 10px",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "10px",
-    background: "rgba(0,0,0,0.2)",
-    padding: "15px",
-    borderRadius: "15px",
-  };
-
-  const statItemStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: "18px",
-  };
-
-  const avatarStyle = {
-    width: "40px",
-    height: "40px",
-    borderRadius: "25%",
-    objectFit: "cover",
-  };
-
   // Calculate grid dimensions to fill space without gaps
-  const containerWidth = 400; // Full container width
+  const containerWidth = 490; // Container width minus padding (540 - 50)
   const cellSize = Math.floor(containerWidth / grid.length);
 
   return (
     <div style={containerStyle}>
-      <div style={gridContainerStyle}>
+      {/* Game Screen */}
+      <div style={gameScreenStyle}>
         <div
           style={{
             display: "flex",
@@ -150,38 +129,33 @@ const Snake = (props) => {
           ))}
         </div>
       </div>
-      <div style={statsContainerStyle}>
-        <div style={statItemStyle}>
-          <img
-            src={
-              interaction?.user?.avatarURL ||
-              "https://cdn.discordapp.com/embed/avatars/0.png"
-            }
-            alt="User Avatar"
-            width={40}
-            height={40}
-            style={avatarStyle}
-          />
-          <span>
-            {translations.score} {score}
-          </span>
-        </div>
-        <div style={statItemStyle}>
-          <span>+{earning.toFixed(1)} 💵</span>
-        </div>
-        <div style={statItemStyle}>
-          <span>
-            {grid.length}x{grid.length}
-          </span>
-        </div>
-      </div>
+
+      {/* Use the unified UserCard component */}
+      <UserCard
+        interaction={interaction}
+        score={score}
+        earning={earning}
+        balance={database?.economy?.balance || 0} // Wallet balance only
+        increaseAmount={earning}
+        levelProgress={
+          database?.levelProgress || {
+            chat: database?.levelProgress?.chat,
+            game: database?.levelProgress?.game,
+          }
+        }
+        i18n={i18n}
+        coloring={coloring}
+        position={{ bottom: 0, left: 0 }}
+        size={{ width: 540, height: 103 }}
+        gridSize={`${grid.length}x${grid.length}`}
+      />
     </div>
   );
 };
 
 Snake.dimensions = {
-  width: 400,
-  height: 490,
+  width: 540,
+  height: 661,
 };
 
 Snake.localization_strings = {

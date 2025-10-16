@@ -1,10 +1,12 @@
+import UserCard from "./unified/UserCard.jsx";
+
 const Game2048 = (props) => {
-  let { grid, score, earning, interaction, i18n } = props;
+  let { grid, score, earning, interaction, i18n, database, coloring } = props;
 
   const translations = Object.entries(Game2048.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
+      [key]: translations[i18n?.getLocale?.()] || translations.en,
     }),
     {}
   );
@@ -16,8 +18,8 @@ const Game2048 = (props) => {
       [0, 0, 0, 32],
       [0, 256, 128, 64],
     ];
-    score = 10;
-    earning = 250;
+    score = 1024;
+    earning = 55.0;
   }
 
   const getScaleFontSize = (number) => {
@@ -44,16 +46,28 @@ const Game2048 = (props) => {
   };
 
   const containerStyle = {
-    width: "400px",
-    height: "490px",
+    width: "540px",
+    height: "661px",
     backgroundColor: "#BBADA0",
-    borderRadius: "10px",
+    borderRadius: "25px",
     fontFamily: "Inter600",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+  };
+
+  const gameScreenStyle = {
+    position: "absolute",
+    left: "0px",
+    top: "0px",
+    width: "540px",
+    height: "558px",
+    background: "#BBADA0",
+    borderRadius: "25px 25px 0 0",
     padding: "25px",
     display: "flex",
     flexDirection: "column",
     gap: "10px",
-    position: "relative",
   };
 
   const tileStyle = (value) => ({
@@ -62,108 +76,62 @@ const Game2048 = (props) => {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-
     fontSize: value < 100 ? "42px" : value < 1000 ? "32px" : "24px",
     fontWeight: "bold",
     color: value < 8 ? "#776E65" : "#F9F6F2",
   });
 
-  const scoreContainerStyle = {
-    display: "flex",
-    alignItems: "stretch",
-    gap: "10px",
-    marginBottom: "20px",
-    minHeight: "60px",
-  };
-
-  const scoreStyle = {
-    display: "flex",
-    alignItems: "center",
-    minWidth: 0,
-    flex: "1 1 auto",
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    color: "#FFFFFF",
-    padding: "10px 15px",
-    borderRadius: "10px",
-    fontWeight: "bold",
-  };
-
-  const scoreContentStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    minWidth: 0,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    fontSize: getScaleFontSize(`${score}  `),
-  };
-
-  const earningStyle = {
-    display: "flex",
-    alignItems: "center",
-    backgroundColor: "rgba(65, 194, 69, 0.71)",
-    color: "#FFFFFF",
-    padding: "10px 15px",
-    borderRadius: "10px",
-    fontWeight: "bold",
-    fontSize: getScaleFontSize(earning.toFixed(1)),
-  };
-
-  const avatarStyle = {
-    width: "40px",
-    height: "40px",
-    borderRadius: "25%",
-    objectFit: "cover",
-    flexShrink: 0,
-  };
-
   return (
     <div style={containerStyle}>
-      <div style={scoreContainerStyle}>
-        <div style={scoreStyle}>
-          <div style={scoreContentStyle}>
-            <img
-              src={
-                interaction?.user?.avatarURL ||
-                "https://cdn.discordapp.com/embed/avatars/0.png"
-              }
-              alt="User Avatar"
-              width={40}
-              height={40}
-              style={avatarStyle}
-            />
-            <span>
-              {translations.score} {score}
-            </span>
+      {/* Game Screen */}
+      <div style={gameScreenStyle}>
+        {grid.map((row, rowIndex) => (
+          <div key={rowIndex} style={{ display: "flex", gap: "10px" }}>
+            {row.map((value, colIndex) => (
+              <div
+                key={colIndex}
+                style={{
+                  ...tileStyle(value),
+                  width: "115px",
+                  height: "115px",
+                  display: "flex",
+                }}
+              >
+                {value !== 0 && value}
+              </div>
+            ))}
           </div>
-        </div>
-        <div style={earningStyle}>
-          <span>+{earning.toFixed(1)} 💵</span>
-        </div>
+        ))}
       </div>
-      {grid.map((row, rowIndex) => (
-        <div key={rowIndex} style={{ display: "flex", gap: "10px" }}>
-          {row.map((value, colIndex) => (
-            <div
-              key={colIndex}
-              style={{
-                ...tileStyle(value),
-                width: "80px",
-                height: "80px",
-              }}
-            >
-              {value !== 0 && value}
-            </div>
-          ))}
-        </div>
-      ))}
+
+      {}
+
+      {/* Use the unified UserCard component */}
+      <UserCard
+        interaction={interaction}
+        score={score}
+        earning={earning}
+        balance={database?.economy?.balance || 0} // Wallet balance only
+        increaseAmount={earning}
+        levelProgress={
+          database?.levelProgress || {
+            chat: database?.levelProgress?.chat,
+            game: database?.levelProgress?.game,
+          }
+        }
+        i18n={i18n}
+        coloring={coloring}
+        position={{ bottom: 0, left: 0 }}
+        size={{ width: 540, height: 103 }}
+        gridSize="4x4"
+      />
     </div>
   );
 };
 
 Game2048.dimensions = {
-  width: 400,
-  height: 490,
+  width: 540,
+  height: 661,
 };
 
 Game2048.localization_strings = {
