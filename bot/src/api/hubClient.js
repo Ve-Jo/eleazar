@@ -340,7 +340,7 @@ class HubClient {
   async addGameXP(guildId, userId, gameType, amount) {
     return await apiRequest(`${this.databaseUrl}/games/xp/add`, {
       method: "POST",
-      body: JSON.stringify({ userId, guildId, gameType, amount }),
+      body: JSON.stringify({ userId, guildId, gameType, xp: amount }),
     });
   }
 
@@ -374,9 +374,9 @@ class HubClient {
   }
 
   async updateGameHighScore(guildId, userId, gameType, score) {
-    return await apiRequest(`${this.databaseUrl}/games/records`, {
+    return await apiRequest(`${this.databaseUrl}/games/records/update`, {
       method: "POST",
-      body: JSON.stringify({ userId, guildId, gameType, score }),
+      body: JSON.stringify({ userId, guildId, gameId: gameType, score }),
     });
   }
 
