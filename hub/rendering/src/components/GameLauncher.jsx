@@ -1,4 +1,9 @@
 const GameLauncher = (props) => {
+  console.log(
+    "[GameLauncher] Received props:",
+    JSON.stringify(props, null, 2).substring(0, 1000)
+  );
+
   const {
     interaction,
     database,
@@ -17,6 +22,12 @@ const GameLauncher = (props) => {
     coloring,
   } = props;
 
+  // Early return if critical props are missing
+  if (!interaction || !i18n) {
+    console.error("[GameLauncher] Missing critical props");
+    return <div>Loading...</div>;
+  }
+
   const {
     textColor,
     secondaryTextColor,
@@ -26,13 +37,16 @@ const GameLauncher = (props) => {
   } = coloring || {};
 
   // Rest of the imports and initial setup remains the same...
-  const translations = Object.entries(GameLauncher.localization_strings).reduce(
-    (acc, [key, translations]) => ({
-      ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
-    }),
-    {}
-  );
+  const translations = Object.entries(
+    GameLauncher.localization_strings || {}
+  ).reduce((acc, [key, translationObj]) => {
+    if (translationObj && i18n && i18n.getLocale) {
+      acc[key] = translationObj[i18n.getLocale()] || translationObj.en || key;
+    } else {
+      acc[key] = key;
+    }
+    return acc;
+  }, {});
 
   const defaultCategories = {
     eleazar: {
@@ -65,32 +79,63 @@ const GameLauncher = (props) => {
     },
   };
 
+  console.log("[GameLauncher] games prop:", games);
+  console.log("[GameLauncher] games type:", typeof games);
+  console.log(
+    "[GameLauncher] games keys:",
+    games ? Object.keys(games) : "null"
+  );
+
   const groupedGames =
     games ||
     Object.entries(defaultCategories).reduce((acc, [key, category]) => {
-      acc[translations[category.translationKey]] = {
-        avatar: category.avatar,
-        games_list: category.games_list,
-      };
+      if (category && category.translationKey && category.games_list) {
+        acc[translations[category.translationKey] || key] = {
+          avatar: category.avatar,
+          games_list: category.games_list,
+        };
+      }
       return acc;
     }, {});
 
-  const transformedGames = Object.entries(groupedGames).reduce(
+  console.log("[GameLauncher] groupedGames:", groupedGames);
+
+  const transformedGames = Object.entries(groupedGames || {}).reduce(
     (acc, [key, value]) => {
+      console.log("[GameLauncher] Processing category:", key, "value:", value);
+      if (!value || !value.games_list) {
+        console.log("[GameLauncher] Skipping category due to missing data");
+        return acc;
+      }
+
       const categoryKey = Object.entries(defaultCategories).find(
-        ([_, category]) => translations[category.translationKey] === key
+        ([_, category]) =>
+          category && translations[category.translationKey] === key
       );
 
-      const localizedKey = categoryKey
-        ? translations[defaultCategories[categoryKey[0]].translationKey]
-        : key;
+      const localizedKey =
+        categoryKey && categoryKey[1] && defaultCategories[categoryKey[0]]
+          ? translations[defaultCategories[categoryKey[0]].translationKey] ||
+            key
+          : key;
 
-      return {
+      const result = {
         ...acc,
         [localizedKey]: value,
       };
+
+      console.log(
+        "[GameLauncher] transformedGames so far:",
+        Object.keys(result)
+      );
+      return result;
     },
     {}
+  );
+
+  console.log(
+    "[GameLauncher] Final transformedGames:",
+    Object.keys(transformedGames)
   );
 
   const isCategoryVisible = (categoryIndex) => {
@@ -105,10 +150,24 @@ const GameLauncher = (props) => {
 
   const renderGameCard = (game, gameIndex, categoryIndex) => {
     if (!isGameVisible(categoryIndex, gameIndex)) return null;
+    if (!game || !game.id) return null;
 
     // Get high score either from game object or gameStats
-    const highScore = game.highScore || gameStats[game.id]?.highScore || 0;
+    const highScore =
+      game.highScore || (gameStats && gameStats[game.id]?.highScore) || 0;
     console.log(`Rendering game ${game.id} with highScore:`, highScore);
+
+    // Ensure all required properties exist
+    const gameTitle =
+      typeof game.title === "object"
+        ? game.title.translation || game.title.en || game.id
+        : game.title;
+    const gameEmoji = game.emoji || "🎮";
+
+    if (!gameTitle) {
+      console.warn(`Game ${game.id} missing title`, game);
+      return null;
+    }
 
     const isHighlighted =
       highlightedGame === gameIndex && categoryIndex === highlightedCategory;
@@ -184,7 +243,7 @@ const GameLauncher = (props) => {
                 : `${BORDER_RADIUS}px ${BORDER_RADIUS}px 0 0`,
             }}
           >
-            {game.emoji}
+            {gameEmoji}
           </div>
         )}
         <div
@@ -202,7 +261,7 @@ const GameLauncher = (props) => {
             color: textColor || "#FFFFFF",
           }}
         >
-          {game.title}
+          {gameTitle}
         </div>
         {/* High Score Display */}
         <div
@@ -231,7 +290,7 @@ const GameLauncher = (props) => {
             color: textColor || "#FFFFFF",
           }}
         >
-          {translations.highScore}: {highScore}
+          {translations.highScore || "Record"}: {highScore}
         </div>
       </div>
     );
@@ -264,14 +323,17 @@ const GameLauncher = (props) => {
         }}
       >
         <img
-          src={interaction.user.avatarURL}
+          src={
+            interaction?.user?.avatarURL ||
+            "https://cdn.discordapp.com/embed/avatars/0.png"
+          }
           style={{
             width: "100px",
             height: "100px",
             borderRadius: "20%",
             backgroundColor: overlayBackground,
           }}
-          alt={translations.userAvatarAlt}
+          alt={translations.userAvatarAlt || "User Avatar"}
         />
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div
@@ -281,7 +343,7 @@ const GameLauncher = (props) => {
               color: textColor,
             }}
           >
-            {translations.gameSelection}
+            {translations.gameSelection || "Game Selection"}
           </div>
           <div style={{ display: "flex" }}>
             <div
@@ -298,7 +360,7 @@ const GameLauncher = (props) => {
             >
               <span style={{ display: "flex" }}>💵</span>
               <span style={{ display: "flex" }}>
-                {database.economy?.balance?.toFixed(1) || 0}
+                {database?.economy?.balance?.toFixed(1) || 0}
               </span>
             </div>
           </div>
@@ -315,9 +377,39 @@ const GameLauncher = (props) => {
           paddingRight: "25px",
         }}
       >
-        {Object.entries(transformedGames).map(
+        {Object.entries(transformedGames || {}).map(
           ([category, categoryData], categoryIndex) => {
-            if (!isCategoryVisible(categoryIndex)) return null;
+            console.log(
+              `[GameLauncher] Rendering category: ${category}, index: ${categoryIndex}`
+            );
+            console.log(
+              `[GameLauncher] Category data:`,
+              JSON.stringify(categoryData, null, 2).substring(0, 200)
+            );
+
+            if (!isCategoryVisible(categoryIndex)) {
+              console.log(`[GameLauncher] Category ${category} not visible`);
+              return null; // Return null instead of Fragment
+            }
+            if (!categoryData || !categoryData.games_list) {
+              console.log(
+                `[GameLauncher] Category ${category} missing data or games_list`
+              );
+              return null; // Return null instead of Fragment
+            }
+
+            // Ensure categoryData has required properties
+            if (!categoryData.avatar) {
+              console.warn(
+                `[GameLauncher] Category ${category} missing avatar`
+              );
+              return null; // Return null instead of Fragment
+            }
+
+            console.log(
+              `[GameLauncher] Category ${category} has ${categoryData.games_list.length} games`
+            );
+
             return (
               <div
                 key={category}
@@ -338,8 +430,11 @@ const GameLauncher = (props) => {
                   }}
                 >
                   <img
-                    src={categoryData.avatar}
-                    alt={translations.userAvatarAlt}
+                    src={
+                      categoryData?.avatar ||
+                      "https://cdn.discordapp.com/embed/avatars/0.png"
+                    }
+                    alt={translations.userAvatarAlt || "Category Avatar"}
                     style={{
                       width: "60px",
                       height: "60px",
@@ -355,7 +450,7 @@ const GameLauncher = (props) => {
                       color: textColor,
                     }}
                   >
-                    {category}
+                    {category || "Unknown Category"}
                   </span>
                 </div>
                 <div
@@ -378,9 +473,26 @@ const GameLauncher = (props) => {
                       scrollbarWidth: "none",
                     }}
                   >
-                    {categoryData.games_list.map((game, gameIndex) =>
-                      renderGameCard(game, gameIndex, categoryIndex)
-                    )}
+                    {categoryData.games_list &&
+                      categoryData.games_list
+                        .map((game, gameIndex) => {
+                          console.log(
+                            `[GameLauncher] Processing game ${gameIndex}:`,
+                            game?.id,
+                            game?.title
+                          );
+                          const renderedCard = renderGameCard(
+                            game,
+                            gameIndex,
+                            categoryIndex
+                          );
+                          console.log(
+                            `[GameLauncher] Rendered card for ${game?.id}:`,
+                            renderedCard ? "success" : "null"
+                          );
+                          return renderedCard;
+                        })
+                        .filter(Boolean)}
                   </div>
                 </div>
               </div>
