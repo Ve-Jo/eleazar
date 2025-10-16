@@ -3,7 +3,7 @@ import { PrismaClient, Prisma } from "@prisma/client"; // Added Prisma
 // Redis functionality completely disabled
 
 // Load environment variables
-dotenv.config({ path: '../.env' });
+dotenv.config({ path: "../.env" });
 
 export function serializeWithBigInt(data) {
   return JSON.stringify(data, (_, value) => {
@@ -1222,9 +1222,6 @@ class Database {
 
   // Remove a crate from user's inventory
 
-
-
-
   // Update cooldown for a crate type
   async updateCrateCooldown(guildId, userId, type) {
     // Ensure user exists first
@@ -1263,7 +1260,9 @@ class Database {
     const crateKey = `crate_${type}`;
     const timestamp = Date.now();
     cooldowns[crateKey] = timestamp;
-    console.log(`Setting cooldown for ${type}: ${timestamp} (key: ${crateKey})`);
+    console.log(
+      `Setting cooldown for ${type}: ${timestamp} (key: ${crateKey})`
+    );
 
     // Perform cleanup - remove expired cooldowns to keep the table clean
     // But only for non-crate cooldowns to prevent wiping other crate cooldowns
@@ -1505,12 +1504,14 @@ class Database {
 
     // Discount reward (chance-based)
     const discountRoll = Math.random();
-    console.log(`Discount roll: ${discountRoll}, chance: ${crateConfig.rewards.discount_chance}`);
+    console.log(
+      `Discount roll: ${discountRoll}, chance: ${crateConfig.rewards.discount_chance}`
+    );
     if (discountRoll < crateConfig.rewards.discount_chance) {
       rewards.discount = crateConfig.rewards.discount_amount;
       console.log(`Discount awarded: ${rewards.discount}%`);
     } else {
-      console.log('No discount awarded');
+      console.log("No discount awarded");
     }
 
     // Removed cooldown reducer logic
@@ -1598,8 +1599,8 @@ class Database {
         await tx.statistics.upsert({
           where: {
             guildId_userId: {
-            guildId,
-            userId,
+              guildId,
+              userId,
             },
           },
           create: {
@@ -1728,8 +1729,10 @@ class Database {
   }
 
   async deposit(guildId, userId, amount) {
-    console.log(`Deposit initiated for user ${userId} in guild ${guildId} with amount ${amount}`);
-    
+    console.log(
+      `Deposit initiated for user ${userId} in guild ${guildId} with amount ${amount}`
+    );
+
     // Ensure user exists first
     await this.ensureUser(guildId, userId);
 
@@ -1761,15 +1764,20 @@ class Database {
 
       // Check if user has enough balance to deposit using Decimal comparison
       if (user.economy.balance.lessThan(depositAmount)) {
-        console.error(`Insufficient balance for user ${userId}: has ${user.economy.balance}, needs ${depositAmount}`);
+        console.error(
+          `Insufficient balance for user ${userId}: has ${user.economy.balance}, needs ${depositAmount}`
+        );
         throw new Error("Insufficient balance");
       }
 
       // Calculate current bank balance with any accumulated interest
       let currentBankBalance = user.economy.bankBalance;
       console.log(`Initial bank balance: ${currentBankBalance}`);
-      
-      if (user.economy.bankStartTime > 0 && user.economy.bankRate.greaterThan(0)) {
+
+      if (
+        user.economy.bankStartTime > 0 &&
+        user.economy.bankRate.greaterThan(0)
+      ) {
         const timeElapsed = Date.now() - Number(user.economy.bankStartTime);
         console.log(`Time elapsed since last bank update: ${timeElapsed}ms`);
         currentBankBalance = this.calculateInterestDecimal(
@@ -1781,11 +1789,19 @@ class Database {
       }
 
       // Calculate new bank rate: 300 + (5 * chatting level) + (5 * gaming level)
-      const chattingLevel = user.Level ? this.calculateLevel(user.Level.xp).level : 1;
-      const gamingLevel = user.Level ? this.calculateLevel(user.Level.gameXp).level : 1;
-      console.log(`User levels - Chatting: ${chattingLevel}, Gaming: ${gamingLevel}`);
-      
-      const newBankRate = new Prisma.Decimal(300 + (5 * chattingLevel) + (5 * gamingLevel));
+      const chattingLevel = user.Level
+        ? this.calculateLevel(user.Level.xp).level
+        : 1;
+      const gamingLevel = user.Level
+        ? this.calculateLevel(user.Level.gameXp).level
+        : 1;
+      console.log(
+        `User levels - Chatting: ${chattingLevel}, Gaming: ${gamingLevel}`
+      );
+
+      const newBankRate = new Prisma.Decimal(
+        300 + 5 * chattingLevel + 5 * gamingLevel
+      );
       console.log(`New bank rate calculated: ${newBankRate}`);
 
       // Calculate final bank balance after deposit using Decimal arithmetic
@@ -1863,7 +1879,10 @@ class Database {
 
       // Calculate current bank balance with any accumulated interest
       let currentBankBalance = user.economy.bankBalance;
-      if (user.economy.bankStartTime > 0 && user.economy.bankRate.greaterThan(0)) {
+      if (
+        user.economy.bankStartTime > 0 &&
+        user.economy.bankRate.greaterThan(0)
+      ) {
         const timeElapsed = Date.now() - Number(user.economy.bankStartTime);
         currentBankBalance = this.calculateInterestDecimal(
           currentBankBalance,
@@ -1886,9 +1905,15 @@ class Database {
 
       // If not withdrawing everything, calculate new bank rate and reset timer
       if (!isWithdrawingAll) {
-        const chattingLevel = user.Level ? this.calculateLevel(user.Level.xp).level : 1;
-        const gamingLevel = user.Level ? this.calculateLevel(user.Level.gameXp).level : 1;
-        newBankRate = new Prisma.Decimal(300 + (5 * chattingLevel) + (5 * gamingLevel));
+        const chattingLevel = user.Level
+          ? this.calculateLevel(user.Level.xp).level
+          : 1;
+        const gamingLevel = user.Level
+          ? this.calculateLevel(user.Level.gameXp).level
+          : 1;
+        newBankRate = new Prisma.Decimal(
+          300 + 5 * chattingLevel + 5 * gamingLevel
+        );
         newBankStartTime = Date.now();
       }
 
@@ -1904,7 +1929,9 @@ class Database {
           balance: {
             increment: withdrawAmount,
           },
-          bankBalance: isWithdrawingAll ? new Prisma.Decimal(0) : remainingBalance,
+          bankBalance: isWithdrawingAll
+            ? new Prisma.Decimal(0)
+            : remainingBalance,
           bankRate: newBankRate,
           bankStartTime: newBankStartTime,
         },
@@ -1999,7 +2026,11 @@ class Database {
         update: {
           bankBalance: finalBalance,
           bankRate: isEmptyingBank ? new Prisma.Decimal(0) : decimalRate,
-          bankStartTime: isEmptyingBank ? 0 : decimalRate.greaterThan(0) ? Date.now() : 0,
+          bankStartTime: isEmptyingBank
+            ? 0
+            : decimalRate.greaterThan(0)
+            ? Date.now()
+            : 0,
         },
       });
 
@@ -2072,15 +2103,15 @@ class Database {
     // but needs a DB read to check the definitive current state if resetting due to inactivity.
 
     const currentBank = await dbClient.economy.findUnique({
-        where: {
-          guildId_userId: {
-            guildId: user.guildId,
-            userId: user.id,
-          },
+      where: {
+        guildId_userId: {
+          guildId: user.guildId,
+          userId: user.id,
         },
-      });
+      },
+    });
 
-      if (!currentBank) return "0.00000";
+    if (!currentBank) return "0.00000";
 
     // Just return current balance if bank is not active
     if (!currentBank.bankStartTime || !currentBank.bankRate) {
@@ -2986,7 +3017,7 @@ class Database {
     });
   }
 
-  async addGameXP(guildId, userId, amount, gameType) {
+  async addGameXP(guildId, userId, gameType, amount) {
     // Don't create a record if adding 0 XP
     if (amount <= 0) {
       return {
@@ -3112,8 +3143,8 @@ class Database {
         stats = await prisma.statistics.update({
           where: {
             guildId_userId: {
-            guildId,
-            userId,
+              guildId,
+              userId,
             },
           },
           data: {
@@ -3359,7 +3390,6 @@ class Database {
       console.error("Guild ID is required");
       return null;
     }
-
 
     try {
       const player = await this.client.musicPlayer.findUnique({
@@ -4689,7 +4719,7 @@ class Database {
   // --- End Marriage Methods ---
 
   // --- Statistics Methods ---
-  
+
   /**
    * Helper method to get level data for a user
    * @param {string} guildId
@@ -4705,7 +4735,7 @@ class Database {
       });
       return level;
     } catch (error) {
-      console.error('Error getting level data:', error);
+      console.error("Error getting level data:", error);
       return null;
     }
   }
@@ -4725,7 +4755,7 @@ class Database {
       });
       return stats;
     } catch (error) {
-      console.error('Error getting statistics data:', error);
+      console.error("Error getting statistics data:", error);
       return null;
     }
   }
@@ -4745,7 +4775,7 @@ class Database {
       });
       return stats;
     } catch (error) {
-      console.error('Error getting statistics:', error);
+      console.error("Error getting statistics:", error);
       return null;
     }
   }
@@ -4764,10 +4794,17 @@ class Database {
 
       // Filter out invalid fields and prepare update data
       const validFields = [
-        'totalEarned', 'messageCount', 'commandCount', 'gameRecords',
-        'xpStats', 'gameXpStats', 'interactionStats', 'voiceTime', 'crypto2DisclaimerSeen'
+        "totalEarned",
+        "messageCount",
+        "commandCount",
+        "gameRecords",
+        "xpStats",
+        "gameXpStats",
+        "interactionStats",
+        "voiceTime",
+        "crypto2DisclaimerSeen",
       ];
-      
+
       const filteredUpdateData = {};
       for (const [key, value] of Object.entries(updateData)) {
         if (validFields.includes(key)) {
@@ -4795,7 +4832,7 @@ class Database {
 
       return stats;
     } catch (error) {
-      console.error('Error updating statistics:', error);
+      console.error("Error updating statistics:", error);
       throw error;
     }
   }
@@ -4811,9 +4848,13 @@ class Database {
   async incrementStatistic(userId, guildId, field, amount = 1) {
     try {
       // Validate field
-      const incrementableFields = ['messageCount', 'commandCount', 'voiceTime'];
+      const incrementableFields = ["messageCount", "commandCount", "voiceTime"];
       if (!incrementableFields.includes(field)) {
-        throw new Error(`Field '${field}' is not incrementable. Valid fields: ${incrementableFields.join(', ')}`);
+        throw new Error(
+          `Field '${field}' is not incrementable. Valid fields: ${incrementableFields.join(
+            ", "
+          )}`
+        );
       }
 
       // Ensure user exists
@@ -4826,7 +4867,7 @@ class Database {
         },
       });
 
-      const currentValue = currentStats ? (currentStats[field] || 0) : 0;
+      const currentValue = currentStats ? currentStats[field] || 0 : 0;
       const newValue = Number(currentValue) + Number(amount);
 
       const updateData = {
@@ -4953,187 +4994,189 @@ class Database {
       });
       return users;
     } catch (error) {
-      console.error('Error getting guild users:', error);
+      console.error("Error getting guild users:", error);
       throw error;
     }
   }
   // #endregion Guild Users
 
   // #region Seasons
-   /**
-    * Get the current active season
-    * @returns {Promise<object|null>} Current season or null if no active season
-    */
-   async getCurrentSeason() {
-     try {
-       const currentSeason = await this.client.seasons.findFirst({
-         orderBy: {
-           seasonEnds: 'desc',
-         },
-       });
-       return currentSeason;
-     } catch (error) {
-       console.error('Error getting current season:', error);
-       throw error;
-     }
-   }
+  /**
+   * Get the current active season
+   * @returns {Promise<object|null>} Current season or null if no active season
+   */
+  async getCurrentSeason() {
+    try {
+      const currentSeason = await this.client.seasons.findFirst({
+        orderBy: {
+          seasonEnds: "desc",
+        },
+      });
+      return currentSeason;
+    } catch (error) {
+      console.error("Error getting current season:", error);
+      throw error;
+    }
+  }
 
-   /**
-    * Get season leaderboard
-    * @param {number} seasonId
-    * @param {number} limit - Number of users to return (default: 100)
-    * @returns {Promise<Array>} Array of users with their season stats
-    */
-   async getSeasonLeaderboard(seasonId, limit = 100) {
-     try {
-       const leaderboard = await this.client.seasonStats.findMany({
-         where: { seasonId },
-         include: {
-           user: true,
-         },
-         orderBy: {
-           totalXp: 'desc',
-         },
-         take: limit,
-       });
-       return leaderboard;
-     } catch (error) {
-       console.error('Error getting season leaderboard:', error);
-       throw error;
-     }
-   }
-   // #endregion Seasons
+  /**
+   * Get season leaderboard
+   * @param {number} seasonId
+   * @param {number} limit - Number of users to return (default: 100)
+   * @returns {Promise<Array>} Array of users with their season stats
+   */
+  async getSeasonLeaderboard(seasonId, limit = 100) {
+    try {
+      const leaderboard = await this.client.seasonStats.findMany({
+        where: { seasonId },
+        include: {
+          user: true,
+        },
+        orderBy: {
+          totalXp: "desc",
+        },
+        take: limit,
+      });
+      return leaderboard;
+    } catch (error) {
+      console.error("Error getting season leaderboard:", error);
+      throw error;
+    }
+  }
+  // #endregion Seasons
 
-   // #region Crates
-   /**
-    * Get all crates for a user
-    * @param {string} userId
-    * @param {string} guildId
-    * @returns {Promise<Array>} Array of user crates
-    */
-   async getUserCrates(guildId, userId) {
-     try {
-       // Redis caching disabled
-       
-       const crates = await this.client.crate.findMany({
-         where: { userId, guildId },
-       });
-       
-       // Redis caching disabled
-       
-       return crates;
-     } catch (error) {
-       console.error('Error getting user crates:', error);
-       throw error;
-     }
-   }
+  // #region Crates
+  /**
+   * Get all crates for a user
+   * @param {string} userId
+   * @param {string} guildId
+   * @returns {Promise<Array>} Array of user crates
+   */
+  async getUserCrates(guildId, userId) {
+    try {
+      // Redis caching disabled
 
-   /**
-    * Get a specific crate for a user
-    * @param {string} userId
-    * @param {string} guildId
-    * @param {string} crateType
-    * @returns {Promise<object>} User crate
-    */
-   async getUserCrate(guildId, userId, crateType) {
-     try {
-       // Redis caching disabled
-       
-       const crate = await this.client.crate.upsert({
-         where: {
-           guildId_userId_type: { guildId, userId, type: crateType },
-         },
-         create: {
-           userId,
-           guildId,
-           type: crateType,
-           count: 0,
-         },
-         update: {},
-       });
-       
-       // Redis caching disabled
-       
-       return crate;
-     } catch (error) {
-       console.error('Error getting user crate:', error);
-       throw error;
-     }
-   }
+      const crates = await this.client.crate.findMany({
+        where: { userId, guildId },
+      });
 
-   /**
-    * Add crates to a user
-    * @param {string} userId
-    * @param {string} guildId
-    * @param {string} crateType
-    * @param {number} amount
-    * @returns {Promise<object>} Updated user crate
-    */
-   async addCrate(guildId, userId, crateType, amount = 1) {
-     try {
-       const crate = await this.client.crate.upsert({
-         where: {
-           guildId_userId_type: { guildId, userId, type: crateType },
-         },
-         create: {
-           guildId,
-           userId,
-           type: crateType,
-           count: amount,
-         },
-         update: {
-           count: {
-             increment: amount,
-           },
-         },
-       });
-       
-       // Redis cache invalidation disabled
-       
-       return crate;
-     } catch (error) {
-       console.error('Error adding crate:', error);
-       throw error;
-     }
-   }
+      // Redis caching disabled
 
-   /**
-    * Remove crates from a user
-    * @param {string} userId
-    * @param {string} guildId
-    * @param {string} crateType
-    * @param {number} amount
-    * @returns {Promise<object>} Updated user crate
-    */
-   async removeCrate(guildId, userId, crateType, amount = 1) {
-     try {
-       const currentCrate = await this.getUserCrate(userId, guildId, crateType);
-       
-       if (currentCrate.count < amount) {
-         throw new Error(`Insufficient crates. Has ${currentCrate.count}, trying to remove ${amount}`);
-       }
-       
-       const crate = await this.client.crate.update({
-         where: {
-           guildId_userId_type: { guildId, userId, type: crateType },
-         },
-         data: {
-           count: {
-             decrement: amount,
-           },
-         },
-       });
-       
-       // Redis cache invalidation disabled
-       
-       return crate;
-     } catch (error) {
-       console.error('Error removing crate:', error);
-       throw error;
-     }
-   }
+      return crates;
+    } catch (error) {
+      console.error("Error getting user crates:", error);
+      throw error;
+    }
+  }
 
-   /**
+  /**
+   * Get a specific crate for a user
+   * @param {string} userId
+   * @param {string} guildId
+   * @param {string} crateType
+   * @returns {Promise<object>} User crate
+   */
+  async getUserCrate(guildId, userId, crateType) {
+    try {
+      // Redis caching disabled
+
+      const crate = await this.client.crate.upsert({
+        where: {
+          guildId_userId_type: { guildId, userId, type: crateType },
+        },
+        create: {
+          userId,
+          guildId,
+          type: crateType,
+          count: 0,
+        },
+        update: {},
+      });
+
+      // Redis caching disabled
+
+      return crate;
+    } catch (error) {
+      console.error("Error getting user crate:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add crates to a user
+   * @param {string} userId
+   * @param {string} guildId
+   * @param {string} crateType
+   * @param {number} amount
+   * @returns {Promise<object>} Updated user crate
+   */
+  async addCrate(guildId, userId, crateType, amount = 1) {
+    try {
+      const crate = await this.client.crate.upsert({
+        where: {
+          guildId_userId_type: { guildId, userId, type: crateType },
+        },
+        create: {
+          guildId,
+          userId,
+          type: crateType,
+          count: amount,
+        },
+        update: {
+          count: {
+            increment: amount,
+          },
+        },
+      });
+
+      // Redis cache invalidation disabled
+
+      return crate;
+    } catch (error) {
+      console.error("Error adding crate:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove crates from a user
+   * @param {string} userId
+   * @param {string} guildId
+   * @param {string} crateType
+   * @param {number} amount
+   * @returns {Promise<object>} Updated user crate
+   */
+  async removeCrate(guildId, userId, crateType, amount = 1) {
+    try {
+      const currentCrate = await this.getUserCrate(userId, guildId, crateType);
+
+      if (currentCrate.count < amount) {
+        throw new Error(
+          `Insufficient crates. Has ${currentCrate.count}, trying to remove ${amount}`
+        );
+      }
+
+      const crate = await this.client.crate.update({
+        where: {
+          guildId_userId_type: { guildId, userId, type: crateType },
+        },
+        data: {
+          count: {
+            decrement: amount,
+          },
+        },
+      });
+
+      // Redis cache invalidation disabled
+
+      return crate;
+    } catch (error) {
+      console.error("Error removing crate:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get crate cooldown for a user
    * @param {string} userId
    * @param {string} guildId
@@ -5147,66 +5190,69 @@ class Database {
           guildId_userId: { guildId, userId },
         },
       });
-      
+
       if (!cooldown || !cooldown.data) {
         return null;
       }
-      
+
       const crateKey = `crate_${crateType}`;
       const crateCooldown = cooldown.data[crateKey];
-      console.log(`Getting cooldown for ${crateType}: key=${crateKey}, value=${crateCooldown}, data=`, cooldown.data);
-      
+      console.log(
+        `Getting cooldown for ${crateType}: key=${crateKey}, value=${crateCooldown}, data=`,
+        cooldown.data
+      );
+
       return crateCooldown || null;
     } catch (error) {
-      console.error('Error getting crate cooldown:', error);
+      console.error("Error getting crate cooldown:", error);
       throw error;
     }
   }
-   // #endregion Crates
+  // #endregion Crates
 
-   // #region Cache Methods (Redis disabled - stub implementations)
-   /**
-    * Get value from cache (Redis disabled - always returns null)
-    * @param {string} key
-    * @returns {Promise<null>}
-    */
-   async getFromCache(key) {
-     // Redis functionality completely disabled
-     return null;
-   }
+  // #region Cache Methods (Redis disabled - stub implementations)
+  /**
+   * Get value from cache (Redis disabled - always returns null)
+   * @param {string} key
+   * @returns {Promise<null>}
+   */
+  async getFromCache(key) {
+    // Redis functionality completely disabled
+    return null;
+  }
 
-   /**
-    * Set cache value (Redis disabled - no-op)
-    * @param {string} key
-    * @param {any} value
-    * @param {number|null} ttl
-    * @returns {Promise<boolean>}
-    */
-   async setCache(key, value, ttl = null) {
-     // Redis functionality completely disabled
-     return true;
-   }
+  /**
+   * Set cache value (Redis disabled - no-op)
+   * @param {string} key
+   * @param {any} value
+   * @param {number|null} ttl
+   * @returns {Promise<boolean>}
+   */
+  async setCache(key, value, ttl = null) {
+    // Redis functionality completely disabled
+    return true;
+  }
 
-   /**
-    * Invalidate cache keys (Redis disabled - no-op)
-    * @param {Array<string>} keys
-    * @returns {Promise<boolean>}
-    */
-   async invalidateCache(keys) {
-     // Redis functionality completely disabled
-     return true;
-   }
+  /**
+   * Invalidate cache keys (Redis disabled - no-op)
+   * @param {Array<string>} keys
+   * @returns {Promise<boolean>}
+   */
+  async invalidateCache(keys) {
+    // Redis functionality completely disabled
+    return true;
+  }
 
-   /**
-    * Delete cache key (Redis disabled - no-op)
-    * @param {string} key
-    * @returns {Promise<boolean>}
-    */
-   async deleteFromCache(key) {
-     // Redis functionality completely disabled
-     return true;
-   }
-   // #endregion Cache Methods
+  /**
+   * Delete cache key (Redis disabled - no-op)
+   * @param {string} key
+   * @returns {Promise<boolean>}
+   */
+  async deleteFromCache(key) {
+    // Redis functionality completely disabled
+    return true;
+  }
+  // #endregion Cache Methods
 }
 
 // Export the Database class instance with proper initialization
@@ -5216,9 +5262,9 @@ const instance = new Database();
 (async () => {
   try {
     await instance.client.$connect();
-    console.log('Database connected successfully');
+    console.log("Database connected successfully");
   } catch (error) {
-    console.error('Failed to connect to database:', error);
+    console.error("Failed to connect to database:", error);
   }
 })();
 

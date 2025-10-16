@@ -250,7 +250,7 @@ const Balance = (props) => {
   const translations = Object.entries(Balance.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
+      [key]: translations[i18n?.getLocale()] || translations.en,
     }),
     {}
   );
