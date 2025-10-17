@@ -60,6 +60,8 @@ class GameState {
     this.gameOver = false;
     this.lastAction = "start"; // e.g., 'start', 'safe', 'bomb', 'prize'
     this.lastUpdateTime = Date.now();
+    this.sessionChange = 0; // Track money won/lost during session
+    this.initialBalance = 0; // Store initial balance before game starts
   }
 
   // Generate bomb position for the next floor if it doesn't exist
@@ -105,7 +107,7 @@ function getGameKey(channelId, userId) {
 async function generateTowerImage(
   interaction,
   i18n,
-  pendingState // { bet: number, difficulty: string, isPreGame: boolean }
+  pendingState // { bet: number, difficulty: string, isPreGame: boolean, balance: number, levelProgress: object, sessionChange: number }
 ) {
   const props = {
     interaction: {
@@ -133,6 +135,14 @@ async function generateTowerImage(
     dominantColor: "user",
     floorMultipliers:
       BASE_MULTIPLIERS[pendingState.difficulty] || BASE_MULTIPLIERS.easy,
+    // Pass balance and level progress data
+    balance: pendingState.balance || 0,
+    levelProgress: pendingState.levelProgress || {
+      chat: null,
+      game: null,
+    },
+    // Pass session change data (can be non-zero when restarting)
+    sessionChange: pendingState.sessionChange || 0,
   };
 
   // Use the actual component name
@@ -140,7 +150,16 @@ async function generateTowerImage(
 }
 
 // Function to generate image for active game state
-async function generateActiveTowerImage(gameInstance, interaction, i18n) {
+async function generateActiveTowerImage(
+  gameInstance,
+  interaction,
+  i18n,
+  balance = 0,
+  levelProgress = { chat: null, game: null }
+) {
+  // Calculate session change as current balance minus initial balance
+  const sessionChange = balance - gameInstance.initialBalance;
+
   const props = {
     interaction: {
       user: {
@@ -166,19 +185,17 @@ async function generateActiveTowerImage(gameInstance, interaction, i18n) {
     floorMultipliers: BASE_MULTIPLIERS[gameInstance.difficulty],
     locale: interaction.locale || interaction.guildLocale || "en",
     dominantColor: "user",
+    // Pass balance and level progress data
+    balance: balance || 0, // Ensure balance is always a number
+    levelProgress: {
+      chat: levelProgress.chat || null,
+      game: levelProgress.game || null,
+    },
+    // Pass session change data (calculated as balance difference)
+    sessionChange: sessionChange || 0,
   };
   return generateImage("Tower", props, { image: 1.5, emoji: 1 }, i18n);
 }
-
-// Function to create restart button for game over state
-const createGameOverButtons = async (userId) => {
-  const restartButton = new ButtonBuilder()
-    .setCustomId(`tower_restart_game_${userId}`)
-    .setLabel(await getTranslation("games.tower.restartButtonLabel"))
-    .setStyle(ButtonStyle.Primary);
-
-  return [new ActionRowBuilder().addComponents(restartButton)];
-};
 
 // --- Command Export ---
 export default {
@@ -210,7 +227,7 @@ export default {
 
     if (activeGames.has(gameKey)) {
       return interaction.followUp({
-        content: getTranslation("games.tower.alreadyRunning"),
+        content: await getTranslation("games.tower.alreadyRunning"),
         ephemeral: true,
       });
     }
@@ -222,15 +239,57 @@ export default {
     let setupCollector = null; // Add this to the outer scope
 
     // Create a reusable function for setting up the game
-    const setupGame = async (initialBet = 0, initialDifficulty = "easy") => {
+    const setupGame = async (
+      initialBet = 0,
+      initialDifficulty = "easy",
+      initialSessionChange = 0
+    ) => {
       pendingBet = initialBet;
       pendingDifficulty = initialDifficulty;
+
+      // Fetch user data for balance and level progress
+      let userData = null;
+      let balance = 0;
+      let chatLevelData = null;
+      let gameLevelData = null;
+
+      if (guildId) {
+        try {
+          // Ensure user exists in database
+          await hubClient.ensureGuildUser(guildId, userId);
+          userData = await hubClient.getUser(guildId, userId);
+
+          if (userData) {
+            // Get wallet balance
+            if (userData.economy) {
+              balance = Number(userData.economy.balance || 0);
+            }
+
+            // Calculate level progress for XP bars
+            if (userData.Level) {
+              const chatXP = Number(userData.Level.xp || 0);
+              chatLevelData = hubClient.calculateLevel(chatXP);
+
+              const gameXP = Number(userData.Level.gameXp || 0);
+              gameLevelData = hubClient.calculateLevel(gameXP);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user data for Tower:", error);
+        }
+      }
 
       // Generate initial pre-game image
       const initialBuffer = await generateTowerImage(interaction, i18n, {
         bet: pendingBet,
         difficulty: pendingDifficulty,
         isPreGame: true,
+        balance: balance || 0,
+        levelProgress: {
+          chat: chatLevelData || null,
+          game: gameLevelData || null,
+        },
+        sessionChange: initialSessionChange,
       });
 
       // If setupMessage already exists, edit it, otherwise create a new one
@@ -336,8 +395,8 @@ export default {
           const prevBet = gameInstance.betAmount;
           const prevDifficulty = gameInstance.difficulty;
 
-          // Start a new setup with the previous settings
-          await setupGame(prevBet, prevDifficulty);
+          // Start a new setup with the previous settings, including sessionChange from previous game
+          await setupGame(prevBet, prevDifficulty, gameInstance.sessionChange);
         } catch (error) {
           console.error("[Tower] Error in restart collector:", error);
           // Don't try to respond to the interaction if there's an error
@@ -383,7 +442,7 @@ export default {
         ) {
           setupMessage
             .edit({
-              content: getTranslation("games.tower.setupTimeout"),
+              content: await getTranslation("games.tower.setupTimeout"),
               components: [],
               embeds: [],
             })
@@ -442,7 +501,7 @@ export default {
             const userBalance = parseFloat(userData?.economy?.balance || 0);
             if (!userData || !userData.economy || userBalance < betAmount) {
               await modalSubmission.reply({
-                content: getTranslation("games.tower.notEnoughMoney", {
+                content: await getTranslation("games.tower.notEnoughMoney", {
                   balance: userBalance.toFixed(2),
                   bet: betAmount,
                 }),
@@ -454,14 +513,49 @@ export default {
 
           pendingBet = betAmount;
 
+          // Fetch updated balance and level progress after setting bet
+          let updatedBalance = 0;
+          let chatLevelData = null;
+          let gameLevelData = null;
+
+          if (guildId) {
+            try {
+              const currentBalanceData = await hubClient.getUser(
+                guildId,
+                userId
+              );
+              updatedBalance = parseFloat(
+                currentBalanceData?.economy?.balance || 0
+              );
+
+              if (currentBalanceData?.Level) {
+                const chatXP = Number(currentBalanceData.Level.xp || 0);
+                chatLevelData = hubClient.calculateLevel(chatXP);
+                const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                gameLevelData = hubClient.calculateLevel(gameXP);
+              }
+            } catch (error) {
+              console.error(
+                "Error fetching user data after setting bet:",
+                error
+              );
+            }
+          }
+
           const updatedBuffer = await generateTowerImage(interaction, i18n, {
             bet: pendingBet,
             difficulty: pendingDifficulty,
             isPreGame: true,
+            balance: updatedBalance,
+            levelProgress: {
+              chat: chatLevelData,
+              game: gameLevelData,
+            },
+            sessionChange: 0, // Reset to 0 when setting new bet
           });
           await modalSubmission.update({
             files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
-            components: [createSetupComponents()], // Update buttons (Start might enable)
+            components: [await createSetupComponents()], // Update buttons (Start might enable)
           });
         }
         // --- Change Difficulty Button ---
@@ -471,14 +565,49 @@ export default {
           pendingDifficulty =
             difficulties[(currentIndex + 1) % difficulties.length];
 
+          // Fetch current balance and level progress for the updated image
+          let currentBalance = 0;
+          let chatLevelData = null;
+          let gameLevelData = null;
+
+          if (guildId) {
+            try {
+              const currentBalanceData = await hubClient.getUser(
+                guildId,
+                userId
+              );
+              currentBalance = parseFloat(
+                currentBalanceData?.economy?.balance || 0
+              );
+
+              if (currentBalanceData?.Level) {
+                const chatXP = Number(currentBalanceData.Level.xp || 0);
+                chatLevelData = hubClient.calculateLevel(chatXP);
+                const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                gameLevelData = hubClient.calculateLevel(gameXP);
+              }
+            } catch (error) {
+              console.error(
+                "Error fetching user data after changing difficulty:",
+                error
+              );
+            }
+          }
+
           const updatedBuffer = await generateTowerImage(interaction, i18n, {
             bet: pendingBet,
             difficulty: pendingDifficulty,
             isPreGame: true,
+            balance: currentBalance,
+            levelProgress: {
+              chat: chatLevelData,
+              game: gameLevelData,
+            },
+            sessionChange: 0, // Reset to 0 when changing difficulty
           });
           await i.update({
             files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
-            components: [createSetupComponents()], // Update button label
+            components: [await createSetupComponents()], // Update button label
           });
         }
         // --- Start Game Button ---
@@ -503,7 +632,7 @@ export default {
               userBalanceStart < pendingBet
             ) {
               await i.reply({
-                content: getTranslation("games.tower.notEnoughMoney", {
+                content: await getTranslation("games.tower.notEnoughMoney", {
                   balance: userBalanceStart.toFixed(2),
                   bet: pendingBet,
                 }),
@@ -529,6 +658,18 @@ export default {
           // Initialize selectedTiles array to track selections
           gameInstance.selectedTiles = [];
 
+          // Store initial balance before deducting bet
+          let initialBalance = 0;
+          if (guildId) {
+            try {
+              const userDataStart = await hubClient.getUser(guildId, userId);
+              initialBalance = parseFloat(userDataStart?.economy?.balance || 0);
+            } catch (error) {
+              console.error("Error fetching initial balance:", error);
+            }
+          }
+          gameInstance.initialBalance = initialBalance;
+
           activeGames.set(gameKey, gameInstance);
 
           // Deduct bet if in a guild
@@ -548,10 +689,44 @@ export default {
             setupCollector.stop("game_started");
           }
 
+          // Fetch updated balance and level progress after deducting bet
+          let updatedBalance = 0;
+          let chatLevelData = null;
+          let gameLevelData = null;
+
+          if (guildId) {
+            try {
+              const currentBalanceData = await hubClient.getUser(
+                guildId,
+                userId
+              );
+              updatedBalance = parseFloat(
+                currentBalanceData?.economy?.balance || 0
+              );
+
+              if (currentBalanceData?.Level) {
+                const chatXP = Number(currentBalanceData.Level.xp || 0);
+                chatLevelData = hubClient.calculateLevel(chatXP);
+                const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                gameLevelData = hubClient.calculateLevel(gameXP);
+              }
+            } catch (error) {
+              console.error(
+                "Error fetching user data after starting game:",
+                error
+              );
+            }
+          }
+
           const gameBuffer = await generateActiveTowerImage(
             gameInstance,
             interaction,
-            i18n
+            i18n,
+            updatedBalance,
+            {
+              chat: chatLevelData,
+              game: gameLevelData,
+            }
           );
 
           // Start the active game
@@ -562,19 +737,29 @@ export default {
         if (!i.replied && !i.deferred) {
           await i
             .reply({
-              content: getTranslation("games.tower.setupError"),
+              content: await getTranslation("games.tower.setupError"),
               ephemeral: true,
             })
             .catch(console.error);
         } else {
           await i
             .followUp({
-              content: getTranslation("games.tower.setupError"),
+              content: await getTranslation("games.tower.setupError"),
               ephemeral: true,
             })
             .catch(console.error);
         }
       }
+    };
+
+    // Function to create restart button for game over state
+    const createGameOverButtons = async (userId) => {
+      const restartButton = new ButtonBuilder()
+        .setCustomId(`tower_restart_game_${userId}`)
+        .setLabel(await getTranslation("games.tower.restartButtonLabel"))
+        .setStyle(ButtonStyle.Primary);
+
+      return [new ActionRowBuilder().addComponents(restartButton)];
     };
 
     // Start an active game
@@ -661,18 +846,55 @@ export default {
               await hubClient.addBalance(guildId, userId, prizeTaken);
             }
 
+            // Session change is now calculated automatically based on balance difference
+            // No need to manually set it
+
             // Update UI
             await gameInteraction.deferUpdate();
+
+            // Fetch updated balance and level progress after bomb hit
+            let updatedBalance = 0;
+            let chatLevelData = null;
+            let gameLevelData = null;
+
+            if (guildId) {
+              try {
+                const currentBalanceData = await hubClient.getUser(
+                  guildId,
+                  userId
+                );
+                updatedBalance = parseFloat(
+                  currentBalanceData?.economy?.balance || 0
+                );
+
+                if (currentBalanceData?.Level) {
+                  const chatXP = Number(currentBalanceData.Level.xp || 0);
+                  chatLevelData = hubClient.calculateLevel(chatXP);
+                  const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                  gameLevelData = hubClient.calculateLevel(gameXP);
+                }
+              } catch (error) {
+                console.error(
+                  "Error fetching user data after bomb hit:",
+                  error
+                );
+              }
+            }
 
             const finalBuffer = await generateActiveTowerImage(
               gameInstance,
               interaction,
-              i18n
+              i18n,
+              updatedBalance,
+              {
+                chat: chatLevelData,
+                game: gameLevelData,
+              }
             );
 
             // Show game over message
             await setupMessage.edit({
-              content: getTranslation("games.tower.prizeTakenMessage", {
+              content: await getTranslation("games.tower.prizeTakenMessage", {
                 prize: prizeTaken.toFixed(2),
                 floor: gameInstance.currentFloor,
               }),
@@ -705,18 +927,55 @@ export default {
               gameInstance.gameOver = true;
               gameInstance.lastAction = "bomb";
 
+              // Session change is now calculated automatically based on balance difference
+              // No need to manually set it
+
               // Update UI
               await gameInteraction.deferUpdate();
+
+              // Fetch updated balance and level progress after reaching max floor
+              let updatedBalance = 0;
+              let chatLevelData = null;
+              let gameLevelData = null;
+
+              if (guildId) {
+                try {
+                  const currentBalanceData = await hubClient.getUser(
+                    guildId,
+                    userId
+                  );
+                  updatedBalance = parseFloat(
+                    currentBalanceData?.economy?.balance || 0
+                  );
+
+                  if (currentBalanceData?.Level) {
+                    const chatXP = Number(currentBalanceData.Level.xp || 0);
+                    chatLevelData = hubClient.calculateLevel(chatXP);
+                    const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                    gameLevelData = hubClient.calculateLevel(gameXP);
+                  }
+                } catch (error) {
+                  console.error(
+                    "Error fetching user data after max floor:",
+                    error
+                  );
+                }
+              }
 
               const finalBuffer = await generateActiveTowerImage(
                 gameInstance,
                 interaction,
-                i18n
+                i18n,
+                updatedBalance,
+                {
+                  chat: chatLevelData,
+                  game: gameLevelData,
+                }
               );
 
               // Show game over message
               await setupMessage.edit({
-                content: getTranslation("games.tower.bombHitMessage", {
+                content: await getTranslation("games.tower.bombHitMessage", {
                   floor: gameInstance.currentFloor + 1,
                   bet: gameInstance.betAmount,
                 }),
@@ -746,18 +1005,57 @@ export default {
                   await hubClient.addBalance(guildId, userId, maxPrize);
                 }
 
+                // Session change is now calculated automatically based on balance difference
+                // No need to manually set it
+
                 // Update UI
                 await gameInteraction.deferUpdate();
+
+                // Fetch updated balance and level progress after reaching max floor
+                let updatedBalance = 0;
+                let chatLevelData = null;
+                let gameLevelData = null;
+
+                if (guildId) {
+                  try {
+                    const currentBalanceData = await hubClient.getUser(
+                      guildId,
+                      userId
+                    );
+                    updatedBalance = parseFloat(
+                      currentBalanceData?.economy?.balance || 0
+                    );
+
+                    if (currentBalanceData?.Level) {
+                      const chatXP = Number(currentBalanceData.Level.xp || 0);
+                      chatLevelData = hubClient.calculateLevel(chatXP);
+                      const gameXP = Number(
+                        currentBalanceData.Level.gameXp || 0
+                      );
+                      gameLevelData = hubClient.calculateLevel(gameXP);
+                    }
+                  } catch (error) {
+                    console.error(
+                      "Error fetching user data after max floor:",
+                      error
+                    );
+                  }
+                }
 
                 const finalBuffer = await generateActiveTowerImage(
                   gameInstance,
                   interaction,
-                  i18n
+                  i18n,
+                  updatedBalance,
+                  {
+                    chat: chatLevelData,
+                    game: gameLevelData,
+                  }
                 );
 
                 // Show win message
                 await setupMessage.edit({
-                  content: getTranslation(
+                  content: await getTranslation(
                     "games.tower.maxFloorReachedMessage",
                     {
                       floor: MAX_FLOORS,
@@ -785,10 +1083,46 @@ export default {
                 // Update UI
                 await gameInteraction.deferUpdate();
 
+                // Fetch updated balance and level progress after safe tile
+                let updatedBalance = 0;
+                let chatLevelData = null;
+                let gameLevelData = null;
+
+                if (guildId) {
+                  try {
+                    const currentBalanceData = await hubClient.getUser(
+                      guildId,
+                      userId
+                    );
+                    updatedBalance = parseFloat(
+                      currentBalanceData?.economy?.balance || 0
+                    );
+
+                    if (currentBalanceData?.Level) {
+                      const chatXP = Number(currentBalanceData.Level.xp || 0);
+                      chatLevelData = hubClient.calculateLevel(chatXP);
+                      const gameXP = Number(
+                        currentBalanceData.Level.gameXp || 0
+                      );
+                      gameLevelData = hubClient.calculateLevel(gameXP);
+                    }
+                  } catch (error) {
+                    console.error(
+                      "Error fetching user data after safe tile:",
+                      error
+                    );
+                  }
+                }
+
                 const nextBuffer = await generateActiveTowerImage(
                   gameInstance,
                   interaction,
-                  i18n
+                  i18n,
+                  updatedBalance,
+                  {
+                    chat: chatLevelData,
+                    game: gameLevelData,
+                  }
                 );
 
                 await setupMessage.edit({

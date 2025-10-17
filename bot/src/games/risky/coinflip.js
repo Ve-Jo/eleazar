@@ -31,6 +31,7 @@ class GameState {
     this.recentGames = []; // Store last 3 games: { bet: number, result: 'win'|'lose', change: number, timestamp: number }
     this.totalWon = 0;
     this.totalLost = 0;
+    this.sessionChange = 0; // Total balance change during this session
     this.lastUpdateTime = Date.now();
   }
 
@@ -50,7 +51,13 @@ function getGameKey(channelId, userId) {
   return `${channelId}-${userId}`;
 }
 
-async function generateCoinflipImage(gameInstance, interaction, i18n, balance) {
+async function generateCoinflipImage(
+  gameInstance,
+  interaction,
+  i18n,
+  balance,
+  levelProgress = { chat: null, game: null }
+) {
   // Calculate potential profit multiplier for display
   let potentialProfitMultiplier = 0;
   if (gameInstance.winProbability > 0) {
@@ -75,6 +82,8 @@ async function generateCoinflipImage(gameInstance, interaction, i18n, balance) {
     lastResult: gameInstance.lastResult,
     recentGames: gameInstance.recentGames,
     balance: balance, // Pass the current balance
+    sessionChange: gameInstance.sessionChange, // Pass total session change
+    levelProgress: levelProgress, // Pass level progress data
     locale: interaction.locale || interaction.guildLocale || "en",
     dominantColor: "user", // Use user avatar color
   };
@@ -101,9 +110,9 @@ export default {
     }
 
     // Helper function to safely get translation with fallback
-    const getTranslation = (key, variables = {}) => {
+    const getTranslation = async (key, variables = {}) => {
       try {
-        const result = i18n.__(key, variables);
+        const result = await i18n.__(key, variables);
         return typeof result === "string" ? result : key.split(".").pop();
       } catch (error) {
         console.warn(`Translation error for key: ${key}`, error);
@@ -117,7 +126,7 @@ export default {
 
     if (activeGames.has(gameKey)) {
       return interaction.followUp({
-        content: getTranslation("games.coinflip.alreadyRunning"),
+        content: await getTranslation("games.coinflip.alreadyRunning"),
         ephemeral: true,
       });
     }
@@ -125,16 +134,16 @@ export default {
     const gameInstance = new GameState(channelId, userId, null, guildId);
     activeGames.set(gameKey, gameInstance);
 
-    const createComponents = (betSet = false) => {
+    const createComponents = async (betSet = false) => {
       const flipButton = new ButtonBuilder()
         .setCustomId("coinflip_flip")
-        .setLabel(getTranslation("games.coinflip.flipButton"))
+        .setLabel(await getTranslation("games.coinflip.flipButton"))
         .setStyle(ButtonStyle.Success)
         .setDisabled(!betSet || gameInstance.betAmount <= 0);
 
       const setBetButton = new ButtonBuilder()
         .setCustomId("coinflip_set_bet")
-        .setLabel(getTranslation("games.coinflip.setBetButton"))
+        .setLabel(await getTranslation("games.coinflip.setBetButton"))
         .setStyle(ButtonStyle.Primary);
 
       // Button to change win probability
@@ -142,7 +151,7 @@ export default {
         .setCustomId("coinflip_change_chance")
         // Display current chance on the button
         .setLabel(
-          getTranslation("games.coinflip.chanceButton", {
+          await getTranslation("games.coinflip.chanceButton", {
             chance: gameInstance.winProbability * 100,
           })
         )
@@ -150,7 +159,7 @@ export default {
 
       const endButton = new ButtonBuilder()
         .setCustomId("coinflip_end")
-        .setLabel(getTranslation("games.coinflip.endButton"))
+        .setLabel(await getTranslation("games.coinflip.endButton"))
         .setStyle(ButtonStyle.Danger);
 
       return new ActionRowBuilder().addComponents(
@@ -162,25 +171,45 @@ export default {
     };
 
     try {
-      // Fetch initial balance before generating the first image
+      // Fetch initial balance and level progress before generating the first image
       let initialBalance = 0;
+      let chatLevelData = null;
+      let gameLevelData = null;
+
       if (guildId) {
-        const initialUserData = await hubClient.getUser(guildId, userId);
-        initialBalance = parseFloat(initialUserData?.economy?.balance || 0);
+        try {
+          // Ensure user exists in database
+          await hubClient.ensureGuildUser(guildId, userId);
+          const initialUserData = await hubClient.getUser(guildId, userId);
+          initialBalance = parseFloat(initialUserData?.economy?.balance || 0);
+
+          if (initialUserData?.Level) {
+            const chatXP = Number(initialUserData.Level.xp || 0);
+            chatLevelData = hubClient.calculateLevel(chatXP);
+            const gameXP = Number(initialUserData.Level.gameXp || 0);
+            gameLevelData = hubClient.calculateLevel(gameXP);
+          }
+        } catch (error) {
+          console.error("Error fetching user data for Coinflip:", error);
+        }
       }
 
       const initialBuffer = await generateCoinflipImage(
         gameInstance,
         interaction,
         i18n,
-        // Pass the fetched initial balance
-        initialBalance
+        // Pass the fetched initial balance and level progress
+        initialBalance,
+        {
+          chat: chatLevelData,
+          game: gameLevelData,
+        }
       );
 
       const message = await interaction.followUp({
-        content: getTranslation("games.coinflip.startMessage"),
+        content: await getTranslation("games.coinflip.startMessage"),
         files: [{ attachment: initialBuffer, name: "coinflip.avif" }],
-        components: [createComponents(false)],
+        components: [await createComponents(false)],
         fetchReply: true,
       });
 
@@ -192,11 +221,11 @@ export default {
         console.log(`[Coinflip] Cleaned up game for ${userId}`);
       };
 
-      let inactivityTimeout = setTimeout(() => {
+      let inactivityTimeout = setTimeout(async () => {
         if (activeGames.has(gameKey)) {
           message
             .edit({
-              content: getTranslation("games.coinflip.timesOut"),
+              content: await getTranslation("games.coinflip.timesOut"),
               components: [],
             })
             .catch(console.error);
@@ -206,11 +235,11 @@ export default {
 
       const resetInactivityTimer = () => {
         clearTimeout(inactivityTimeout);
-        inactivityTimeout = setTimeout(() => {
+        inactivityTimeout = setTimeout(async () => {
           if (activeGames.has(gameKey)) {
             message
               .edit({
-                content: getTranslation("games.coinflip.timesOut"),
+                content: await getTranslation("games.coinflip.timesOut"),
                 components: [],
               })
               .catch(console.error);
@@ -233,11 +262,11 @@ export default {
           if (i.customId === "coinflip_set_bet") {
             const modal = new ModalBuilder()
               .setCustomId(`coinflip_bet_modal_${userId}`)
-              .setTitle(getTranslation("games.coinflip.setBetTitle"));
+              .setTitle(await getTranslation("games.coinflip.setBetTitle"));
 
             const amountInput = new TextInputBuilder()
               .setCustomId("bet_amount")
-              .setLabel(getTranslation("games.coinflip.betAmountLabel"))
+              .setLabel(await getTranslation("games.coinflip.betAmountLabel"))
               .setStyle(TextInputStyle.Short)
               .setPlaceholder("100")
               .setRequired(true);
@@ -262,7 +291,7 @@ export default {
 
                 if (isNaN(betAmount) || betAmount <= 0) {
                   await modalInteraction.reply({
-                    content: getTranslation("games.coinflip.invalidBet"),
+                    content: await getTranslation("games.coinflip.invalidBet"),
                     ephemeral: true,
                   });
                   return;
@@ -271,7 +300,7 @@ export default {
                 // Only check balance if in a guild
                 if (guildId) {
                   // Check user balance
-                  const userData = await Database.getUser(guildId, userId);
+                  const userData = await hubClient.getUser(guildId, userId);
                   const userBalance = parseFloat(
                     userData?.economy?.balance || 0
                   );
@@ -282,39 +311,76 @@ export default {
                     userBalance < betAmount
                   ) {
                     await modalInteraction.reply({
-                      content: getTranslation("games.coinflip.notEnoughMoney", {
-                        balance: userBalance.toFixed(2),
-                        bet: betAmount,
-                      }),
+                      content: await getTranslation(
+                        "games.coinflip.notEnoughMoney",
+                        {
+                          balance: userBalance.toFixed(2),
+                          bet: betAmount,
+                        }
+                      ),
                       ephemeral: true,
                     });
                     return;
                   }
                 }
 
+                // If everything is OK, set the bet
                 gameInstance.betAmount = betAmount;
 
-                // Get current balance
+                // Reply to modal interaction with ephemeral message
+                await modalInteraction.reply({
+                  content: await getTranslation(
+                    "games.coinflip.betSetSuccess",
+                    {
+                      bet: betAmount,
+                    }
+                  ),
+                  ephemeral: true,
+                });
+
+                // Then update the original message
                 let userBalance = 0;
+                let chatLevelData = null;
+                let gameLevelData = null;
                 if (guildId) {
-                  const currentBalanceData = await Database.getUser(
-                    guildId,
-                    userId
-                  );
-                  userBalance = parseFloat(
-                    currentBalanceData?.economy?.balance || 0
-                  );
+                  try {
+                    const currentBalanceData = await hubClient.getUser(
+                      guildId,
+                      userId
+                    );
+                    userBalance = parseFloat(
+                      currentBalanceData?.economy?.balance || 0
+                    );
+
+                    if (currentBalanceData?.Level) {
+                      const chatXP = Number(currentBalanceData.Level.xp || 0);
+                      chatLevelData = hubClient.calculateLevel(chatXP);
+                      const gameXP = Number(
+                        currentBalanceData.Level.gameXp || 0
+                      );
+                      gameLevelData = hubClient.calculateLevel(gameXP);
+                    }
+                  } catch (error) {
+                    console.error(
+                      "Error fetching user data in set bet:",
+                      error
+                    );
+                  }
                 }
 
                 const updatedBuffer = await generateCoinflipImage(
                   gameInstance,
                   interaction,
                   i18n,
-                  userBalance
+                  userBalance,
+                  {
+                    chat: chatLevelData,
+                    game: gameLevelData,
+                  }
                 );
-                await modalInteraction.update({
+                await message.edit({
                   files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
-                  components: [createComponents(true)], // Enable flip button
+                  components: [await createComponents(true)], // Enable flip button
                 });
               })
               .catch(console.error); // Handle modal timeout/errors
@@ -328,26 +394,52 @@ export default {
 
             // Update the message with new chance and buttons
             await i.deferUpdate();
-            const currentBalanceData = await hubClient.getUser(guildId, userId);
-            const currentBalance = parseFloat(
-              currentBalanceData?.economy?.balance || 0
-            );
+            let currentBalance = 0;
+            let chatLevelData = null;
+            let gameLevelData = null;
+            if (guildId) {
+              try {
+                const currentBalanceData = await hubClient.getUser(
+                  guildId,
+                  userId
+                );
+                currentBalance = parseFloat(
+                  currentBalanceData?.economy?.balance || 0
+                );
+
+                if (currentBalanceData?.Level) {
+                  const chatXP = Number(currentBalanceData.Level.xp || 0);
+                  chatLevelData = hubClient.calculateLevel(chatXP);
+                  const gameXP = Number(currentBalanceData.Level.gameXp || 0);
+                  gameLevelData = hubClient.calculateLevel(gameXP);
+                }
+              } catch (error) {
+                console.error(
+                  "Error fetching user data in change chance:",
+                  error
+                );
+              }
+            }
             const updatedBuffer = await generateCoinflipImage(
               gameInstance,
               interaction,
               i18n,
-              currentBalance
+              currentBalance,
+              {
+                chat: chatLevelData,
+                game: gameLevelData,
+              }
             );
             await message.edit({
               files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
-              components: [createComponents(gameInstance.betAmount > 0)],
+              components: [await createComponents(gameInstance.betAmount > 0)],
             });
           } else if (i.customId === "coinflip_flip") {
             await i.deferUpdate(); // Acknowledge button press
 
             if (gameInstance.betAmount <= 0) {
               await i.followUp({
-                content: getTranslation("games.coinflip.noBetSet"),
+                content: await getTranslation("games.coinflip.noBetSet"),
                 ephemeral: true,
               });
               return;
@@ -366,10 +458,13 @@ export default {
                 userBalanceFlip < gameInstance.betAmount
               ) {
                 await i.followUp({
-                  content: getTranslation("games.coinflip.notEnoughMoney", {
-                    balance: userBalanceFlip.toFixed(2),
-                    bet: gameInstance.betAmount,
-                  }),
+                  content: await getTranslation(
+                    "games.coinflip.notEnoughMoney",
+                    {
+                      balance: userBalanceFlip.toFixed(2),
+                      bet: gameInstance.betAmount,
+                    }
+                  ),
                   ephemeral: true,
                 });
                 return;
@@ -396,18 +491,26 @@ export default {
                   (gameInstance.betAmount * profitMultiplier).toFixed(2)
                 );
                 gameInstance.totalWon += changeAmount;
+                gameInstance.sessionChange += changeAmount; // Update session change
                 await hubClient.addBalance(guildId, userId, changeAmount);
-                messageContent = getTranslation("games.coinflip.winMessage", {
-                  amount: changeAmount.toFixed(2),
-                });
+                messageContent = await getTranslation(
+                  "games.coinflip.winMessage",
+                  {
+                    amount: changeAmount.toFixed(2),
+                  }
+                );
               } else {
                 gameInstance.lastResult = "lose";
                 changeAmount = -gameInstance.betAmount;
                 gameInstance.totalLost += Math.abs(changeAmount);
+                gameInstance.sessionChange += changeAmount; // Update session change
                 await hubClient.addBalance(guildId, userId, changeAmount);
-                messageContent = getTranslation("games.coinflip.loseMessage", {
-                  amount: Math.abs(changeAmount).toFixed(2),
-                });
+                messageContent = await getTranslation(
+                  "games.coinflip.loseMessage",
+                  {
+                    amount: Math.abs(changeAmount).toFixed(2),
+                  }
+                );
               }
             } else {
               // In DM, just show the result without updating balance
@@ -420,16 +523,24 @@ export default {
                   (gameInstance.betAmount * profitMultiplier).toFixed(2)
                 );
                 gameInstance.totalWon += changeAmount;
-                messageContent = getTranslation("games.coinflip.winMessage", {
-                  amount: changeAmount.toFixed(2),
-                });
+                gameInstance.sessionChange += changeAmount; // Update session change
+                messageContent = await getTranslation(
+                  "games.coinflip.winMessage",
+                  {
+                    amount: changeAmount.toFixed(2),
+                  }
+                );
               } else {
                 gameInstance.lastResult = "lose";
                 changeAmount = -gameInstance.betAmount;
                 gameInstance.totalLost += Math.abs(changeAmount);
-                messageContent = getTranslation("games.coinflip.loseMessage", {
-                  amount: Math.abs(changeAmount).toFixed(2),
-                });
+                gameInstance.sessionChange += changeAmount; // Update session change
+                messageContent = await getTranslation(
+                  "games.coinflip.loseMessage",
+                  {
+                    amount: Math.abs(changeAmount).toFixed(2),
+                  }
+                );
               }
             }
 
@@ -440,29 +551,49 @@ export default {
               changeAmount
             );
 
-            // Get updated balance AFTER the change
+            // Get updated balance and level progress AFTER the change
             let updatedBalance = 0;
+            let chatLevelData = null;
+            let gameLevelData = null;
             if (guildId) {
-              const updatedUserData = await hubClient.getUser(guildId, userId);
-              updatedBalance = parseFloat(
-                updatedUserData?.economy?.balance || 0
-              );
+              try {
+                const updatedUserData = await hubClient.getUser(
+                  guildId,
+                  userId
+                );
+                updatedBalance = parseFloat(
+                  updatedUserData?.economy?.balance || 0
+                );
+
+                if (updatedUserData?.Level) {
+                  const chatXP = Number(updatedUserData.Level.xp || 0);
+                  chatLevelData = hubClient.calculateLevel(chatXP);
+                  const gameXP = Number(updatedUserData.Level.gameXp || 0);
+                  gameLevelData = hubClient.calculateLevel(gameXP);
+                }
+              } catch (error) {
+                console.error("Error fetching user data after flip:", error);
+              }
             }
 
             const updatedBuffer = await generateCoinflipImage(
               gameInstance,
               interaction,
               i18n,
-              updatedBalance
+              updatedBalance,
+              {
+                chat: chatLevelData,
+                game: gameLevelData,
+              }
             );
             await message.edit({
               content: messageContent,
               files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
-              components: [createComponents(true)], // Keep flip button enabled
+              components: [await createComponents(true)], // Keep flip button enabled
             });
           } else if (i.customId === "coinflip_end") {
             await i.update({
-              content: getTranslation("games.coinflip.endMessage", {
+              content: await getTranslation("games.coinflip.endMessage", {
                 won: gameInstance.totalWon.toFixed(2),
                 lost: gameInstance.totalLost.toFixed(2),
               }),
@@ -477,14 +608,14 @@ export default {
           if (!i.replied && !i.deferred) {
             await i
               .reply({
-                content: getTranslation("games.coinflip.error"),
+                content: await getTranslation("games.coinflip.error"),
                 ephemeral: true,
               })
               .catch(console.error);
           } else {
             await i
               .followUp({
-                content: getTranslation("games.coinflip.error"),
+                content: await getTranslation("games.coinflip.error"),
                 ephemeral: true,
               })
               .catch(console.error);
@@ -492,13 +623,13 @@ export default {
         }
       });
 
-      collector.on("end", (collected, reason) => {
+      collector.on("end", async (collected, reason) => {
         if (reason !== "user") {
           // Only cleanup if ended naturally, not by user action ("coinflip_end")
           if (activeGames.has(gameKey)) {
             message
               .edit({
-                content: getTranslation("games.coinflip.ended"),
+                content: await getTranslation("games.coinflip.ended"),
                 components: [],
               })
               .catch(console.error);
@@ -516,12 +647,12 @@ export default {
       }
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: getTranslation("games.coinflip.error"),
+          content: await getTranslation("games.coinflip.error"),
           ephemeral: true,
         });
       } else {
         await interaction.followUp({
-          content: getTranslation("games.coinflip.error"),
+          content: await getTranslation("games.coinflip.error"),
           ephemeral: true,
         });
       }
@@ -593,6 +724,11 @@ export default {
       en: "Coinflip ended. You won {{won}} 💵 and lost {{lost}} 💵 in total.",
       ru: "Монетка завершена. Всего вы выиграли {{won}} 💵 и проиграли {{lost}} 💵.",
       uk: "Монетку завершено. Всього ви виграли {{won}} 💵 та програли {{lost}} 💵.",
+    },
+    betSetSuccess: {
+      en: "Bet set to {{bet}} 💵 successfully!",
+      ru: "Ставка установлена на {{bet}} 💵 успешно!",
+      uk: "Ставку встановлено на {{bet}} 💵 успішно!",
     },
     timesOut: {
       en: "Coinflip game ended due to inactivity.",
