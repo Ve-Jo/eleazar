@@ -1,4 +1,5 @@
 import React from "react";
+import UserCard from "./unified/UserCard.jsx";
 
 // Helper function to format time difference
 const timeAgo = (timestamp, locale = "en") => {
@@ -27,6 +28,7 @@ const Coinflip = (props) => {
     potentialProfitMultiplier = 0.9, // Add prop with default (0.95 for 50%)
     lastResult = "none", // Still needed for potential overall status, though not explicitly shown
     balance = 0, // Added balance prop
+    sessionChange = 0, // Added sessionChange prop for total balance change during session
     recentGames = [
       {
         bet: 10,
@@ -37,6 +39,7 @@ const Coinflip = (props) => {
     ], // Added recentGames prop
     i18n,
     coloring = {}, // Use coloring prop for theme
+    levelProgress = {}, // Added levelProgress prop
   } = props;
 
   const safeI18n = i18n || {
@@ -64,27 +67,29 @@ const Coinflip = (props) => {
 
   const containerStyle = {
     width: "450px", // Wider container
-    height: "250px", // Adjusted height
+    height: "353px", // Increased height to accommodate UserCard (250 + 103)
     background: backgroundGradient,
     borderRadius: "15px",
     fontFamily: "Inter600, Roboto, sans-serif",
     padding: "20px",
     display: "flex",
-    // Use justifyContent: 'space-between' to push elements apart
-    justifyContent: "space-between",
-    alignItems: "center", // Vertically center items
+    flexDirection: "row", // Side-by-side layout
+    justifyContent: "space-between", // Space sections apart
+    alignItems: "flex-start", // Align to top
     position: "relative",
     color: textColor,
     gap: "20px", // Add gap between main sections
+    overflow: "hidden", // Prevent UserCard overflow
   };
 
   const leftSectionStyle = {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    left: "25px",
-    justifyContent: "center", // Center coin vertically
+    justifyContent: "flex-start", // Align to top
     flexShrink: 0,
+    width: "45%", // Take half the width
+    paddingTop: "20px", // Add top padding
   };
 
   const coinStyle = {
@@ -126,18 +131,9 @@ const Coinflip = (props) => {
     flexDirection: "column",
     alignItems: "flex-end", // Align avatar and history to the right
     gap: "15px", // Gap between avatar and history
-    flexGrow: 1, // Allow this section to take remaining space
-    height: "100%", // Take full height
-    justifyContent: "space-between", // Space avatar top, history bottom
-  };
-
-  const avatarStyle = {
-    width: "60px", // Adjusted size
-    height: "60px", // Adjusted size
-    borderRadius: "25%", // Rounded square as per screenshot
-    objectFit: "cover",
     flexShrink: 0,
-    alignSelf: "flex-end", // Keep avatar to the right
+    width: "52%", // Take half the width
+    justifyContent: "flex-start", // Align to top
   };
 
   const historyContainerStyle = {
@@ -146,6 +142,7 @@ const Coinflip = (props) => {
     gap: "8px",
     width: "100%", // Take full width of the right section
     alignItems: "flex-end", // Align history items to the right
+    marginTop: "20px", // Add spacing below avatar
   };
 
   const historyItemStyle = (result) => ({
@@ -209,15 +206,6 @@ const Coinflip = (props) => {
 
       {/* Right Section (Avatar and History) */}
       <div style={rightSectionStyle}>
-        <img
-          src={
-            interaction?.user?.avatarURL ||
-            "https://cdn.discordapp.com/embed/avatars/0.png"
-          }
-          alt="User Avatar"
-          style={avatarStyle}
-        />
-
         <div style={historyContainerStyle}>
           {recentGames.slice(0, 3).map((game, index) => (
             <div key={index} style={historyItemStyle(game.result)}>
@@ -249,13 +237,39 @@ const Coinflip = (props) => {
           )}
         </div>
       </div>
+      {/* Unified UserCard - positioned at bottom */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "0px",
+          left: "0px",
+          zIndex: 10,
+          display: "flex",
+        }}
+      >
+        <UserCard
+          interaction={interaction}
+          score={0}
+          earning={0}
+          balance={balance}
+          increaseAmount={sessionChange}
+          levelProgress={levelProgress}
+          i18n={i18n}
+          coloring={coloring}
+          position={{ bottom: 0, left: 0 }}
+          size={{ width: 450, height: 85 }}
+          showScore={false}
+          showGridSize={false}
+          addIncreaseToBalance={false}
+        />
+      </div>
     </div>
   );
 };
 
 Coinflip.dimensions = {
   width: 450, // Match container width
-  height: 250, // Match container height
+  height: 353, // Match container height (250 + 103 for UserCard)
 };
 
 // Add localization strings directly to the component

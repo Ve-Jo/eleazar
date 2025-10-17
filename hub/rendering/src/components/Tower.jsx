@@ -1,7 +1,8 @@
 import React from "react";
+import UserCard from "./unified/UserCard.jsx";
 
 const Tower = (props) => {
-  const {
+  let {
     interaction,
     difficulty = "easy",
     betAmount = 0,
@@ -17,8 +18,12 @@ const Tower = (props) => {
     isPreGame = false,
     selectedTiles = [],
     floorMultipliers = [],
+    balance = 0, // Added balance prop
+    levelProgress = {}, // Added levelProgress prop
+    sessionChange = 0, // Added sessionChange prop for total balance change during session
   } = props;
 
+  //currentFloor = 10;
   const translations = Object.entries(Tower.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
@@ -41,20 +46,22 @@ const Tower = (props) => {
   } = coloring;
 
   // --- Dynamic Sizing Calculations ---
-  const totalHeight = 550;
+  const totalHeight = 550; // Increased by 150px to accommodate UserCard
   const containerPadding = 25 * 2;
   const headerHeightEst = 75; // Avatar (60) + margin (15)
   const footerHeightEst = 60; // Padding (15) + text (~22*2) + border (1)
   const floorIndicatorHeightEst = 30; // Text (~18) + gap (10)
   const mainContentGap = 10;
 
+  const userCardHeight = 75; // Fixed height for UserCard
   const fixedVerticalSpace =
     containerPadding +
     headerHeightEst +
     footerHeightEst +
     floorIndicatorHeightEst +
     mainContentGap;
-  const availableFloorsHeight = totalHeight - fixedVerticalSpace; // Approx height for floors container
+  const availableFloorsHeight =
+    totalHeight - fixedVerticalSpace - userCardHeight; // Reserve space for UserCard
 
   const numberOfFloors = currentFloor + 1;
 
@@ -168,22 +175,15 @@ const Tower = (props) => {
     flexShrink: 0, // Prevent header from shrinking
   };
 
-  const avatarStyle = {
-    width: "60px",
-    height: "60px",
-    borderRadius: "25%",
-    objectFit: "cover",
-  };
-
   const titleStyle = {
-    fontSize: "24px",
+    fontSize: "36px",
     fontWeight: "bold",
     textAlign: "right",
     display: "flex", // For Satori
   };
 
   const difficultyStyle = {
-    fontSize: "14px",
+    fontSize: "24px",
     fontWeight: "normal",
     color: tertiaryTextColor,
     textTransform: "capitalize",
@@ -214,6 +214,7 @@ const Tower = (props) => {
     flexDirection: "column-reverse",
     alignItems: "center",
     width: "100%",
+    paddingBottom: "20px",
     overflow: "hidden",
     gap: `${dynamicGapBetweenFloors}px`,
     flex: 1,
@@ -366,14 +367,6 @@ const Tower = (props) => {
           <div style={titleStyle}>Tower</div>
           <div style={difficultyStyle}>{difficulty}</div>
         </div>
-        <img
-          src={
-            interaction?.user?.avatarURL ||
-            "https://cdn.discordapp.com/embed/avatars/0.png"
-          }
-          alt="User Avatar"
-          style={avatarStyle}
-        />
       </div>
 
       <div style={mainContentStyle}>
@@ -451,6 +444,33 @@ const Tower = (props) => {
           </div>
           <div style={prizeAmountStyle(false)}>{nextPrize?.toFixed(2)} 💵</div>
         </div>
+      </div>
+
+      {/* Unified UserCard - overlay at bottom-left */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "0px",
+          left: "0px",
+          zIndex: 10,
+          display: "flex",
+        }}
+      >
+        <UserCard
+          interaction={interaction}
+          score={0}
+          earning={0}
+          balance={balance}
+          increaseAmount={sessionChange}
+          levelProgress={levelProgress}
+          i18n={i18n}
+          coloring={coloring}
+          position={{ bottom: 0, left: 0 }}
+          size={{ width: 400, height: 75 }} // Use standard UserCard height
+          showScore={false}
+          showGridSize={false}
+          addIncreaseToBalance={false}
+        />
       </div>
     </div>
   );
