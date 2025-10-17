@@ -912,7 +912,8 @@
       "error": "An error occurred during the Coinflip game.",
       "name": "Coinflip",
       "description": "Flip a coin to win or lose your bet.",
-      "chanceButton": "{{chance}}% Chance"
+      "chanceButton": "{{chance}}% Chance",
+      "betSetSuccess": "Bet set to {{bet}} 💵 successfully!"
     },
     "tower": {
       "alreadyRunning": "A Tower game is already running!",
