@@ -1,5 +1,5 @@
 const UserCard = (props) => {
-  const {
+  let {
     interaction,
     score = 0,
     earning = 0,
@@ -11,6 +11,9 @@ const UserCard = (props) => {
     coloring = {},
     position = { bottom: 0, left: 0 },
     size = { width: 540, height: 103 },
+    showScore = true, // New prop to control score visibility
+    showGridSize = true, // New prop to control grid size visibility
+    addIncreaseToBalance = true, // New prop to control if increaseAmount should be added to balance
   } = props;
 
   // Dynamic scaling based on container size
@@ -21,33 +24,83 @@ const UserCard = (props) => {
     scale: scaleFactor,
   };
 
-  // Dynamic positioning based on scale
-  const dynamicPositions = {
-    avatar: {
-      left: 25 * scaleFactor,
-      top: size.height - 88 * scaleFactor,
-      width: 70 * scaleFactor,
-      height: 70 * scaleFactor,
-    },
+  // Dynamic positioning based on scale and visibility
+  const BASE_POS = {
+    avatar: { left: 25, top: 15, width: 70, height: 70 },
     money: {
-      left: 103 * scaleFactor,
-      top: size.height - 88 * scaleFactor,
-      width: 167 * scaleFactor,
-      height: 70 * scaleFactor,
+      left: { base: 105, noScore: 105 },
+      width: { base: 167, noScore: 180 },
+      height: 70,
     },
     gamingLevel: {
-      left: size.width - 260 * scaleFactor,
-      top: size.height - 88 * scaleFactor, // Скорректировано под новую высоту 70px
-      width: 90 * scaleFactor,
-      height: 70 * scaleFactor, // Сделано такой же высоты как и money контейнер
+      width: { base: 100, noScore: 175 },
+      height: 70,
+      gap: { base: 10, noScore: 12 },
+      offset: 25,
     },
+    banknotes: { left: 44, bottom: 12 },
     score: {
-      left: size.width - 152 * scaleFactor,
-      top: size.height - 94 * scaleFactor,
-      width: 95 * scaleFactor,
-      height: 68 * scaleFactor,
+      left: 390,
+      top: { withGrid: 15, noGrid: 21 },
+      width: 95,
+      height: 68,
     },
   };
+
+  // Scale all measurements
+  const scaleValue = (val) => {
+    console.log(val * scaleFactor);
+    return val * scaleFactor;
+  };
+  const scaled = {
+    avatar: {
+      left: scaleValue(BASE_POS.avatar.left),
+      top: scaleValue(BASE_POS.avatar.top),
+      width: scaleValue(BASE_POS.avatar.width),
+      height: scaleValue(BASE_POS.avatar.height),
+    },
+    money: {
+      left: showScore
+        ? scaleValue(BASE_POS.money.left.base)
+        : scaleValue(BASE_POS.money.left.noScore),
+      top: scaleValue(BASE_POS.avatar.top),
+      width: showScore
+        ? scaleValue(BASE_POS.money.width.base)
+        : scaleValue(BASE_POS.money.width.noScore),
+      height: scaleValue(BASE_POS.money.height),
+    },
+    gamingLevel: {
+      left:
+        (showScore
+          ? scaleValue(BASE_POS.money.left.base)
+          : scaleValue(BASE_POS.money.left.noScore)) +
+        (showScore
+          ? scaleValue(BASE_POS.money.width.base)
+          : scaleValue(BASE_POS.money.width.noScore)) +
+        scaleValue(
+          showScore
+            ? BASE_POS.gamingLevel.gap.base
+            : BASE_POS.gamingLevel.gap.noScore
+        ),
+      top: scaleValue(BASE_POS.avatar.top),
+      width: showScore
+        ? scaleValue(BASE_POS.gamingLevel.width.base)
+        : scaleValue(BASE_POS.gamingLevel.width.noScore),
+      height: scaleValue(BASE_POS.gamingLevel.height),
+    },
+    score: showScore
+      ? {
+          left: scaleValue(BASE_POS.score.left),
+          top: showGridSize
+            ? scaleValue(BASE_POS.score.top.withGrid)
+            : scaleValue(BASE_POS.score.top.noGrid),
+          width: scaleValue(BASE_POS.score.width),
+          height: scaleValue(BASE_POS.score.height),
+        }
+      : null,
+  };
+
+  console.log(`SCALED`, scaled);
 
   const translations = Object.entries(UserCard.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -283,10 +336,10 @@ const UserCard = (props) => {
     position: "absolute",
     left: `${position.left + 20}px`,
     bottom: `${position.bottom + 20}px`,
-    width: `${size.width - 40}px`,
-    height: `${size.height}px`,
-    background: coloring.backgroundGradient || backgroundGradient,
-    borderRadius: "25px",
+    width: `${scaledSize.width - 40}px`,
+    height: `${scaledSize.height}px`,
+    background: "transparent",
+    borderRadius: `${scaleValue(25)}px`,
     overflow: "hidden",
     display: "flex",
     zIndex: 10,
@@ -295,33 +348,31 @@ const UserCard = (props) => {
 
   const userBackgroundStyle = {
     position: "absolute",
-    left: "9px",
-    top: `${size.height - 103}px`,
-    width: `${size.width - 19}px`,
-    height: "103px",
+    left: "0px",
+    top: "0px",
+    width: "100%",
+    height: "100%",
     background: coloring.backgroundGradient || backgroundGradient,
-    borderRadius: "25px",
+    borderRadius: `${scaleValue(25)}px`,
     display: "flex",
     zIndex: 1,
   };
 
   const moneyContainerStyle = {
     position: "absolute",
-    left: `${dynamicPositions.money.left}px`,
-    top: `${dynamicPositions.money.top}px`,
-    width: `${dynamicPositions.money.width}px`,
-    height: `${dynamicPositions.money.height}px`,
+    left: `${scaled.money.left}px`,
+    top: `${scaled.money.top}px`,
+    width: `${scaled.money.width}px`,
+    height: `${scaled.money.height}px`,
     display: "flex",
     zIndex: 2,
-    transform: `scale(${scaleFactor})`,
-    transformOrigin: "top left",
   };
 
   const dollarBanknoteStyle = {
     position: "absolute",
-    left: `${dynamicPositions.money.left}px`, // Align with money container
+    left: `${scaled.money.left}px`, // Align with money container
     bottom: "0px", // Touch the bottom edge of UserCard container
-    width: `${dynamicPositions.money.width}px`, // Match balance container width
+    width: `${scaled.money.width}px`, // Match balance container width
     height: "16px",
     display: "flex",
     zIndex: 1,
@@ -332,21 +383,21 @@ const UserCard = (props) => {
     position: "absolute",
     left: "0px",
     top: "0px",
-    width: "167px",
-    height: "70px",
+    width: `${scaled.money.width}px`,
+    height: `${scaled.money.height}px`,
     background: overlayBackground,
-    borderRadius: "20px",
+    borderRadius: `${scaleValue(20)}px`,
     display: "flex",
   };
 
   const dollarEmojiStyle = {
     position: "absolute",
-    left: "13px",
-    top: "20px",
-    width: "29px",
-    height: "29px",
+    left: `${scaleValue(13)}px`,
+    top: `${scaleValue(20)}px`,
+    width: `${scaleValue(29)}px`,
+    height: `${scaleValue(29)}px`,
     display: "flex",
-    fontSize: "24px",
+    fontSize: `${scaleValue(24)}px`,
     justifyContent: "center",
     alignItems: "center",
     color: "#FFD700",
@@ -354,10 +405,10 @@ const UserCard = (props) => {
 
   const balanceTextStyle = {
     position: "absolute",
-    left: "55px",
-    top: "26px",
-    width: "97px",
-    height: "29px",
+    left: `${scaleValue(55)}px`,
+    top: `${scaleValue(26)}px`,
+    width: `${scaleValue(97)}px`,
+    height: `${scaleValue(29)}px`,
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -375,15 +426,20 @@ const UserCard = (props) => {
 
   const increaseTextStyle = {
     position: "absolute",
-    left: "99px",
-    top: "8px",
-    height: "18px",
+    left: `${scaleValue(99)}px`,
+    top: `${scaleValue(8)}px`,
+    height: `${scaleValue(18)}px`,
     display: "flex",
     alignItems: "center",
   };
 
   const increaseNumberStyle = {
-    color: winColor,
+    color:
+      increaseAmount > 0
+        ? winColor
+        : increaseAmount < 0
+        ? "#ff4444"
+        : textColor,
     fontSize: `${15 * scaleFactor}px`,
     fontFamily: "Inter600",
     textRendering: "geometricPrecision",
@@ -395,10 +451,10 @@ const UserCard = (props) => {
   // Gaming Level - Vertical Progress Bar based on Penpot template and Balance
   const gamingLevelContainerStyle = {
     position: "absolute",
-    left: `${dynamicPositions.gamingLevel.left}px`,
-    top: `${dynamicPositions.gamingLevel.top}px`,
-    width: `${dynamicPositions.gamingLevel.width}px`,
-    height: `${dynamicPositions.gamingLevel.height}px`,
+    left: `${scaled.gamingLevel.left}px`,
+    top: `${scaled.gamingLevel.top}px`,
+    width: `${scaled.gamingLevel.width}px`, // Use full width since we already reduced it in positioning
+    height: `${scaled.gamingLevel.height}px`,
     zIndex: 2,
     display: "flex",
     flexDirection: "column",
@@ -411,14 +467,14 @@ const UserCard = (props) => {
     position: "absolute",
     left: "0px",
     top: "0px",
-    width: `${dynamicPositions.gamingLevel.width}px`,
-    height: `${dynamicPositions.gamingLevel.height}px`,
+    width: `${scaled.gamingLevel.width}px`, // Use full container width
+    height: `${scaled.gamingLevel.height}px`,
     background: `linear-gradient(to left, ${overlayBackground} 0%, rgba(255, 68, 68, 0.5) 100%)`,
-    borderRadius: "20px",
+    borderRadius: `${scaleValue(20)}px`, // Rounded corners on left side only
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    paddingTop: "8px",
+    paddingTop: `${scaleValue(8)}px`,
     overflow: "hidden",
   };
 
@@ -427,43 +483,46 @@ const UserCard = (props) => {
     position: "absolute",
     left: "0px",
     top: "0px",
-    width: `${dynamicPositions.gamingLevel.width * gameFillRatio}px`,
-    height: "70px",
+    width: `${scaled.gamingLevel.width * gameFillRatio}px`, // Use full container width for fill
+    height: `${scaleValue(70)}px`,
     background: "#d55656",
-    borderRadius: "20px 20px 20px 20px",
+    borderRadius: `${scaleValue(20)}px ${scaleValue(20)}px ${scaleValue(
+      20
+    )}px ${scaleValue(20)}px`,
     display: "flex",
   };
 
   // Red filling bar - right side (difference/transition) - based on Penpot template
   const gamingLevelFillDifferenceStyle = {
     position: "absolute",
-    left: `${dynamicPositions.gamingLevel.width * gameFillRatio}px`,
+    left: `${scaled.gamingLevel.width * gameFillRatio}px`, // Use full container width for position
     top: "0px",
-    width: "7px",
-    height: "70px",
+    width: `${scaleValue(7)}px`,
+    right: "0px", // Remove right margin to align with container
+    height: `${scaleValue(70)}px`,
     background: "#d67373",
     borderRadius: "0px 0px 0px 0px",
     display: "flex",
   };
 
-  const scoreTextStyle = {
-    position: "absolute",
-    left: `${dynamicPositions.score.left}px`,
-    top: `${dynamicPositions.score.top}px`,
-    width: `${dynamicPositions.score.width}px`,
-    height: `${dynamicPositions.score.height}px`,
-    zIndex: 2,
-    display: "flex",
-    transform: `scale(${scaleFactor})`,
-    transformOrigin: "top left",
-  };
+  const scoreTextStyle = showScore
+    ? {
+        position: "absolute",
+        left: `${scaled.score.left}px`,
+        top: `${scaled.score.top}px`,
+        width: `${scaled.score.width}px`,
+        height: `${scaled.score.height}px`,
+        zIndex: 2,
+        display: "flex",
+      }
+    : { display: "none" };
 
   const scoreNumberStyle = {
     position: "absolute",
     left: "0px",
-    top: "-3px",
+    top: `${scaleValue(-3)}px`,
     width: "100%",
-    height: "58px",
+    height: `${scaleValue(58)}px`,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -481,27 +540,28 @@ const UserCard = (props) => {
 
   const avatarStyle = {
     position: "absolute",
-    left: `${dynamicPositions.avatar.left}px`,
-    top: `${dynamicPositions.avatar.top}px`,
-    width: `${dynamicPositions.avatar.width}px`,
-    height: `${dynamicPositions.avatar.height}px`,
+    left: `${scaled.avatar.left}px`,
+    top: `${scaled.avatar.top}px`,
+    width: `${scaled.avatar.width}px`,
+    height: `${scaled.avatar.height}px`,
     zIndex: 2,
     display: "flex",
-    transform: `scale(${scaleFactor})`,
-    transformOrigin: "top left",
-    borderRadius: "20px",
+    borderRadius: `${scaleValue(20)}px`,
   };
 
-  const gridSizeStyle = {
-    position: "absolute",
-    left: "0px",
-    top: "34px",
-    width: `${dynamicPositions.score.width}px`,
-    height: "58px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
+  const gridSizeStyle =
+    showScore && showGridSize
+      ? {
+          position: "absolute",
+          left: "0px",
+          top: `${scaleValue(34)}px`,
+          width: `${scaled.score?.width || scaleValue(95)}px`,
+          height: `${scaleValue(58)}px`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }
+      : { display: "none" };
 
   const gridSizeValueStyle = {
     color: tertiaryTextColor,
@@ -522,19 +582,31 @@ const UserCard = (props) => {
         <div style={moneyBackgroundStyle}></div>
         <div style={dollarEmojiStyle}>💵</div>
 
-        {/* Balance Text with Green Highlighting for Earned Amount */}
+        {/* Balance Text with Color Highlighting for Earned/Lost Amount */}
         <div style={balanceTextStyle}>
           <div style={balanceNumberStyle}>
             {(() => {
               // Use only economy.balance (not bankBalance) with earned amounts
               const walletBalance = Number(balance);
-              const currentBalance = walletBalance + Number(increaseAmount);
+              const currentBalance = addIncreaseToBalance
+                ? walletBalance + Number(increaseAmount)
+                : walletBalance;
               const balanceStr = currentBalance.toFixed(2);
-              const [wholePart, decimalPart] = balanceStr.split(".");
-              const increaseStr = increaseAmount.toFixed(2);
+              const increaseStr = Math.abs(increaseAmount).toFixed(2);
               const [increaseWhole, increaseDecimal] = increaseStr.split(".");
 
-              // Calculate which digits should be green
+              // For highlighting, we need to consider the actual balance digits
+              const [wholePart, decimalPart] = balanceStr.split(".");
+
+              // Determine color based on increaseAmount
+              const highlightColor =
+                increaseAmount > 0
+                  ? winColor
+                  : increaseAmount < 0
+                  ? "#ff4444"
+                  : textColor;
+
+              // Calculate which digits should be highlighted
               const wholeDigits = wholePart.split("");
               const decimalDigits = decimalPart.split("");
               const increaseWholeDigits = increaseWhole.split("");
@@ -568,12 +640,16 @@ const UserCard = (props) => {
 
               return (
                 <>
-                  {highlightDigits(wholeDigits, increaseWholeDigits, winColor)}
-                  <span style={{ color: winColor }}>.</span>
+                  {highlightDigits(
+                    wholeDigits,
+                    increaseWholeDigits,
+                    highlightColor
+                  )}
+                  <span style={{ color: highlightColor }}>.</span>
                   {highlightDigits(
                     decimalDigits,
                     increaseDecimalDigits,
-                    winColor
+                    highlightColor
                   )}
                 </>
               );
@@ -582,9 +658,12 @@ const UserCard = (props) => {
         </div>
 
         {/* Increase Text */}
-        {increaseAmount > 0 && (
+        {increaseAmount !== 0 && (
           <div style={increaseTextStyle}>
-            <div style={increaseNumberStyle}>+{increaseAmount.toFixed(2)}</div>
+            <div style={increaseNumberStyle}>
+              {increaseAmount > 0 ? "+" : ""}
+              {increaseAmount.toFixed(2)}
+            </div>
           </div>
         )}
       </div>
@@ -603,13 +682,14 @@ const UserCard = (props) => {
             position: "absolute",
             left: "0px",
             top: "0px",
-            width: `${dynamicPositions.gamingLevel.width}px`,
-            height: `${dynamicPositions.gamingLevel.height}px`,
+            width: `${scaled.gamingLevel.width}px`,
+            height: `${scaled.gamingLevel.height}px`,
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-start",
             justifyContent: "center",
-            paddingLeft: "15px",
+            paddingLeft: `${scaleValue(15)}px`,
+            paddingRight: `${scaleValue(5)}px`, // Add small right padding for better alignment
           }}
         >
           {/* Level Number - Larger text like in Penpot template */}
@@ -621,14 +701,14 @@ const UserCard = (props) => {
               display: "flex",
               alignItems: "baseline",
               justifyContent: "flex-start",
-              marginBottom: "2px",
+              marginBottom: `${scaleValue(2)}px`,
             }}
           >
             <span>{gamingLevel}</span>
             <span
               style={{
                 fontSize: `${12 * scaleFactor}px`,
-                top: "-3px",
+                top: `${scaleValue(-3)}px`,
               }}
             >
               lvl
@@ -653,18 +733,20 @@ const UserCard = (props) => {
           </div>
         </div>
       </div>
-      {/* Score Text */}
-      <div style={scoreTextStyle}>
-        <div style={scoreNumberStyle}>
-          <div style={scoreValueStyle}>{score}</div>
-        </div>
-
-        {gridSize && (
-          <div style={gridSizeStyle}>
-            <div style={gridSizeValueStyle}>{gridSize}</div>
+      {/* Score Text - only show if enabled */}
+      {showScore && (
+        <div style={scoreTextStyle}>
+          <div style={scoreNumberStyle}>
+            <div style={scoreValueStyle}>{score}</div>
           </div>
-        )}
-      </div>
+
+          {showGridSize && gridSize && (
+            <div style={gridSizeStyle}>
+              <div style={gridSizeValueStyle}>{gridSize}</div>
+            </div>
+          )}
+        </div>
+      )}
       {/* User Avatar */}
       <div style={avatarStyle}>
         <img
@@ -677,7 +759,7 @@ const UserCard = (props) => {
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            borderRadius: "20px",
+            borderRadius: `${scaleValue(20)}px`,
           }}
         />
       </div>
@@ -688,7 +770,7 @@ const UserCard = (props) => {
           {renderBanknotes(increaseAmount, 44, 12, "banknotes", 10, 18, {
             left: 0,
             top: 0,
-            right: dynamicPositions.money.width, // Match balance container width
+            right: scaled.money.width, // Match balance container width
             bottom: 16,
             padding: 0,
           })}
