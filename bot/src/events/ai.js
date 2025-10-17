@@ -689,22 +689,22 @@ function validateEnvironment() {
 
   if (!process.env.OPENROUTER_API_KEY) {
     console.warn(
-      "⚠️ Missing OPENROUTER_API_KEY environment variable. OpenRouter models will not be available."
+      "⚠️ Missing OPENROUTER_API_KEY environment variable. OpenRouter models will not be available.",
     );
   }
 
   if (missingVars.length > 0 && !process.env.OPENROUTER_API_KEY) {
     console.error(
       `❌ AI module cannot function without at least one API key: ${missingVars.join(
-        ", "
-      )} or OPENROUTER_API_KEY`
+        ", ",
+      )} or OPENROUTER_API_KEY`,
     );
     isValid = false;
   } else if (missingVars.length > 0) {
     console.log(
       `⚠️ AI module running with missing optional keys: ${missingVars.join(
-        ", "
-      )}. Some providers may be unavailable.`
+        ", ",
+      )}. Some providers may be unavailable.`,
     );
   } else {
     console.log("✅ AI module environment variables validated");
@@ -735,7 +735,7 @@ export default {
         message.author.tag
       }: "${message.content.substring(0, 50)}${
         message.content.length > 50 ? "..." : ""
-      }"`
+      }"`,
     );
 
     if (!message.mentions.users.has(message.client.user.id)) {
@@ -764,7 +764,7 @@ export default {
     try {
       const userDbLocale = await hubClient.getUserLocale(
         message.guild?.id,
-        userId
+        userId,
       );
       if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
         effectiveLocale = userDbLocale;
@@ -779,7 +779,7 @@ export default {
     } catch (dbError) {
       console.error(
         `Error fetching user locale for ${userId}, defaulting to 'en':`,
-        dbError
+        dbError,
       );
     }
     // Set locale for subsequent i18n calls within this scope if needed
@@ -793,13 +793,13 @@ export default {
       console.log(
         `Vision request detected with attachment: ${
           message.attachments.first().name
-        }`
+        }`,
       );
     }
 
     if (!prefs.selectedModel) {
       console.log(
-        `User ${userId} has no model selected. Prompting for selection.`
+        `User ${userId} has no model selected. Prompting for selection.`,
       );
       message.channel.sendTyping();
 
@@ -807,7 +807,7 @@ export default {
         const client = message.client; // Get client object
         const availableModels = await getAvailableModels(
           client,
-          isVisionRequest ? "vision" : null
+          isVisionRequest ? "vision" : null,
         );
         console.log(`Found ${availableModels.length} available models`);
 
@@ -817,8 +817,8 @@ export default {
             await i18n.__(
               "events.ai.messages.noModelsFound",
               { vision: isVisionRequest ? "vision" : "text" },
-              effectiveLocale
-            )
+              effectiveLocale,
+            ),
           );
           return;
         }
@@ -830,7 +830,7 @@ export default {
           isVisionRequest,
           true,
           effectiveLocale,
-          message.client // Pass client parameter
+          message.client, // Pass client parameter
         );
 
         console.log("Sending model selection prompt");
@@ -838,7 +838,7 @@ export default {
         let promptMsg = await message.reply({
           content: await i18n.__(
             "events.ai.messages.selectModelPrompt",
-            effectiveLocale
+            effectiveLocale,
           ),
           components: components,
         });
@@ -855,7 +855,7 @@ export default {
 
         collector.on("collect", async (interaction) => {
           console.log(
-            `Initial Collector: Received interaction - Type: ${interaction.componentType}, Custom ID: ${interaction.customId}, User: ${interaction.user.id}`
+            `Initial Collector: Received interaction - Type: ${interaction.componentType}, Custom ID: ${interaction.customId}, User: ${interaction.user.id}`,
           );
 
           const customId = interaction.customId;
@@ -865,11 +865,11 @@ export default {
             customId.startsWith("ai_select_model_")
           ) {
             console.log(
-              "Initial Collector: Handling StringSelectMenu interaction."
+              "Initial Collector: Handling StringSelectMenu interaction.",
             );
             const selectedModelId = interaction.values[0];
             console.log(
-              `Initial Collector: Raw selected value: ${selectedModelId}`
+              `Initial Collector: Raw selected value: ${selectedModelId}`,
             );
 
             // Immediately defer the update to show loading state
@@ -880,13 +880,13 @@ export default {
 
             updateUserPreference(userId, "selectedModel", selectedModelId);
             console.log(
-              `Initial Collector: User ${userId} preference updated to model: ${selectedModelId}`
+              `Initial Collector: User ${userId} preference updated to model: ${selectedModelId}`,
             );
 
             const originalMessage = state.pendingInteractions[userId];
             if (originalMessage) {
               console.log(
-                `Initial Collector: Found pending message ${originalMessage.id}.`
+                `Initial Collector: Found pending message ${originalMessage.id}.`,
               );
               delete state.pendingInteractions[userId];
               collector.stop("model_selected");
@@ -899,23 +899,23 @@ export default {
                     content: await i18n.__(
                       "events.ai.messages.modelSelectedProcessing",
                       { model: selectedModelId },
-                      effectiveLocale
+                      effectiveLocale,
                     ),
                     components: [],
                   })
                   .catch((err) => {
                     console.error(
                       "Initial Collector: Failed to update prompt message:",
-                      err
+                      err,
                     );
                   });
                 console.log(
-                  `Initial Collector: Edited prompt message ${promptMsg.id}.`
+                  `Initial Collector: Edited prompt message ${promptMsg.id}.`,
                 );
               } catch (updateError) {
                 console.error(
                   "Initial Collector: Error deferring/editing interaction/prompt message: ",
-                  updateError
+                  updateError,
                 );
                 // Use locale for the fallback message
                 await message.channel
@@ -923,11 +923,11 @@ export default {
                     await i18n.__(
                       "events.ai.messages.modelSelectedProcessing",
                       { model: selectedModelId },
-                      effectiveLocale
-                    )
+                      effectiveLocale,
+                    ),
                   )
                   .catch((e) =>
-                    console.error("Failed to send fallback message:", e)
+                    console.error("Failed to send fallback message:", e),
                   );
                 promptMsg = null;
               }
@@ -935,7 +935,7 @@ export default {
               const messageContent = originalMessage.content
                 .replace(
                   new RegExp(`<@!?${originalMessage.client.user.id}>`, "g"),
-                  ""
+                  "",
                 )
                 .trim();
               const isVisionRequest =
@@ -951,12 +951,12 @@ export default {
                 messageContent,
                 isVisionRequest,
                 promptMsg,
-                effectiveLocale // Pass locale here
+                effectiveLocale, // Pass locale here
               );
               console.log("Initial Collector: processAiRequest call finished.");
             } else {
               console.warn(
-                `Initial Collector: No pending message found for user ${userId} after model selection.`
+                `Initial Collector: No pending message found for user ${userId} after model selection.`,
               );
               try {
                 await interaction.update({
@@ -968,13 +968,13 @@ export default {
               } catch (e) {
                 console.error(
                   "Couldn't update interaction after model selection (no pending message)",
-                  e
+                  e,
                 );
               }
             }
           } else {
             console.log(
-              `Initial Collector: Interaction ${customId} is not the model select menu. Ignoring in this collector.`
+              `Initial Collector: Interaction ${customId} is not the model select menu. Ignoring in this collector.`,
             );
           }
 
@@ -984,7 +984,7 @@ export default {
 
         collector.on("end", async (collected, reason) => {
           console.log(
-            `Collector for ${userId} ended with reason: ${reason}, collected ${collected.size} interactions`
+            `Collector for ${userId} ended with reason: ${reason}, collected ${collected.size} interactions`,
           );
 
           if (
@@ -998,12 +998,12 @@ export default {
                 .edit({
                   content: await i18n.__(
                     "events.ai.messages.selectionTimeout",
-                    effectiveLocale
+                    effectiveLocale,
                   ),
                   components: [],
                 })
                 .catch(async (e) =>
-                  console.error("Failed to edit timeout message:", e)
+                  console.error("Failed to edit timeout message:", e),
                 );
               console.log(`Pending interaction timed out for user ${userId}`);
             }
@@ -1014,7 +1014,7 @@ export default {
         // Use locale for the error message
         await message
           .reply(
-            await i18n.__("events.ai.messages.selectionError", effectiveLocale)
+            await i18n.__("events.ai.messages.selectionError", effectiveLocale),
           )
           .catch((e) => {});
       }
@@ -1037,15 +1037,15 @@ export default {
               model: prefs.selectedModel,
               minutes: minutes,
             },
-            effectiveLocale
-          )
+            effectiveLocale,
+          ),
         );
         return;
       }
     }
 
     console.log(
-      `Processing message from ${message.author.tag} with model ${prefs.selectedModel}`
+      `Processing message from ${message.author.tag} with model ${prefs.selectedModel}`,
     );
     // Pass effectiveLocale to processAiRequest
     await processAiRequest(
@@ -1054,7 +1054,7 @@ export default {
       messageContent,
       isVisionRequest,
       null,
-      effectiveLocale
+      effectiveLocale,
     );
   },
 };

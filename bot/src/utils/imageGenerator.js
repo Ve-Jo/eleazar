@@ -82,23 +82,23 @@ export async function processImageColors(imageUrl, options = {}) {
   try {
     // Use hub client for color processing
     const result = await hubClient.processImageColors(imageUrl, options);
-    
+
     // Cache the result
     manageColorCache();
     colorCache.set(cacheKey, result);
-    
+
     return result;
   } catch (error) {
     console.error("Hub color processing failed, falling back to local:", error);
-    
+
     // Fallback to local color processing
     try {
       let palette, dominantColor;
-      
+
       if (returnDominant) {
         [palette, dominantColor] = await Promise.all([
           getPaletteFromURL(imageUrl, paletteSize, quality),
-          getColorFromURL(imageUrl, quality)
+          getColorFromURL(imageUrl, quality),
         ]);
       } else {
         palette = await getPaletteFromURL(imageUrl, paletteSize, quality);
@@ -113,11 +113,11 @@ export async function processImageColors(imageUrl, options = {}) {
       }
 
       const result = returnDominant ? { palette, dominantColor } : palette;
-      
+
       // Cache the result
       manageColorCache();
       colorCache.set(cacheKey, result);
-      
+
       return result;
     } catch (fallbackError) {
       console.error("Local color processing also failed:", fallbackError);
@@ -132,20 +132,20 @@ export async function generateImage(
   props = {},
   scaling = { image: 1, emoji: 1, debug: false },
   i18n,
-  options = {}
+  options = {},
 ) {
   try {
     console.log("Generating image via hub rendering service");
-    
+
     // Use hub client to generate image
     const result = await hubClient.generateImage(
       component,
       props,
       scaling,
-      i18n?.getLocale() || 'en',
-      options
+      i18n?.getLocale() || "en",
+      options,
     );
-    
+
     return result;
   } catch (error) {
     console.error("Hub image generation failed:", error);

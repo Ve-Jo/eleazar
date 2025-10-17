@@ -57,7 +57,7 @@ const localization_strings = {
         category,
         component,
         localization_strings[category][component],
-        true
+        true,
       );
     });
   });
@@ -98,7 +98,7 @@ export async function createMusicButtons(player) {
       .setStyle(
         player.repeatMode !== "off"
           ? ButtonStyle.Primary
-          : ButtonStyle.Secondary
+          : ButtonStyle.Secondary,
       ),
     new ButtonBuilder()
       .setCustomId("music_pause")
@@ -110,12 +110,12 @@ export async function createMusicButtons(player) {
       .setLabel(
         autoplay
           ? await hubClient.getTranslation("music.buttons.on", {}, locale)
-          : await hubClient.getTranslation("music.buttons.off", {}, locale)
+          : await hubClient.getTranslation("music.buttons.off", {}, locale),
       )
       .setStyle(autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("music_skip")
       .setEmoji("⏭️")
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Secondary),
   );
 }

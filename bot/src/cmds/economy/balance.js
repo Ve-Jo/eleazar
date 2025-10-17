@@ -19,7 +19,7 @@ export default {
         option
           .setName("user")
           .setDescription("User to check")
-          .setRequired(false)
+          .setRequired(false),
       );
 
     return builder;
@@ -69,7 +69,7 @@ export default {
     // Marriage functionality will need to be implemented in hub services
     const marriageStatus = await hubClient.getMarriageStatus(
       interaction.guild.id,
-      user.id
+      user.id,
     );
 
     let partnerData = null;
@@ -104,16 +104,15 @@ export default {
       // Ensure partner exists in database before fetching data
       await hubClient.ensureGuildUser(
         interaction.guild.id,
-        marriageStatus.partnerId
+        marriageStatus.partnerId,
       );
       partnerData = await hubClient.getUser(
         interaction.guild.id,
-        marriageStatus.partnerId
+        marriageStatus.partnerId,
       );
       if (partnerData && partnerData.economy) {
-        const partnerBankBalance = await hubClient.calculateBankBalance(
-          partnerData
-        );
+        const partnerBankBalance =
+          await hubClient.calculateBankBalance(partnerData);
         partnerData.economy.bankBalance = partnerBankBalance;
         combinedBankBalance =
           Number(combinedBankBalance) + Number(partnerBankBalance);
@@ -127,7 +126,7 @@ export default {
       // --- Fetch Partner's Discord User for Avatar ---
       try {
         partnerDiscordUser = await interaction.client.users.fetch(
-          marriageStatus.partnerId
+          marriageStatus.partnerId,
         );
         // Add avatar URL to the data passed to the image generator
         userData.partnerAvatarUrl = partnerDiscordUser?.displayAvatarURL({
@@ -139,7 +138,7 @@ export default {
       } catch (fetchError) {
         console.error(
           `Failed to fetch partner Discord user (${marriageStatus.partnerId}):`,
-          fetchError
+          fetchError,
         );
         userData.partnerAvatarUrl =
           "https://cdn.discordapp.com/embed/avatars/0.png"; // Fallback avatar
@@ -200,7 +199,7 @@ export default {
         },
       },
       { image: 2, emoji: 2 },
-      i18n
+      i18n,
     );
 
     if (!buffer) {

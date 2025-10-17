@@ -124,7 +124,7 @@ export default {
       channelId,
       userId,
       null,
-      interaction.guildId
+      interaction.guildId,
     );
 
     // Calculate earning based on score and time (synchronous like in Snake)
@@ -205,7 +205,7 @@ export default {
         },
         { image: 1, emoji: 1 },
         i18n,
-        { disableThrottle: true }
+        { disableThrottle: true },
       );
     };
 
@@ -235,7 +235,7 @@ export default {
     const row2 = new ActionRowBuilder().addComponents(
       leftButton,
       downButton,
-      rightButton
+      rightButton,
     );
 
     try {
@@ -251,7 +251,7 @@ export default {
         try {
           gameRecords = await hubClient.getGameRecords(
             interaction.guildId,
-            interaction.user.id
+            interaction.user.id,
           );
           currentHighScore = gameRecords?.["2048"]?.highScore || 0;
         } catch (error) {
@@ -263,17 +263,17 @@ export default {
         // Fetch complete user data including balance and level progress
         try {
           console.log(
-            `[2048] Fetching complete user data for guild ${interaction.guildId}, user ${interaction.user.id}`
+            `[2048] Fetching complete user data for guild ${interaction.guildId}, user ${interaction.user.id}`,
           );
 
           // Ensure user exists in database
           await hubClient.ensureGuildUser(
             interaction.guild.id,
-            interaction.user.id
+            interaction.user.id,
           );
           userData = await hubClient.getUser(
             interaction.guild.id,
-            interaction.user.id
+            interaction.user.id,
           );
 
           if (userData) {
@@ -293,17 +293,17 @@ export default {
 
               // Store base game XP for session tracking (use gameXp, not totalXP)
               initialState.state.baseGameXP = Number(
-                userData.Level.gameXp || 0
+                userData.Level.gameXp || 0,
               );
 
               console.log(
-                `[2048] Initial base game XP set: ${gameXP}, level: ${gameLevelData?.level}`
+                `[2048] Initial base game XP set: ${gameXP}, level: ${gameLevelData?.level}`,
               );
             }
 
             // Store games earning upgrade level for synchronous calculation
             const gamesEarningUpgrade = userData?.upgrades?.find(
-              (u) => u.type === "games_earning"
+              (u) => u.type === "games_earning",
             );
             initialState.state.gamesEarningLevel =
               gamesEarningUpgrade?.level || 1;
@@ -345,7 +345,7 @@ export default {
       const buffer = await generateGameBoard(
         initialState.state,
         interaction.locale,
-        interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
+        interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
       );
 
       // Send initial game board
@@ -396,7 +396,7 @@ export default {
                 extension: "png",
                 size: 1024,
               }),
-              gameInstance.state.earningGameXP // Pass earnedGameXP as increaseAmount
+              gameInstance.state.earningGameXP, // Pass earnedGameXP as increaseAmount
             );
 
             // Use earningGameXP for timeout case
@@ -410,7 +410,7 @@ export default {
                   interaction.guildId,
                   interaction.user.id,
                   "2048",
-                  earningGameXP
+                  earningGameXP,
                 );
 
                 // Handle level-up notification if the user leveled up
@@ -421,7 +421,7 @@ export default {
                     interaction.user.id,
                     xpResult.levelUp,
                     xpResult.type || "activity",
-                    interaction.channel
+                    interaction.channel,
                   );
                 }
               } catch (error) {
@@ -436,7 +436,7 @@ export default {
                 await hubClient.addBalance(
                   interaction.guildId,
                   interaction.user.id,
-                  gameInstance.state.earning
+                  gameInstance.state.earning,
                 );
               } catch (error) {
                 console.error("Error adding balance on timeout:", error);
@@ -450,12 +450,12 @@ export default {
             const content =
               typeof timeoutText === "string"
                 ? `${timeoutText} (+${timeoutEarning.toFixed(
-                    1
+                    1,
                   )} 💵, +${earningGameXP} Game XP)`
                 : `Game ended due to inactivity! Final Score: ${
                     gameInstance.state.score
                   } (+${timeoutEarning.toFixed(
-                    1
+                    1,
                   )} 💵, +${earningGameXP} Game XP)`;
 
             await message.edit({
@@ -507,7 +507,7 @@ export default {
           const stopBoard = await generateGameBoard(
             state,
             interaction.locale,
-            interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
+            interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
           );
 
           // Use earningGameXP for stop case
@@ -523,7 +523,7 @@ export default {
                 interaction.guildId,
                 interaction.user.id,
                 "2048",
-                state.score
+                state.score,
               );
               isNewRecordStop = stopHighScoreResult?.isNewRecord || false;
             } catch (error) {
@@ -539,7 +539,7 @@ export default {
                   interaction.guildId,
                   interaction.user.id,
                   "2048",
-                  earningGameXP
+                  earningGameXP,
                 );
 
                 if (stopXpResult && stopXpResult.levelUp) {
@@ -549,7 +549,7 @@ export default {
                     interaction.user.id,
                     stopXpResult.levelUp,
                     stopXpResult.type || "activity",
-                    interaction.channel
+                    interaction.channel,
                   );
                 }
               } catch (error) {
@@ -563,7 +563,7 @@ export default {
                 await hubClient.addBalance(
                   interaction.guildId,
                   interaction.user.id,
-                  state.earning
+                  state.earning,
                 );
               } catch (error) {
                 console.error("Error adding balance on stop:", error);
@@ -580,7 +580,7 @@ export default {
               ? `${stoppedText}${
                   interaction.guildId
                     ? ` (+${state.earning.toFixed(
-                        1
+                        1,
                       )} 💵, +${earningGameXP} Game XP)${
                         isNewRecordStop ? " 🏆 New High Score!" : ""
                       }`
@@ -589,7 +589,7 @@ export default {
               : `Game stopped! Final Score: ${state.score}${
                   interaction.guildId
                     ? ` (+${state.earning.toFixed(
-                        1
+                        1,
                       )} 💵, +${earningGameXP} Game XP)${
                         isNewRecordStop ? " 🏆 New High Score!" : ""
                       }`
@@ -637,21 +637,21 @@ export default {
           const scoreGained = state.score - oldScore;
 
           console.log(
-            `[2048] Move processed: scoreGained=${scoreGained}, oldScore=${oldScore}, newScore=${state.score}`
+            `[2048] Move processed: scoreGained=${scoreGained}, oldScore=${oldScore}, newScore=${state.score}`,
           );
 
           // Update earning game XP for display only when score increases
           if (state.score > oldScore) {
             console.log(
-              "[DEBUG] Score increased, calling updateEarningGameXP()"
+              "[DEBUG] Score increased, calling updateEarningGameXP()",
             );
             const scoreDifference = state.score - oldScore;
             console.log(
-              `[2048] Score increased by ${scoreDifference}, oldScore=${oldScore}, newScore=${state.score}`
+              `[2048] Score increased by ${scoreDifference}, oldScore=${oldScore}, newScore=${state.score}`,
             );
             const xpGained = gameInstance.updateEarningGameXP(scoreDifference);
             console.log(
-              `[2048] Updated earningGameXP: ${gameInstance.state.earningGameXP}, gameLevelData.currentXP: ${gameInstance.state.gameLevelData?.currentXP}`
+              `[2048] Updated earningGameXP: ${gameInstance.state.earningGameXP}, gameLevelData.currentXP: ${gameInstance.state.gameLevelData?.currentXP}`,
             );
           } else {
             console.log("[DEBUG] Score NOT increased");
@@ -662,7 +662,7 @@ export default {
             state,
             interaction.locale,
             interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
-            gameInstance.state.earningGameXP // Pass earnedGameXP as increaseAmount
+            gameInstance.state.earningGameXP, // Pass earnedGameXP as increaseAmount
           );
 
           // Update the message with new game state
@@ -686,7 +686,7 @@ export default {
               const earningGameXP = state.earningGameXP || 0;
               const finalEarning = await calculateEarning(state); // Calculate final earning for visual XP
               console.log(
-                `[2048] Game over - earningGameXP: ${earningGameXP}, finalEarning: ${finalEarning}`
+                `[2048] Game over - earningGameXP: ${earningGameXP}, finalEarning: ${finalEarning}`,
               );
 
               // Only update high score if in a guild
@@ -699,7 +699,7 @@ export default {
                     interaction.guildId,
                     interaction.user.id,
                     "2048",
-                    state.score
+                    state.score,
                   );
                   isNewRecord = highScoreResult.isNewRecord || false;
                 } catch (error) {
@@ -712,13 +712,13 @@ export default {
                 if (earningGameXP > 0) {
                   try {
                     console.log(
-                      `[2048] Adding game over XP: ${earningGameXP} for user ${interaction.user.id}`
+                      `[2048] Adding game over XP: ${earningGameXP} for user ${interaction.user.id}`,
                     );
                     const xpResult = await hubClient.addGameXP(
                       interaction.guildId,
                       interaction.user.id,
                       "2048",
-                      earningGameXP
+                      earningGameXP,
                     );
 
                     // Debug logging for game XP and level-up
@@ -728,7 +728,7 @@ export default {
                     if (xpResult && xpResult.levelUp) {
                       console.log(
                         `[2048] User ${interaction.user.id} leveled up on game over!`,
-                        xpResult.levelUp
+                        xpResult.levelUp,
                       );
                       await handleLevelUp(
                         interaction.client,
@@ -736,7 +736,7 @@ export default {
                         interaction.user.id,
                         xpResult.levelUp,
                         xpResult.type || "activity",
-                        interaction.channel
+                        interaction.channel,
                       );
                     }
                   } catch (error) {
@@ -754,7 +754,7 @@ export default {
                     await hubClient.addBalance(
                       interaction.guildId,
                       interaction.user.id,
-                      state.earning
+                      state.earning,
                     );
                   } catch (error) {
                     console.error("Error adding balance on game over:", error);
@@ -771,7 +771,7 @@ export default {
                   extension: "png",
                   size: 1024,
                 }),
-                earningGameXP // Pass earnedGameXP as increaseAmount
+                earningGameXP, // Pass earnedGameXP as increaseAmount
               );
 
               const gameOverText = await i18n.__(`games.2048.gameOver`, {
@@ -782,7 +782,7 @@ export default {
                   ? `${gameOverText}${
                       interaction.guildId
                         ? ` (+${state.earning.toFixed(
-                            1
+                            1,
                           )} 💵, +${earningGameXP} Game XP)${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
@@ -791,7 +791,7 @@ export default {
                   : `Game Over! Final Score: ${state.score}${
                       interaction.guildId
                         ? ` (+${state.earning.toFixed(
-                            1
+                            1,
                           )} 💵, +${earningGameXP} Game XP)${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
@@ -937,7 +937,7 @@ function moveLeft(state) {
         nums[i] *= 2;
         state.score += nums[i];
         console.log(
-          `[2048] DEBUG: Merged tiles, added ${nums[i]} to score. Score now: ${state.score}`
+          `[2048] DEBUG: Merged tiles, added ${nums[i]} to score. Score now: ${state.score}`,
         );
         nums[i + 1] = 0;
         moved = true;

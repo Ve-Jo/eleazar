@@ -56,7 +56,7 @@ async function generateCoinflipImage(
   interaction,
   i18n,
   balance,
-  levelProgress = { chat: null, game: null }
+  levelProgress = { chat: null, game: null },
 ) {
   // Calculate potential profit multiplier for display
   let potentialProfitMultiplier = 0;
@@ -153,7 +153,7 @@ export default {
         .setLabel(
           await getTranslation("games.coinflip.chanceButton", {
             chance: gameInstance.winProbability * 100,
-          })
+          }),
         )
         .setStyle(ButtonStyle.Secondary);
 
@@ -166,7 +166,7 @@ export default {
         flipButton,
         setBetButton,
         changeChanceButton, // Add the new button
-        endButton
+        endButton,
       );
     };
 
@@ -203,7 +203,7 @@ export default {
         {
           chat: chatLevelData,
           game: gameLevelData,
-        }
+        },
       );
 
       const message = await interaction.followUp({
@@ -272,7 +272,7 @@ export default {
               .setRequired(true);
 
             const firstActionRow = new ActionRowBuilder().addComponents(
-              amountInput
+              amountInput,
             );
             modal.addComponents(firstActionRow);
 
@@ -302,7 +302,7 @@ export default {
                   // Check user balance
                   const userData = await hubClient.getUser(guildId, userId);
                   const userBalance = parseFloat(
-                    userData?.economy?.balance || 0
+                    userData?.economy?.balance || 0,
                   );
 
                   if (
@@ -316,7 +316,7 @@ export default {
                         {
                           balance: userBalance.toFixed(2),
                           bet: betAmount,
-                        }
+                        },
                       ),
                       ephemeral: true,
                     });
@@ -333,7 +333,7 @@ export default {
                     "games.coinflip.betSetSuccess",
                     {
                       bet: betAmount,
-                    }
+                    },
                   ),
                   ephemeral: true,
                 });
@@ -346,24 +346,24 @@ export default {
                   try {
                     const currentBalanceData = await hubClient.getUser(
                       guildId,
-                      userId
+                      userId,
                     );
                     userBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0
+                      currentBalanceData?.economy?.balance || 0,
                     );
 
                     if (currentBalanceData?.Level) {
                       const chatXP = Number(currentBalanceData.Level.xp || 0);
                       chatLevelData = hubClient.calculateLevel(chatXP);
                       const gameXP = Number(
-                        currentBalanceData.Level.gameXp || 0
+                        currentBalanceData.Level.gameXp || 0,
                       );
                       gameLevelData = hubClient.calculateLevel(gameXP);
                     }
                   } catch (error) {
                     console.error(
                       "Error fetching user data in set bet:",
-                      error
+                      error,
                     );
                   }
                 }
@@ -376,7 +376,7 @@ export default {
                   {
                     chat: chatLevelData,
                     game: gameLevelData,
-                  }
+                  },
                 );
                 await message.edit({
                   files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
@@ -387,7 +387,7 @@ export default {
           } else if (i.customId === "coinflip_change_chance") {
             // Cycle through probability options
             const currentIndex = PROBABILITY_OPTIONS.indexOf(
-              gameInstance.winProbability
+              gameInstance.winProbability,
             );
             const nextIndex = (currentIndex + 1) % PROBABILITY_OPTIONS.length;
             gameInstance.winProbability = PROBABILITY_OPTIONS[nextIndex];
@@ -401,10 +401,10 @@ export default {
               try {
                 const currentBalanceData = await hubClient.getUser(
                   guildId,
-                  userId
+                  userId,
                 );
                 currentBalance = parseFloat(
-                  currentBalanceData?.economy?.balance || 0
+                  currentBalanceData?.economy?.balance || 0,
                 );
 
                 if (currentBalanceData?.Level) {
@@ -416,7 +416,7 @@ export default {
               } catch (error) {
                 console.error(
                   "Error fetching user data in change chance:",
-                  error
+                  error,
                 );
               }
             }
@@ -428,7 +428,7 @@ export default {
               {
                 chat: chatLevelData,
                 game: gameLevelData,
-              }
+              },
             );
             await message.edit({
               files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
@@ -449,7 +449,7 @@ export default {
             if (guildId) {
               const userDataFlip = await hubClient.getUser(guildId, userId);
               const userBalanceFlip = parseFloat(
-                userDataFlip?.economy?.balance || 0
+                userDataFlip?.economy?.balance || 0,
               );
 
               if (
@@ -463,7 +463,7 @@ export default {
                     {
                       balance: userBalanceFlip.toFixed(2),
                       bet: gameInstance.betAmount,
-                    }
+                    },
                   ),
                   ephemeral: true,
                 });
@@ -488,7 +488,7 @@ export default {
                 profitMultiplier = Math.max(0, profitMultiplier);
 
                 changeAmount = parseFloat(
-                  (gameInstance.betAmount * profitMultiplier).toFixed(2)
+                  (gameInstance.betAmount * profitMultiplier).toFixed(2),
                 );
                 gameInstance.totalWon += changeAmount;
                 gameInstance.sessionChange += changeAmount; // Update session change
@@ -497,7 +497,7 @@ export default {
                   "games.coinflip.winMessage",
                   {
                     amount: changeAmount.toFixed(2),
-                  }
+                  },
                 );
               } else {
                 gameInstance.lastResult = "lose";
@@ -509,7 +509,7 @@ export default {
                   "games.coinflip.loseMessage",
                   {
                     amount: Math.abs(changeAmount).toFixed(2),
-                  }
+                  },
                 );
               }
             } else {
@@ -520,7 +520,7 @@ export default {
                   (1 / gameInstance.winProbability) * HOUSE_EDGE_FACTOR - 1;
                 profitMultiplier = Math.max(0, profitMultiplier);
                 changeAmount = parseFloat(
-                  (gameInstance.betAmount * profitMultiplier).toFixed(2)
+                  (gameInstance.betAmount * profitMultiplier).toFixed(2),
                 );
                 gameInstance.totalWon += changeAmount;
                 gameInstance.sessionChange += changeAmount; // Update session change
@@ -528,7 +528,7 @@ export default {
                   "games.coinflip.winMessage",
                   {
                     amount: changeAmount.toFixed(2),
-                  }
+                  },
                 );
               } else {
                 gameInstance.lastResult = "lose";
@@ -539,7 +539,7 @@ export default {
                   "games.coinflip.loseMessage",
                   {
                     amount: Math.abs(changeAmount).toFixed(2),
-                  }
+                  },
                 );
               }
             }
@@ -548,7 +548,7 @@ export default {
             gameInstance.addGameResult(
               gameInstance.betAmount,
               gameInstance.lastResult,
-              changeAmount
+              changeAmount,
             );
 
             // Get updated balance and level progress AFTER the change
@@ -559,10 +559,10 @@ export default {
               try {
                 const updatedUserData = await hubClient.getUser(
                   guildId,
-                  userId
+                  userId,
                 );
                 updatedBalance = parseFloat(
-                  updatedUserData?.economy?.balance || 0
+                  updatedUserData?.economy?.balance || 0,
                 );
 
                 if (updatedUserData?.Level) {
@@ -584,7 +584,7 @@ export default {
               {
                 chat: chatLevelData,
                 game: gameLevelData,
-              }
+              },
             );
             await message.edit({
               content: messageContent,
@@ -637,7 +637,7 @@ export default {
           }
         }
         console.log(
-          `[Coinflip] Collector ended for ${userId}, reason: ${reason}`
+          `[Coinflip] Collector ended for ${userId}, reason: ${reason}`,
         );
       });
     } catch (error) {

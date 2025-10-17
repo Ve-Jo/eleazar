@@ -8,11 +8,11 @@ const router = express.Router();
 router.post('/sessions', async (req, res) => {
   try {
     const { userId, guildId, channelId } = req.body;
-    
+
     if (!userId || !guildId || !channelId) {
       return res.status(400).json({ error: 'userId, guildId, and channelId are required' });
     }
-    
+
     const session = await Database.createVoiceSession(guildId, userId, channelId);
     res.json(serializeBigInt(session));
   } catch (error) {
@@ -25,13 +25,13 @@ router.post('/sessions', async (req, res) => {
 router.get('/sessions/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     const session = await Database.getVoiceSession(guildId, userId);
-    
+
     if (!session) {
       return res.status(404).json({ error: 'Voice session not found' });
     }
-    
+
     res.json(serializeBigInt(session));
   } catch (error) {
     console.error('Error getting voice session:', error);
@@ -43,7 +43,7 @@ router.get('/sessions/:guildId/:userId', async (req, res) => {
 router.delete('/sessions/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     const result = await Database.removeVoiceSession(guildId, userId);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -56,7 +56,7 @@ router.delete('/sessions/:guildId/:userId', async (req, res) => {
 router.get('/sessions/guild/:guildId', async (req, res) => {
   try {
     const { guildId } = req.params;
-    
+
     const sessions = await Database.getAllVoiceSessions(guildId);
     res.json(serializeBigInt(sessions));
   } catch (error) {
@@ -69,11 +69,11 @@ router.get('/sessions/guild/:guildId', async (req, res) => {
 router.post('/xp/calculate', async (req, res) => {
   try {
     const { userId, guildId, timeSpent } = req.body;
-    
+
     if (!userId || !guildId || timeSpent === undefined) {
       return res.status(400).json({ error: 'userId, guildId, and timeSpent are required' });
     }
-    
+
     const result = await Database.calculateAndAddVoiceXP(guildId, userId, timeSpent);
     res.json(serializeBigInt(result));
   } catch (error) {

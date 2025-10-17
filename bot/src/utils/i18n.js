@@ -89,7 +89,7 @@ export class I18n {
     const response = await hubClient.getTranslation(
       key,
       variables,
-      effectiveLocale
+      effectiveLocale,
     );
 
     // Extract the translation string from the response object
@@ -104,7 +104,7 @@ export class I18n {
   getTranslationGroup(groupKey, locale = null) {
     return hubClient.getTranslationGroup(
       groupKey,
-      locale || this.currentLocale
+      locale || this.currentLocale,
     );
   }
 
@@ -202,7 +202,7 @@ class I18nAdapter {
     this.i18n.extractLocalizations(
       "commands",
       `${category}.${commandName}`,
-      translations
+      translations,
     );
     return true;
   }
@@ -320,7 +320,7 @@ const registerComponentStrings = (componentName, localizations) => {
     "components",
     componentName,
     localizations,
-    true
+    true,
   );
 };
 

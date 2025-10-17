@@ -8,10 +8,10 @@ export const serializeBigInt = (obj) => {
 // Middleware to automatically serialize BigInt values in responses
 export const bigIntSerializationMiddleware = (req, res, next) => {
   const originalJson = res.json;
-  
+
   res.json = function(obj) {
     return originalJson.call(this, serializeBigInt(obj));
   };
-  
+
   next();
 };

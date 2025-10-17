@@ -50,7 +50,7 @@ async function makePermanentAttachment(interaction, attachment) {
         {
           name: "Original Filename",
           value: attachment.name,
-        }
+        },
       )
       .setTimestamp();
 
@@ -64,7 +64,7 @@ async function makePermanentAttachment(interaction, attachment) {
     const permanentUrl = storageMsg.attachments.first()?.url;
     if (!permanentUrl) {
       throw new Error(
-        "Failed to get permanent URL from storage message attachment."
+        "Failed to get permanent URL from storage message attachment.",
       );
     }
 
@@ -130,7 +130,7 @@ export default {
         option
           .setName("image")
           .setDescription("The image to use as your banner")
-          .setRequired(true)
+          .setRequired(true),
       );
 
     return builder;
@@ -224,13 +224,13 @@ export default {
       // Upload the image to storage
       const permanentUrl = await makePermanentAttachment(
         interaction,
-        attachment
+        attachment,
       );
 
       // Ensure user exists in database before updating
       await hubClient.ensureGuildUser(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
       );
 
       // Save the banner URL to the database
@@ -242,7 +242,7 @@ export default {
       try {
         const userData = await hubClient.getUser(
           interaction.guild.id,
-          interaction.user.id
+          interaction.user.id,
         );
 
         const [previewBuffer, dominantColor] = await generateImage(
@@ -272,7 +272,7 @@ export default {
             returnDominant: true,
           },
           { image: 2, emoji: 1 },
-          i18n
+          i18n,
         );
 
         if (previewBuffer) {
@@ -286,7 +286,7 @@ export default {
           })
             .addText(
               await i18n.__("commands.images.setbanner.title"),
-              "header3"
+              "header3",
             )
             .addText(await i18n.__("commands.images.setbanner.success"))
             .addImage(permanentUrl) // Use the permanent URL
@@ -296,7 +296,7 @@ export default {
           const replyOptions = successComponent.toReplyOptions({
             content: isAiContext
               ? `${await i18n.__(
-                  "commands.images.setbanner.success"
+                  "commands.images.setbanner.success",
                 )} Banner URL: ${permanentUrl}`
               : undefined,
           });
@@ -314,7 +314,7 @@ export default {
           })
             .addText(
               await i18n.__("commands.images.setbanner.title"),
-              "header3"
+              "header3",
             )
             .addText(await i18n.__("commands.images.setbanner.success"))
             .addTimestamp(interaction.locale);
@@ -323,7 +323,7 @@ export default {
           const replyOptions = successComponent.toReplyOptions({
             content: isAiContext
               ? `${await i18n.__(
-                  "commands.images.setbanner.success"
+                  "commands.images.setbanner.success",
                 )} Banner URL: ${permanentUrl}`
               : undefined,
           });
@@ -349,7 +349,7 @@ export default {
         const replyOptions = successComponent.toReplyOptions({
           content: isAiContext
             ? `${await i18n.__(
-                "commands.images.setbanner.success"
+                "commands.images.setbanner.success",
               )} Banner URL: ${permanentUrl}`
             : undefined,
         });

@@ -23,7 +23,7 @@ const negativeEmotions = Object.fromEntries(
     "kill",
     "threaten",
     "tickle",
-  ].map((key) => [key, key])
+  ].map((key) => [key, key]),
 );
 
 export default {
@@ -47,11 +47,14 @@ export default {
             { name: "bite", value: "bite" },
             { name: "kill", value: "kill" },
             { name: "threaten", value: "threaten" },
-            { name: "tickle", value: "tickle" }
-          )
+            { name: "tickle", value: "tickle" },
+          ),
       )
       .addUserOption((option) =>
-        option.setName("user").setDescription("Choose a user").setRequired(true)
+        option
+          .setName("user")
+          .setDescription("Choose a user")
+          .setRequired(true),
       );
 
     return builder;
@@ -267,11 +270,11 @@ export default {
                   image: imageUrl,
                   category: emotionType,
                   emotion: await i18n.__(
-                    `commands.emotions.negative.${emotionType}.title`
+                    `commands.emotions.negative.${emotionType}.title`,
                   ),
                   description: await i18n.__(
                     `commands.emotions.negative.${emotionType}.description`,
-                    { user: interaction.user.id, targetUser: targetUser.id }
+                    { user: interaction.user.id, targetUser: targetUser.id },
                   ),
                 };
               }
@@ -338,7 +341,7 @@ export default {
         if (reason !== "messageDelete" && message.editable) {
           try {
             const latestMessage = await message.channel.messages.fetch(
-              message.id
+              message.id,
             );
             if (latestMessage.components.length > 0) {
               await latestMessage.edit({ components: [] });
@@ -346,7 +349,7 @@ export default {
           } catch (error) {
             console.error(
               "Failed to remove components on collector end:",
-              error
+              error,
             );
           }
         }

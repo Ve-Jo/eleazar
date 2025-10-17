@@ -30,8 +30,8 @@ export default {
             {
               name: "weekly",
               value: "weekly",
-            }
-          )
+            },
+          ),
       );
 
     return builder;
@@ -172,7 +172,7 @@ export default {
           interaction,
           i18n,
           requestedCase,
-          builderMode
+          builderMode,
         );
       }
 
@@ -194,7 +194,7 @@ export default {
     const cooldownTimestamp = await hubClient.getCrateCooldown(
       interaction.guild.id,
       interaction.user.id,
-      requestedCase
+      requestedCase,
     );
 
     const now = Date.now();
@@ -202,7 +202,7 @@ export default {
       cooldownTimestamp > 0
         ? Math.max(
             0,
-            cooldownTimestamp + CRATE_TYPES[requestedCase].cooldown - now
+            cooldownTimestamp + CRATE_TYPES[requestedCase].cooldown - now,
           )
         : 0;
 
@@ -218,7 +218,7 @@ export default {
     try {
       const { crateName, crateEmoji } = this.getCrateInfo(
         requestedCase,
-        interaction.locale
+        interaction.locale,
       );
       const rewardMessage = await this.openCaseAndCreateMessage(
         interaction,
@@ -227,7 +227,7 @@ export default {
         crateName,
         crateEmoji,
         builderMode,
-        "DIRECT CASE OPENING"
+        "DIRECT CASE OPENING",
       );
 
       const message = await interaction.editReply(rewardMessage);
@@ -247,7 +247,7 @@ export default {
 
     const userData = await hubClient.getUser(
       interaction.guild.id,
-      interaction.user.id
+      interaction.user.id,
     );
 
     const cratesList = await this.buildCratesList(interaction, i18n);
@@ -288,7 +288,7 @@ export default {
           returnDominant: true,
         },
         { image: 2, emoji: 2 },
-        i18n
+        i18n,
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
@@ -303,7 +303,7 @@ export default {
         .addText(
           await i18n.__("commands.economy.cases.balance", {
             balance: Math.round(Number(userData.economy?.balance || 0)),
-          })
+          }),
         )
         .addImage("attachment://crates.avif");
 
@@ -311,12 +311,12 @@ export default {
         const selectMenu = await this.createSelectMenu(
           cratesList,
           selectedCrate,
-          i18n
+          i18n,
         );
         const openButton = await this.createOpenButton(
           cratesList,
           selectedCrate,
-          i18n
+          i18n,
         );
 
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
@@ -356,7 +356,7 @@ export default {
             interaction,
             i18n,
             builderMode,
-            message
+            message,
           );
         }
       } catch (error) {
@@ -380,7 +380,7 @@ export default {
   async buildCratesList(interaction, i18n) {
     const crates = await hubClient.getUserCrates(
       interaction.guild.id,
-      interaction.user.id
+      interaction.user.id,
     );
 
     const [dailyCooldown, weeklyCooldown] = await Promise.all([
@@ -394,12 +394,12 @@ export default {
         name: this.getCrateTranslation(
           "types.daily.name",
           "Daily Crate",
-          interaction.locale
+          interaction.locale,
         ),
         description: this.getCrateTranslation(
           "types.daily.description",
           "A crate you can open once every 24 hours",
-          interaction.locale
+          interaction.locale,
         ),
         emoji: CRATE_TYPES.daily.emoji,
         available: dailyCooldown <= 0,
@@ -411,12 +411,12 @@ export default {
         name: this.getCrateTranslation(
           "types.weekly.name",
           "Weekly Crate",
-          interaction.locale
+          interaction.locale,
         ),
         description: this.getCrateTranslation(
           "types.weekly.description",
           "A crate you can open once every 7 days",
-          interaction.locale
+          interaction.locale,
         ),
         emoji: CRATE_TYPES.weekly.emoji,
         available: weeklyCooldown <= 0,
@@ -433,12 +433,12 @@ export default {
           name: this.getCrateTranslation(
             `types.${crate.type}.name`,
             crate.type,
-            interaction.locale
+            interaction.locale,
           ),
           description: this.getCrateTranslation(
             `types.${crate.type}.description`,
             "A special crate with unique rewards",
-            interaction.locale
+            interaction.locale,
           ),
           emoji: "🎁",
           available: true,
@@ -455,7 +455,7 @@ export default {
     const cooldownTimestamp = await hubClient.getCrateCooldown(
       interaction.guild.id,
       interaction.user.id,
-      crateType
+      crateType,
     );
 
     const now = Date.now();
@@ -485,7 +485,7 @@ export default {
     const crateName = this.getCrateTranslation(
       `types.${requestedCase}.name`,
       requestedCase,
-      interactionLocale
+      interactionLocale,
     );
     const crateEmoji = CRATE_TYPES[requestedCase]?.emoji || "🎁";
 
@@ -511,7 +511,7 @@ export default {
             emoji: crate.emoji,
             default: selectedCrate === index,
           };
-        })
+        }),
       );
   },
 
@@ -530,7 +530,7 @@ export default {
     interaction,
     i18n,
     builderMode,
-    message
+    message,
   ) {
     const selectedCrateInfo = cratesList[selectedCrate];
 
@@ -552,7 +552,7 @@ export default {
         selectedCrateInfo.name, // This is already localized from buildCratesList
         selectedCrateInfo.emoji,
         builderMode,
-        "INTERACTIVE CASE OPENING"
+        "INTERACTIVE CASE OPENING",
       );
 
       await i.update(rewardMessage);
@@ -574,12 +574,12 @@ export default {
     crateName,
     crateEmoji,
     builderMode,
-    logPrefix = "CASE OPENING"
+    logPrefix = "CASE OPENING",
   ) {
     const rewards = await hubClient.openCrate(
       interaction.guild.id,
       interaction.user.id,
-      crateType
+      crateType,
     );
 
     console.log(`${logPrefix} - REWARDS:`);
@@ -592,7 +592,7 @@ export default {
       crateName,
       crateEmoji,
       rewards,
-      builderMode
+      builderMode,
     );
   },
 
@@ -603,7 +603,7 @@ export default {
     crateName,
     crateEmoji,
     rewards,
-    builderMode
+    builderMode,
   ) {
     const [rewardBuffer, dominantColor] = await generateImage(
       "CrateRewards",
@@ -636,7 +636,7 @@ export default {
         returnDominant: true,
       },
       { image: 2, emoji: 2 },
-      i18n
+      i18n,
     );
 
     const rewardAttachment = new AttachmentBuilder(rewardBuffer, {

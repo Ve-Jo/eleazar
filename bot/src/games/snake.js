@@ -110,7 +110,7 @@ export default {
       channelId,
       userId,
       null,
-      interaction.guildId
+      interaction.guildId,
     );
     addFood(initialState.state);
 
@@ -193,7 +193,7 @@ export default {
         },
         { image: 1, emoji: 1 },
         i18n,
-        { disableThrottle: true }
+        { disableThrottle: true },
       );
     };
 
@@ -223,7 +223,7 @@ export default {
     const row2 = new ActionRowBuilder().addComponents(
       leftButton,
       downButton,
-      rightButton
+      rightButton,
     );
 
     try {
@@ -238,11 +238,11 @@ export default {
       if (interaction.guildId) {
         try {
           console.log(
-            `[snake] Getting game records for guild ${interaction.guildId}, user ${interaction.user.id}`
+            `[snake] Getting game records for guild ${interaction.guildId}, user ${interaction.user.id}`,
           );
           gameRecords = await hubClient.getGameRecords(
             interaction.guildId,
-            interaction.user.id
+            interaction.user.id,
           );
           console.log("[snake] Game records result:", gameRecords);
           currentHighScore = gameRecords?.snake?.highScore || 0;
@@ -256,17 +256,17 @@ export default {
         // Fetch complete user data including balance and level progress
         try {
           console.log(
-            `[snake] Fetching complete user data for guild ${interaction.guildId}, user ${interaction.user.id}`
+            `[snake] Fetching complete user data for guild ${interaction.guildId}, user ${interaction.user.id}`,
           );
 
           // Ensure user exists in database
           await hubClient.ensureGuildUser(
             interaction.guild.id,
-            interaction.user.id
+            interaction.user.id,
           );
           userData = await hubClient.getUser(
             interaction.guild.id,
-            interaction.user.id
+            interaction.user.id,
           );
 
           if (userData) {
@@ -286,11 +286,11 @@ export default {
 
               // Store base game XP for session tracking (use gameXp, not totalXP)
               initialState.state.baseGameXP = Number(
-                userData.Level.gameXp || 0
+                userData.Level.gameXp || 0,
               );
 
               console.log(
-                `[snake] Initial base game XP set: ${gameXP}, level: ${gameLevelData?.level}`
+                `[snake] Initial base game XP set: ${gameXP}, level: ${gameLevelData?.level}`,
               );
             }
 
@@ -329,7 +329,7 @@ export default {
       const buffer = await generateGameBoard(
         initialState.state,
         interaction.locale,
-        interaction.user.displayAvatarURL({ extension: "png", size: 1024 })
+        interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
       );
 
       // Send initial game board
@@ -371,7 +371,7 @@ export default {
               interaction.user.displayAvatarURL({
                 extension: "png",
                 size: 1024,
-              })
+              }),
             );
 
             // Use earningGameXP for timeout case
@@ -386,7 +386,7 @@ export default {
                   interaction.guildId,
                   interaction.user.id,
                   "snake",
-                  initialState.state.score
+                  initialState.state.score,
                 );
 
                 isNewRecord = highScoreResult.isNewRecord;
@@ -394,13 +394,13 @@ export default {
                 // Only add XP if there's something to add
                 if (earningGameXP > 0) {
                   console.log(
-                    `[snake] Adding game XP: ${earningGameXP} for user ${interaction.user.id}`
+                    `[snake] Adding game XP: ${earningGameXP} for user ${interaction.user.id}`,
                   );
                   const xpResult = await hubClient.addGameXP(
                     interaction.guildId,
                     interaction.user.id,
                     "snake",
-                    earningGameXP
+                    earningGameXP,
                   );
                   console.log("[snake] Game XP Result:", xpResult);
 
@@ -412,7 +412,7 @@ export default {
                       interaction.user.id,
                       xpResult.levelUp,
                       xpResult.type,
-                      interaction.channel
+                      interaction.channel,
                     );
                   }
                 }
@@ -422,7 +422,7 @@ export default {
                   await hubClient.addBalance(
                     interaction.guildId,
                     interaction.user.id,
-                    initialState.state.earning
+                    initialState.state.earning,
                   );
                 }
               }
@@ -435,7 +435,7 @@ export default {
                   ? `${timeoutText}${
                       interaction.guildId
                         ? ` (+${initialState.state.earning.toFixed(
-                            1
+                            1,
                           )} 💵, +${earningGameXP} Game XP)${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
@@ -446,7 +446,7 @@ export default {
                     }${
                       interaction.guildId
                         ? ` (+${initialState.state.earning.toFixed(
-                            1
+                            1,
                           )} 💵, +${earningGameXP} Game XP)${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
@@ -577,7 +577,7 @@ export default {
             const scoreDifference = state.score - oldScore;
             const xpGained = gameInstance.updateEarningGameXP(scoreDifference);
             console.log(
-              `[snake] Added ${xpGained} XP for display (score difference: ${scoreDifference})`
+              `[snake] Added ${xpGained} XP for display (score difference: ${scoreDifference})`,
             );
 
             // Log XP progression for debugging
@@ -587,8 +587,8 @@ export default {
             const xpProgress = (currentXP / requiredXP) * 100;
             console.log(
               `[snake] XP Progress: ${currentXP}/${requiredXP} (${xpProgress.toFixed(
-                1
-              )}%) - Gained: ${xpGained} XP`
+                1,
+              )}%) - Gained: ${xpGained} XP`,
             );
           }
         }
@@ -603,7 +603,7 @@ export default {
               interaction.user.displayAvatarURL({
                 extension: "png",
                 size: 1024,
-              })
+              }),
             );
 
             // Use earningGameXP for stop case
@@ -616,26 +616,26 @@ export default {
                 interaction.guildId,
                 interaction.user.id,
                 "snake",
-                state.score
+                state.score,
               );
               isNewRecordStop = stopHighScoreResult.isNewRecord;
 
               // Add XP
               if (earningGameXP > 0) {
                 console.log(
-                  `[snake] Adding stop game XP: ${earningGameXP} for user ${interaction.user.id}`
+                  `[snake] Adding stop game XP: ${earningGameXP} for user ${interaction.user.id}`,
                 );
                 const stopXpResult = await hubClient.addGameXP(
                   interaction.guildId,
                   interaction.user.id,
                   "snake",
-                  earningGameXP
+                  earningGameXP,
                 );
                 console.log("[snake] Stop Game XP Result:", stopXpResult);
                 if (stopXpResult && stopXpResult.levelUp) {
                   console.log(
                     `[snake] User ${interaction.user.id} leveled up on stop!`,
-                    stopXpResult.levelUp
+                    stopXpResult.levelUp,
                   );
                   await handleLevelUp(
                     interaction.client,
@@ -643,7 +643,7 @@ export default {
                     interaction.user.id,
                     stopXpResult.levelUp,
                     stopXpResult.type || "activity",
-                    interaction.channel
+                    interaction.channel,
                   );
                 }
               }
@@ -653,7 +653,7 @@ export default {
                 await hubClient.addBalance(
                   interaction.guildId,
                   interaction.user.id,
-                  state.earning
+                  state.earning,
                 );
               }
             }
@@ -666,7 +666,7 @@ export default {
                 ? `${stoppedText}${
                     interaction.guildId
                       ? ` (+${state.earning.toFixed(
-                          1
+                          1,
                         )} 💵, +${earningGameXP} Game XP)${
                           isNewRecordStop ? " 🏆 New High Score!" : ""
                         }`
@@ -675,7 +675,7 @@ export default {
                 : `Game stopped! Final Score: ${state.score}${
                     interaction.guildId
                       ? ` (+${state.earning.toFixed(
-                          1
+                          1,
                         )} 💵, +${earningGameXP} Game XP)${
                           isNewRecordStop ? " 🏆 New High Score!" : ""
                         }`
@@ -716,8 +716,8 @@ export default {
             ? scoreText
             : `Your Score: ${state.score}`
           : typeof invalidMoveText === "string"
-          ? invalidMoveText
-          : "Invalid move!";
+            ? invalidMoveText
+            : "Invalid move!";
         let messageComponents = [row1, row2];
         let messageFiles = []; // Default empty
 
@@ -729,7 +729,7 @@ export default {
             interaction.user.displayAvatarURL({
               extension: "png",
               size: 1024,
-            })
+            }),
           );
           gameInstance.updateImageTimestamp();
           messageFiles = [{ attachment: newBoard, name: "snake.avif" }];
@@ -737,7 +737,7 @@ export default {
 
         // Fetch and edit the message
         const gameMessage = await i.channel.messages.fetch(
-          gameInstance.messageId
+          gameInstance.messageId,
         );
         try {
           // Edit message: Always include 'files', even if empty
@@ -865,7 +865,7 @@ function addFood(state) {
 // Check if point collides with snake body
 function checkCollision(point, snake) {
   return snake.some(
-    (segment) => segment.x === point.x && segment.y === point.y
+    (segment) => segment.x === point.x && segment.y === point.y,
   );
 }
 

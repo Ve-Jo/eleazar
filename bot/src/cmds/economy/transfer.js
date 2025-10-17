@@ -16,13 +16,13 @@ export default {
         option
           .setName("user")
           .setDescription("User to transfer money to")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addStringOption((option) =>
         option
           .setName("amount")
           .setDescription("Amount to transfer (or 'all', 'half')")
-          .setRequired(true)
+          .setRequired(true),
       );
 
     return builder;
@@ -107,7 +107,7 @@ export default {
     if (targetUser.id === interaction.user.id) {
       return interaction.editReply({
         content: await i18n.__(
-          "commands.economy.transfer.cannotTransferToSelf"
+          "commands.economy.transfer.cannotTransferToSelf",
         ),
         ephemeral: true,
       });
@@ -124,14 +124,14 @@ export default {
       const senderData = await hubClient.getUser(
         interaction.guild.id,
         interaction.user.id,
-        true
+        true,
       );
 
       // Get recipient user data
       const recipientData = await hubClient.getUser(
         interaction.guild.id,
         targetUser.id,
-        true
+        true,
       );
 
       // Calculate transfer amount
@@ -160,7 +160,7 @@ export default {
       if (amountInt <= 0) {
         return interaction.editReply({
           content: await i18n.__(
-            "commands.economy.transfer.amountGreaterThanZero"
+            "commands.economy.transfer.amountGreaterThanZero",
           ),
           ephemeral: true,
         });
@@ -174,20 +174,20 @@ export default {
         interaction.guild.id,
         interaction.user.id,
         targetUser.id,
-        amountInt
+        amountInt,
       );
 
       // Get updated user data (users already ensured above)
       const updatedSender = await hubClient.getUser(
         interaction.guild.id,
         interaction.user.id,
-        true
+        true,
       );
 
       const updatedRecipient = await hubClient.getUser(
         interaction.guild.id,
         targetUser.id,
-        true
+        true,
       );
 
       // Generate transfer confirmation image
@@ -239,7 +239,7 @@ export default {
           returnDominant: true,
         },
         { image: 2, emoji: 1 },
-        i18n
+        i18n,
       );
 
       const attachment = new AttachmentBuilder(buffer, {

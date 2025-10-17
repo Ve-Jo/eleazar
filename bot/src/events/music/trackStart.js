@@ -12,14 +12,14 @@ export default {
   name: "trackStart",
   async execute(client, player, track) {
     console.log(
-      "=============================================================="
+      "==============================================================",
     );
     console.log("EXECUTING FIXED trackStart.js (with debounce)");
     console.log("GUILD ID:", player?.guildId);
     console.log("TRACK TITLE:", track?.info?.title);
     console.log("TEXT CHANNEL ID:", player?.textChannelId);
     console.log(
-      "=============================================================="
+      "==============================================================",
     );
 
     if (!player.textChannelId) {
@@ -34,7 +34,7 @@ export default {
 
     if (timeSinceLastMessage < DEBOUNCE_TIME) {
       console.log(
-        `Debouncing trackStart event - last message was ${timeSinceLastMessage}ms ago`
+        `Debouncing trackStart event - last message was ${timeSinceLastMessage}ms ago`,
       );
       return;
     }
@@ -61,7 +61,7 @@ export default {
       if (typeof channel.send !== "function") {
         console.error(
           "Channel does not support sending messages:",
-          channel.type
+          channel.type,
         );
         return;
       }
@@ -79,7 +79,7 @@ export default {
         } catch (error) {
           console.error(
             "Error handling previous message deletion:",
-            error.message
+            error.message,
           );
         }
       }
@@ -106,20 +106,20 @@ export default {
         console.log("Generating player embed data...");
         const playerEmbedData = await createOrUpdateMusicPlayerEmbed(
           track,
-          player
+          player,
         );
         console.log("Player embed data generated successfully");
 
         // Inspect the playerEmbedData
         console.log(
           "playerEmbedData.components:",
-          playerEmbedData.components ? "present" : "missing"
+          playerEmbedData.components ? "present" : "missing",
         );
         console.log(
           "playerEmbedData.files:",
           playerEmbedData.files
             ? `${playerEmbedData.files.length} files`
-            : "missing"
+            : "missing",
         );
 
         // Fix attachment issues if needed
@@ -132,7 +132,7 @@ export default {
             console.log(
               `File ${i}: type=${typeof file}, isAttachmentBuilder=${
                 file instanceof AttachmentBuilder
-              }`
+              }`,
             );
 
             // If it's already an AttachmentBuilder, use it
@@ -156,12 +156,12 @@ export default {
 
           if (fixedFiles.length > 0) {
             console.log(
-              `Replaced ${playerEmbedData.files.length} files with ${fixedFiles.length} fixed files`
+              `Replaced ${playerEmbedData.files.length} files with ${fixedFiles.length} fixed files`,
             );
             playerEmbedData.files = fixedFiles;
           } else {
             console.error(
-              "Could not fix attachment files, sending without attachments"
+              "Could not fix attachment files, sending without attachments",
             );
             delete playerEmbedData.files;
           }
@@ -199,7 +199,7 @@ export default {
             if (fallbackMessage) {
               console.log(
                 "Fallback message sent successfully",
-                fallbackMessage.id
+                fallbackMessage.id,
               );
               client.musicMessageMap.set(player.guildId, fallbackMessage);
             }

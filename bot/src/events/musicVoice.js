@@ -18,7 +18,7 @@ export default {
       // Wait for Lavalink to be initialized
       if (!client.lavalink?.isInitialized) {
         console.log(
-          "Lavalink not initialized yet, skipping voice state update"
+          "Lavalink not initialized yet, skipping voice state update",
         );
         return;
       }
@@ -37,7 +37,7 @@ export default {
         // Bot disconnected from a channel
         if (oldState.channel && !newState.channel) {
           console.log(
-            "Bot disconnected from voice channel, checking channel state..."
+            "Bot disconnected from voice channel, checking channel state...",
           );
           try {
             const channel = oldState.channel;
@@ -76,10 +76,10 @@ export default {
             const oldChannel = oldState.channel;
 
             const newChannelMembers = newChannel.members.filter(
-              (m) => !m.user.bot
+              (m) => !m.user.bot,
             );
             const oldChannelMembers = oldChannel.members.filter(
-              (m) => !m.user.bot
+              (m) => !m.user.bot,
             );
 
             if (newChannelMembers.size > 0) {
@@ -90,13 +90,13 @@ export default {
               }
             } else if (oldChannelMembers.size > 0) {
               console.log(
-                "No users in new channel, returning to old channel..."
+                "No users in new channel, returning to old channel...",
               );
               player.voiceChannelId = oldState.channelId;
               await player.connect();
             } else {
               console.log(
-                "No users in either channel, saving and disconnecting..."
+                "No users in either channel, saving and disconnecting...",
               );
               await hubClient.savePlayer(player).catch(console.error);
               await player.disconnect().catch(console.error);

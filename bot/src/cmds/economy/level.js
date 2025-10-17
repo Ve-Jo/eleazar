@@ -17,7 +17,7 @@ export default {
         option
           .setName("user")
           .setDescription("User to check")
-          .setRequired(false)
+          .setRequired(false),
       );
 
     return builder;
@@ -100,7 +100,7 @@ export default {
       const userData = await hubClient.getUser(
         interaction.guild.id,
         user.id,
-        true
+        true,
       );
 
       if (!userData) {
@@ -130,7 +130,7 @@ export default {
       try {
         const nextRoleData = await hubClient.getNextLevelRole(
           interaction.guild.id,
-          chatLevelInfo.level
+          chatLevelInfo.level,
         );
         if (nextRoleData) {
           const role = await interaction.guild.roles
@@ -147,7 +147,7 @@ export default {
       } catch (err) {
         console.error(
           `Error fetching next level role for guild ${interaction.guild.id}:`,
-          err
+          err,
         );
         // Continue without role info if fetch fails
       }
@@ -190,7 +190,7 @@ export default {
           nextLevelRole: nextLevelRoleInfo,
         },
         { image: 2, emoji: 1 },
-        i18n
+        i18n,
       );
 
       if (!buffer) {

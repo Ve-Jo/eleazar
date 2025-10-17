@@ -10,47 +10,47 @@ export default {
         option
           .setName("channel")
           .setDescription("Select channel")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addNumberOption((option) =>
         option
           .setName("start_number")
           .setDescription("Start number from what number counting will start")
-          .setRequired(false)
+          .setRequired(false),
       )
       .addNumberOption((option) =>
         option
           .setName("pin_on_each")
           .setDescription("Pin message every n number")
-          .setRequired(false)
+          .setRequired(false),
       )
       .addRoleOption((option) =>
         option
           .setName("pinned_role")
           .setDescription(
-            "Set role to give for a user when her message is pinned"
+            "Set role to give for a user when her message is pinned",
           )
-          .setRequired(false)
+          .setRequired(false),
       )
       .addBooleanOption((option) =>
         option
           .setName("no_unique_role")
           .setDescription("Previous users with this role will not lose it")
-          .setRequired(false)
+          .setRequired(false),
       )
       .addBooleanOption((option) =>
         option
           .setName("only_numbers")
           .setDescription(
-            "Only numbers are allowed in this channel (no other text after number)"
+            "Only numbers are allowed in this channel (no other text after number)",
           )
-          .setRequired(false)
+          .setRequired(false),
       )
       .addBooleanOption((option) =>
         option
           .setName("no_same_user")
           .setDescription("One person cant count twice or more in a row")
-          .setRequired(false)
+          .setRequired(false),
       );
 
     return builder;
@@ -154,7 +154,7 @@ export default {
     // Check if user has manage_channels perms
     if (
       !interaction.member.permissions.has(
-        PermissionsBitField.Flags.ManageChannels
+        PermissionsBitField.Flags.ManageChannels,
       )
     ) {
       return interaction.reply({
@@ -182,7 +182,7 @@ export default {
       pinnedRole.id,
       onlyNumbers,
       noSameUser,
-      noUniqueRole
+      noUniqueRole,
     );
 
     await interaction.reply({

@@ -10,7 +10,7 @@ export default {
         option
           .setName("song")
           .setDescription("The song to play (URL or search term)")
-          .setRequired(true)
+          .setRequired(true),
       );
 
     return builder;
@@ -98,7 +98,7 @@ export default {
       !interaction.client.lavalink.nodeManager.nodes.size
     ) {
       return interaction.editReply(
-        await i18n.__("commands.music.play.noLavalinkNode")
+        await i18n.__("commands.music.play.noLavalinkNode"),
       );
     }
 
@@ -116,7 +116,7 @@ export default {
       let res = await Promise.race([
         player.search({ query: query }, interaction.user),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Search timeout")), 12000)
+          setTimeout(() => reject(new Error("Search timeout")), 12000),
         ),
       ]);
 
@@ -124,13 +124,13 @@ export default {
         return interaction.editReply(
           await i18n.__("commands.music.play.errorLoadingTrack", {
             message: res.exception?.message,
-          })
+          }),
         );
       }
 
       if (res.loadType === "empty") {
         return interaction.editReply(
-          await i18n.__("commands.music.play.noMatchesFound")
+          await i18n.__("commands.music.play.noMatchesFound"),
         );
       }
 
@@ -184,19 +184,19 @@ export default {
         error.message === "Search timeout"
       ) {
         return interaction.editReply(
-          await i18n.__("commands.music.play.connectionTimeout")
+          await i18n.__("commands.music.play.connectionTimeout"),
         );
       } else if (error.message.includes("No available Node was found")) {
         return interaction.editReply(
-          await i18n.__("commands.music.play.noAvailableNode")
+          await i18n.__("commands.music.play.noAvailableNode"),
         );
       } else if (error.message === "No Lavalink Node was provided") {
         return interaction.editReply(
-          await i18n.__("commands.music.play.noLavalinkNode")
+          await i18n.__("commands.music.play.noLavalinkNode"),
         );
       } else {
         return interaction.editReply(
-          await i18n.__("errorOccurred", { error: error.message })
+          await i18n.__("errorOccurred", { error: error.message }),
         );
       }
     }

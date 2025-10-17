@@ -29,9 +29,9 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    service: 'rendering', 
+  res.json({
+    status: 'healthy',
+    service: 'rendering',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     version: '1.0.0'
@@ -42,11 +42,11 @@ app.get('/health', (req, res) => {
 app.post('/generate', async (req, res) => {
   try {
     const { component, props, scaling, locale, options } = req.body;
-    
+
     if (!component) {
       return res.status(400).json({ error: 'Component is required' });
     }
-    
+
     // Create i18n mock object
     const i18n = {
       getLocale: () => locale || 'en',
@@ -55,9 +55,9 @@ app.post('/generate', async (req, res) => {
         return key;
       }
     };
-    
+
     const result = await generateImage(component, props || {}, scaling || { image: 1, emoji: 1 }, i18n, options || {});
-    
+
     if (Buffer.isBuffer(result)) {
       res.set('Content-Type', 'image/png');
       res.send(result);
@@ -73,7 +73,7 @@ app.post('/generate', async (req, res) => {
     }
   } catch (error) {
     console.error('Error generating image:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to generate image',
       message: process.env.NODE_ENV === 'development' ? error.message : 'Image generation failed'
     });
@@ -84,16 +84,16 @@ app.post('/generate', async (req, res) => {
 app.post('/colors', async (req, res) => {
   try {
     const { imageUrl } = req.body;
-    
+
     if (!imageUrl) {
       return res.status(400).json({ error: 'imageUrl is required' });
     }
-    
+
     const colors = await processImageColors(imageUrl);
     res.json(colors);
   } catch (error) {
     console.error('Error processing colors:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to process colors',
       message: process.env.NODE_ENV === 'development' ? error.message : 'Color processing failed'
     });
@@ -108,7 +108,7 @@ app.get('/components', async (req, res) => {
     const components = files
       .filter(f => f.endsWith('.jsx'))
       .map(f => f.replace('.jsx', ''));
-    
+
     res.json({ components });
   } catch (error) {
     console.error('Error listing components:', error);
@@ -124,7 +124,7 @@ app.use('*', (req, res) => {
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Rendering service error:', error);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
   });

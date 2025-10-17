@@ -597,7 +597,7 @@ function addCoinSelectionMenu(
   userId,
   coinPage,
   allTickerData,
-  filteredBaseSymbols = null
+  filteredBaseSymbols = null,
 ) {
   // Use filtered symbols if provided, otherwise use all symbols
   const allSymbols =
@@ -616,11 +616,11 @@ function addCoinSelectionMenu(
   if (allTickerData) {
     // Check if ticker data was successfully passed
     availableSymbols = usdtSymbolsToShow.filter(
-      (symbol) => allTickerData[symbol] && allTickerData[symbol].lastPrice
+      (symbol) => allTickerData[symbol] && allTickerData[symbol].lastPrice,
     );
   } else {
     console.warn(
-      `[crypto2] addCoinSelectionMenu called without valid allTickerData for page ${coinPage}.`
+      `[crypto2] addCoinSelectionMenu called without valid allTickerData for page ${coinPage}.`,
     );
   }
 
@@ -681,7 +681,7 @@ function addCoinSelectionMenu(
     // Ensure we never exceed 25 options total (Discord limit)
     if (finalOptions.length > 25) {
       console.warn(
-        `[crypto2] Too many options (${finalOptions.length}) for coin select menu on page ${coinPage}. Slicing.`
+        `[crypto2] Too many options (${finalOptions.length}) for coin select menu on page ${coinPage}. Slicing.`,
       );
       finalOptions.length = 25;
     }
@@ -690,14 +690,14 @@ function addCoinSelectionMenu(
       `crypto2_coin_select_${userId}_${coinPage}`, // Changed custom ID prefix
       i18n.__("games.crypto2.selectMenuPlaceholder") ||
         "Select a symbol to trade...",
-      finalOptions // Use the combined list
+      finalOptions, // Use the combined list
     );
   } else if (baseSymbolsToShow.length > 0) {
     // Log if the page had base symbols but none met the criteria or fetched data
     console.log(
       `[crypto2] No available tickers meeting criteria for page ${coinPage}. Base symbols on page: ${baseSymbolsToShow.join(
-        ", "
-      )}`
+        ", ",
+      )}`,
     );
     // Optionally, you could add text feedback here if desired:
     // builder.addText("No coins meet the criteria on this page.", "small");
@@ -713,17 +713,17 @@ async function generateMainMenu(
   page = 1,
   selectedPosition = null,
   selectedCategoryId = null,
-  categoryPage = 1
+  categoryPage = 1,
 ) {
   // Determine mode based on interaction type
   const isAiContext = !!interaction._isAiProxy;
   const builderMode = isAiContext ? "v1" : "v2";
   console.log(
-    `[generateMainMenu] isAiContext: ${isAiContext}, Builder mode set to: ${builderMode}`
+    `[generateMainMenu] isAiContext: ${isAiContext}, Builder mode set to: ${builderMode}`,
   );
 
   console.log(
-    `[generateMainMenu] Received selectedPosition: ${selectedPosition}`
+    `[generateMainMenu] Received selectedPosition: ${selectedPosition}`,
   ); // Log 1
   const userData = await hubClient.getUser(guildId, userId);
   const positions = await hubClient.getUserCryptoPositions(guildId, userId);
@@ -758,14 +758,14 @@ async function generateMainMenu(
             (await getTickers(symbolsToFetch.slice(0, maxSymbols))) || {};
           if (symbolsToFetch.length > maxSymbols)
             console.log(
-              `[crypto2] Category has ${symbolsToFetch.length} coins, only fetched first ${maxSymbols}`
+              `[crypto2] Category has ${symbolsToFetch.length} coins, only fetched first ${maxSymbols}`,
             );
         }
       }
     } catch (error) {
       console.error(
         `[crypto2] Error loading coins for category ${selectedCategoryId}:`,
-        error
+        error,
       );
     }
   } else {
@@ -780,7 +780,7 @@ async function generateMainMenu(
 
     // Check if all position symbols are already in the fetched data
     const allPositionSymbolsPresent = positionSymbols.every(
-      (sym) => allTickerData[sym]
+      (sym) => allTickerData[sym],
     );
 
     if (allPositionSymbolsPresent) {
@@ -852,11 +852,11 @@ async function generateMainMenu(
         p.entryPrice,
         currentPrice, // Use the potentially missing price
         p.direction,
-        p.leverage
+        p.leverage,
       );
       // Calculate stake value here to pass to component
       const stakeValue = new Prisma.Decimal(p.entryPrice || 0).times(
-        new Prisma.Decimal(p.quantity || 0)
+        new Prisma.Decimal(p.quantity || 0),
       );
 
       // Calculate PnL amount
@@ -864,7 +864,7 @@ async function generateMainMenu(
         p.entryPrice,
         currentPrice, // Use the potentially missing price
         p.quantity,
-        p.direction
+        p.direction,
       );
 
       return {
@@ -892,7 +892,7 @@ async function generateMainMenu(
     "Crypto2",
     componentData,
     { image: 1, emoji: 1 },
-    i18n // Pass the main i18n object here for generateImage's internal use if needed
+    i18n, // Pass the main i18n object here for generateImage's internal use if needed
   );
   const attachmentName = `crypto_portfolio_${userId}.avif`; // Use .avif
 
@@ -918,14 +918,14 @@ async function generateMainMenu(
     .setLabel(getTranslation("games.crypto2.buttonRefresh") || "Refresh")
     .setStyle(ButtonStyle.Secondary);
   builder.addActionRow(
-    new ActionRowBuilder().addComponents(openButton, refreshButton)
+    new ActionRowBuilder().addComponents(openButton, refreshButton),
   );
 
   // --- Conditional Category / Coin Selection ---
   if (selectedCategoryId) {
     // --- Show Coin Selection for Selected Category ---
     const selectedCategory = allCategories.find(
-      (c) => c.id === selectedCategoryId
+      (c) => c.id === selectedCategoryId,
     );
     if (selectedCategory) {
       // Add category label
@@ -933,7 +933,7 @@ async function generateMainMenu(
         getTranslation("games.crypto2.categoryLabel", {
           category: selectedCategory.name,
         }) || `Category: ${selectedCategory.name}`,
-        "small"
+        "small",
       );
 
       // Add coin selection menu (includes back button)
@@ -943,7 +943,7 @@ async function generateMainMenu(
         userId,
         page,
         allTickerData,
-        filteredBaseSymbols
+        filteredBaseSymbols,
       );
     } else {
       // Should not happen if ID is valid, but handle gracefully
@@ -955,7 +955,7 @@ async function generateMainMenu(
     if (allCategories.length > 0) {
       const categoriesPerPage = 23; // Max 25 options - 2 for pagination
       const totalCategoryPages = Math.ceil(
-        allCategories.length / categoriesPerPage
+        allCategories.length / categoriesPerPage,
       );
       const catStartIndex = (categoryPage - 1) * categoriesPerPage;
       const catEndIndex = catStartIndex + categoriesPerPage;
@@ -1004,7 +1004,7 @@ async function generateMainMenu(
           `crypto2_category_select_${interaction.id}_${categoryPage}`, // Include page in ID
           i18n.__("games.crypto2.selectCategory") ||
             "Select a coin category...",
-          finalCategoryOptions // Use the combined list with pagination
+          finalCategoryOptions, // Use the combined list with pagination
         );
       } else {
         builder.addText("No categories found on this page.", "small");
@@ -1025,13 +1025,13 @@ async function generateMainMenu(
         p.entryPrice,
         currentPrice, // Use potentially missing price
         p.direction,
-        p.leverage
+        p.leverage,
       );
       const pnlString = currentPrice ? `${pnlPercent.toFixed(2)}%` : "N/A";
 
       const isDefault = p.id === selectedPosition;
       console.log(
-        `[generateMainMenu] Checking position ${p.id} against selected ${selectedPosition}. Is default: ${isDefault}`
+        `[generateMainMenu] Checking position ${p.id} against selected ${selectedPosition}. Is default: ${isDefault}`,
       ); // Log 2
       return {
         label: `${p.direction} ${p.symbol} (${p.leverage}x)`,
@@ -1051,27 +1051,27 @@ async function generateMainMenu(
       `crypto2_position_select_${userId}`,
       getTranslation("games.crypto2.selectPositionPrompt") ||
         "Select a position to manage...",
-      positionOptions
+      positionOptions,
     );
   }
 
   // --- Add Position Action Buttons if a position is selected ---
   console.log(
-    `[generateMainMenu] Checking if selectedPosition (${selectedPosition}) is truthy to add buttons.`
+    `[generateMainMenu] Checking if selectedPosition (${selectedPosition}) is truthy to add buttons.`,
   ); // Log 3
   if (selectedPosition) {
     // Check if the parameter is truthy
     const closeButton = new ButtonBuilder()
       .setCustomId(`crypto2_close_${selectedPosition}`)
       .setLabel(
-        getTranslation("games.crypto2.buttonClosePosition") || "Close Position"
+        getTranslation("games.crypto2.buttonClosePosition") || "Close Position",
       )
       .setStyle(ButtonStyle.Danger);
     const averageButton = new ButtonBuilder()
       .setCustomId(`crypto2_average_${selectedPosition}`)
       .setLabel(
         getTranslation("games.crypto2.buttonAveragePosition") ||
-          "Average Position"
+          "Average Position",
       )
       .setStyle(ButtonStyle.Primary);
     const tpslButton = new ButtonBuilder()
@@ -1087,7 +1087,7 @@ async function generateMainMenu(
       closeButton,
       averageButton,
       tpslButton,
-      backButton
+      backButton,
     );
     builder.addActionRow(actionRow);
     // Add separator after position actions - REMOVED to stay within limit
@@ -1109,7 +1109,7 @@ export default {
     const isAiContext = !!interaction._isAiProxy;
     const builderMode = isAiContext ? "v1" : "v2";
     console.log(
-      `[crypto2 execute] isAiContext: ${isAiContext}, Mode: ${builderMode}`
+      `[crypto2 execute] isAiContext: ${isAiContext}, Mode: ${builderMode}`,
     );
 
     // Helper function to safely get translation with fallback
@@ -1160,7 +1160,7 @@ export default {
           .setStyle(ButtonStyle.Success);
 
         disclaimerBuilder.addActionRow(
-          new ActionRowBuilder().addComponents(acknowledgeButton)
+          new ActionRowBuilder().addComponents(acknowledgeButton),
         );
 
         // Send/Edit based on mode
@@ -1171,7 +1171,7 @@ export default {
         if (isAiContext) {
           // AI Context: Skip the disclaimer interaction entirely
           console.log(
-            "[crypto2] AI context detected, skipping disclaimer interaction."
+            "[crypto2] AI context detected, skipping disclaimer interaction.",
           );
           // Proceed directly to showing the main menu (via proxy reply)
           try {
@@ -1183,13 +1183,13 @@ export default {
               1,
               null,
               null,
-              1
+              1,
             );
             await interaction.reply(initialContent); // Use proxy reply
           } catch (error) {
             console.error(
               "Error generating/sending main menu in AI context (after skipping disclaimer):",
-              error
+              error,
             );
             // Throw error to be caught by toolExecutor
             throw new Error(getTranslation("games.crypto2.errorRender"));
@@ -1226,7 +1226,7 @@ export default {
               1,
               null,
               null,
-              1
+              1,
             );
             let gameMessage;
             if (isAiContext) {
@@ -1242,12 +1242,12 @@ export default {
               i18n,
               modalSubmitOpenPositionId,
               modalSubmitTpslId,
-              modalSubmitAverageId
+              modalSubmitAverageId,
             );
           } catch (error) {
             console.error(
               "Error generating/sending main menu after disclaimer:",
-              error
+              error,
             );
             await interaction.followUp({
               content: getTranslation("games.crypto2.errorRender"),
@@ -1288,7 +1288,7 @@ export default {
               1,
               null,
               null,
-              1
+              1,
             );
             let gameMessage;
             if (isAiContext) {
@@ -1304,12 +1304,12 @@ export default {
               i18n,
               modalSubmitOpenPositionId,
               modalSubmitTpslId,
-              modalSubmitAverageId
+              modalSubmitAverageId,
             );
           } catch (error) {
             console.error(
               "Error generating/sending main menu after disclaimer:",
-              error
+              error,
             );
             await interaction.followUp({
               content: getTranslation("games.crypto2.errorRender"),
@@ -1327,33 +1327,33 @@ export default {
           1,
           null,
           null,
-          1
+          1,
         );
 
         let message;
         if (isAiContext) {
           // AI Context: Use followUp for the initial display
           console.log(
-            "[crypto2] Sending initial UI via interaction.followUp (disclaimer seen)"
+            "[crypto2] Sending initial UI via interaction.followUp (disclaimer seen)",
           );
           message = await interaction.followUp(initialContent);
           if (!message) {
             console.error(
-              "[crypto2] Failed to send initial game UI via followUp."
+              "[crypto2] Failed to send initial game UI via followUp.",
             );
             return;
           }
         } else {
           // Real Interaction: Edit the deferred reply
           console.log(
-            "[crypto2] Sending initial UI via interaction.editReply (disclaimer seen)"
+            "[crypto2] Sending initial UI via interaction.editReply (disclaimer seen)",
           );
           message = await interaction.editReply(initialContent);
         }
 
         if (!message) {
           console.error(
-            "[crypto2] Failed to obtain message object after sending initial UI (disclaimer seen)."
+            "[crypto2] Failed to obtain message object after sending initial UI (disclaimer seen).",
           );
           await interaction.followUp?.({
             content:
@@ -1370,7 +1370,7 @@ export default {
           i18n,
           modalSubmitOpenPositionId,
           modalSubmitTpslId,
-          modalSubmitAverageId
+          modalSubmitAverageId,
         );
       }
     } catch (error) {
@@ -1417,7 +1417,7 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
   const currentPrices = await getTickers(symbolsToFetch);
   if (!currentPrices) {
     console.warn(
-      `[LiquidationCheck] Failed to fetch prices for user ${userId} in guild ${guildId}`
+      `[LiquidationCheck] Failed to fetch prices for user ${userId} in guild ${guildId}`,
     );
     return []; // Cant check without prices
   }
@@ -1435,7 +1435,7 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
       position.entryPrice,
       currentPrice,
       position.direction,
-      position.leverage
+      position.leverage,
     );
 
     if (pnlPercent <= -100) {
@@ -1445,7 +1445,7 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
 
   if (positionsToLiquidate.length > 0) {
     console.log(
-      `[LiquidationCheck] Liquidating ${positionsToLiquidate.length} positions for user ${userId} in guild ${guildId}`
+      `[LiquidationCheck] Liquidating ${positionsToLiquidate.length} positions for user ${userId} in guild ${guildId}`,
     );
     try {
       // Use transaction to delete all liquidated positions at once
@@ -1466,7 +1466,7 @@ async function checkAndLiquidatePositions(guildId, userId, i18n) {
     } catch (error) {
       console.error(
         `[LiquidationCheck] Error during bulk liquidation for user ${userId} in guild ${guildId}:`,
-        error
+        error,
       );
       return []; // Return empty if liquidation failed
     }
@@ -1482,20 +1482,20 @@ async function testMexcApi() {
     const response = await axios.get(`${MEXC_API_BASE_URL}/api/v3/time`);
     if (response.status === 200 && response.data && response.data.serverTime) {
       console.log(
-        `[crypto2] MEXC API Test successful. Server Time: ${response.data.serverTime}`
+        `[crypto2] MEXC API Test successful. Server Time: ${response.data.serverTime}`,
       );
       return true;
     } else {
       console.warn(
         `[crypto2] MEXC API Test failed. Status: ${response.status}, Data:`,
-        response.data
+        response.data,
       );
       return false;
     }
   } catch (error) {
     console.error(
       "[crypto2] Error during MEXC API Test:",
-      error.message || error
+      error.message || error,
     );
     return false;
   }
@@ -1508,7 +1508,7 @@ function setupGameInteractionCollector(
   i18n,
   _modalSubmitOpenPositionId,
   _modalSubmitTpslId,
-  _modalSubmitAverageId
+  _modalSubmitAverageId,
 ) {
   const guildId = originalInteraction.guild.id;
   const userId = originalInteraction.user.id;
@@ -1537,13 +1537,13 @@ function setupGameInteractionCollector(
         const liquidatedInfos = await checkAndLiquidatePositions(
           guildId,
           userId,
-          i18n
+          i18n,
         );
         if (liquidatedInfos.length > 0) {
           // Send notifications for any liquidations that just happened
           const liquidationMessages = liquidatedInfos
             .map((info) =>
-              getTranslation("games.crypto2.liquidationNotification", info)
+              getTranslation("games.crypto2.liquidationNotification", info),
             )
             .join("\n");
           await i
@@ -1607,7 +1607,7 @@ function setupGameInteractionCollector(
             new ActionRowBuilder().addComponents(symbolInput),
             new ActionRowBuilder().addComponents(directionInput),
             new ActionRowBuilder().addComponents(stakeInput),
-            new ActionRowBuilder().addComponents(leverageInput)
+            new ActionRowBuilder().addComponents(leverageInput),
           );
 
           // Show the modal
@@ -1642,27 +1642,27 @@ function setupGameInteractionCollector(
                 // 2. Validate Input
                 if (!/^[A-Z]+USDT$/.test(symbol)) {
                   await modalInteraction.editReply(
-                    getTranslation("games.crypto2.errorInvalidSymbol")
+                    getTranslation("games.crypto2.errorInvalidSymbol"),
                   );
                   return;
                 }
                 if (direction !== "LONG" && direction !== "SHORT") {
                   await modalInteraction.editReply(
-                    getTranslation("games.crypto2.errorInvalidDirection")
+                    getTranslation("games.crypto2.errorInvalidDirection"),
                   );
                   return;
                 }
                 const stake = parseFloat(stakeString);
                 if (isNaN(stake) || stake <= 0) {
                   await modalInteraction.editReply(
-                    getTranslation("games.crypto2.errorInvalidStake")
+                    getTranslation("games.crypto2.errorInvalidStake"),
                   );
                   return;
                 }
                 const leverage = parseInt(leverageString);
                 if (isNaN(leverage) || leverage <= 0 || leverage > 100) {
                   await modalInteraction.editReply(
-                    getTranslation("games.crypto2.errorInvalidLeverage")
+                    getTranslation("games.crypto2.errorInvalidLeverage"),
                   );
                   return;
                 }
@@ -1679,7 +1679,7 @@ function setupGameInteractionCollector(
                     getTranslation("games.crypto2.errorMaxMarginExceeded", {
                       maxMargin: MAX_POSITION_MARGIN, // Pass the value for interpolation
                     }) ||
-                      `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN}.` // Fallback
+                      `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN}.`, // Fallback
                   );
                   return;
                 }
@@ -1688,11 +1688,11 @@ function setupGameInteractionCollector(
                 // 3. Check Balance
                 const userData = await hubClient.getUser(guildId, userId);
                 const userBalance = new Prisma.Decimal(
-                  userData?.economy?.balance ?? 0
+                  userData?.economy?.balance ?? 0,
                 );
                 if (userBalance.lt(stakeDecimal)) {
                   await modalInteraction.editReply(
-                    getTranslation("games.crypto2.errorInsufficientBalance")
+                    getTranslation("games.crypto2.errorInsufficientBalance"),
                   );
                   return;
                 }
@@ -1703,12 +1703,12 @@ function setupGameInteractionCollector(
                   await modalInteraction.editReply(
                     getTranslation("games.crypto2.errorApiSymbolNotFound", {
                       symbol,
-                    })
+                    }),
                   );
                   return;
                 }
                 const entryPrice = new Prisma.Decimal(
-                  tickerData[symbol].markPrice || tickerData[symbol].lastPrice
+                  tickerData[symbol].markPrice || tickerData[symbol].lastPrice,
                 );
 
                 // 5. Calculate Quantity
@@ -1720,7 +1720,7 @@ function setupGameInteractionCollector(
                 await hubClient.addBalance(
                   guildId,
                   userId,
-                  -stakeDecimal.toNumber()
+                  -stakeDecimal.toNumber(),
                 );
                 await hubClient.createCryptoPosition(
                   guildId,
@@ -1728,7 +1728,7 @@ function setupGameInteractionCollector(
                   symbol,
                   quantity.toNumber(),
                   entryPrice.toNumber(),
-                  direction
+                  direction,
                 );
 
                 // 7. Invalidate User Cache (since balance changed)
@@ -1739,7 +1739,7 @@ function setupGameInteractionCollector(
                   getTranslation("games.crypto2.positionOpenedSuccess", {
                     direction,
                     symbol,
-                  })
+                  }),
                 );
 
                 // 9. Refresh the main menu view (reset category)
@@ -1754,19 +1754,19 @@ function setupGameInteractionCollector(
                     1, // Start at coin page 1
                     currentSelectedPositionId, // Pass null (cleared above)
                     null, // No category selected
-                    1 // Start at category page 1
+                    1, // Start at category page 1
                   );
                   await message.edit(menuContent);
                 } catch (refreshError) {
                   console.error(
                     "Error refreshing main menu after opening position:",
-                    refreshError
+                    refreshError,
                   );
                 }
               } catch (error) {
                 console.error(
                   "Error processing open position modal submission:",
-                  error
+                  error,
                 );
                 if (!modalInteraction.replied && !modalInteraction.deferred) {
                   await modalInteraction
@@ -1775,7 +1775,7 @@ function setupGameInteractionCollector(
                 }
                 await modalInteraction
                   .editReply(
-                    getTranslation("games.crypto2.errorCreatingPosition")
+                    getTranslation("games.crypto2.errorCreatingPosition"),
                   )
                   .catch(() => {});
               }
@@ -1783,7 +1783,7 @@ function setupGameInteractionCollector(
             .catch(async (err) => {
               console.log(
                 `Open Position Modal timed out or failed for user ${userId}:`,
-                err.message
+                err.message,
               );
               await i
                 .followUp({ content: "Modal timed out.", ephemeral: true })
@@ -1823,14 +1823,14 @@ function setupGameInteractionCollector(
             }
             const currentPrice = new Prisma.Decimal(
               tickerData[position.symbol].markPrice ||
-                tickerData[position.symbol].lastPrice
+                tickerData[position.symbol].lastPrice,
             );
 
             const pnlAmount = calculatePnlAmount(
               position.entryPrice,
               currentPrice,
               position.quantity,
-              position.direction
+              position.direction,
             );
 
             const originalStake = position.quantity
@@ -1843,7 +1843,7 @@ function setupGameInteractionCollector(
             await hubClient.addBalance(
               guildId,
               userId,
-              amountToAddBack.toNumber()
+              amountToAddBack.toNumber(),
             );
             await hubClient.deleteCryptoPosition(positionId);
 
@@ -1853,7 +1853,7 @@ function setupGameInteractionCollector(
               position.entryPrice,
               currentPrice,
               position.direction,
-              position.leverage
+              position.leverage,
             );
             const profitLossString = pnlAmount.gte(0)
               ? `profit of ${pnlAmount.toFixed(2)}`
@@ -1877,7 +1877,7 @@ function setupGameInteractionCollector(
               1, // Start at coin page 1
               null, // Pass null directly instead of using the state variable
               currentSelectedCategoryId, // Keep current category if one was selected
-              currentCategoryPage // Keep category page
+              currentCategoryPage, // Keep category page
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -1920,7 +1920,7 @@ function setupGameInteractionCollector(
               .setRequired(true);
 
             modal.addComponents(
-              new ActionRowBuilder().addComponents(averagePriceInput)
+              new ActionRowBuilder().addComponents(averagePriceInput),
             );
 
             // Show the modal
@@ -1945,7 +1945,7 @@ function setupGameInteractionCollector(
                   const averagePrice = parseFloat(averagePriceString);
                   if (isNaN(averagePrice) || averagePrice <= 0) {
                     await modalInteraction.editReply(
-                      getTranslation("games.crypto2.errorInvalidAveragePrice")
+                      getTranslation("games.crypto2.errorInvalidAveragePrice"),
                     );
                     return;
                   }
@@ -1960,7 +1960,7 @@ function setupGameInteractionCollector(
                     getTranslation("games.crypto2.averagePriceSetSuccess", {
                       symbol: position.symbol,
                       averagePrice,
-                    })
+                    }),
                   );
 
                   // Refresh the main menu with the position still selected
@@ -1974,19 +1974,19 @@ function setupGameInteractionCollector(
                       1, // Start page 1 for coins in this category
                       position.id, // Pass position.id directly instead of the state variable
                       currentSelectedCategoryId, // Keep category selected
-                      currentCategoryPage // Keep category page
+                      currentCategoryPage, // Keep category page
                     );
                     await message.edit(menuContent);
                   } catch (refreshError) {
                     console.error(
                       "Error refreshing main menu after setting average price:",
-                      refreshError
+                      refreshError,
                     );
                   }
                 } catch (error) {
                   console.error(
                     "Error processing average price modal submission:",
-                    error
+                    error,
                   );
                   if (!modalInteraction.replied && !modalInteraction.deferred) {
                     await modalInteraction
@@ -1995,7 +1995,7 @@ function setupGameInteractionCollector(
                   }
                   await modalInteraction
                     .editReply(
-                      getTranslation("games.crypto2.errorSettingAveragePrice")
+                      getTranslation("games.crypto2.errorSettingAveragePrice"),
                     )
                     .catch(() => {});
                 }
@@ -2003,7 +2003,7 @@ function setupGameInteractionCollector(
               .catch(async (err) => {
                 console.log(
                   `Average Price Modal timed out or failed for user ${userId}:`,
-                  err.message
+                  err.message,
                 );
                 await i
                   .followUp({ content: "Modal timed out.", ephemeral: true })
@@ -2058,7 +2058,7 @@ function setupGameInteractionCollector(
 
             modal.addComponents(
               new ActionRowBuilder().addComponents(tpInput),
-              new ActionRowBuilder().addComponents(slInput)
+              new ActionRowBuilder().addComponents(slInput),
             );
 
             // Show the modal
@@ -2087,7 +2087,7 @@ function setupGameInteractionCollector(
                   const sl = parseFloat(slString);
                   if ((isNaN(tp) || tp <= 0) && (isNaN(sl) || sl <= 0)) {
                     await modalInteraction.editReply(
-                      getTranslation("games.crypto2.errorInvalidTpSl")
+                      getTranslation("games.crypto2.errorInvalidTpSl"),
                     );
                     return;
                   }
@@ -2106,16 +2106,16 @@ function setupGameInteractionCollector(
                   const confirmationMessage = [];
                   if (!isNaN(tp) && tp > 0) {
                     confirmationMessage.push(
-                      getTranslation("games.crypto2.tpSetSuccess", { tp })
+                      getTranslation("games.crypto2.tpSetSuccess", { tp }),
                     );
                   }
                   if (!isNaN(sl) && sl > 0) {
                     confirmationMessage.push(
-                      getTranslation("games.crypto2.slSetSuccess", { sl })
+                      getTranslation("games.crypto2.slSetSuccess", { sl }),
                     );
                   }
                   await modalInteraction.editReply(
-                    confirmationMessage.join("\n")
+                    confirmationMessage.join("\n"),
                   );
 
                   // Refresh the main menu with the position still selected
@@ -2129,19 +2129,19 @@ function setupGameInteractionCollector(
                       1, // Start page 1 for coins
                       position.id, // Pass position.id directly instead of the state variable
                       currentSelectedCategoryId, // Keep category selected
-                      currentCategoryPage // Keep category page
+                      currentCategoryPage, // Keep category page
                     );
                     await message.edit(menuContent);
                   } catch (refreshError) {
                     console.error(
                       "Error refreshing main menu after setting TP/SL:",
-                      refreshError
+                      refreshError,
                     );
                   }
                 } catch (error) {
                   console.error(
                     "Error processing TP/SL modal submission:",
-                    error
+                    error,
                   );
                   if (!modalInteraction.replied && !modalInteraction.deferred) {
                     await modalInteraction
@@ -2156,7 +2156,7 @@ function setupGameInteractionCollector(
               .catch(async (err) => {
                 console.log(
                   `TP/SL Modal timed out or failed for user ${userId}:`,
-                  err.message
+                  err.message,
                 );
                 await i
                   .followUp({ content: "Modal timed out.", ephemeral: true })
@@ -2183,7 +2183,7 @@ function setupGameInteractionCollector(
               1, // Start at coin page 1
               currentSelectedPositionId, // Pass null (cleared above)
               currentSelectedCategoryId, // Keep current category
-              currentCategoryPage // Keep category page
+              currentCategoryPage, // Keep category page
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -2200,13 +2200,13 @@ function setupGameInteractionCollector(
             const liquidatedInfos = await checkAndLiquidatePositions(
               guildId,
               userId,
-              i18n
+              i18n,
             );
             if (liquidatedInfos.length > 0) {
               // Send notifications for any liquidations that just happened
               const liquidationMessages = liquidatedInfos
                 .map((info) =>
-                  getTranslation("games.crypto2.liquidationNotification", info)
+                  getTranslation("games.crypto2.liquidationNotification", info),
                 )
                 .join("\n");
               await i
@@ -2224,7 +2224,7 @@ function setupGameInteractionCollector(
               1, // Start at coin page 1
               currentSelectedPositionId, // Pass null (cleared above)
               currentSelectedCategoryId, // Keep category selected
-              currentCategoryPage // Keep category page
+              currentCategoryPage, // Keep category page
             );
 
             await message.edit(menuContent);
@@ -2245,9 +2245,8 @@ function setupGameInteractionCollector(
           currentSelectedPositionId = selectedPositionId; // Update state
           try {
             // Fetch the position details (optional, could remove if not needed for validation here)
-            const position = await hubClient.getCryptoPositionById(
-              selectedPositionId
-            );
+            const position =
+              await hubClient.getCryptoPositionById(selectedPositionId);
             if (
               !position ||
               position.userId !== userId ||
@@ -2269,7 +2268,7 @@ function setupGameInteractionCollector(
               1, // Start at coin page 1
               selectedPositionId, // Pass the selected position ID directly, not the state variable
               currentSelectedCategoryId, // Keep current category
-              currentCategoryPage // Keep category page
+              currentCategoryPage, // Keep category page
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -2315,7 +2314,7 @@ function setupGameInteractionCollector(
               1, // Reset to coin page 1
               null, // Clear selected position
               currentSelectedCategoryId, // Pass the potentially updated category ID
-              currentCategoryPage // Pass the potentially updated category page
+              currentCategoryPage, // Pass the potentially updated category page
             );
             await message.edit(menuContent);
           } catch (error) {
@@ -2348,7 +2347,7 @@ function setupGameInteractionCollector(
                 1, // Reset page
                 null, // No position selected
                 null, // Pass null category ID to show category list
-                1 // Reset category page
+                1, // Reset category page
               );
               await message.edit(menuContent);
             }
@@ -2374,7 +2373,7 @@ function setupGameInteractionCollector(
                 newPage, // Use new page number
                 null, // No position selected when paginating coins
                 currentSelectedCategoryId, // KEEP category selected
-                currentCategoryPage // Keep category page
+                currentCategoryPage, // Keep category page
               );
               await message.edit(menuContent);
             }
@@ -2390,14 +2389,14 @@ function setupGameInteractionCollector(
                 .setCustomId(modalSubmitId)
                 .setTitle(
                   getTranslation("games.crypto2.openPositionModalTitle") ||
-                    "Open New Position"
+                    "Open New Position",
                 ); // Fallback
 
               const symbolInput = new TextInputBuilder()
                 .setCustomId("symbolInput")
                 .setLabel(
                   getTranslation("games.crypto2.symbolInputLabel") ||
-                    "Symbol (e.g., BTCUSDT)"
+                    "Symbol (e.g., BTCUSDT)",
                 ) // Fallback
                 .setStyle(TextInputStyle.Short)
                 .setValue(selectedSymbol) // Pre-fill with selected symbol
@@ -2409,7 +2408,7 @@ function setupGameInteractionCollector(
                 .setCustomId("directionInput")
                 .setLabel(
                   getTranslation("games.crypto2.directionInputLabel") ||
-                    "Direction (LONG or SHORT)"
+                    "Direction (LONG or SHORT)",
                 ) // Fallback
                 .setStyle(TextInputStyle.Short)
                 .setPlaceholder("LONG or SHORT")
@@ -2421,7 +2420,7 @@ function setupGameInteractionCollector(
                 .setCustomId("stakeInput")
                 .setLabel(
                   getTranslation("games.crypto2.stakeInputLabel") ||
-                    "Stake Amount"
+                    "Stake Amount",
                 ) // Fallback
                 .setStyle(TextInputStyle.Short)
                 .setPlaceholder("e.g., 10.50")
@@ -2431,7 +2430,7 @@ function setupGameInteractionCollector(
                 .setCustomId("leverageInput")
                 .setLabel(
                   getTranslation("games.crypto2.leverageInputLabel") ||
-                    "Leverage (e.g., 10)"
+                    "Leverage (e.g., 10)",
                 ) // Fallback
                 .setStyle(TextInputStyle.Short)
                 .setPlaceholder("e.g., 10")
@@ -2442,7 +2441,7 @@ function setupGameInteractionCollector(
                 new ActionRowBuilder().addComponents(symbolInput),
                 new ActionRowBuilder().addComponents(directionInput),
                 new ActionRowBuilder().addComponents(stakeInput),
-                new ActionRowBuilder().addComponents(leverageInput)
+                new ActionRowBuilder().addComponents(leverageInput),
               );
 
               // Show the modal
@@ -2478,14 +2477,14 @@ function setupGameInteractionCollector(
                   if (!/^[A-Z]+USDT$/.test(symbol)) {
                     await modalInteraction.editReply(
                       getTranslation("games.crypto2.errorInvalidSymbol") ||
-                        "Invalid symbol format."
+                        "Invalid symbol format.",
                     );
                     return;
                   }
                   if (direction !== "LONG" && direction !== "SHORT") {
                     await modalInteraction.editReply(
                       getTranslation("games.crypto2.errorInvalidDirection") ||
-                        "Invalid direction."
+                        "Invalid direction.",
                     );
                     return;
                   }
@@ -2493,7 +2492,7 @@ function setupGameInteractionCollector(
                   if (isNaN(stake) || stake <= 0) {
                     await modalInteraction.editReply(
                       getTranslation("games.crypto2.errorInvalidStake") ||
-                        "Invalid stake."
+                        "Invalid stake.",
                     );
                     return;
                   }
@@ -2501,7 +2500,7 @@ function setupGameInteractionCollector(
                   if (isNaN(leverage) || leverage <= 0 || leverage > 100) {
                     await modalInteraction.editReply(
                       getTranslation("games.crypto2.errorInvalidLeverage") ||
-                        "Invalid leverage."
+                        "Invalid leverage.",
                     );
                     return;
                   }
@@ -2518,7 +2517,7 @@ function setupGameInteractionCollector(
                       getTranslation("games.crypto2.errorMaxMarginExceeded", {
                         maxMargin: MAX_POSITION_MARGIN_COIN, // Pass the value for interpolation
                       }) ||
-                        `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN_COIN}.` // Fallback
+                        `❌ Position size (Stake * Leverage) cannot exceed ${MAX_POSITION_MARGIN_COIN}.`, // Fallback
                     );
                     return;
                   }
@@ -2527,13 +2526,13 @@ function setupGameInteractionCollector(
                   // 3. Check Balance
                   const userDataCoin = await hubClient.getUser(guildId, userId);
                   const userBalanceCoin = new Prisma.Decimal(
-                    userDataCoin?.economy?.balance ?? 0
+                    userDataCoin?.economy?.balance ?? 0,
                   );
                   if (userBalanceCoin.lt(stakeDecimalCoin)) {
                     await modalInteraction.editReply(
                       getTranslation(
-                        "games.crypto2.errorInsufficientBalance"
-                      ) || "Insufficient balance."
+                        "games.crypto2.errorInsufficientBalance",
+                      ) || "Insufficient balance.",
                     );
                     return;
                   }
@@ -2544,13 +2543,13 @@ function setupGameInteractionCollector(
                     await modalInteraction.editReply(
                       getTranslation("games.crypto2.errorApiSymbolNotFound", {
                         symbol,
-                      }) || `Cannot find data for ${symbol}.`
+                      }) || `Cannot find data for ${symbol}.`,
                     );
                     return;
                   }
                   const entryPriceCoin = new Prisma.Decimal(
                     tickerDataCoin[symbol].markPrice ||
-                      tickerDataCoin[symbol].lastPrice
+                      tickerDataCoin[symbol].lastPrice,
                   );
 
                   // 5. Calculate Quantity
@@ -2563,7 +2562,7 @@ function setupGameInteractionCollector(
                   await hubClient.addBalance(
                     guildId,
                     userId,
-                    -stakeDecimalCoin.toNumber()
+                    -stakeDecimalCoin.toNumber(),
                   );
                   await hubClient.createCryptoPosition(
                     guildId,
@@ -2571,7 +2570,7 @@ function setupGameInteractionCollector(
                     symbol,
                     quantityCoin.toNumber(),
                     entryPriceCoin.toNumber(),
-                    direction
+                    direction,
                   );
 
                   // 7. Invalidate User Cache (since balance changed)
@@ -2582,12 +2581,12 @@ function setupGameInteractionCollector(
                     getTranslation("games.crypto2.positionOpenedSuccess", {
                       direction,
                       symbol,
-                    }) || `✅ Position opened for ${symbol}.` // Fallback
+                    }) || `✅ Position opened for ${symbol}.`, // Fallback
                   );
                 } catch (error) {
                   console.error(
                     `[DEBUG] Error processing modal ${modalInteraction.customId}:`,
-                    error
+                    error,
                   );
                   if (!modalInteraction.replied && !modalInteraction.deferred) {
                     await modalInteraction
@@ -2597,7 +2596,7 @@ function setupGameInteractionCollector(
                   await modalInteraction
                     .editReply(
                       getTranslation("games.crypto2.errorCreatingPosition") ||
-                        "Error creating position."
+                        "Error creating position.",
                     ) // Fallback
                     .catch(() => {});
                 }
@@ -2615,13 +2614,13 @@ function setupGameInteractionCollector(
                     1, // Reset page
                     currentSelectedPositionId, // Pass null (cleared above)
                     null, // Reset category ID
-                    1 // Reset category page
+                    1, // Reset category page
                   );
                   await message.edit(menuContent);
                 } catch (refreshError) {
                   console.error(
                     "Failed to refresh menu after trade:",
-                    refreshError
+                    refreshError,
                   );
                 }
               });
@@ -2638,7 +2637,7 @@ function setupGameInteractionCollector(
         // --- General Error Handling ---
         console.error(
           `Error handling crypto component interaction ${i?.customId}:`,
-          error
+          error,
         );
         if (i && !i.replied && !i.deferred) {
           // Check if 'i' exists before accessing properties
@@ -2653,7 +2652,7 @@ function setupGameInteractionCollector(
             })
             .catch(() => {
               console.error(
-                `Failed to send follow-up error message for interaction ${i?.customId}`
+                `Failed to send follow-up error message for interaction ${i?.customId}`,
               );
             });
         }
@@ -2669,7 +2668,7 @@ function setupGameInteractionCollector(
             1, // Start at coin page 1
             currentSelectedPositionId, // Pass null (cleared above)
             null, // No category selected
-            1 // Start at category page 1
+            1, // Start at category page 1
           );
           await message.edit(menuContent).catch((menuError) => {
             console.error("Failed to reset menu after error:", menuError);
@@ -2677,7 +2676,7 @@ function setupGameInteractionCollector(
         } catch (menuError) {
           console.error(
             "Failed to generate reset menu after error:",
-            menuError
+            menuError,
           );
         }
       } // End of main try...catch block for interaction handling

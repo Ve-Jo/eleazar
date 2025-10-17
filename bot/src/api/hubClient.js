@@ -171,7 +171,7 @@ async function apiRequest(url, options = {}) {
 
     if (!response.ok) {
       throw new Error(
-        `API request failed: ${response.status} ${response.statusText}`
+        `API request failed: ${response.status} ${response.statusText}`,
       );
     }
 
@@ -232,7 +232,7 @@ class HubClient {
 
   async getBalance(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/economy/balance/${guildId}/${userId}`
+      `${this.databaseUrl}/economy/balance/${guildId}/${userId}`,
     );
   }
 
@@ -266,7 +266,7 @@ class HubClient {
 
   async getUpgradeInfo(upgradeType, level) {
     return await apiRequest(
-      `${this.databaseUrl}/economy/upgrades/info/${upgradeType}/${level}`
+      `${this.databaseUrl}/economy/upgrades/info/${upgradeType}/${level}`,
     );
   }
 
@@ -279,13 +279,13 @@ class HubClient {
 
   async getCooldown(guildId, userId, type) {
     return await apiRequest(
-      `${this.databaseUrl}/cooldowns/${guildId}/${userId}/${type}`
+      `${this.databaseUrl}/cooldowns/${guildId}/${userId}/${type}`,
     );
   }
 
   async getCrateCooldown(guildId, userId, type) {
     return await apiRequest(
-      `${this.databaseUrl}/cooldowns/crate/${guildId}/${userId}/${type}`
+      `${this.databaseUrl}/cooldowns/crate/${guildId}/${userId}/${type}`,
     );
   }
 
@@ -294,13 +294,13 @@ class HubClient {
       `${this.databaseUrl}/cooldowns/${guildId}/${userId}/${type}`,
       {
         method: "DELETE",
-      }
+      },
     );
   }
 
   async getAllCooldowns(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/cooldowns/${guildId}/${userId}`
+      `${this.databaseUrl}/cooldowns/${guildId}/${userId}`,
     );
   }
 
@@ -313,13 +313,13 @@ class HubClient {
 
   async getUserLevel(guildId, userId, type = "activity") {
     return await apiRequest(
-      `${this.databaseUrl}/xp/level/${guildId}/${userId}?type=${type}`
+      `${this.databaseUrl}/xp/level/${guildId}/${userId}?type=${type}`,
     );
   }
 
   async getAllUserLevels(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/xp/levels/${guildId}/${userId}`
+      `${this.databaseUrl}/xp/levels/${guildId}/${userId}`,
     );
   }
 
@@ -369,7 +369,7 @@ class HubClient {
       {
         method: "POST",
         body: JSON.stringify({ userId }),
-      }
+      },
     );
   }
 
@@ -382,7 +382,7 @@ class HubClient {
 
   async getGameRecords(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/games/records/${guildId}/${userId}`
+      `${this.databaseUrl}/games/records/${guildId}/${userId}`,
     );
   }
 
@@ -396,7 +396,7 @@ class HubClient {
 
   async getVoiceSession(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/voice/sessions/${guildId}/${userId}`
+      `${this.databaseUrl}/voice/sessions/${guildId}/${userId}`,
     );
   }
 
@@ -405,13 +405,13 @@ class HubClient {
       `${this.databaseUrl}/voice/sessions/${guildId}/${userId}`,
       {
         method: "DELETE",
-      }
+      },
     );
   }
 
   async getAllGuildVoiceSessions(guildId) {
     return await apiRequest(
-      `${this.databaseUrl}/voice/sessions/guild/${guildId}`
+      `${this.databaseUrl}/voice/sessions/guild/${guildId}`,
     );
   }
 
@@ -431,7 +431,7 @@ class HubClient {
 
   async getUserUpgrades(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/economy/upgrades/${guildId}/${userId}`
+      `${this.databaseUrl}/economy/upgrades/${guildId}/${userId}`,
     );
   }
 
@@ -442,13 +442,13 @@ class HubClient {
 
   async getEligibleRolesForLevel(guildId, level) {
     return await apiRequest(
-      `${this.databaseUrl}/levels/roles/${guildId}/level/${level}`
+      `${this.databaseUrl}/levels/roles/${guildId}/level/${level}`,
     );
   }
 
   async getNextLevelRole(guildId, currentLevel) {
     return await apiRequest(
-      `${this.databaseUrl}/levels/roles/${guildId}/next/${currentLevel}`
+      `${this.databaseUrl}/levels/roles/${guildId}/next/${currentLevel}`,
     );
   }
 
@@ -464,7 +464,7 @@ class HubClient {
       `${this.databaseUrl}/levels/roles/${guildId}/${level}`,
       {
         method: "DELETE",
-      }
+      },
     );
   }
 
@@ -481,13 +481,13 @@ class HubClient {
 
   async getInteractionStats(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}`
+      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}`,
     );
   }
 
   async getMostUsedInteractions(guildId, userId, limit = 10) {
     return await apiRequest(
-      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}/top?limit=${limit}`
+      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}/top?limit=${limit}`,
     );
   }
 
@@ -501,13 +501,13 @@ class HubClient {
 
   async getUserCryptoPositions(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/crypto/positions/${guildId}/${userId}`
+      `${this.databaseUrl}/crypto/positions/${guildId}/${userId}`,
     );
   }
 
   async getCryptoPositionById(positionId) {
     return await apiRequest(
-      `${this.databaseUrl}/crypto/positions/id/${positionId}`
+      `${this.databaseUrl}/crypto/positions/id/${positionId}`,
     );
   }
 
@@ -517,7 +517,7 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify(updateData),
-      }
+      },
     );
   }
 
@@ -526,7 +526,7 @@ class HubClient {
       `${this.databaseUrl}/crypto/positions/${positionId}`,
       {
         method: "DELETE",
-      }
+      },
     );
   }
 
@@ -537,7 +537,7 @@ class HubClient {
   // Marriage API methods
   async getMarriageStatus(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/marriage/status/${userId}?guildId=${guildId}`
+      `${this.databaseUrl}/marriage/status/${userId}?guildId=${guildId}`,
     );
   }
 
@@ -691,14 +691,14 @@ class HubClient {
 
   async getSeasonLeaderboard(limit = 250) {
     return await apiRequest(
-      `${this.databaseUrl}/seasons/leaderboard?limit=${limit}`
+      `${this.databaseUrl}/seasons/leaderboard?limit=${limit}`,
     );
   }
 
   // User locale methods
   async getUserLocale(guildId, userId) {
     return await apiRequest(
-      `${this.databaseUrl}/users/${guildId}/${userId}/locale`
+      `${this.databaseUrl}/users/${guildId}/${userId}/locale`,
     );
   }
 
@@ -708,7 +708,7 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify({ locale }),
-      }
+      },
     );
   }
 
@@ -730,7 +730,7 @@ class HubClient {
 
   async getFromCache(key) {
     return await apiRequest(
-      `${this.databaseUrl}/cache/${encodeURIComponent(key)}`
+      `${this.databaseUrl}/cache/${encodeURIComponent(key)}`,
     );
   }
 
@@ -740,14 +740,14 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify({ value, ttl }),
-      }
+      },
     );
   }
 
   // Legacy game data methods
   async getLegacyGameData(guildId, userId, gameId) {
     return await apiRequest(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}?guildId=${guildId}`
+      `${this.databaseUrl}/legacy/games/${gameId}/${userId}?guildId=${guildId}`,
     );
   }
 
@@ -757,13 +757,13 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify({ guildId, data }),
-      }
+      },
     );
   }
 
   async getLegacyValue(guildId, userId, gameId, key) {
     return await apiRequest(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}?guildId=${guildId}`
+      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}?guildId=${guildId}`,
     );
   }
 
@@ -773,7 +773,7 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify({ guildId, value }),
-      }
+      },
     );
   }
 
@@ -783,7 +783,7 @@ class HubClient {
       {
         method: "POST",
         body: JSON.stringify({ guildId, increment }),
-      }
+      },
     );
   }
 
@@ -793,7 +793,7 @@ class HubClient {
       {
         method: "POST",
         body: JSON.stringify({ guildId, decrement }),
-      }
+      },
     );
   }
 
@@ -803,7 +803,7 @@ class HubClient {
       {
         method: "DELETE",
         body: JSON.stringify({ guildId }),
-      }
+      },
     );
   }
 
@@ -813,7 +813,7 @@ class HubClient {
     props = {},
     scaling = { image: 1, emoji: 1 },
     locale = "en",
-    options = {}
+    options = {},
   ) {
     const response = await fetch(`${this.renderingUrl}/generate`, {
       method: "POST",
@@ -831,7 +831,7 @@ class HubClient {
 
     if (!response.ok) {
       throw new Error(
-        `Image generation failed: ${response.status} ${response.statusText}`
+        `Image generation failed: ${response.status} ${response.statusText}`,
       );
     }
 
@@ -898,10 +898,10 @@ class HubClient {
   async getTranslation(key, variables = {}, locale) {
     return await apiRequest(
       `${this.localizationUrl}/i18n/translate?key=${encodeURIComponent(
-        key
+        key,
       )}&variables=${encodeURIComponent(
-        JSON.stringify(variables)
-      )}&locale=${encodeURIComponent(locale)}`
+        JSON.stringify(variables),
+      )}&locale=${encodeURIComponent(locale)}`,
     );
   }
 
@@ -922,8 +922,8 @@ class HubClient {
   async getTranslationGroup(groupKey, locale) {
     return await apiRequest(
       `${this.localizationUrl}/i18n/group?groupKey=${encodeURIComponent(
-        groupKey
-      )}&locale=${encodeURIComponent(locale)}`
+        groupKey,
+      )}&locale=${encodeURIComponent(locale)}`,
     );
   }
 

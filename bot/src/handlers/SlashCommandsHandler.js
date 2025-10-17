@@ -11,20 +11,19 @@ class CommandManager {
     try {
       console.log("Starting command registration process...");
 
-      const { serverCommands, globalCommands } = await this.prepareCommands(
-        commands
-      );
+      const { serverCommands, globalCommands } =
+        await this.prepareCommands(commands);
 
       // Check if SERVER_SLASHES is true
       const forceServer = process.env.SERVER_SLASHES === "true";
 
       if (forceServer) {
         console.log(
-          "Forcing all commands to be registered to the testing server."
+          "Forcing all commands to be registered to the testing server.",
         );
         await this.registerNewCommands(
           serverCommands.concat(globalCommands),
-          []
+          [],
         );
       } else {
         await this.cleanupOldCommands(serverCommands, globalCommands);
@@ -81,19 +80,19 @@ class CommandManager {
       await hubClient.registerLocalizations(
         "commands",
         cmd.data.name,
-        cmd.localization_strings
+        cmd.localization_strings,
       );
     }
 
     // Apply name localizations (Check nested structure first)
     if (cmd.localization_strings?.command?.name) {
       json.name_localizations = this.filterLocalizations(
-        cmd.localization_strings.command.name
+        cmd.localization_strings.command.name,
       );
     } else if (cmd.localization_strings?.name) {
       // Fallback to direct key
       json.name_localizations = this.filterLocalizations(
-        cmd.localization_strings.name
+        cmd.localization_strings.name,
       );
     } else if (cmd.data.name_localizations) {
       json.name_localizations = cmd.data.name_localizations;
@@ -102,12 +101,12 @@ class CommandManager {
     // Apply description localizations (Check nested structure first)
     if (cmd.localization_strings?.command?.description) {
       json.description_localizations = this.filterLocalizations(
-        cmd.localization_strings.command.description
+        cmd.localization_strings.command.description,
       );
     } else if (cmd.localization_strings?.description) {
       // Fallback to direct key
       json.description_localizations = this.filterLocalizations(
-        cmd.localization_strings.description
+        cmd.localization_strings.description,
       );
     } else if (cmd.data.description_localizations) {
       json.description_localizations = cmd.data.description_localizations;
@@ -139,17 +138,17 @@ class CommandManager {
             await hubClient.registerLocalizations(
               "commands",
               `${cmd.data.name}.${option.name}`,
-              locStrings
+              locStrings,
             );
             this.applySubcommandLocalizations(
               option,
               locStrings,
               cmd,
-              subcommandObj
+              subcommandObj,
             );
           }
         }
-      })
+      }),
     );
   }
 
@@ -159,7 +158,7 @@ class CommandManager {
     // Handle name localizations (Check nested structure first)
     if (locStrings.command?.name) {
       option.name_localizations = this.filterLocalizations(
-        locStrings.command.name
+        locStrings.command.name,
       );
     } else if (locStrings.name) {
       // Fallback
@@ -169,12 +168,12 @@ class CommandManager {
     // Handle description localizations (Check nested structure first)
     if (locStrings.command?.description) {
       option.description_localizations = this.filterLocalizations(
-        locStrings.command.description
+        locStrings.command.description,
       );
     } else if (locStrings.description) {
       // Fallback
       option.description_localizations = this.filterLocalizations(
-        locStrings.description
+        locStrings.description,
       );
     }
 
@@ -191,12 +190,12 @@ class CommandManager {
       if (optionStrings) {
         if (optionStrings.name) {
           option.name_localizations = this.filterLocalizations(
-            optionStrings.name
+            optionStrings.name,
           );
         }
         if (optionStrings.description) {
           option.description_localizations = this.filterLocalizations(
-            optionStrings.description
+            optionStrings.description,
           );
         }
       }
@@ -208,18 +207,18 @@ class CommandManager {
       const existingServerCommands = await this.rest.get(
         Routes.applicationGuildCommands(
           this.client.user.id,
-          process.env.SERVER_TESTING
-        )
+          process.env.SERVER_TESTING,
+        ),
       );
       await this.removeOldCommands(
         existingServerCommands,
         serverCommands,
-        true
+        true,
       );
     }
 
     const existingGlobalCommands = await this.rest.get(
-      Routes.applicationCommands(this.client.user.id)
+      Routes.applicationCommands(this.client.user.id),
     );
     await this.removeOldCommands(existingGlobalCommands, globalCommands, false);
   }
@@ -227,7 +226,7 @@ class CommandManager {
   async removeOldCommands(existingCommands, newCommands, isServer) {
     for (const existingCommand of existingCommands) {
       const shouldKeep = newCommands.some(
-        (cmd) => cmd.name === existingCommand.name
+        (cmd) => cmd.name === existingCommand.name,
       );
 
       if (!shouldKeep) {
@@ -235,7 +234,7 @@ class CommandManager {
           ? Routes.applicationGuildCommand(
               this.client.user.id,
               process.env.SERVER_TESTING,
-              existingCommand.id
+              existingCommand.id,
             )
           : Routes.applicationCommand(this.client.user.id, existingCommand.id);
 
@@ -243,7 +242,7 @@ class CommandManager {
         console.log(
           `Removed ${isServer ? "server" : "global"} command: ${
             existingCommand.name
-          }`
+          }`,
         );
       }
     }
@@ -254,9 +253,9 @@ class CommandManager {
       await this.rest.put(
         Routes.applicationGuildCommands(
           this.client.user.id,
-          process.env.SERVER_TESTING
+          process.env.SERVER_TESTING,
         ),
-        { body: serverCommands }
+        { body: serverCommands },
       );
       console.log(`Registered ${serverCommands.length} server commands`);
     }

@@ -867,7 +867,7 @@ app.get("/", async (req, res) => {
     <head>
       <title>Component Preview</title>
       <style>
-        body { 
+        body {
           font-family: -apple-system, system-ui, sans-serif;
           max-width: 800px;
           margin: 40px auto;
@@ -991,27 +991,27 @@ app.get("/:componentName", async (req, res) => {
         <title>${componentName} Preview</title>
         <script>
           const ws = new WebSocket('ws://' + window.location.host);
-          
+
           let currentLang = localStorage.getItem('previewLang') || 'en';
           let debugMode = localStorage.getItem('debugMode') === 'true';
           let darkTheme = localStorage.getItem('darkTheme') !== 'false';
           let currentMode = localStorage.getItem('transferMode') || 'transfer';
           let currentType = localStorage.getItem('levelUpType') || 'chat';
           let isMarried = localStorage.getItem('isMarried') !== 'false';
-          
+
           // Get mock data from localStorage or use initial data from server
           let mockDataJson = localStorage.getItem('mockDataJson');
           if (mockDataJson === null) {
               mockDataJson = fallbackMockDataString;
           }
-          
+
           function toggleDebug() {
             debugMode = !debugMode;
             localStorage.setItem('debugMode', debugMode);
             document.getElementById('debugButton').classList.toggle('active', debugMode);
             refreshImage();
           }
-          
+
           function toggleTheme() {
             darkTheme = !darkTheme;
             localStorage.setItem('darkTheme', darkTheme);
@@ -1019,14 +1019,14 @@ app.get("/:componentName", async (req, res) => {
             document.getElementById('themeButton').textContent = darkTheme ? 'Dark Theme' : 'Light Theme';
             refreshImage();
           }
-          
+
           function changeLang(lang) {
             currentLang = lang;
             localStorage.setItem('previewLang', lang);
             document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
             refreshImage();
           }
-          
+
           function changeMode(mode) {
             if ('${componentName}' !== 'Transfer') return;
             currentMode = mode;
@@ -1034,7 +1034,7 @@ app.get("/:componentName", async (req, res) => {
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
             refreshImage();
           }
-          
+
           function changeType(type) {
             if ('${componentName}' !== 'LevelUp') return;
             currentType = type;
@@ -1054,7 +1054,7 @@ app.get("/:componentName", async (req, res) => {
           function updateMockData() {
             const editor = document.getElementById('mockDataEditor');
             if (!editor) return;
-            
+
             try {
               // Validate JSON first
               JSON.parse(editor.value);
@@ -1106,13 +1106,13 @@ app.get("/:componentName", async (req, res) => {
                 url += '&forceInit=true';
             }
             url += '&t=' + Date.now();
-            
+
             // Clear any previous error display
             const errorContainer = document.getElementById('errorContainer');
             if (errorContainer) {
               errorContainer.style.display = 'none';
             }
-            
+
             // Use fetch to handle errors properly
             fetch(url)
               .then(response => {
@@ -1133,14 +1133,14 @@ app.get("/:componentName", async (req, res) => {
                 displayError(errorData);
               });
           }
-          
+
           function displayError(errorData) {
             const errorContainer = document.getElementById('errorContainer');
             const errorDetails = document.getElementById('errorDetails');
             const formattedPropsDisplay = document.getElementById('formattedPropsDisplay');
-            
+
             if (!errorContainer || !errorDetails || !formattedPropsDisplay) return;
-            
+
             // Display error message
             errorDetails.innerHTML =
               '<h3>🚨 Error Details</h3>' +
@@ -1149,7 +1149,7 @@ app.get("/:componentName", async (req, res) => {
                 '<strong>Error:</strong> ' + (errorData.error || 'Unknown error type') + '<br>' +
                 (errorData.stack ? '<strong>Stack:</strong><pre>' + errorData.stack + '</pre>' : '') +
               '</div>';
-            
+
             // Display formatted props if available
             if (errorData.formattedProps) {
               formattedPropsDisplay.innerHTML =
@@ -1164,7 +1164,7 @@ app.get("/:componentName", async (req, res) => {
                   '<em>No formatted props available</em>' +
                 '</div>';
             }
-            
+
             errorContainer.style.display = 'flex';
           }
 
@@ -1186,7 +1186,7 @@ app.get("/:componentName", async (req, res) => {
               })
               .catch(error => console.error('Error resetting mock data:', error));
           }
-          
+
           ws.onopen = () => { console.log('WS Open'); };
           ws.onmessage = (event) => {
             try {
@@ -1206,14 +1206,14 @@ app.get("/:componentName", async (req, res) => {
             if ('${componentName}' === 'Transfer') { document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === currentMode)); }
             if ('${componentName}' === 'LevelUp') { document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === currentType)); }
             if ('${componentName}' === 'Balance') { document.querySelectorAll('.marriage-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.married === String(isMarried))); }
-            
+
             // Init JSON editor
             const editor = document.getElementById('mockDataEditor');
             if (editor) {
               editor.value = mockDataJson;
             }
           };
-          
+
         </script>
         <style>
           body {
@@ -1474,14 +1474,14 @@ app.get("/:componentName", async (req, res) => {
            ${additionalControls}
         </div>
         <div class="preview"> <img src="#" alt="Loading preview..."> <div class="dimensions"></div> </div>
-        
+
         <!-- Error Display Container -->
         <div id="errorContainer" class="error-container" style="display: none;">
           <div class="error-panel">
             <div id="errorDetails"></div>
           </div>
         </div>
-        
+
         <div class="json-editor">
           <h3>Mock Data Editor</h3>
           <textarea id="mockDataEditor" placeholder="Enter JSON mock data here..."></textarea>

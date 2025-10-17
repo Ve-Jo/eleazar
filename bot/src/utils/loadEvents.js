@@ -33,22 +33,22 @@ export async function loadEvents(client) {
           "events",
           eventName,
           event.default.localization_strings,
-          false
+          false,
         );
       } else {
         console.log(
-          `No localizations found for event: ${path.basename(file, ".js")}`
+          `No localizations found for event: ${path.basename(file, ".js")}`,
         );
       }
       // --- End Localization Registration ---
 
       if (event.default.once) {
         client.once(event.default.name, (...args) =>
-          event.default.execute(...args)
+          event.default.execute(...args),
         );
       } else {
         client.on(event.default.name, (...args) =>
-          event.default.execute(...args)
+          event.default.execute(...args),
         );
       }
       client.events.set(event.default.name, event.default);

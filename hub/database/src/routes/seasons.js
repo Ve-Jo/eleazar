@@ -19,11 +19,11 @@ router.get('/current', async (req, res) => {
 router.get('/leaderboard', async (req, res) => {
   try {
     const { seasonId, limit = 250 } = req.query;
-    
+
     if (!seasonId) {
       return res.status(400).json({ error: 'seasonId is required' });
     }
-    
+
     const leaderboard = await Database.getSeasonLeaderboard(parseInt(seasonId), parseInt(limit));
     res.json(serializeWithBigInt(leaderboard));
   } catch (error) {

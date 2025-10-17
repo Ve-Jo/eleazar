@@ -31,11 +31,14 @@ export default {
             { name: "five", value: "five" },
             { name: "glomp", value: "glomp" },
             { name: "hold", value: "hold" },
-            { name: "boop", value: "boop" }
-          )
+            { name: "boop", value: "boop" },
+          ),
       )
       .addUserOption((option) =>
-        option.setName("user").setDescription("Choose a user").setRequired(true)
+        option
+          .setName("user")
+          .setDescription("Choose a user")
+          .setRequired(true),
       );
 
     return builder;
@@ -266,11 +269,11 @@ export default {
                   image: imageUrl,
                   category: emotionType,
                   emotion: await i18n.__(
-                    `commands.emotions.positive.${emotionType}.title`
+                    `commands.emotions.positive.${emotionType}.title`,
                   ),
                   description: await i18n.__(
                     `commands.emotions.positive.${emotionType}.description`,
-                    { user: interaction.user.id, targetUser: targetUser.id }
+                    { user: interaction.user.id, targetUser: targetUser.id },
                   ),
                 };
               }
@@ -350,7 +353,7 @@ export default {
           if (i.user.id !== targetUser.id) {
             await i.reply({
               content: await i18n.__(
-                "commands.emotions.onlyTargetUserCanRespond"
+                "commands.emotions.onlyTargetUserCanRespond",
               ),
               ephemeral: true,
             });
@@ -414,7 +417,7 @@ export default {
         if (reason !== "messageDelete" && message.editable) {
           try {
             const latestMessage = await message.channel.messages.fetch(
-              message.id
+              message.id,
             );
             if (latestMessage.components.length > 0) {
               await latestMessage.edit({ components: [] });
@@ -422,7 +425,7 @@ export default {
           } catch (error) {
             console.error(
               "Failed to remove components on collector end:",
-              error
+              error,
             );
           }
         }

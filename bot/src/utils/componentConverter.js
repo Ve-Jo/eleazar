@@ -50,19 +50,19 @@ export function embedToContainer(embed, options = {}) {
     // Add author as text
     if (data.author?.name) {
       section.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`### ${data.author.name}`)
+        new TextDisplayBuilder().setContent(`### ${data.author.name}`),
       );
     }
 
     // Add thumbnail if present
     if (data.thumbnail?.url) {
       section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(data.thumbnail.url)
+        new ThumbnailBuilder().setURL(data.thumbnail.url),
       );
     } else if (data.author?.icon_url) {
       // Use author icon as thumbnail if no thumbnail but author has icon
       section.setThumbnailAccessory(
-        new ThumbnailBuilder().setURL(data.author.icon_url)
+        new ThumbnailBuilder().setURL(data.author.icon_url),
       );
     }
 
@@ -72,14 +72,14 @@ export function embedToContainer(embed, options = {}) {
   // Add title if present
   if (data.title) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# ${data.title}`)
+      new TextDisplayBuilder().setContent(`# ${data.title}`),
     );
   }
 
   // Add description if present
   if (data.description) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(data.description)
+      new TextDisplayBuilder().setContent(data.description),
     );
   }
 
@@ -91,12 +91,12 @@ export function embedToContainer(embed, options = {}) {
     data.fields.forEach((field, index) => {
       // Add field name as header
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`## ${field.name}`)
+        new TextDisplayBuilder().setContent(`## ${field.name}`),
       );
 
       // Add field value
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(field.value)
+        new TextDisplayBuilder().setContent(field.value),
       );
 
       // Add separator between fields (except after last field)
@@ -113,8 +113,8 @@ export function embedToContainer(embed, options = {}) {
 
     container.addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(imageUrl)
-      )
+        new MediaGalleryItemBuilder().setURL(imageUrl),
+      ),
     );
   }
 
@@ -134,8 +134,8 @@ export function embedToContainer(embed, options = {}) {
       const prefix = options.locale?.startsWith("ru")
         ? "Сегодня, в"
         : options.locale?.startsWith("uk")
-        ? "Сьогодні о"
-        : "Today at";
+          ? "Сьогодні о"
+          : "Today at";
 
       if (footerText) {
         footerText += ` • ${prefix} <t:${timestamp}:t>`;
@@ -154,7 +154,7 @@ export function embedToContainer(embed, options = {}) {
 
     if (footerText) {
       container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`${footerText}`)
+        new TextDisplayBuilder().setContent(`${footerText}`),
       );
     }
   }
@@ -300,12 +300,12 @@ export class ComponentBuilder {
   addHeader(title, avatarUrl = null) {
     if (this.mode === "v2") {
       const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`### ${title}`)
+        new TextDisplayBuilder().setContent(`### ${title}`),
       );
       if (avatarUrl) {
         try {
           section.setThumbnailAccessory(
-            new ThumbnailBuilder().setURL(avatarUrl)
+            new ThumbnailBuilder().setURL(avatarUrl),
           );
         } catch (error) {
           console.error("Error setting thumbnail in header:", error);
@@ -340,12 +340,12 @@ export class ComponentBuilder {
   addTextWithThumbnail(text, imageUrl) {
     if (this.mode === "v2") {
       const section = new SectionBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(text)
+        new TextDisplayBuilder().setContent(text),
       );
       if (imageUrl) {
         try {
           section.setThumbnailAccessory(
-            new ThumbnailBuilder().setURL(imageUrl)
+            new ThumbnailBuilder().setURL(imageUrl),
           );
         } catch (error) {
           console.error("Error setting thumbnail in text section:", error);
@@ -398,7 +398,7 @@ ${text}`;
           break;
       }
       this.container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(formattedText)
+        new TextDisplayBuilder().setContent(formattedText),
       );
     } else {
       // V1 - Append to description
@@ -465,8 +465,8 @@ ${text}`;
     if (this.mode === "v2") {
       this.container.addMediaGalleryComponents(
         new MediaGalleryBuilder().addItems(
-          new MediaGalleryItemBuilder().setURL(url)
-        )
+          new MediaGalleryItemBuilder().setURL(url),
+        ),
       );
     } else {
       // V1 - Set embed image
@@ -510,7 +510,7 @@ ${text}`;
       }
       const text = `${prefix || defaultPrefix} <t:${timestamp}:t>`;
       this.container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(text)
+        new TextDisplayBuilder().setContent(text),
       );
     } else {
       // V1 - Set embed timestamp
@@ -539,7 +539,7 @@ ${text}`;
     if (this.mode === "v2") {
       // V2 doesn't have icon URLs for footers, just text
       this.container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(text) // Typically small/italic *${text}*?
+        new TextDisplayBuilder().setContent(text), // Typically small/italic *${text}*?
       );
     } else {
       // V1 - Add to embed footer
@@ -726,7 +726,7 @@ ${text}`;
    */
   build() {
     console.warn(
-      "`ComponentBuilder.build()` is ambiguous with V1/V2 modes. Use `toReplyOptions()`."
+      "`ComponentBuilder.build()` is ambiguous with V1/V2 modes. Use `toReplyOptions()`.",
     );
     if (this.mode === "v2") {
       return this.container;
@@ -836,7 +836,7 @@ class ActionRowComponentBuilder {
     label,
     style = ButtonStyle.Primary,
     emoji = null,
-    disabled = false
+    disabled = false,
   ) {
     const button = new ButtonBuilder()
       .setCustomId(customId)
@@ -1035,8 +1035,8 @@ export function createSimpleContainer(options = {}) {
       const prefix = options.locale?.startsWith("ru")
         ? "Сегодня, в"
         : options.locale?.startsWith("uk")
-        ? "Сьогодні о"
-        : "Today at";
+          ? "Сьогодні о"
+          : "Today at";
       const timestampText = `${prefix} <t:${timestamp}:t>`;
       combinedFooter = combinedFooter
         ? `${combinedFooter} • ${timestampText}`

@@ -9,11 +9,11 @@ router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { guildId } = req.query;
-    
+
     if (!guildId) {
       return res.status(400).json({ error: 'guildId is required' });
     }
-    
+
     const status = await Database.getMarriageStatus(guildId, userId);
     res.json(serializeBigInt(status));
   } catch (error) {
@@ -26,11 +26,11 @@ router.get('/status/:userId', async (req, res) => {
 router.post('/propose', async (req, res) => {
   try {
     const { guildId, userId1, userId2 } = req.body;
-    
+
     if (!guildId || !userId1 || !userId2) {
       return res.status(400).json({ error: 'guildId, userId1, and userId2 are required' });
     }
-    
+
     const result = await Database.proposeMarriage(guildId, userId1, userId2);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -43,11 +43,11 @@ router.post('/propose', async (req, res) => {
 router.post('/accept', async (req, res) => {
   try {
     const { guildId, userId1, userId2 } = req.body;
-    
+
     if (!guildId || !userId1 || !userId2) {
       return res.status(400).json({ error: 'guildId, userId1, and userId2 are required' });
     }
-    
+
     const result = await Database.acceptMarriage(guildId, userId1, userId2);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -60,11 +60,11 @@ router.post('/accept', async (req, res) => {
 router.post('/reject', async (req, res) => {
   try {
     const { guildId, userId1, userId2 } = req.body;
-    
+
     if (!guildId || !userId1 || !userId2) {
       return res.status(400).json({ error: 'guildId, userId1, and userId2 are required' });
     }
-    
+
     const result = await Database.rejectMarriage(guildId, userId1, userId2);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -77,11 +77,11 @@ router.post('/reject', async (req, res) => {
 router.post('/dissolve', async (req, res) => {
   try {
     const { guildId, userId1, userId2 } = req.body;
-    
+
     if (!guildId || !userId1 || !userId2) {
       return res.status(400).json({ error: 'guildId, userId1, and userId2 are required' });
     }
-    
+
     const result = await Database.dissolveMarriage(guildId, userId1, userId2);
     res.json(serializeBigInt(result));
   } catch (error) {

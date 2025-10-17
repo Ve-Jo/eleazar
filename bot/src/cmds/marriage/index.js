@@ -18,8 +18,8 @@ export default {
             option
               .setName("user")
               .setDescription("The user to propose to")
-              .setRequired(true)
-          )
+              .setRequired(true),
+          ),
       )
       .addSubcommand((subcommand) =>
         subcommand
@@ -29,8 +29,8 @@ export default {
             option
               .setName("user")
               .setDescription("The user whose proposal you want to accept")
-              .setRequired(true)
-          )
+              .setRequired(true),
+          ),
       )
       .addSubcommand((subcommand) =>
         subcommand
@@ -40,13 +40,13 @@ export default {
             option
               .setName("user")
               .setDescription("The user whose proposal you want to reject")
-              .setRequired(true)
-          )
+              .setRequired(true),
+          ),
       )
       .addSubcommand((subcommand) =>
         subcommand
           .setName("divorce")
-          .setDescription("End your current marriage")
+          .setDescription("End your current marriage"),
       );
     return builder;
   },
@@ -240,12 +240,12 @@ export default {
 
           if (userId === targetUserId) {
             return interaction.editReply(
-              await i18n.__("commands.marriage.cannotMarrySelf")
+              await i18n.__("commands.marriage.cannotMarrySelf"),
             );
           }
           if (targetUser.bot) {
             return interaction.editReply(
-              await i18n.__("commands.marriage.cannotMarryBot")
+              await i18n.__("commands.marriage.cannotMarryBot"),
             );
           }
 
@@ -259,13 +259,13 @@ export default {
                 await i18n.__("commands.marriage.proposalDM", {
                   user: interaction.user.tag,
                   guild: interaction.guild.name,
-                })
+                }),
               );
               dmSent = true;
             } catch (dmError) {
               console.warn(
                 `Failed to send proposal DM to ${targetUser.id}:`,
-                dmError
+                dmError,
               );
             }
             // --- End Send DM ---
@@ -277,25 +277,25 @@ export default {
               })) +
                 (dmSent
                   ? ""
-                  : ` ${await i18n.__("commands.marriage.cannotSendDM")}`)
+                  : ` ${await i18n.__("commands.marriage.cannotSendDM")}`),
             );
           } catch (error) {
             // Handle specific errors from proposeMarriage
             if (error.message.includes("User 1 is already married")) {
               return interaction.editReply(
-                await i18n.__("commands.marriage.alreadyMarried")
+                await i18n.__("commands.marriage.alreadyMarried"),
               );
             }
             if (error.message.includes("User 2 is already married")) {
               return interaction.editReply(
                 await i18n.__("commands.marriage.targetAlreadyMarried", {
                   user: targetUser.toString(),
-                })
+                }),
               );
             }
             console.error("Propose marriage error:", error);
             return interaction.editReply(
-              await i18n.__("commands.marriage.proposalError")
+              await i18n.__("commands.marriage.proposalError"),
             );
           }
         }
@@ -308,19 +308,19 @@ export default {
             return interaction.editReply(
               await i18n.__("commands.marriage.acceptSuccess", {
                 user: proposingUser.toString(),
-              })
+              }),
             );
           } catch (error) {
             if (error.message.includes("No pending marriage proposal")) {
               return interaction.editReply(
                 await i18n.__("commands.marriage.noProposalToAccept", {
                   user: proposingUser.toString(),
-                })
+                }),
               );
             }
             console.error("Accept marriage error:", error);
             return interaction.editReply(
-              await i18n.__("commands.marriage.acceptError")
+              await i18n.__("commands.marriage.acceptError"),
             );
           }
         }
@@ -334,7 +334,7 @@ export default {
             return interaction.editReply(
               await i18n.__("commands.marriage.rejectSuccess", {
                 user: proposingUser.toString(),
-              })
+              }),
             );
           } catch (error) {
             if (error.message.includes("No pending marriage proposal")) {
@@ -347,24 +347,24 @@ export default {
                 await hubClient.rejectMarriage(
                   guildId,
                   userId,
-                  proposingUserId
+                  proposingUserId,
                 ); // Reject own proposal
                 return interaction.editReply(
                   await i18n.__("commands.marriage.rejectSuccess", {
                     user: proposingUser.toString(),
-                  })
+                  }),
                 );
               }
               // Otherwise, no proposal exists from the target user
               return interaction.editReply(
                 await i18n.__("commands.marriage.noProposalToReject", {
                   user: proposingUser.toString(),
-                })
+                }),
               );
             }
             console.error("Reject marriage error:", error);
             return interaction.editReply(
-              await i18n.__("commands.marriage.rejectError")
+              await i18n.__("commands.marriage.rejectError"),
             );
           }
         }
@@ -373,12 +373,12 @@ export default {
             const status = await hubClient.getMarriageStatus(guildId, userId);
             if (!status || status.status !== "MARRIED") {
               return interaction.editReply(
-                await i18n.__("commands.marriage.notMarried")
+                await i18n.__("commands.marriage.notMarried"),
               );
             }
 
             const partner = await interaction.client.users.fetch(
-              status.partnerId
+              status.partnerId,
             );
             const partnerTag = partner
               ? partner.toString()
@@ -393,7 +393,7 @@ export default {
               {
                 user: interaction.user.tag,
                 guild: interaction.guild.name,
-              }
+              },
             );
 
             if (partner) {
@@ -402,7 +402,7 @@ export default {
                 partnerDmSent = true;
               } catch (e) {
                 console.warn(
-                  `Failed to send divorce DM to partner ${partner.id}`
+                  `Failed to send divorce DM to partner ${partner.id}`,
                 );
               }
             }
@@ -412,7 +412,7 @@ export default {
               "commands.marriage.divorceSuccess",
               {
                 user: partnerTag,
-              }
+              },
             );
             if (!partnerDmSent)
               replyMessage += ` ${(
@@ -423,12 +423,12 @@ export default {
           } catch (error) {
             if (error.message.includes("No active marriage found")) {
               return interaction.editReply(
-                await i18n.__("commands.marriage.notMarried")
+                await i18n.__("commands.marriage.notMarried"),
               );
             }
             console.error("Divorce error:", error);
             return interaction.editReply(
-              await i18n.__("commands.marriage.divorceError")
+              await i18n.__("commands.marriage.divorceError"),
             );
           }
         }
@@ -439,7 +439,7 @@ export default {
     } catch (error) {
       console.error(`Error executing marriage command (${subcommand}):`, error);
       interaction.editReply(
-        "An unexpected error occurred. Please try again later."
+        "An unexpected error occurred. Please try again later.",
       );
     }
   },

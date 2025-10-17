@@ -105,7 +105,7 @@ async function testServerConnection(node) {
           Authorization: node.authorization,
         },
         signal: controller.signal,
-      }
+      },
     );
 
     clearTimeout(timeout);
@@ -149,7 +149,7 @@ async function loadMusicPlayers(client) {
       const nodeReadyPromise = new Promise((resolve, reject) => {
         const timeout = setTimeout(
           () => reject(new Error("Timeout waiting for Lavalink node")),
-          30000
+          30000,
         );
         const checkNode = setInterval(() => {
           const nodes = Array.from(client.lavalink.nodeManager.nodes.values());
@@ -182,7 +182,7 @@ async function loadMusicPlayers(client) {
         const guild = await client.guilds.fetch(data.id).catch(() => null);
         if (!guild) {
           console.log(
-            `Guild ${data.id} no longer exists, skipping player restoration`
+            `Guild ${data.id} no longer exists, skipping player restoration`,
           );
           // TODO: Implement deletePlayer in hub services
           await hubClient.deletePlayer(data.id).catch(() => null);
@@ -194,7 +194,7 @@ async function loadMusicPlayers(client) {
           .catch(() => null);
         if (!voiceChannel) {
           console.log(
-            `Voice channel ${data.voiceChannelId} no longer exists in guild ${data.id}`
+            `Voice channel ${data.voiceChannelId} no longer exists in guild ${data.id}`,
           );
           await hubClient.deletePlayer(data.id).catch(() => null);
           continue;
@@ -204,7 +204,7 @@ async function loadMusicPlayers(client) {
         if (voiceChannel.type !== 2) {
           // 2 is GUILD_VOICE
           console.log(
-            `Channel ${data.voiceChannelId} is not a voice channel, skipping`
+            `Channel ${data.voiceChannelId} is not a voice channel, skipping`,
           );
           await hubClient.deletePlayer(data.id).catch(() => null);
           continue;
@@ -212,11 +212,11 @@ async function loadMusicPlayers(client) {
 
         // Check if there are any non-bot users in the voice channel
         const nonBotMembers = voiceChannel.members.filter(
-          (member) => !member.user.bot
+          (member) => !member.user.bot,
         );
         if (nonBotMembers.size === 0) {
           console.log(
-            `No users in voice channel ${data.voiceChannelId}, skipping restoration`
+            `No users in voice channel ${data.voiceChannelId}, skipping restoration`,
           );
           continue; // Don't delete the player, just skip restoration
         }
@@ -229,7 +229,7 @@ async function loadMusicPlayers(client) {
         }
 
         console.log(
-          `Creating player for guild ${data.id} with voice channel ${data.voiceChannelId}`
+          `Creating player for guild ${data.id} with voice channel ${data.voiceChannelId}`,
         );
 
         // Create new player with timeout protection
@@ -246,8 +246,8 @@ async function loadMusicPlayers(client) {
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Player creation timed out")),
-              10000
-            )
+              10000,
+            ),
           );
 
           player = await Promise.race([createPlayerPromise, timeoutPromise]);
@@ -268,12 +268,12 @@ async function loadMusicPlayers(client) {
             console.log(
               `Attempting to connect to voice channel (attempt ${
                 attempt + 1
-              }/3)`
+              }/3)`,
             );
 
             // Verify channel still has non-bot users
             const currentNonBotMembers = voiceChannel.members.filter(
-              (member) => !member.user.bot
+              (member) => !member.user.bot,
             );
             if (currentNonBotMembers.size === 0) {
               throw new Error("No users in voice channel");
@@ -290,8 +290,8 @@ async function loadMusicPlayers(client) {
             const connectTimeoutPromise = new Promise((_, reject) =>
               setTimeout(
                 () => reject(new Error("Voice connection timed out")),
-                5000
-              )
+                5000,
+              ),
             );
             await Promise.race([connectPromise, connectTimeoutPromise]);
 
@@ -301,7 +301,7 @@ async function loadMusicPlayers(client) {
             if (guild.members.me.voice.channelId === data.voiceChannelId) {
               connected = true;
               console.log(
-                `Successfully connected to voice channel in guild ${data.id}`
+                `Successfully connected to voice channel in guild ${data.id}`,
               );
             } else {
               throw new Error("Voice connection verification failed");
@@ -315,7 +315,7 @@ async function loadMusicPlayers(client) {
 
         if (!connected) {
           console.log(
-            "Failed to establish voice connection after all attempts, skipping player restoration"
+            "Failed to establish voice connection after all attempts, skipping player restoration",
           );
           continue;
         }
@@ -340,7 +340,7 @@ async function loadMusicPlayers(client) {
               const avatarUrl =
                 requesterData.avatarURL ||
                 `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-                  Math.random() * 5
+                  Math.random() * 5,
                 )}.png`;
 
               return {
@@ -390,13 +390,13 @@ async function loadMusicPlayers(client) {
               } catch (error) {
                 console.error(
                   `Failed to decode track in queue for guild ${data.id}:`,
-                  error
+                  error,
                 );
               }
             }
 
             console.log(
-              `Restored ${restoredTracks} tracks to the queue for guild ${data.id}`
+              `Restored ${restoredTracks} tracks to the queue for guild ${data.id}`,
             );
           }
 
@@ -428,21 +428,21 @@ async function loadMusicPlayers(client) {
                   .catch((err) => {
                     console.error(
                       `Failed to play current track for guild ${data.id}:`,
-                      err
+                      err,
                     );
                   });
               }
             } catch (error) {
               console.error(
                 `Failed to restore current track for guild ${data.id}:`,
-                error
+                error,
               );
               // If current track fails, try to play next in queue
               if (player.queue.tracks.length > 0) {
                 await player.play(player.queue.tracks[0]).catch((err) => {
                   console.error(
                     `Failed to play next track for guild ${data.id}:`,
-                    err
+                    err,
                   );
                 });
               }
@@ -452,13 +452,13 @@ async function loadMusicPlayers(client) {
             await player.play(player.queue.tracks[0]).catch((err) => {
               console.error(
                 `Failed to play first track for guild ${data.id}:`,
-                err
+                err,
               );
             });
           }
 
           console.log(
-            `Successfully restored music player for guild ${data.id}`
+            `Successfully restored music player for guild ${data.id}`,
           );
 
           // Add a small delay between processing players to reduce load
@@ -466,7 +466,7 @@ async function loadMusicPlayers(client) {
         } catch (playerError) {
           console.error(
             `Error setting up player for guild ${data.id}:`,
-            playerError
+            playerError,
           );
         }
       } catch (error) {
@@ -621,7 +621,7 @@ async function init(client) {
         retryCount++;
         console.error(
           `Failed to initialize Lavalink (attempt ${retryCount}/${maxRetries}):`,
-          error
+          error,
         );
         if (retryCount === maxRetries) {
           throw error;
@@ -638,7 +638,7 @@ async function init(client) {
         if (!error.message?.includes("No player found")) {
           console.error(
             `Failed to process queued voice state for ${key}:`,
-            error
+            error,
           );
         }
       }
@@ -653,7 +653,7 @@ async function init(client) {
       } catch (error) {
         console.error(
           "Failed to load music players after node connect:",
-          error
+          error,
         );
       }
     });
@@ -662,7 +662,7 @@ async function init(client) {
       console.error(`Node ${node.id} disconnected. Reason:`, reason);
       try {
         const affectedPlayers = client.lavalink.players.filter(
-          (p) => p.node.id === node.id
+          (p) => p.node.id === node.id,
         );
 
         for (const server of LAVALINK_SERVERS) {
@@ -671,9 +671,8 @@ async function init(client) {
           const isWorking = await testServerConnection(server);
           if (isWorking) {
             console.log(`Connecting to alternative server ${server.id}`);
-            const newNode = await client.lavalink.nodeManager.createNode(
-              server
-            );
+            const newNode =
+              await client.lavalink.nodeManager.createNode(server);
 
             for (const player of affectedPlayers.values()) {
               try {
@@ -691,12 +690,12 @@ async function init(client) {
                 }
 
                 console.log(
-                  `Successfully migrated player in guild ${player.guildId} to node ${newNode.id}`
+                  `Successfully migrated player in guild ${player.guildId} to node ${newNode.id}`,
                 );
               } catch (error) {
                 console.error(
                   `Failed to migrate player in guild ${player.guildId}:`,
-                  error
+                  error,
                 );
               }
             }
@@ -719,7 +718,7 @@ async function init(client) {
         error.message.includes("timeout")
       ) {
         const affectedPlayers = client.lavalink.players.filter(
-          (p) => p.node.id === node.id
+          (p) => p.node.id === node.id,
         );
 
         // Try other nodes
@@ -729,9 +728,8 @@ async function init(client) {
           const isWorking = await testServerConnection(server);
           if (isWorking) {
             console.log(`Switching to backup node ${server.id} due to error`);
-            const newNode = await client.lavalink.nodeManager.createNode(
-              server
-            );
+            const newNode =
+              await client.lavalink.nodeManager.createNode(server);
 
             // Migrate players
             for (const player of affectedPlayers.values()) {
@@ -740,7 +738,7 @@ async function init(client) {
               } catch (migrateError) {
                 console.error(
                   `Failed to migrate player ${player.guildId}:`,
-                  migrateError
+                  migrateError,
                 );
               }
             }
@@ -766,7 +764,7 @@ async function init(client) {
         await hubClient.savePlayer(player);
       } catch (error) {
         console.error(
-          `Failed to save player state (debounced): ${error.message}`
+          `Failed to save player state (debounced): ${error.message}`,
         );
       }
     }, 2000); // 2 second debounce
@@ -786,7 +784,7 @@ async function init(client) {
       // Execute trackStart event
       try {
         const eventModule = await import("../events/music/trackStart.js").catch(
-          () => null
+          () => null,
         );
         if (
           eventModule?.default &&
@@ -797,37 +795,37 @@ async function init(client) {
           try {
             await eventModule.default.execute(client, player, track);
             console.log(
-              `Successfully executed trackStart for ${player.guildId}`
+              `Successfully executed trackStart for ${player.guildId}`,
             );
           } catch (trackStartError) {
             console.error(
               "Error in trackStart event execution:",
-              trackStartError
+              trackStartError,
             );
 
             // Try to get the text channel for recovery
             if (player.textChannelId) {
               try {
                 const channel = await client.channels.fetch(
-                  player.textChannelId
+                  player.textChannelId,
                 );
                 if (channel && channel.isText?.()) {
                   console.log(
-                    `Found text channel ${player.textChannelId} for recovery`
+                    `Found text channel ${player.textChannelId} for recovery`,
                   );
                   // Just log the error, no message for now to avoid cascading issues
                 }
               } catch (channelError) {
                 console.error(
                   "Could not fetch text channel for recovery:",
-                  channelError
+                  channelError,
                 );
               }
             }
           }
         } else {
           console.log(
-            "No trackStart event module found or it has an invalid structure"
+            "No trackStart event module found or it has an invalid structure",
           );
         }
       } catch (error) {
@@ -912,7 +910,7 @@ async function init(client) {
               displayAvatarURL: () =>
                 requesterData.avatarURL ||
                 `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-                  Math.random() * 5
+                  Math.random() * 5,
                 )}.png`,
               toString: () => `<@${requesterData.id}>`,
               tag: requesterData.username || "Unknown User",
@@ -938,7 +936,7 @@ async function init(client) {
               .catch((err) => {
                 console.error(
                   `Failed to fetch voice channel ${player.voiceChannelId}:`,
-                  err
+                  err,
                 );
                 return null;
               });
@@ -950,7 +948,7 @@ async function init(client) {
 
             // Check if there are any non-bot users in the voice channel
             const nonBotMembers = voiceChannel.members.filter(
-              (member) => !member.user.bot
+              (member) => !member.user.bot,
             );
             if (nonBotMembers.size === 0) {
               console.log("No users in voice channel, skipping reconnection");
@@ -961,7 +959,7 @@ async function init(client) {
             const permissions = voiceChannel.permissionsFor(client.user);
             if (!permissions || !permissions.has(["Connect", "Speak"])) {
               console.log(
-                "Missing voice channel permissions, skipping reconnection"
+                "Missing voice channel permissions, skipping reconnection",
               );
               return;
             }
@@ -969,7 +967,7 @@ async function init(client) {
             // Only try to connect if not already in voice
             if (!guild.members.me.voice.channelId) {
               console.log(
-                `Attempting to reconnect to voice in guild ${guildId}`
+                `Attempting to reconnect to voice in guild ${guildId}`,
               );
               await player.connect().catch((err) => {
                 console.error("Error connecting to voice:", err);
@@ -988,7 +986,7 @@ async function init(client) {
         // Enhanced check for player state
         if (player.queue?.current && !player.playing && !player.paused) {
           console.log(
-            "Player has current track but not playing, attempting to play..."
+            "Player has current track but not playing, attempting to play...",
           );
           try {
             await player.play().catch((err) => {
@@ -1002,7 +1000,7 @@ async function init(client) {
         // Check if player has tracks in queue but no current track
         else if (!player.queue?.current && player.queue?.tracks?.length > 0) {
           console.log(
-            "Player has tracks in queue but no current track, playing next track"
+            "Player has tracks in queue but no current track, playing next track",
           );
           try {
             // Access the first track directly without removing it from the queue
@@ -1011,7 +1009,7 @@ async function init(client) {
             // Only play if we have a valid track
             if (nextTrack) {
               console.log(
-                `Playing next track: ${nextTrack.title || "Unknown title"}`
+                `Playing next track: ${nextTrack.title || "Unknown title"}`,
               );
               await player.play(nextTrack).catch((err) => {
                 console.error("Error playing next track:", err);
@@ -1051,7 +1049,7 @@ async function init(client) {
       .filter(
         (file) =>
           file.endsWith(".js") &&
-          !["trackStart.js", "playerUpdate.js"].includes(file)
+          !["trackStart.js", "playerUpdate.js"].includes(file),
       );
 
     // Load other events normally
@@ -1078,7 +1076,7 @@ async function init(client) {
     async function findAlternativeTrack(
       player,
       searchQuery,
-      originalSource = "youtube"
+      originalSource = "youtube",
     ) {
       console.log(`Searching for "${searchQuery}" across multiple platforms`);
 
@@ -1104,7 +1102,7 @@ async function init(client) {
 
           if (results?.tracks?.length > 0) {
             console.log(
-              `Found ${results.tracks.length} tracks using ${source}`
+              `Found ${results.tracks.length} tracks using ${source}`,
             );
             return results.tracks[0];
           }
@@ -1133,7 +1131,7 @@ async function init(client) {
 
       if (isYoutubeError) {
         console.log(
-          "Detected YouTube extraction error, attempting to search using alternative source"
+          "Detected YouTube extraction error, attempting to search using alternative source",
         );
 
         try {
@@ -1144,20 +1142,20 @@ async function init(client) {
 
           if (!searchQuery) {
             console.error(
-              "Cannot perform alternative search: No track title available"
+              "Cannot perform alternative search: No track title available",
             );
             return;
           }
 
           console.log(
-            `Searching for alternative to YouTube track: "${searchQuery}"`
+            `Searching for alternative to YouTube track: "${searchQuery}"`,
           );
 
           // Try to find a track across multiple platforms
           const alternativeTrack = await findAlternativeTrack(
             player,
             searchQuery,
-            track?.info?.sourceName || "youtube"
+            track?.info?.sourceName || "youtube",
           );
 
           // If we found an alternative, play it
@@ -1165,7 +1163,7 @@ async function init(client) {
             console.log(
               `Found alternative track: ${alternativeTrack.title} from ${
                 alternativeTrack.info?.sourceName || "unknown source"
-              }`
+              }`,
             );
 
             // Copy over requester data
@@ -1194,7 +1192,7 @@ async function init(client) {
             } catch (playError) {
               console.error(
                 "Error playing alternative track, trying direct method:",
-                playError
+                playError,
               );
 
               // Try REST API as last resort
@@ -1237,13 +1235,13 @@ async function init(client) {
 
       // Try to reconnect the player if it appears to be a connection issue
       const connectionError = /connection|timeout|reset|refused|closed/i.test(
-        payload?.error || payload?.exception?.message || ""
+        payload?.error || payload?.exception?.message || "",
       );
 
       if (connectionError) {
         try {
           console.log(
-            `Attempting to recover from connection error for guild ${player.guildId}`
+            `Attempting to recover from connection error for guild ${player.guildId}`,
           );
           // Check if we need to reconnect to voice
           const guild = await client.guilds
@@ -1258,7 +1256,7 @@ async function init(client) {
             // Try to restart the track or play next in queue
             if (track) {
               console.log(
-                `Attempting to replay track: ${track.title || "Unknown"}`
+                `Attempting to replay track: ${track.title || "Unknown"}`,
               );
               await player
                 .play(track)
@@ -1279,12 +1277,12 @@ async function init(client) {
           try {
             const currentNodeId = player.node.id;
             const availableNodes = Array.from(
-              client.lavalink.nodeManager.nodes.values()
+              client.lavalink.nodeManager.nodes.values(),
             ).filter((n) => n.id !== currentNodeId && n.connected);
 
             if (availableNodes.length > 0) {
               console.log(
-                `Switching to alternative node for guild ${player.guildId}`
+                `Switching to alternative node for guild ${player.guildId}`,
               );
               await player.setNode(availableNodes[0].id);
 
@@ -1308,10 +1306,10 @@ async function init(client) {
       "playerVolumeUpdate",
       async (player, oldVolume, newVolume) => {
         console.log(
-          `Volume changed from ${oldVolume} to ${newVolume}, saving state`
+          `Volume changed from ${oldVolume} to ${newVolume}, saving state`,
         );
         debouncedSavePlayer(player);
-      }
+      },
     );
 
     // Handle disconnect and reconnect
@@ -1328,7 +1326,7 @@ async function init(client) {
     // Handle move between voice channels
     client.lavalink.on("playerMove", async (player, oldChannel, newChannel) => {
       console.log(
-        `Player moved from ${oldChannel} to ${newChannel}, saving state`
+        `Player moved from ${oldChannel} to ${newChannel}, saving state`,
       );
       debouncedSavePlayer(player);
     });
@@ -1362,7 +1360,7 @@ async function init(client) {
 
         console.log("Performing periodic Lavalink node health check");
         const currentNodes = Array.from(
-          client.lavalink.nodeManager.nodes.values()
+          client.lavalink.nodeManager.nodes.values(),
         );
 
         // No action needed if no nodes or no active players
@@ -1373,10 +1371,10 @@ async function init(client) {
         const healthResults = await Promise.all(
           LAVALINK_SERVERS.map(async (server) => {
             const isWorking = await testServerConnection(server).catch(
-              () => false
+              () => false,
             );
             return { server, isWorking };
-          })
+          }),
         );
 
         // Get working servers
@@ -1393,12 +1391,12 @@ async function init(client) {
         const connectedNodes = currentNodes.filter((node) => node.connected);
         if (connectedNodes.length === 0) {
           console.log(
-            "All current nodes disconnected, attempting to connect to a working server"
+            "All current nodes disconnected, attempting to connect to a working server",
           );
 
           // Try to connect to the first working server
           const newNode = await client.lavalink.nodeManager.createNode(
-            workingServers[0]
+            workingServers[0],
           );
           console.log(`Connected to new node: ${newNode.id}`);
 
@@ -1423,7 +1421,7 @@ async function init(client) {
             } catch (error) {
               console.error(
                 `Failed to migrate player ${player.guildId}:`,
-                error
+                error,
               );
             }
           }
@@ -1469,12 +1467,12 @@ async function init(client) {
             error.message?.includes("500 Internal Server Error")
           ) {
             console.log(
-              `Player record for guild ${player.guildId} was already deleted or doesn't exist`
+              `Player record for guild ${player.guildId} was already deleted or doesn't exist`,
             );
           } else {
             console.error(
               `Failed to cleanup player for guild ${player.guildId}:`,
-              error
+              error,
             );
           }
         }

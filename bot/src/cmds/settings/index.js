@@ -22,23 +22,23 @@ export default {
             subcommand
               .setName("add")
               .setDescription(
-                "Assign a role to be awarded at a specific chat level"
+                "Assign a role to be awarded at a specific chat level",
               )
               .addRoleOption((option) =>
                 option
                   .setName("role")
                   .setDescription("The role to award")
-                  .setRequired(true)
+                  .setRequired(true),
               )
               .addIntegerOption((option) =>
                 option
                   .setName("level")
                   .setDescription(
-                    "The chat level required to receive this role"
+                    "The chat level required to receive this role",
                   )
                   .setRequired(true)
-                  .setMinValue(1)
-              )
+                  .setMinValue(1),
+              ),
           )
           .addSubcommand((subcommand) =>
             subcommand
@@ -48,14 +48,14 @@ export default {
                 option
                   .setName("role")
                   .setDescription("The role reward to remove")
-                  .setRequired(true)
-              )
+                  .setRequired(true),
+              ),
           )
           .addSubcommand((subcommand) =>
             subcommand
               .setName("list")
-              .setDescription("List all configured level role rewards")
-          )
+              .setDescription("List all configured level role rewards"),
+          ),
       );
     return builder;
   },
@@ -197,7 +197,7 @@ export default {
     if (!interaction.inGuild()) return;
     if (
       !interaction.member.permissions.has(
-        PermissionsBitField.Flags.Administrator
+        PermissionsBitField.Flags.Administrator,
       )
     ) {
       return interaction.reply({
@@ -225,7 +225,7 @@ export default {
             return interaction.editReply(
               await i18n.__(`${i18nBaseKey}.error_role_unmanageable`, {
                 roleName: role.name,
-              })
+              }),
             );
           }
 
@@ -235,7 +235,7 @@ export default {
               await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
                 level: level,
-              })
+              }),
             );
           } catch (dbError) {
             if (dbError.message.includes("already assigned to level")) {
@@ -249,7 +249,7 @@ export default {
                   await i18n.__(`${i18nBaseKey}.error_level_exists`, {
                     existingRoleName: existingRole?.name || existingRoleId,
                     level: level,
-                  })
+                  }),
                 );
               } else {
                 const match = dbError.message.match(/level (\d+)/);
@@ -258,12 +258,12 @@ export default {
                   await i18n.__(`${i18nBaseKey}.error_role_exists`, {
                     roleName: role.name,
                     existingLevel: existingLevel,
-                  })
+                  }),
                 );
               }
             } else if (dbError.message.includes("level must be at least 1")) {
               await interaction.editReply(
-                await i18n.__(`${i18nBaseKey}.error_level_invalid`)
+                await i18n.__(`${i18nBaseKey}.error_level_invalid`),
               );
             } else {
               throw dbError;
@@ -276,14 +276,14 @@ export default {
             await interaction.editReply(
               await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
-              })
+              }),
             );
           } catch (dbError) {
             if (dbError.message.includes("not found")) {
               await interaction.editReply(
                 await i18n.__(`${i18nBaseKey}.error_not_found`, {
                   roleName: role.name,
-                })
+                }),
               );
             } else {
               throw dbError;
@@ -294,7 +294,7 @@ export default {
 
           if (!levelRoles || levelRoles.length === 0) {
             return interaction.editReply(
-              await i18n.__(`${i18nBaseKey}.no_roles`)
+              await i18n.__(`${i18nBaseKey}.no_roles`),
             );
           }
 

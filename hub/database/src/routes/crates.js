@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     if (!userId || !guildId) {
       return res.status(400).json({ error: 'userId and guildId are required' });
     }
@@ -25,7 +25,7 @@ router.get('/:guildId/:userId', async (req, res) => {
 router.get('/:guildId/:userId/:type', async (req, res) => {
   try {
     const { userId, guildId, type } = req.params;
-    
+
     if (!userId || !guildId || !type) {
       return res.status(400).json({ error: 'userId, guildId, and type are required' });
     }
@@ -42,7 +42,7 @@ router.get('/:guildId/:userId/:type', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { userId, guildId, type, count = 1, properties = {} } = req.body;
-    
+
     if (!userId || !guildId || !type) {
       return res.status(400).json({ error: 'userId, guildId, and type are required' });
     }
@@ -60,7 +60,7 @@ router.delete('/:guildId/:userId/:type', async (req, res) => {
   try {
     const { userId, guildId, type } = req.params;
     const { count = 1 } = req.body;
-    
+
     if (!userId || !guildId || !type) {
       return res.status(400).json({ error: 'userId, guildId, and type are required' });
     }
@@ -77,7 +77,7 @@ router.delete('/:guildId/:userId/:type', async (req, res) => {
 router.post('/open', async (req, res) => {
   try {
     const { userId, guildId, type } = req.body;
-    
+
     if (!userId || !guildId || !type) {
       return res.status(400).json({ error: 'userId, guildId, and type are required' });
     }

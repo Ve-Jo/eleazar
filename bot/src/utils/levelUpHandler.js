@@ -9,7 +9,7 @@ export async function handleLevelUp(
   userId,
   levelUpInfo,
   type,
-  channelObj = null
+  channelObj = null,
 ) {
   if (!levelUpInfo || !levelUpInfo.levelUp) return;
 
@@ -31,8 +31,8 @@ export async function handleLevelUp(
           level: levelUpInfo.newLevel,
         },
         null,
-        2
-      )
+        2,
+      ),
     );
 
     // Handle level role assignment if applicable
@@ -41,7 +41,7 @@ export async function handleLevelUp(
         // Add the new role
         await member.roles.add(levelUpInfo.assignedRole);
         console.log(
-          `Added role ${levelUpInfo.assignedRole} to ${member.displayName} for ${type} level ${levelUpInfo.newLevel}`
+          `Added role ${levelUpInfo.assignedRole} to ${member.displayName} for ${type} level ${levelUpInfo.newLevel}`,
         );
 
         // Remove any lower level roles if specified
@@ -50,13 +50,13 @@ export async function handleLevelUp(
           console.log(
             `Removed roles ${levelUpInfo.removedRoles.join(", ")} from ${
               member.displayName
-            }`
+            }`,
           );
         }
       } catch (roleError) {
         console.error(
           `Error assigning level roles to ${member.displayName}:`,
-          roleError
+          roleError,
         );
       }
     }
@@ -68,7 +68,7 @@ export async function handleLevelUp(
       if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
         userLocale = userDbLocale;
         console.log(
-          `Using saved locale from DB for user ${member.displayName}: ${userLocale}`
+          `Using saved locale from DB for user ${member.displayName}: ${userLocale}`,
         );
       } else {
         if (member.preferredLocale) {
@@ -78,7 +78,7 @@ export async function handleLevelUp(
           if (["en", "ru", "uk"].includes(normalizedMemberLocale)) {
             userLocale = normalizedMemberLocale;
             console.log(
-              `Using member's preferred locale for ${member.displayName}: ${userLocale}`
+              `Using member's preferred locale for ${member.displayName}: ${userLocale}`,
             );
           }
         } else if (guild.preferredLocale) {
@@ -88,7 +88,7 @@ export async function handleLevelUp(
           if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
             userLocale = normalizedGuildLocale;
             console.log(
-              `Using guild's preferred locale for ${member.displayName}: ${userLocale}`
+              `Using guild's preferred locale for ${member.displayName}: ${userLocale}`,
             );
           }
         }
@@ -96,13 +96,13 @@ export async function handleLevelUp(
     } catch (dbError) {
       console.error(
         `Error fetching user locale for ${userId}, using fallback:`,
-        dbError
+        dbError,
       );
       userLocale = member.preferredLocale || guild.preferredLocale || "en";
     }
 
     console.log(
-      `Level-up notification locale: ${userLocale} for user ${member.displayName}`
+      `Level-up notification locale: ${userLocale} for user ${member.displayName}`,
     );
 
     if (!i18n.initialized) {
@@ -142,7 +142,7 @@ export async function handleLevelUp(
         locale: userLocale,
       },
       { image: 2, emoji: 1 },
-      i18n
+      i18n,
     );
 
     if (!buffer || !Buffer.isBuffer(buffer)) {
@@ -178,7 +178,7 @@ export async function handleLevelUp(
             (c) =>
               c.name.includes("general") &&
               c.type === 0 &&
-              c.permissionsFor(guild.members.me).has("SendMessages")
+              c.permissionsFor(guild.members.me).has("SendMessages"),
           );
 
         if (channel) {

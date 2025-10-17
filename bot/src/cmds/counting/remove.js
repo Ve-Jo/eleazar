@@ -36,7 +36,7 @@ export default {
     // Check if user has manage_channels perms
     if (
       !interaction.member.permissions.has(
-        PermissionsBitField.Flags.ManageChannels
+        PermissionsBitField.Flags.ManageChannels,
       )
     ) {
       return interaction.reply({

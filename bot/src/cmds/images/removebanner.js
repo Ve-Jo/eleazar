@@ -55,7 +55,7 @@ export default {
       // Ensure user exists in database before updating
       await hubClient.ensureGuildUser(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
       );
 
       // Remove the banner URL using hubClient

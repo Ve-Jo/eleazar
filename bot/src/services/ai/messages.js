@@ -83,8 +83,8 @@ async function buildModelOptions(models, selectedModel, locale = "en") {
       features.push(
         `🖼️ ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.visionSupport",
-          locale
-        )}`
+          locale,
+        )}`,
       );
     }
 
@@ -93,8 +93,8 @@ async function buildModelOptions(models, selectedModel, locale = "en") {
       features.push(
         `🧠 ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.reasoningSupport",
-          locale
-        )}`
+          locale,
+        )}`,
       );
     }
 
@@ -117,7 +117,7 @@ export async function buildInteractionComponents(
   isVision = false,
   noButtons = false,
   locale = "en",
-  client = null
+  client = null,
 ) {
   const prefs = getUserPreferences(userId);
   let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2; // Default
@@ -130,7 +130,7 @@ export async function buildInteractionComponents(
       if (selectedModelDetails) {
         console.log(
           `Model details for ${prefs.selectedModel}:`,
-          selectedModelDetails
+          selectedModelDetails,
         );
 
         // Get the actual context window from config
@@ -144,17 +144,17 @@ export async function buildInteractionComponents(
         effectiveMaxContext = Math.floor(maxTokens / 4); // Convert to characters
 
         console.log(
-          `[DEBUG] Context window for ${prefs.selectedModel}: ${modelContextWindow} tokens, effective max: ${effectiveMaxContext} chars`
+          `[DEBUG] Context window for ${prefs.selectedModel}: ${modelContextWindow} tokens, effective max: ${effectiveMaxContext} chars`,
         );
       } else {
         console.log(
-          `No selected model details available for ${prefs.selectedModel}, disabling tools button`
+          `No selected model details available for ${prefs.selectedModel}, disabling tools button`,
         );
       }
     } catch (error) {
       console.warn(
         "Error getting model details for context adjustment:",
-        error
+        error,
       );
       selectedModelDetails = null; // Ensure it's null on error to avoid disabling tools incorrectly
     }
@@ -171,7 +171,7 @@ export async function buildInteractionComponents(
       console.log(
         `Model ${m.name}: Vision=${
           m.capabilities?.vision
-        }, Reasoning=${supportsReasoning(m.id)}`
+        }, Reasoning=${supportsReasoning(m.id)}`,
       );
     });
     if (availableModels.length > 3) {
@@ -181,14 +181,14 @@ export async function buildInteractionComponents(
     const menu = new StringSelectMenuBuilder()
       .setCustomId(`ai_select_model_${userId}`)
       .setPlaceholder(
-        await i18n.__("events.ai.buttons.menus.modelSelect.placeholder")
+        await i18n.__("events.ai.buttons.menus.modelSelect.placeholder"),
       );
 
     // Use the shared function to build options
     const opts = await buildModelOptions(
       availableModels,
       prefs.selectedModel,
-      locale
+      locale,
     );
 
     menu.addOptions(opts);
@@ -208,13 +208,13 @@ export async function buildInteractionComponents(
           ? `${prefs.selectedModel} - ${
               (await i18n.__(
                 "events.ai.buttons.menus.settingsSelect.placeholder",
-                locale
+                locale,
               )) || "Settings"
             }`
           : (await i18n.__(
               "events.ai.buttons.menus.settingsSelect.placeholder",
-              locale
-            )) || "Settings"
+              locale,
+            )) || "Settings",
       );
 
     const options = [];
@@ -222,14 +222,14 @@ export async function buildInteractionComponents(
     // System prompt toggle option
     options.push({
       label: await i18n.__(
-        "events.ai.buttons.menus.settingsSelect.systemPrompt"
+        "events.ai.buttons.menus.settingsSelect.systemPrompt",
       ),
       description: prefs.systemPromptEnabled
         ? await i18n.__(
-            "events.ai.buttons.menus.settingsSelect.systemPromptEnabled"
+            "events.ai.buttons.menus.settingsSelect.systemPromptEnabled",
           )
         : await i18n.__(
-            "events.ai.buttons.menus.settingsSelect.systemPromptDisabled"
+            "events.ai.buttons.menus.settingsSelect.systemPromptDisabled",
           ),
       value: "system_prompt",
       emoji: prefs.systemPromptEnabled ? "✅" : "❌",
@@ -283,9 +283,9 @@ export async function buildInteractionComponents(
       }),
       value: "clear_context",
       description: `Tokens: ${Math.round(
-        estimatedTokens
+        estimatedTokens,
       ).toLocaleString()} / ${modelContextWindow.toLocaleString()} (${Math.round(
-        (estimatedTokens / modelContextWindow) * 100
+        (estimatedTokens / modelContextWindow) * 100,
       )}%)`,
       emoji: "🗑️",
       disabled: current === 0,
@@ -299,7 +299,7 @@ export async function buildInteractionComponents(
       description:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.finetune",
-          locale
+          locale,
         )) || "Adjust AI generation parameters",
       emoji: "🎛️",
       default: false,
@@ -310,13 +310,13 @@ export async function buildInteractionComponents(
       label:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.label",
-          locale
+          locale,
         )) || "Switch Model",
       value: "switch_model",
       description:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.description",
-          locale
+          locale,
         )) || "Change the AI model",
       emoji: "🔄",
       default: false,
@@ -335,7 +335,7 @@ export async function sendResponse(
   content,
   components = [],
   locale = "en",
-  isStreaming = false
+  isStreaming = false,
 ) {
   i18n.setLocale(locale);
 
@@ -343,15 +343,15 @@ export async function sendResponse(
   const sanitized = content
     .replace(
       /<@[!&]?\d+>/g,
-      await i18n.__("events.ai.buttons.sanitization.mention", locale)
+      await i18n.__("events.ai.buttons.sanitization.mention", locale),
     )
     .replace(
       /@everyone/gi,
-      await i18n.__("events.ai.buttons.sanitization.everyone", locale)
+      await i18n.__("events.ai.buttons.sanitization.everyone", locale),
     )
     .replace(
       /@here/gi,
-      await i18n.__("events.ai.buttons.sanitization.here", locale)
+      await i18n.__("events.ai.buttons.sanitization.here", locale),
     );
 
   const chunks = splitMessage(sanitized);
@@ -380,7 +380,7 @@ export async function sendResponse(
     // Ensure components are V1 Action Rows
     const v1Components = Array.isArray(components)
       ? components.filter(
-          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
         )
       : [];
 
@@ -393,7 +393,7 @@ export async function sendResponse(
     // Ensure components are V1 Action Rows for fallback
     const v1Components = Array.isArray(components)
       ? components.filter(
-          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
         )
       : [];
 
@@ -410,7 +410,7 @@ export async function sendResponse(
   // Also use the filtered V1 components when deciding to attach the collector
   const finalV1Components = Array.isArray(components)
     ? components.filter(
-        (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
+        (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
       )
     : [];
 
@@ -439,7 +439,7 @@ export async function sendResponse(
               updateUserPreference(
                 userId,
                 "systemPromptEnabled",
-                !prefs.systemPromptEnabled
+                !prefs.systemPromptEnabled,
               );
               break;
 
@@ -475,22 +475,22 @@ export async function sendResponse(
 
               const models = await getAvailableModels(
                 message.client,
-                isVisionRequest ? "vision" : null
+                isVisionRequest ? "vision" : null,
               );
 
               const modelMenu = new StringSelectMenuBuilder()
                 .setCustomId(`ai_select_model_${userId}`)
                 .setPlaceholder(
                   await i18n.__(
-                    "events.ai.buttons.menus.modelSelect.placeholder"
-                  )
+                    "events.ai.buttons.menus.modelSelect.placeholder",
+                  ),
                 );
 
               // Use the shared function to build options
               const opts = await buildModelOptions(
                 models,
                 prefs.selectedModel,
-                locale
+                locale,
               );
 
               modelMenu.addOptions(opts);
@@ -522,7 +522,7 @@ export async function sendResponse(
           // Clear history before processing with the new model
           clearUserHistory(userId);
           console.log(
-            `Cleared history for user ${userId} due to model switch.`
+            `Cleared history for user ${userId} due to model switch.`,
           );
 
           // Process the request with the newly selected model
@@ -532,7 +532,7 @@ export async function sendResponse(
             messageContent,
             newVisionRequest,
             finalMsg,
-            locale
+            locale,
           );
           return; // Return early
         }
@@ -543,7 +543,7 @@ export async function sendResponse(
           message.attachments.first().contentType?.startsWith("image/");
         const models = await getAvailableModels(
           message.client,
-          isVisionRequest ? "vision" : null
+          isVisionRequest ? "vision" : null,
         );
         const newComponents = await buildInteractionComponents(
           userId,
@@ -551,7 +551,7 @@ export async function sendResponse(
           isVisionRequest,
           false,
           locale,
-          message.client
+          message.client,
         );
 
         // Update original message with new components
@@ -613,13 +613,13 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       .map(async ([param, config]) => ({
         label: await i18n.__(
           `events.ai.buttons.finetune.parameters.${param}.label`,
-          locale
+          locale,
         ),
         value: param,
         description: `${aiParams[param] || config.default} (${config.min}-${
           config.max
         })`,
-      }))
+      })),
   );
 
   // Create selection menu
@@ -628,9 +628,9 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       .setCustomId(`ai_param_select_${userId}`)
       .setPlaceholder(
         (await i18n.__("events.ai.buttons.finetune.selectParameter", locale)) ||
-          "Select parameter to adjust"
+          "Select parameter to adjust",
       )
-      .addOptions(paramOptions)
+      .addOptions(paramOptions),
   );
 
   // Show parameter selection menu
@@ -638,7 +638,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
     content:
       (await i18n.__(
         "events.ai.buttons.finetune.selectParameterPrompt",
-        locale
+        locale,
       )) || "Select an AI parameter to adjust:",
     components: [row],
     ephemeral: true,
@@ -663,7 +663,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
         selectedParam,
         paramConfig,
         aiParams[selectedParam],
-        locale
+        locale,
       );
 
       // Create modal for parameter edit
@@ -672,8 +672,8 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
         .setTitle(
           await i18n.__(
             `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
-            locale
-          )
+            locale,
+          ),
         );
 
       // Create text input for selected parameter
@@ -703,7 +703,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
         inputValue,
         selectedParam,
         aiParams[selectedParam] || paramConfig.default,
-        paramConfig
+        paramConfig,
       );
 
       // Update user preferences
@@ -718,11 +718,11 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
           {
             parameter: await i18n.__(
               `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
-              locale
+              locale,
             ),
             value: newValue,
           },
-          locale
+          locale,
         ),
         ephemeral: true,
       });
@@ -749,7 +749,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
           content:
             (await i18n.__(
               "events.ai.buttons.finetune.selectionTimeout",
-              locale
+              locale,
             )) || "Parameter selection timed out.",
           components: [],
         })
@@ -763,12 +763,12 @@ async function createParameterPlaceholder(
   paramName,
   paramConfig,
   currentValue,
-  locale
+  locale,
 ) {
   const defaultVal = paramConfig.default;
   const description = await i18n.__(
     `events.ai.buttons.finetune.parameters.${paramName}.description`,
-    locale
+    locale,
   );
 
   // Create display for values
@@ -807,7 +807,7 @@ function validateParameterValue(input, paramName, currentValue, paramConfig) {
     // Check if the value is valid
     if (isNaN(parsedValue)) {
       console.warn(
-        `Invalid value for ${paramName}: ${input}, using default: ${paramConfig.default}`
+        `Invalid value for ${paramName}: ${input}, using default: ${paramConfig.default}`,
       );
       return currentValue || paramConfig.default;
     }

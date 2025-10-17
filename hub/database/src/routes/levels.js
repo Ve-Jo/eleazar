@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/roles/:guildId', async (req, res) => {
   try {
     const { guildId } = req.params;
-    
+
     const levelRoles = await Database.getLevelRoles(guildId);
     res.json(serializeBigInt(levelRoles));
   } catch (error) {
@@ -21,12 +21,12 @@ router.get('/roles/:guildId', async (req, res) => {
 router.get('/roles/:guildId/level/:level', async (req, res) => {
   try {
     const { guildId, level } = req.params;
-    
+
     const levelNum = parseInt(level);
     if (isNaN(levelNum)) {
       return res.status(400).json({ error: 'Invalid level number' });
     }
-    
+
     const role = await Database.getEligibleLevelRole(guildId, levelNum);
     res.json(serializeBigInt({ role }));
   } catch (error) {
@@ -39,12 +39,12 @@ router.get('/roles/:guildId/level/:level', async (req, res) => {
 router.get('/roles/:guildId/next/:currentLevel', async (req, res) => {
   try {
     const { guildId, currentLevel } = req.params;
-    
+
     const levelNum = parseInt(currentLevel);
     if (isNaN(levelNum)) {
       return res.status(400).json({ error: 'Invalid current level number' });
     }
-    
+
     const nextRole = await Database.getNextLevelRole(guildId, levelNum);
     res.json(serializeBigInt({ nextRole }));
   } catch (error) {
@@ -57,16 +57,16 @@ router.get('/roles/:guildId/next/:currentLevel', async (req, res) => {
 router.post('/roles', async (req, res) => {
   try {
     const { guildId, level, roleId } = req.body;
-    
+
     if (!guildId || level === undefined || !roleId) {
       return res.status(400).json({ error: 'guildId, level, and roleId are required' });
     }
-    
+
     const levelNum = parseInt(level);
     if (isNaN(levelNum)) {
       return res.status(400).json({ error: 'Invalid level number' });
     }
-    
+
     const result = await Database.addLevelRole(guildId, levelNum, roleId);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -79,12 +79,12 @@ router.post('/roles', async (req, res) => {
 router.delete('/roles/:guildId/:level', async (req, res) => {
   try {
     const { guildId, level } = req.params;
-    
+
     const levelNum = parseInt(level);
     if (isNaN(levelNum)) {
       return res.status(400).json({ error: 'Invalid level number' });
     }
-    
+
     const result = await Database.removeLevelRole(guildId, levelNum);
     res.json(serializeBigInt(result));
   } catch (error) {

@@ -66,7 +66,7 @@ Object.keys(localization_strings).forEach((category) => {
       category,
       component,
       localization_strings[category][component],
-      true
+      true,
     );
   });
 });
@@ -79,7 +79,7 @@ export default {
     if (interaction.customId.startsWith("music_")) {
       const option = interaction.customId.split("_")[1];
       const player = interaction.client.lavalink.getPlayer(
-        interaction.guild.id
+        interaction.guild.id,
       );
 
       if (!player) {
@@ -133,7 +133,7 @@ export default {
               interactionResponseContent = await hubClient.getTranslation(
                 "music.skippingSongError",
                 { error: error.message },
-                locale
+                locale,
               );
             }
             break;
@@ -143,7 +143,7 @@ export default {
               interactionResponseContent = await hubClient.getTranslation(
                 "music.previous.noPreviousSongs",
                 {},
-                locale
+                locale,
               );
             } else {
               const previousTrack = player.queue.previous[0];
@@ -153,7 +153,7 @@ export default {
               interactionResponseContent = await hubClient.getTranslation(
                 "music.previous.addedPreviousToQueue",
                 { title: previousTrack.info.title },
-                locale
+                locale,
               );
             }
             break;
@@ -172,15 +172,15 @@ export default {
                   ? await hubClient.getTranslation(
                       "music.buttons.on",
                       {},
-                      locale
+                      locale,
                     )
                   : await hubClient.getTranslation(
                       "music.buttons.off",
                       {},
-                      locale
+                      locale,
                     ),
               },
-              locale
+              locale,
             );
             break;
           }
@@ -189,7 +189,7 @@ export default {
         if (player.queue.current) {
           const updatedPlayerData = await createOrUpdateMusicPlayerEmbed(
             player.queue.current,
-            player
+            player,
           );
 
           await interaction.message
@@ -197,7 +197,7 @@ export default {
             .catch((editError) => {
               console.error(
                 "Failed to edit music player message after button interaction:",
-                editError
+                editError,
               );
               if (editError.code === 10008) {
                 interaction.client.musicMessageMap?.delete(interaction.guildId);
@@ -210,7 +210,7 @@ export default {
           } catch (deleteError) {
             console.error(
               "Failed to delete music message when queue became empty:",
-              deleteError
+              deleteError,
             );
           }
         }
@@ -228,7 +228,7 @@ export default {
             content: await hubClient.getTranslation(
               "music.errorOccurred",
               { error: error.message },
-              locale
+              locale,
             ),
             ephemeral: true,
           });

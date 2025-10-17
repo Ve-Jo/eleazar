@@ -9,7 +9,7 @@ router.get('/:key', async (req, res) => {
   try {
     const { key } = req.params;
     const decodedKey = decodeURIComponent(key);
-    
+
     const value = await Database.getFromCache(decodedKey);
     res.json(serializeBigInt({ value }));
   } catch (error) {
@@ -24,11 +24,11 @@ router.put('/:key', async (req, res) => {
     const { key } = req.params;
     const { value, ttl } = req.body;
     const decodedKey = decodeURIComponent(key);
-    
+
     if (value === undefined) {
       return res.status(400).json({ error: 'value is required' });
     }
-    
+
     const result = await Database.setCache(decodedKey, value, ttl);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -41,11 +41,11 @@ router.put('/:key', async (req, res) => {
 router.post('/invalidate', async (req, res) => {
   try {
     const { keys } = req.body;
-    
+
     if (!keys || !Array.isArray(keys)) {
       return res.status(400).json({ error: 'keys array is required' });
     }
-    
+
     const result = await Database.invalidateCache(keys);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -59,7 +59,7 @@ router.delete('/:key', async (req, res) => {
   try {
     const { key } = req.params;
     const decodedKey = decodeURIComponent(key);
-    
+
     const result = await Database.deleteFromCache(decodedKey);
     res.json(serializeBigInt(result));
   } catch (error) {

@@ -35,7 +35,7 @@ const categoryCache = {
 export async function initializeSymbolMapping() {
   if (!CMC_API_KEY) {
     console.warn(
-      "[cryptoApi] CoinMarketCap API key not found in environment variables."
+      "[cryptoApi] CoinMarketCap API key not found in environment variables.",
     );
     return;
   }
@@ -59,7 +59,7 @@ export async function initializeSymbolMapping() {
     validCmcSymbolMap = new Map(data.map((coin) => [coin.symbol, coin.id]));
 
     console.log(
-      `[cryptoApi] Symbol mapping initialized successfully with ${validCmcSymbols.size} active symbols.`
+      `[cryptoApi] Symbol mapping initialized successfully with ${validCmcSymbols.size} active symbols.`,
     );
   } catch (error) {
     console.error("[cryptoApi] Error initializing symbol mapping:", error);
@@ -127,7 +127,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
     const MAX_SYMBOLS_PER_MEXC_REQUEST = 100;
     if (symbols.length > MAX_SYMBOLS_PER_MEXC_REQUEST) {
       console.warn(
-        `[cryptoApi] Requested ${symbols.length} symbols, but MEXC API limit is ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Only fetching the first ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Consider batching if this happens often.`
+        `[cryptoApi] Requested ${symbols.length} symbols, but MEXC API limit is ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Only fetching the first ${MAX_SYMBOLS_PER_MEXC_REQUEST}. Consider batching if this happens often.`,
       );
       symbols = symbols.slice(0, MAX_SYMBOLS_PER_MEXC_REQUEST); // Trim symbols for this request
     }
@@ -144,14 +144,14 @@ export async function getTickers(symbols = [], forceRefresh = false) {
       console.error(
         `[cryptoApi] MEXC API error! Status: ${
           response.status
-        }, Data: ${JSON.stringify(response.data)}`
+        }, Data: ${JSON.stringify(response.data)}`,
       );
       throw new Error(`MEXC API error! status: ${response.status}`);
     }
 
     const mexcTickers = response.data; // Response is now an array of requested tickers
     const mexcTickerMap = new Map(
-      mexcTickers.map((ticker) => [ticker.symbol, ticker])
+      mexcTickers.map((ticker) => [ticker.symbol, ticker]),
     );
 
     const results = {
@@ -184,7 +184,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
     });
 
     console.log(
-      `[cryptoApi] Processed ${symbolsFound}/${symbols.length} requested symbols from MEXC response.`
+      `[cryptoApi] Processed ${symbolsFound}/${symbols.length} requested symbols from MEXC response.`,
     );
 
     /* --- Cache Write Removed for MEXC ---
@@ -200,7 +200,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
   } catch (error) {
     console.error(
       "[cryptoApi] Error fetching tickers from MEXC:",
-      error.message || error
+      error.message || error,
     );
 
     // If we have stale cache data for this specific key, return it as fallback
@@ -210,7 +210,7 @@ export async function getTickers(symbols = [], forceRefresh = false) {
       staleData.fromCache = true;
       staleData.stale = true;
       console.warn(
-        "[cryptoApi] Returning stale price cache data due to error."
+        "[cryptoApi] Returning stale price cache data due to error.",
       );
       return staleData;
     }
@@ -236,7 +236,7 @@ export async function getCategories(forceRefresh = false) {
 
   if (!CMC_API_KEY) {
     console.error(
-      "[cryptoApi] CoinMarketCap API key not found for category lookup"
+      "[cryptoApi] CoinMarketCap API key not found for category lookup",
     );
     return null;
   }
@@ -246,7 +246,7 @@ export async function getCategories(forceRefresh = false) {
       `${CMC_API_URL}/cryptocurrency/categories`,
       {
         headers: { "X-CMC_PRO_API_KEY": CMC_API_KEY },
-      }
+      },
     );
 
     if (response.status !== 200 || !response.data?.data) {
@@ -300,7 +300,7 @@ export async function getCategoryCoins(categoryId, forceRefresh = false) {
   } catch (error) {
     console.error(
       `[cryptoApi] Error fetching coins for category ${categoryId}:`,
-      error
+      error,
     );
     return categoryCache.categoryCoins[categoryId] || null;
   }

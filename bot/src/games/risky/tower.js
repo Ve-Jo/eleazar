@@ -81,7 +81,7 @@ class GameState {
       console.log(
         `[Tower] Bombs for floor ${floor} (user ${
           this.userId
-        }) set to indices: ${bombs.join(", ")}`
+        }) set to indices: ${bombs.join(", ")}`,
       );
     }
   }
@@ -107,7 +107,7 @@ function getGameKey(channelId, userId) {
 async function generateTowerImage(
   interaction,
   i18n,
-  pendingState // { bet: number, difficulty: string, isPreGame: boolean, balance: number, levelProgress: object, sessionChange: number }
+  pendingState, // { bet: number, difficulty: string, isPreGame: boolean, balance: number, levelProgress: object, sessionChange: number }
 ) {
   const props = {
     interaction: {
@@ -155,7 +155,7 @@ async function generateActiveTowerImage(
   interaction,
   i18n,
   balance = 0,
-  levelProgress = { chat: null, game: null }
+  levelProgress = { chat: null, game: null },
 ) {
   // Calculate session change as current balance minus initial balance
   const sessionChange = balance - gameInstance.initialBalance;
@@ -242,7 +242,7 @@ export default {
     const setupGame = async (
       initialBet = 0,
       initialDifficulty = "easy",
-      initialSessionChange = 0
+      initialSessionChange = 0,
     ) => {
       pendingBet = initialBet;
       pendingDifficulty = initialDifficulty;
@@ -325,7 +325,7 @@ export default {
         .setLabel(
           await getTranslation("games.tower.difficultyLabelShort", {
             difficulty: pendingDifficulty,
-          })
+          }),
         )
         .setStyle(ButtonStyle.Secondary);
 
@@ -338,7 +338,7 @@ export default {
       return new ActionRowBuilder().addComponents(
         setBetButton,
         changeDifficultyButton,
-        startGameButton
+        startGameButton,
       );
     };
 
@@ -449,7 +449,7 @@ export default {
             .catch(console.error);
         }
         console.log(
-          `[Tower] Setup collector ended for ${userId}. Reason: ${reason}`
+          `[Tower] Setup collector ended for ${userId}. Reason: ${reason}`,
         );
       });
 
@@ -472,7 +472,7 @@ export default {
             .setValue(pendingBet > 0 ? pendingBet.toString() : "") // Pre-fill with current bet if exists
             .setRequired(true);
           betModal.addComponents(
-            new ActionRowBuilder().addComponents(amountInput)
+            new ActionRowBuilder().addComponents(amountInput),
           );
           await i.showModal(betModal);
 
@@ -522,10 +522,10 @@ export default {
             try {
               const currentBalanceData = await hubClient.getUser(
                 guildId,
-                userId
+                userId,
               );
               updatedBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0
+                currentBalanceData?.economy?.balance || 0,
               );
 
               if (currentBalanceData?.Level) {
@@ -537,7 +537,7 @@ export default {
             } catch (error) {
               console.error(
                 "Error fetching user data after setting bet:",
-                error
+                error,
               );
             }
           }
@@ -574,10 +574,10 @@ export default {
             try {
               const currentBalanceData = await hubClient.getUser(
                 guildId,
-                userId
+                userId,
               );
               currentBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0
+                currentBalanceData?.economy?.balance || 0,
               );
 
               if (currentBalanceData?.Level) {
@@ -589,7 +589,7 @@ export default {
             } catch (error) {
               console.error(
                 "Error fetching user data after changing difficulty:",
-                error
+                error,
               );
             }
           }
@@ -624,7 +624,7 @@ export default {
           if (guildId) {
             const userDataStart = await hubClient.getUser(guildId, userId);
             const userBalanceStart = parseFloat(
-              userDataStart?.economy?.balance || 0
+              userDataStart?.economy?.balance || 0,
             );
             if (
               !userDataStart ||
@@ -647,7 +647,7 @@ export default {
             channelId,
             userId,
             setupMessage.id,
-            guildId
+            guildId,
           );
           gameInstance.betAmount = pendingBet;
           gameInstance.difficulty = pendingDifficulty;
@@ -677,7 +677,7 @@ export default {
             await hubClient.addBalance(
               guildId,
               userId,
-              -gameInstance.betAmount
+              -gameInstance.betAmount,
             );
           }
 
@@ -698,10 +698,10 @@ export default {
             try {
               const currentBalanceData = await hubClient.getUser(
                 guildId,
-                userId
+                userId,
               );
               updatedBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0
+                currentBalanceData?.economy?.balance || 0,
               );
 
               if (currentBalanceData?.Level) {
@@ -713,7 +713,7 @@ export default {
             } catch (error) {
               console.error(
                 "Error fetching user data after starting game:",
-                error
+                error,
               );
             }
           }
@@ -726,7 +726,7 @@ export default {
             {
               chat: chatLevelData,
               game: gameLevelData,
-            }
+            },
           );
 
           // Start the active game
@@ -772,7 +772,7 @@ export default {
             new ButtonBuilder()
               .setCustomId(`tower_tile_${idx}`)
               .setLabel(`${idx + 1}`)
-              .setStyle(ButtonStyle.Secondary)
+              .setStyle(ButtonStyle.Secondary),
         );
         const takePrizeButton = new ButtonBuilder()
           .setCustomId("tower_take_prize")
@@ -818,7 +818,7 @@ export default {
           if (gameInteraction.customId === `tower_restart_game_${userId}`) {
             await gameInteraction.reply({
               content: await getTranslation(
-                "games.tower.cantRestartActiveGame"
+                "games.tower.cantRestartActiveGame",
               ),
               ephemeral: true,
             });
@@ -861,10 +861,10 @@ export default {
               try {
                 const currentBalanceData = await hubClient.getUser(
                   guildId,
-                  userId
+                  userId,
                 );
                 updatedBalance = parseFloat(
-                  currentBalanceData?.economy?.balance || 0
+                  currentBalanceData?.economy?.balance || 0,
                 );
 
                 if (currentBalanceData?.Level) {
@@ -876,7 +876,7 @@ export default {
               } catch (error) {
                 console.error(
                   "Error fetching user data after bomb hit:",
-                  error
+                  error,
                 );
               }
             }
@@ -889,7 +889,7 @@ export default {
               {
                 chat: chatLevelData,
                 game: gameLevelData,
-              }
+              },
             );
 
             // Show game over message
@@ -942,10 +942,10 @@ export default {
                 try {
                   const currentBalanceData = await hubClient.getUser(
                     guildId,
-                    userId
+                    userId,
                   );
                   updatedBalance = parseFloat(
-                    currentBalanceData?.economy?.balance || 0
+                    currentBalanceData?.economy?.balance || 0,
                   );
 
                   if (currentBalanceData?.Level) {
@@ -957,7 +957,7 @@ export default {
                 } catch (error) {
                   console.error(
                     "Error fetching user data after max floor:",
-                    error
+                    error,
                   );
                 }
               }
@@ -970,7 +970,7 @@ export default {
                 {
                   chat: chatLevelData,
                   game: gameLevelData,
-                }
+                },
               );
 
               // Show game over message
@@ -1020,24 +1020,24 @@ export default {
                   try {
                     const currentBalanceData = await hubClient.getUser(
                       guildId,
-                      userId
+                      userId,
                     );
                     updatedBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0
+                      currentBalanceData?.economy?.balance || 0,
                     );
 
                     if (currentBalanceData?.Level) {
                       const chatXP = Number(currentBalanceData.Level.xp || 0);
                       chatLevelData = hubClient.calculateLevel(chatXP);
                       const gameXP = Number(
-                        currentBalanceData.Level.gameXp || 0
+                        currentBalanceData.Level.gameXp || 0,
                       );
                       gameLevelData = hubClient.calculateLevel(gameXP);
                     }
                   } catch (error) {
                     console.error(
                       "Error fetching user data after max floor:",
-                      error
+                      error,
                     );
                   }
                 }
@@ -1050,7 +1050,7 @@ export default {
                   {
                     chat: chatLevelData,
                     game: gameLevelData,
-                  }
+                  },
                 );
 
                 // Show win message
@@ -1060,7 +1060,7 @@ export default {
                     {
                       floor: MAX_FLOORS,
                       prize: maxPrize.toFixed(2),
-                    }
+                    },
                   ),
                   files: [{ attachment: finalBuffer, name: "tower_win.avif" }],
                   components: await createGameOverButtons(userId),
@@ -1076,7 +1076,7 @@ export default {
                 // Continue to next floor
                 // Calculate the current prize based on the floor that was just completed
                 gameInstance.currentPrize = gameInstance.calculatePrize(
-                  gameInstance.currentFloor - 1
+                  gameInstance.currentFloor - 1,
                 );
                 gameInstance.ensureBombPosition(gameInstance.currentFloor);
 
@@ -1092,24 +1092,24 @@ export default {
                   try {
                     const currentBalanceData = await hubClient.getUser(
                       guildId,
-                      userId
+                      userId,
                     );
                     updatedBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0
+                      currentBalanceData?.economy?.balance || 0,
                     );
 
                     if (currentBalanceData?.Level) {
                       const chatXP = Number(currentBalanceData.Level.xp || 0);
                       chatLevelData = hubClient.calculateLevel(chatXP);
                       const gameXP = Number(
-                        currentBalanceData.Level.gameXp || 0
+                        currentBalanceData.Level.gameXp || 0,
                       );
                       gameLevelData = hubClient.calculateLevel(gameXP);
                     }
                   } catch (error) {
                     console.error(
                       "Error fetching user data after safe tile:",
-                      error
+                      error,
                     );
                   }
                 }
@@ -1122,7 +1122,7 @@ export default {
                   {
                     chat: chatLevelData,
                     game: gameLevelData,
-                  }
+                  },
                 );
 
                 await setupMessage.edit({
@@ -1133,11 +1133,11 @@ export default {
                       nextPrize: gameInstance
                         .calculatePrize(gameInstance.currentFloor)
                         .toFixed(2),
-                    }
+                    },
                   ),
                   files: [{ attachment: nextBuffer, name: "tower_next.avif" }],
                   components: await createGameButtons(
-                    gameInstance.currentFloor
+                    gameInstance.currentFloor,
                   ),
                 });
               }
@@ -1175,12 +1175,12 @@ export default {
           activeGames.delete(gameKey);
         }
         console.log(
-          `[Tower] Game collector ended for ${userId}. Reason: ${reason}`
+          `[Tower] Game collector ended for ${userId}. Reason: ${reason}`,
         );
       });
 
       console.log(
-        `[Tower] Game started actively for ${userId}. Bet: ${gameInstance.betAmount}, Diff: ${gameInstance.difficulty}`
+        `[Tower] Game started actively for ${userId}. Bet: ${gameInstance.betAmount}, Diff: ${gameInstance.difficulty}`,
       );
     };
 

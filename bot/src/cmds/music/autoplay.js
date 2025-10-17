@@ -39,7 +39,7 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
     if (!player)
       return interaction.editReply({

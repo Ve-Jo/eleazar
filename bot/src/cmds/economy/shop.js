@@ -228,8 +228,8 @@ export default {
               UPGRADES.daily_bonus.basePrice *
                 Math.pow(
                   UPGRADES.daily_bonus.priceMultiplier,
-                  (userData.upgrades?.daily_bonus?.level || 1) - 1
-                )
+                  (userData.upgrades?.daily_bonus?.level || 1) - 1,
+                ),
             ),
             effect:
               UPGRADES.daily_bonus.effectMultiplier *
@@ -240,8 +240,8 @@ export default {
               UPGRADES.daily_cooldown.basePrice *
                 Math.pow(
                   UPGRADES.daily_cooldown.priceMultiplier,
-                  (userData.upgrades?.daily_cooldown?.level || 1) - 1
-                )
+                  (userData.upgrades?.daily_cooldown?.level || 1) - 1,
+                ),
             ),
             effect:
               UPGRADES.daily_cooldown.effectValue *
@@ -252,8 +252,8 @@ export default {
               UPGRADES.crime.basePrice *
                 Math.pow(
                   UPGRADES.crime.priceMultiplier,
-                  (userData.upgrades?.crime?.level || 1) - 1
-                )
+                  (userData.upgrades?.crime?.level || 1) - 1,
+                ),
             ),
             effect:
               UPGRADES.crime.effectValue *
@@ -264,8 +264,8 @@ export default {
               UPGRADES.bank_rate.basePrice *
                 Math.pow(
                   UPGRADES.bank_rate.priceMultiplier,
-                  (userData.upgrades?.bank_rate?.level || 1) - 1
-                )
+                  (userData.upgrades?.bank_rate?.level || 1) - 1,
+                ),
             ),
             effect:
               UPGRADES.bank_rate.effectValue *
@@ -276,8 +276,8 @@ export default {
               UPGRADES.games_earning.basePrice *
                 Math.pow(
                   UPGRADES.games_earning.priceMultiplier,
-                  (userData.upgrades?.games_earning?.level || 1) - 1
-                )
+                  (userData.upgrades?.games_earning?.level || 1) - 1,
+                ),
             ),
             effect:
               UPGRADES.games_earning.effectMultiplier *
@@ -293,7 +293,7 @@ export default {
             upgradeInfo[key].originalPrice = upgradeInfo[key].price;
             upgradeInfo[key].price = Math.max(
               1,
-              Math.floor(upgradeInfo[key].price - discountAmount)
+              Math.floor(upgradeInfo[key].price - discountAmount),
             );
             upgradeInfo[key].discountPercent = Math.round(upgradeDiscount);
           });
@@ -339,13 +339,13 @@ export default {
 
                 if (key === "daily_bonus") {
                   effectPerLevel = Math.round(
-                    UPGRADES[key].effectMultiplier * 100
+                    UPGRADES[key].effectMultiplier * 100,
                   );
                   effectUnit = "%";
                   effectValue = upgrade.effect * 100;
                 } else if (key === "daily_cooldown" || key === "crime") {
                   effectPerLevel = Math.floor(
-                    UPGRADES[key].effectValue / (60 * 1000)
+                    UPGRADES[key].effectValue / (60 * 1000),
                   );
                   effectUnit = "m";
                   effectValue = Math.floor(upgrade.effect / (60 * 1000));
@@ -355,7 +355,7 @@ export default {
                   effectValue = upgrade.effect * 100;
                 } else if (key === "games_earning") {
                   effectPerLevel = Math.round(
-                    UPGRADES[key].effectMultiplier * 100
+                    UPGRADES[key].effectMultiplier * 100,
                   );
                   effectUnit = "%";
                   effectValue = upgrade.effect * 100;
@@ -363,21 +363,21 @@ export default {
 
                 // Calculate progress percentage based on user's balance and upgrade price
                 const userBalance = Math.round(
-                  Number(userData.economy?.balance || 0)
+                  Number(userData.economy?.balance || 0),
                 );
                 const progressPercentage = Math.min(
                   Math.round((userBalance / upgrade.price) * 100),
-                  100
+                  100,
                 );
 
                 // Get upgrade name and description from UpgradesDisplay
                 const upgradeName = getUpgradeTranslation(
                   `upgrades.${key}.name`,
-                  key
+                  key,
                 );
                 const upgradeDescription = getUpgradeTranslation(
                   `upgrades.${key}.description`,
-                  ""
+                  "",
                 );
 
                 // Format description with variables if needed
@@ -385,11 +385,11 @@ export default {
                   .replace(/\{\{effect\}\}/g, Math.round(effectValue))
                   .replace(
                     /\{\{increasePerLevel\}\}/g,
-                    Math.round(effectPerLevel)
+                    Math.round(effectPerLevel),
                   )
                   .replace(
                     /\{\{increasePerLevelMinutes\}\}/g,
-                    Math.round(effectPerLevel)
+                    Math.round(effectPerLevel),
                   )
                   .replace(/\{\{price\}\}/g, Math.round(upgrade.price));
 
@@ -415,7 +415,7 @@ export default {
                 }
 
                 return upgradeObj;
-              }
+              },
             ),
             currentUpgrade,
             balance: Math.round(Number(userData.economy?.balance || 0)),
@@ -423,7 +423,7 @@ export default {
             returnDominant: true,
           },
           { image: 2, emoji: 2 },
-          i18n
+          i18n,
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -441,7 +441,7 @@ export default {
           .addText(
             await i18n.__("commands.economy.shop.description", {
               balance: Math.round(Number(userData.economy?.balance || 0)),
-            })
+            }),
           )
           .addImage(`attachment://shop_upgrades.avif`);
 
@@ -455,12 +455,12 @@ export default {
 
               if (key === "daily_bonus") {
                 effectPerLevel = Math.round(
-                  UPGRADES[key].effectMultiplier * 100
+                  UPGRADES[key].effectMultiplier * 100,
                 );
                 effectValue = upgrade.effect * 100;
               } else if (key === "daily_cooldown" || key === "crime") {
                 effectPerLevel = Math.floor(
-                  UPGRADES[key].effectValue / (60 * 1000)
+                  UPGRADES[key].effectValue / (60 * 1000),
                 );
                 effectValue = Math.floor(upgrade.effect / (60 * 1000));
               } else if (key === "bank_rate") {
@@ -468,7 +468,7 @@ export default {
                 effectValue = upgrade.effect * 100;
               } else if (key === "games_earning") {
                 effectPerLevel = Math.round(
-                  UPGRADES[key].effectMultiplier * 100
+                  UPGRADES[key].effectMultiplier * 100,
                 );
                 effectValue = upgrade.effect * 100;
               }
@@ -476,11 +476,11 @@ export default {
               // Get upgrade name and description from command localization strings
               const upgradeName = getUpgradeTranslation(
                 `upgrades.${key}.name`,
-                key
+                key,
               );
               const upgradeDescription = getUpgradeTranslation(
                 `upgrades.${key}.description`,
-                ""
+                "",
               );
 
               // Format description with variables if needed
@@ -488,11 +488,11 @@ export default {
                 .replace(/\{\{effect\}\}/g, Math.round(effectValue))
                 .replace(
                   /\{\{increasePerLevel\}\}/g,
-                  Math.round(effectPerLevel)
+                  Math.round(effectPerLevel),
                 )
                 .replace(
                   /\{\{increasePerLevelMinutes\}\}/g,
-                  Math.round(effectPerLevel)
+                  Math.round(effectPerLevel),
                 )
                 .replace(/\{\{price\}\}/g, Math.round(upgrade.price));
 
@@ -511,7 +511,7 @@ export default {
               }
 
               return option;
-            })
+            }),
           );
 
         const openButton = new ButtonBuilder()
@@ -544,8 +544,8 @@ export default {
               UPGRADES[currentUpgradeType].basePrice *
                 Math.pow(
                   UPGRADES[currentUpgradeType].priceMultiplier,
-                  currentLevel - 1
-                )
+                  currentLevel - 1,
+                ),
             ),
           };
           const refundAmount = currentUpgradeInfo
@@ -557,7 +557,7 @@ export default {
             .setLabel(
               (await i18n.__("commands.economy.shop.revertButtonWithRefund", {
                 refund: refundAmount || 0,
-              })) || (await i18n.__("commands.economy.shop.revertButton")) // Fallback to simple "Revert" text
+              })) || (await i18n.__("commands.economy.shop.revertButton")), // Fallback to simple "Revert" text
             )
             .setDisabled(false);
         }
@@ -566,7 +566,7 @@ export default {
         const selectRow = new ActionRowBuilder().addComponents(selectMenu);
         const buttonRow = new ActionRowBuilder().addComponents(
           openButton,
-          revertButton
+          revertButton,
         );
 
         // Conditionally add interactive components
@@ -607,7 +607,7 @@ export default {
             const purchaseResult = await hubClient.purchaseUpgrade(
               guild.id,
               user.id,
-              type
+              type,
             );
 
             // Cache invalidation is handled by the hub service
@@ -618,7 +618,7 @@ export default {
             if (error.message === "Insufficient balance") {
               await i.reply({
                 content: await i18n.__(
-                  "commands.economy.shop.insufficientFunds"
+                  "commands.economy.shop.insufficientFunds",
                 ),
                 ephemeral: true,
               });
@@ -635,7 +635,7 @@ export default {
             // Revert the upgrade and get the result
             // Revert upgrade functionality will need to be implemented in hub services
             throw new Error(
-              "Revert upgrade not yet implemented in hub services"
+              "Revert upgrade not yet implemented in hub services",
             );
 
             // Cache invalidation is handled by the hub service
@@ -643,7 +643,7 @@ export default {
             // Get the upgrade name from command localization strings for the success message
             const upgradeName = getUpgradeTranslation(
               `upgrades.${type}.name`,
-              type
+              type,
             );
 
             // First, acknowledge the interaction with an update

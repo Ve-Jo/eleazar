@@ -25,12 +25,12 @@ export async function loadCommands(
     "counting",
     "marriage",
     "settings",
-  ]
+  ],
 ) {
   console.log(
     `Loading commands for categories: ${
       categories.length ? categories.join(", ") : "all"
-    }`
+    }`,
   );
 
   // Initialize commands collection
@@ -100,13 +100,13 @@ export async function loadCommands(
       // Register command localizations if available
       if (command.localization_strings) {
         console.log(
-          `Registering localizations for ${category}.${commandData.name}`
+          `Registering localizations for ${category}.${commandData.name}`,
         );
 
         hubClient.registerLocalizations(
           "commands",
           commandData.name,
-          command.localization_strings
+          command.localization_strings,
         );
       }
 
@@ -116,7 +116,7 @@ export async function loadCommands(
         .filter((file) => file.endsWith(".js") && file !== "index.js");
 
       console.log(
-        `Found ${subcommandFiles.length} subcommands in ${category} category`
+        `Found ${subcommandFiles.length} subcommands in ${category} category`,
       );
 
       // Store subcommands for reference
@@ -146,7 +146,7 @@ export async function loadCommands(
             if (subcommand.localization_strings) {
               if (!subcommand.localization_strings.command) {
                 console.error(
-                  `Subcommand ${subcommandName} is missing localization strings`
+                  `Subcommand ${subcommandName} is missing localization strings`,
                 );
                 console.log(subcommand.localization_strings);
                 console.log(JSON.stringify(subcommandModule.default, null, 2));
@@ -155,10 +155,10 @@ export async function loadCommands(
               hubClient.registerLocalizations(
                 "commands",
                 `${commandData.name}.${subcommandName}`,
-                subcommand.localization_strings
+                subcommand.localization_strings,
               );
               console.log(
-                `Registered localizations for ${commandData.name}.${subcommandName}`
+                `Registered localizations for ${commandData.name}.${subcommandName}`,
               );
             }
 
@@ -167,7 +167,7 @@ export async function loadCommands(
             console.log(`Successfully loaded ${subcommandName} subcommand`);
           } else {
             console.error(
-              `Subcommand ${subcommandFile} doesn't have required data or execute properties`
+              `Subcommand ${subcommandFile} doesn't have required data or execute properties`,
             );
           }
         } catch (error) {
@@ -180,7 +180,7 @@ export async function loadCommands(
       console.log(
         `Successfully loaded ${category} command with ${
           Object.keys(command.subcommands).length
-        } subcommands`
+        } subcommands`,
       );
     }
   } catch (error) {

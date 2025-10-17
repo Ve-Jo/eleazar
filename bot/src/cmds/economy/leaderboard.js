@@ -28,10 +28,10 @@ export default {
             { name: "Total Balance", value: "total" },
             { name: "Balance", value: "balance" },
             { name: "Bank Balance", value: "bank" },
-            { name: "Level", value: "level" }
+            { name: "Level", value: "level" },
             /*{ name: "Games", value: "games" },
             { name: "Season XP", value: "season" }*/
-          )
+          ),
       );
 
     return builder;
@@ -131,7 +131,7 @@ export default {
       async function findMyself() {
         if (highlightedPosition === null) {
           const userIndex = sortedUsers.findIndex(
-            (user) => user.id === interaction.user.id
+            (user) => user.id === interaction.user.id,
           );
           if (userIndex !== -1) {
             highlightedPosition = userIndex + 1;
@@ -148,7 +148,7 @@ export default {
         if (category === "season") {
           // For season category, fetch global users ordered by seasonXp
           guildUsers = await hubClient.getSeasonLeaderboard(
-            250 // Limit to reasonable amount
+            250, // Limit to reasonable amount
           );
         } else {
           // For guild-specific categories
@@ -204,7 +204,7 @@ export default {
         const extendedEndIndex = startIndex + pageSize + fetchBufferSize;
         const potentialUsersToDisplay = sortedUsers.slice(
           startIndex,
-          extendedEndIndex
+          extendedEndIndex,
         );
 
         // Fetch member data and process colors for each potential user
@@ -228,12 +228,12 @@ export default {
               console.error(`Failed to fetch member ${userData.id}:`, error);
               return null;
             }
-          })
+          }),
         );
 
         // Filter out failed fetches and take the first 'pageSize' valid users
         const validUsersWithData = potentialUsersWithData.filter(
-          (user) => user !== null
+          (user) => user !== null,
         );
         const usersToDisplayFinal = validUsersWithData.slice(0, pageSize);
 
@@ -243,7 +243,7 @@ export default {
             ? usersToDisplayFinal.findIndex(
                 (u) =>
                   sortedUsers.findIndex((su) => su.id === u.id) + 1 ===
-                  highlightedPosition
+                  highlightedPosition,
               )
             : -1;
 
@@ -267,7 +267,7 @@ export default {
           emptyPageBuilder
             .addText(
               (await i18n.__("commands.economy.leaderboard.noUsersOnPage")) ||
-                "No valid users found on this page."
+                "No valid users found on this page.",
             )
             .addButtons(prevButton, nextButton); // Add the navigation buttons
 
@@ -344,7 +344,7 @@ export default {
             returnDominant: true, // Request dominant color
           },
           { image: 2, emoji: 1 }, // Example weights
-          i18n
+          i18n,
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -361,7 +361,7 @@ export default {
         leaderboardComponent
           .addText(
             await i18n.__(`commands.economy.leaderboard.title`),
-            "header3"
+            "header3",
           )
           .addImage(`attachment://leaderboard.avif`);
 
@@ -373,12 +373,12 @@ export default {
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
             .setPlaceholder(
-              await i18n.__("commands.economy.leaderboard.selectCategory")
+              await i18n.__("commands.economy.leaderboard.selectCategory"),
             )
             .addOptions([
               {
                 label: await i18n.__(
-                  "commands.economy.leaderboard.categories.total"
+                  "commands.economy.leaderboard.categories.total",
                 ),
                 value: "total",
                 default: category === "total",
@@ -386,21 +386,21 @@ export default {
               {
                 label: await i18n.__(
                   // Corrected i18n call
-                  "commands.economy.leaderboard.categories.balance"
+                  "commands.economy.leaderboard.categories.balance",
                 ),
                 value: "balance",
                 default: category === "balance",
               },
               {
                 label: await i18n.__(
-                  "commands.economy.leaderboard.categories.bank"
+                  "commands.economy.leaderboard.categories.bank",
                 ),
                 value: "bank",
                 default: category === "bank",
               },
               {
                 label: await i18n.__(
-                  "commands.economy.leaderboard.categories.level"
+                  "commands.economy.leaderboard.categories.level",
                 ),
                 value: "level",
                 default: category === "level",
@@ -433,16 +433,16 @@ export default {
                 label: `${originalPosition}. ${user.name.slice(0, 20)}`, // Use original position
                 value: originalPosition.toString(), // Use original position as value
                 description: `${await i18n.__(
-                  `commands.economy.leaderboard.categories.${category}`
+                  `commands.economy.leaderboard.categories.${category}`,
                 )}: ${user.displayValue}`.slice(0, 50),
               };
-            })
+            }),
           );
 
           const selectMenu = new StringSelectMenuBuilder()
             .setCustomId("select_user")
             .setPlaceholder(
-              await i18n.__("commands.economy.leaderboard.selectUser")
+              await i18n.__("commands.economy.leaderboard.selectUser"),
             ) // Use localized placeholder
             .addOptions(selectOptions);
 
@@ -475,7 +475,7 @@ export default {
         // No need to add flags here, toReplyOptions handles V1/V2 structure
         console.log(
           "Generated message options:",
-          JSON.stringify(messageOptions, null, 2)
+          JSON.stringify(messageOptions, null, 2),
         );
 
         // Edit the deferred reply
@@ -566,14 +566,14 @@ export default {
               const newMessageOptions = await generateLeaderboardMessage();
               console.log(
                 "Updating message with options:",
-                JSON.stringify(newMessageOptions, null, 2)
+                JSON.stringify(newMessageOptions, null, 2),
               );
               await message.edit(newMessageOptions);
             }
           } catch (collectError) {
             console.error(
               "Error processing leaderboard interaction:",
-              collectError
+              collectError,
             );
             // Optionally send an ephemeral message to the user
             try {
@@ -589,7 +589,7 @@ export default {
 
         collector.on("end", (collected, reason) => {
           console.log(
-            `Leaderboard collector ended. Reason: ${reason}, Collected: ${collected.size}`
+            `Leaderboard collector ended. Reason: ${reason}, Collected: ${collected.size}`,
           );
           // Check if the message exists and is still editable before trying to edit
           if (message && message.editable) {
@@ -599,7 +599,7 @@ export default {
                 // Ignore "Unknown Message" errors
                 console.error(
                   "Failed to remove components on collector end:",
-                  e
+                  e,
                 );
               }
             });

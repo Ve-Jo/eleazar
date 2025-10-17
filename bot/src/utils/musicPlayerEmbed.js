@@ -78,7 +78,7 @@ import { hubClient } from "../api/hubClient.js";
         category,
         component,
         localization_strings[category][component],
-        true
+        true,
       );
     }
   }
@@ -95,10 +95,10 @@ let lastGeneratedImageTimestamp = 0;
 export async function createOrUpdateMusicPlayerEmbed(
   track,
   player,
-  oldEmbed = null
+  oldEmbed = null,
 ) {
   console.log(
-    `[MusicPlayerEmbed] Starting generation for track: ${track?.info?.title}`
+    `[MusicPlayerEmbed] Starting generation for track: ${track?.info?.title}`,
   );
   let locale = track.requester?.locale || "en";
   if (locale.includes("-")) {
@@ -125,13 +125,13 @@ export async function createOrUpdateMusicPlayerEmbed(
   const getAvatarUrl = (user) => {
     if (!user)
       return `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-        Math.random() * 5
+        Math.random() * 5,
       )}.png`;
     return typeof user.displayAvatarURL === "function"
       ? user.displayAvatarURL({ extension: "png", size: 256 })
       : user.avatarURL ||
           `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-            Math.random() * 5
+            Math.random() * 5,
           )}.png`;
   };
 
@@ -149,13 +149,13 @@ export async function createOrUpdateMusicPlayerEmbed(
                 track.requester?.username ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               displayName:
                 track.requester?.displayName ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               avatarURL: getAvatarUrl(track.requester),
               locale: track.requester?.locale || "en",
@@ -180,13 +180,13 @@ export async function createOrUpdateMusicPlayerEmbed(
                 track.requester?.username ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               displayName:
                 track.requester?.displayName ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               avatarURL: getAvatarUrl(track.requester),
             },
@@ -198,7 +198,7 @@ export async function createOrUpdateMusicPlayerEmbed(
                   previousSong.info.title ||
                   (await hubClient.getTranslation(
                     "music.player.noTitle",
-                    locale
+                    locale,
                   )),
                 duration: previousSong.info.duration,
                 thumbnail: previousSong.info.artworkUrl,
@@ -208,13 +208,13 @@ export async function createOrUpdateMusicPlayerEmbed(
                     previousSong.requester?.username ||
                     (await hubClient.getTranslation(
                       "music.player.noTitle",
-                      locale
+                      locale,
                     )),
                   displayName:
                     previousSong.requester?.displayName ||
                     (await hubClient.getTranslation(
                       "music.player.noTitle",
-                      locale
+                      locale,
                     )),
                   avatarURL: getAvatarUrl(previousSong.requester),
                 },
@@ -232,13 +232,13 @@ export async function createOrUpdateMusicPlayerEmbed(
                 t.requester?.username ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               displayName:
                 t.requester?.displayName ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale
+                  locale,
                 )),
               avatarURL: getAvatarUrl(t.requester),
             },
@@ -249,7 +249,7 @@ export async function createOrUpdateMusicPlayerEmbed(
           userAvatar: getAvatarUrl(track.requester),
         },
         { image: 1, emoji: 1 },
-        i18n
+        i18n,
       );
       console.log(`[MusicPlayerEmbed] Image generation successful.`);
       lastGeneratedImage = { buffer };
@@ -276,7 +276,7 @@ export async function createOrUpdateMusicPlayerEmbed(
     .addActionRow(createMusicButtons(player));
 
   console.log(
-    `[MusicPlayerEmbed] Finished generation for track: ${track?.info?.title}`
+    `[MusicPlayerEmbed] Finished generation for track: ${track?.info?.title}`,
   );
   // Return the structure expected for interaction replies/edits
   return {

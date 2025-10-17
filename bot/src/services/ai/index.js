@@ -103,7 +103,7 @@ export function getUserPreferences(userId) {
         Object.entries(CONFIG.aiParameters).map(([key, param]) => [
           key,
           param.default,
-        ])
+        ]),
       ),
     };
   } else {
@@ -115,7 +115,7 @@ export function getUserPreferences(userId) {
       ...Object.fromEntries(
         Object.entries(CONFIG.aiParameters)
           .filter(([key]) => existingParams[key] === undefined)
-          .map(([key, param]) => [key, param.default])
+          .map(([key, param]) => [key, param.default]),
       ),
     };
 
@@ -213,7 +213,7 @@ export function addConversationToHistory(userId, userMessage, aiResponse) {
     prefs.messageHistory.splice(hasSystemMessage ? 1 : 0, 2);
 
     console.log(
-      `[DEBUG] Trimmed context for user ${userId}: ${currentTokens} tokens > ${maxTokens} max tokens`
+      `[DEBUG] Trimmed context for user ${userId}: ${currentTokens} tokens > ${maxTokens} max tokens`,
     );
   }
 }

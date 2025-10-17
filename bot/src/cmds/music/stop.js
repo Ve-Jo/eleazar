@@ -44,12 +44,12 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
 
     if (!player) {
       return interaction.editReply(
-        await i18n.__("commands.music.stop.noMusicPlaying")
+        await i18n.__("commands.music.stop.noMusicPlaying"),
       );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {

@@ -59,12 +59,12 @@ export async function initializeApiClients(client) {
       } catch (error) {
         console.error(
           "❌ Failed to initialize OpenRouter client:",
-          error.message
+          error.message,
         );
       }
     } else {
       console.log(
-        `✅ OpenRouter client already exists at client.${clientPath}`
+        `✅ OpenRouter client already exists at client.${clientPath}`,
       );
       results.openrouter = true;
     }
@@ -103,17 +103,17 @@ export async function initializeApiClients(client) {
 async function fetchGroqModelsFromApi(groqClient) {
   if (!groqClient) {
     console.warn(
-      "Attempted to fetch Groq models without an initialized client."
+      "Attempted to fetch Groq models without an initialized client.",
     );
     return [];
   }
 
   try {
     const preferredTextModels = new Set(
-      CONFIG.groq.preferredModels?.text || []
+      CONFIG.groq.preferredModels?.text || [],
     );
     const preferredVisionModels = new Set(
-      CONFIG.groq.preferredModels?.vision || []
+      CONFIG.groq.preferredModels?.vision || [],
     );
 
     // Fetch all models from API
@@ -124,7 +124,7 @@ async function fetchGroqModelsFromApi(groqClient) {
     const filteredModels = models.data
       .filter((m) => m.active)
       .filter(
-        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id)
+        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id),
       )
       .map((model) => ({
         id: model.id,
@@ -155,17 +155,17 @@ async function fetchGroqModelsFromApi(groqClient) {
 async function fetchOpenRouterModelsFromApi(openRouterClient) {
   if (!openRouterClient) {
     console.warn(
-      "Attempted to fetch OpenRouter models without an initialized client."
+      "Attempted to fetch OpenRouter models without an initialized client.",
     );
     return [];
   }
 
   try {
     const preferredTextModels = new Set(
-      CONFIG.openrouter.preferredModels?.text || []
+      CONFIG.openrouter.preferredModels?.text || [],
     );
     const preferredVisionModels = new Set(
-      CONFIG.openrouter.preferredModels?.vision || []
+      CONFIG.openrouter.preferredModels?.vision || [],
     );
     const preferredModelsSet = new Set([
       ...preferredTextModels,
@@ -253,7 +253,7 @@ async function fetchOpenRouterModelsFromApi(openRouterClient) {
     });
 
     console.log(
-      `Filtered to ${filteredModels.length} OpenRouter models (${processedModels.length} total available)`
+      `Filtered to ${filteredModels.length} OpenRouter models (${processedModels.length} total available)`,
     );
     return filteredModels;
   } catch (error) {
@@ -272,17 +272,17 @@ async function fetchOpenRouterModelsFromApi(openRouterClient) {
 async function fetchNanoGPTModelsFromApi(nanoGptClient) {
   if (!nanoGptClient) {
     console.warn(
-      "Attempted to fetch NanoGPT models without an initialized client."
+      "Attempted to fetch NanoGPT models without an initialized client.",
     );
     return [];
   }
 
   try {
     const preferredTextModels = new Set(
-      CONFIG.nanogpt.preferredModels?.text || []
+      CONFIG.nanogpt.preferredModels?.text || [],
     );
     const preferredVisionModels = new Set(
-      CONFIG.nanogpt.preferredModels?.vision || []
+      CONFIG.nanogpt.preferredModels?.vision || [],
     );
 
     // NanoGPT API может не иметь стандартного endpoint для получения моделей
@@ -399,7 +399,7 @@ async function fetchAllModels(client) {
     fetchPromises.push(
       fetchGroqModelsFromApi(groqClient).then((models) => {
         cachedModels.groq = models;
-      })
+      }),
     );
   } else {
     console.warn("Groq client not available, using fallback models.");
@@ -410,7 +410,7 @@ async function fetchAllModels(client) {
     fetchPromises.push(
       fetchOpenRouterModelsFromApi(openRouterClient).then((models) => {
         cachedModels.openrouter = models;
-      })
+      }),
     );
   } else {
     console.warn("OpenRouter client not available, using fallback models.");
@@ -421,7 +421,7 @@ async function fetchAllModels(client) {
     fetchPromises.push(
       fetchNanoGPTModelsFromApi(nanoGptClient).then((models) => {
         cachedModels.nanogpt = models;
-      })
+      }),
     );
   } else {
     console.warn("NanoGPT client not available, using fallback models.");
@@ -445,7 +445,7 @@ async function fetchAllModels(client) {
   });
 
   console.log(
-    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length}), NanoGPT (${cachedModels.nanogpt.length})`
+    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length}), NanoGPT (${cachedModels.nanogpt.length})`,
   );
   return cachedModels;
 }
@@ -482,10 +482,10 @@ export async function getAvailableModels(client, capabilityFilter = null) {
     preferredModelNamesConfig = [
       ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
       ...(CONFIG.openrouter.preferredModels?.vision || []).map(
-        (id) => `openrouter/${id}`
+        (id) => `openrouter/${id}`,
       ),
       ...(CONFIG.nanogpt.preferredModels?.vision || []).map(
-        (id) => `nanogpt/${id}`
+        (id) => `nanogpt/${id}`,
       ),
     ];
     console.log("Filtering for VISION models based on config.");
@@ -505,10 +505,10 @@ export async function getAvailableModels(client, capabilityFilter = null) {
     preferredModelNamesConfig = [
       ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
       ...(CONFIG.openrouter.preferredModels?.text || []).map(
-        (id) => `openrouter/${id}`
+        (id) => `openrouter/${id}`,
       ),
       ...(CONFIG.nanogpt.preferredModels?.text || []).map(
-        (id) => `nanogpt/${id}`
+        (id) => `nanogpt/${id}`,
       ),
     ];
     console.log("Prioritizing TEXT models based on config.");
@@ -528,7 +528,7 @@ export async function getAvailableModels(client, capabilityFilter = null) {
   console.log(
     `Returning ${resultModels.length} available models for ${
       isVisionRequest ? "VISION" : "TEXT"
-    } request`
+    } request`,
   );
   return resultModels;
 }
@@ -568,7 +568,7 @@ export async function getModelDetails(client, prefixedModelId) {
     if (state.modelStatus.toolSupport.has(cacheKey)) {
       model.capabilities.tools = state.modelStatus.toolSupport.get(cacheKey);
       console.log(
-        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
+        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`,
       );
     }
     // Check against known list of models without tools
@@ -576,7 +576,7 @@ export async function getModelDetails(client, prefixedModelId) {
       model.capabilities.tools = false;
       state.modelStatus.toolSupport.set(cacheKey, false);
       console.log(
-        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
+        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`,
       );
     }
   }
@@ -594,7 +594,7 @@ export async function getApiClientForModel(client, prefixedModelId) {
   const modelDetails = await getModelDetails(client, prefixedModelId);
   if (!modelDetails) {
     throw new Error(
-      `Could not find details or client for model: ${prefixedModelId}`
+      `Could not find details or client for model: ${prefixedModelId}`,
     );
   }
 
@@ -603,7 +603,7 @@ export async function getApiClientForModel(client, prefixedModelId) {
 
   if (!clientPath || !client[clientPath]) {
     throw new Error(
-      `API client for provider '${provider}' not found or not initialized.`
+      `API client for provider '${provider}' not found or not initialized.`,
     );
   }
 
@@ -624,7 +624,7 @@ export async function getModelCapabilities(client, prefixedModelId) {
   const modelDetails = await getModelDetails(client, prefixedModelId);
   if (!modelDetails) {
     console.error(
-      `Could not determine capabilities for unknown model: ${prefixedModelId}`
+      `Could not determine capabilities for unknown model: ${prefixedModelId}`,
     );
     // Return default/conservative capabilities
     return { vision: false, tools: false, maxContext: 8192 };
@@ -707,7 +707,7 @@ export function supportsReasoning(modelId) {
 
   // First check the static configuration
   const isInConfig = CONFIG.reasoningCapableModels.some(
-    (m) => m === baseModelId || m === modelId
+    (m) => m === baseModelId || m === modelId,
   );
 
   if (isInConfig) {
@@ -728,7 +728,7 @@ export function supportsReasoning(modelId) {
   if (provider === "openrouter") {
     const reasoningKeywords = ["reason", "ration", "logic", "think"];
     return reasoningKeywords.some((keyword) =>
-      baseModelId.toLowerCase().includes(keyword)
+      baseModelId.toLowerCase().includes(keyword),
     );
   }
 
@@ -736,7 +736,7 @@ export function supportsReasoning(modelId) {
   if (provider === "nanogpt") {
     const reasoningKeywords = ["reason", "ration", "logic", "think"];
     return reasoningKeywords.some((keyword) =>
-      baseModelId.toLowerCase().includes(keyword)
+      baseModelId.toLowerCase().includes(keyword),
     );
   }
 

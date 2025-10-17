@@ -42,8 +42,8 @@ export default {
             {
               name: "Crypto 2.0",
               value: "crypto2",
-            }
-          )
+            },
+          ),
       );
 
     return builder;
@@ -155,11 +155,11 @@ export default {
       const gamesArray = Array.from(gamesMap.values());
       console.log(
         `[work] Loaded ${gamesArray.length} games with titles:`,
-        gamesArray.map((g) => `${g.id}: "${g.title}" (${typeof g.title})`)
+        gamesArray.map((g) => `${g.id}: "${g.title}" (${typeof g.title})`),
       );
       console.log(
         `[work] First game structure:`,
-        JSON.stringify(gamesArray[0], null, 2)
+        JSON.stringify(gamesArray[0], null, 2),
       );
 
       if (gamesMap.size === 0) {
@@ -197,25 +197,25 @@ export default {
       // Get user and game records in a single operation
       const gameRecords = await hubClient.getGameRecords(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
       );
 
       // Filter games into categories
       const standardGamesArray = gamesArray.filter(
         (game) =>
           !game.file.startsWith("games/risky/") &&
-          !game.file.startsWith("games/ported/") // Standard games only
+          !game.file.startsWith("games/ported/"), // Standard games only
       );
       const riskyGamesArray = gamesArray.filter((game) =>
-        game.file.startsWith("games/risky/")
+        game.file.startsWith("games/risky/"),
       );
 
       // Use translated category names
       const standardCategoryName = await i18n.__(
-        "commands.economy.work.standardGamesCategory"
+        "commands.economy.work.standardGamesCategory",
       );
       const riskyCategoryName = await i18n.__(
-        "commands.economy.work.riskyGamesCategory"
+        "commands.economy.work.riskyGamesCategory",
       );
 
       const games = {};
@@ -268,7 +268,7 @@ export default {
       // Get user data once for initial rendering
       let userData = await hubClient.getUser(
         interaction.guild.id,
-        interaction.user.id
+        interaction.user.id,
       );
 
       const generateGameMessage = async (options = {}) => {
@@ -280,18 +280,18 @@ export default {
         const currentGame = currentCategoryGames[highlightedGame];
 
         console.log(
-          `[work] Generating message with ${currentCategoryGames.length} games in category "${categoryNames[currentCategory]}"`
+          `[work] Generating message with ${currentCategoryGames.length} games in category "${categoryNames[currentCategory]}"`,
         );
 
         if (currentGame) {
           console.log(
             `[work] Current highlighted game: ${currentGame.id} - "${
               currentGame.title
-            }" (${typeof currentGame.title})`
+            }" (${typeof currentGame.title})`,
           );
           console.log(
             `[work] Current game full structure:`,
-            JSON.stringify(currentGame, null, 2)
+            JSON.stringify(currentGame, null, 2),
           );
         }
 
@@ -334,7 +334,7 @@ export default {
             gameStats: currentGameRecords || {}, // Use existing game records
           },
           { image: 2, emoji: 1 },
-          i18n
+          i18n,
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -359,7 +359,7 @@ export default {
               label: category,
               value: index.toString(),
               default: currentCategory === index,
-            }))
+            })),
           );
 
         // Create navigation buttons
@@ -381,7 +381,7 @@ export default {
           .setStyle(
             selectedGame === currentCategoryGames[highlightedGame]?.id
               ? ButtonStyle.Secondary
-              : ButtonStyle.Success
+              : ButtonStyle.Success,
           );
 
         // Add components to the launcher
@@ -395,7 +395,7 @@ export default {
         const buttonRow = new ActionRowBuilder().addComponents(
           prevButton,
           selectButton,
-          nextButton
+          nextButton,
         );
 
         // Conditionally add interactive components
@@ -429,7 +429,7 @@ export default {
           .toLowerCase();
         // No need to set i18n locale here, it should be handled by middleware or initial setup
         console.log(
-          `[work-collect] Handling interaction with locale ${normalizedInteractionLocale}`
+          `[work-collect] Handling interaction with locale ${normalizedInteractionLocale}`,
         );
 
         const categoryNames = Object.keys(games);
@@ -449,7 +449,7 @@ export default {
           highlightedGame = 0;
           selectedGame = null;
           console.log(
-            `[work-collect] Selected category ${currentCategory}: "${categoryNames[currentCategory]}"`
+            `[work-collect] Selected category ${currentCategory}: "${categoryNames[currentCategory]}"`,
           );
           await i.update(await generateGameMessage());
         } else if (i.customId === "prev_game") {
@@ -457,7 +457,7 @@ export default {
             highlightedGame--;
             selectedGame = null;
             console.log(
-              `[work-collect] Navigated to previous game: ${highlightedGame}`
+              `[work-collect] Navigated to previous game: ${highlightedGame}`,
             );
             await i.update(await generateGameMessage());
           }
@@ -466,7 +466,7 @@ export default {
             highlightedGame++;
             selectedGame = null;
             console.log(
-              `[work-collect] Navigated to next game: ${highlightedGame}`
+              `[work-collect] Navigated to next game: ${highlightedGame}`,
             );
             await i.update(await generateGameMessage());
           }
@@ -482,7 +482,7 @@ export default {
 
           selectedGame = game.id;
           console.log(
-            `[work-collect] Selected game ${game.id}: \"${game.title}\" (Legacy: ${game.isLegacy})`
+            `[work-collect] Selected game ${game.id}: \"${game.title}\" (Legacy: ${game.isLegacy})`,
           );
 
           // Defer the update instead of sending a full update
@@ -491,14 +491,14 @@ export default {
           try {
             // Load the game module using the stored relative file path
             console.log(
-              `[work-collect] Loading game module: ${game.id} from ${game.file}`
+              `[work-collect] Loading game module: ${game.id} from ${game.file}`,
             );
             const gameModule = await getGameModule(game.id, i18n);
 
             if (!gameModule?.execute) {
               // Check if execute function exists
               throw new Error(
-                `Game module ${game.id} missing execute function`
+                `Game module ${game.id} missing execute function`,
               );
             }
 

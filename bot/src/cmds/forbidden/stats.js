@@ -93,7 +93,7 @@ export default {
         locale: interaction.locale,
       },
       { image: 2, emoji: 1 },
-      i18n
+      i18n,
     );
 
     const attachment = new AttachmentBuilder(imageResponse, {
@@ -116,7 +116,7 @@ export default {
           imageResponse[2] === 0x46
             ? "gif"
             : "png"
-        }`
+        }`,
       )
       .setAuthor({
         name: await i18n.__("help.stats.title"),

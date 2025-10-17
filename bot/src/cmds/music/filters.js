@@ -11,20 +11,20 @@ export default {
           .setName("filter")
           .setDescription("The filter to set")
           .setRequired(true)
-          .setAutocomplete(true)
+          .setAutocomplete(true),
       )
       .addStringOption((option) =>
         option
           .setName("property")
           .setDescription("The property of the filter to set")
           .setRequired(true)
-          .setAutocomplete(true)
+          .setAutocomplete(true),
       )
       .addNumberOption((option) =>
         option
           .setName("value")
           .setDescription("The value to set for the filter property")
-          .setRequired(true)
+          .setRequired(true),
       );
 
     return builder;
@@ -104,12 +104,12 @@ export default {
     const filterProperty = interaction.options.getString("property");
     const value = interaction.options.getNumber("value");
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
 
     if (!player) {
       return interaction.editReply(
-        await i18n.__("commands.music.filters.noMusicPlaying")
+        await i18n.__("commands.music.filters.noMusicPlaying"),
       );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
@@ -124,7 +124,7 @@ export default {
     console.log("Filter Property:", filterProperty);
     console.log(
       "Filter Value:",
-      player.filterManager.data[filterName]?.[filterProperty]
+      player.filterManager.data[filterName]?.[filterProperty],
     );
 
     if (
@@ -137,18 +137,18 @@ export default {
       await interaction.editReply(
         await i18n.__("commands.music.filters.filterApplied", {
           filter: `${filterName} ${filterProperty} ${value}`,
-        })
+        }),
       );
     } else {
       return interaction.editReply(
-        await i18n.__("commands.music.filters.invalidFilterProperty")
+        await i18n.__("commands.music.filters.invalidFilterProperty"),
       );
     }
   },
 
   async autocomplete(interaction) {
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
 
     if (!player) {
@@ -179,7 +179,7 @@ export default {
           (filter) =>
             filter !== "pluginFilters" &&
             filter !== "channelMix" &&
-            Object.keys(player.filterManager.data[filter]).length > 0
+            Object.keys(player.filterManager.data[filter]).length > 0,
         )
         .map((filter) => ({
           name: filter,
@@ -196,7 +196,7 @@ export default {
     }
 
     const filteredOptions = options.filter((option) =>
-      option.name.toLowerCase().startsWith(focusedOption.value.toLowerCase())
+      option.name.toLowerCase().startsWith(focusedOption.value.toLowerCase()),
     );
 
     await interaction.respond(filteredOptions.slice(0, 25));

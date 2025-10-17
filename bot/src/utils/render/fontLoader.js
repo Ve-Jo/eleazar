@@ -19,7 +19,7 @@ export let defaultFontConfig = Object.entries(fontWeightMap).map(
     weight: font.weight,
     style: "normal",
     data: null,
-  })
+  }),
 );
 
 export async function loadFonts() {
@@ -39,13 +39,13 @@ export async function loadFonts() {
           "render-server",
           "public",
           "fonts",
-          filename
+          filename,
         );
       });
 
       console.log(
         "📂 Attempting to load fonts from paths:",
-        JSON.stringify(fontPaths, null, 2)
+        JSON.stringify(fontPaths, null, 2),
       );
 
       try {
@@ -58,17 +58,17 @@ export async function loadFonts() {
                 key,
                 buffer.buffer.slice(
                   buffer.byteOffset,
-                  buffer.byteOffset + buffer.byteLength
+                  buffer.byteOffset + buffer.byteLength,
                 ),
               ];
             } catch (error) {
               console.error(
                 `❌ Failed to load font ${key} from ${path}:`,
-                error
+                error,
               );
               throw error;
             }
-          })
+          }),
         );
 
         fontBuffers = Object.fromEntries(loadedBuffers);
@@ -102,7 +102,7 @@ export async function createFontConfig(customConfig = {}) {
     const configFonts = defaultFontConfig.map((font) => {
       const fontKey = `${font.name}${font.weight}`;
       const fontConfig = Object.values(fontWeightMap).find(
-        (config) => config.name === font.name && config.weight === font.weight
+        (config) => config.name === font.name && config.weight === font.weight,
       );
       const fontData = fonts[fontKey];
       console.log(
@@ -114,8 +114,8 @@ export async function createFontConfig(customConfig = {}) {
             hasData: !!fontData,
           },
           null,
-          2
-        )
+          2,
+        ),
       );
 
       if (!fontData) {

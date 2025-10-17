@@ -17,7 +17,7 @@ export default {
         option
           .setName("amount")
           .setDescription("Amount to deposit (or 'all', 'half')")
-          .setRequired(true)
+          .setRequired(true),
       );
     return builder;
   },
@@ -135,7 +135,7 @@ export default {
         partnerData = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true
+          true,
         );
       }
 
@@ -170,7 +170,7 @@ export default {
       if (amountToDeposit <= 0) {
         return interaction.editReply({
           content: await i18n.__(
-            "commands.economy.deposit.amountGreaterThanZero"
+            "commands.economy.deposit.amountGreaterThanZero",
           ),
           ephemeral: true,
         });
@@ -197,7 +197,7 @@ export default {
         const updatedPartner = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true
+          true,
         );
         const userBankBalance = Number(currentBankBalance) || 0;
         const partnerBankBalance = updatedPartner?.economy
@@ -256,7 +256,7 @@ export default {
           returnDominant: true,
         },
         { image: 2, emoji: 1 },
-        i18n
+        i18n,
       );
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -271,7 +271,7 @@ export default {
         .addText(
           await i18n.__("commands.economy.deposit.depositSuccess", {
             amount: amountToDeposit.toFixed(2),
-          })
+          }),
         )
         .addImage("attachment://deposit_receipt.avif")
         .addTimestamp(interaction.locale);
@@ -287,7 +287,7 @@ export default {
       if (partnerData) {
         try {
           const partnerDiscordUser = await interaction.client.users.fetch(
-            partnerData.id
+            partnerData.id,
           );
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
@@ -297,14 +297,14 @@ export default {
                   user: interaction.user.tag,
                   amount: amountToDeposit.toFixed(2),
                   guild: interaction.guild.name,
-                }
+                },
               ),
             });
           }
         } catch (dmError) {
           console.error(
             `Failed to send deposit DM to partner ${partnerData.id}:`,
-            dmError
+            dmError,
           );
         }
       }

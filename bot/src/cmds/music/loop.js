@@ -14,8 +14,8 @@ export default {
           .addChoices(
             { name: "Track", value: "track" },
             { name: "Queue", value: "queue" },
-            { name: "Off", value: "off" }
-          )
+            { name: "Off", value: "off" },
+          ),
       );
 
     return builder;
@@ -67,12 +67,12 @@ export default {
   async execute(interaction) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
 
     if (!player) {
       return interaction.editReply(
-        await i18n.__("commands.music.loop.noMusicPlaying")
+        await i18n.__("commands.music.loop.noMusicPlaying"),
       );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
@@ -86,7 +86,7 @@ export default {
     const loopType = interaction.options.getString("type");
     await player.setRepeatMode(loopType);
     await interaction.editReply(
-      await i18n.__("commands.music.loop.loopApplied", { type: loopType })
+      await i18n.__("commands.music.loop.loopApplied", { type: loopType }),
     );
   },
 };

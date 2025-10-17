@@ -86,7 +86,7 @@ export default {
     };
 
     console.log(
-      `[help.commands] Total commands loaded: ${interaction.client.commands.size}`
+      `[help.commands] Total commands loaded: ${interaction.client.commands.size}`,
     );
     console.log(`[help.commands] Using locale: ${locale}`);
 
@@ -99,13 +99,13 @@ export default {
       console.log(`- Command: ${commandName}`);
       console.log(`  Has Builder: ${!!(command.data && command.data.builder)}`);
       console.log(
-        `  Has Category: ${!!(command.data && command.data.category)}`
+        `  Has Category: ${!!(command.data && command.data.category)}`,
       );
       console.log(`  Has Subcommands: ${!!command.subcommands}`);
 
       if (command.subcommands) {
         console.log(
-          `  Subcommands: ${Object.keys(command.subcommands).join(", ")}`
+          `  Subcommands: ${Object.keys(command.subcommands).join(", ")}`,
         );
       }
     }
@@ -116,7 +116,7 @@ export default {
         // Skip invalid commands
         if (!command || !command.data) {
           console.log(
-            "[help.commands] Skipping invalid command (missing data)"
+            "[help.commands] Skipping invalid command (missing data)",
           );
           return;
         }
@@ -155,7 +155,7 @@ export default {
               ? Object.keys(command.subcommands).length
               : 0,
             category: category,
-          })}`
+          })}`,
         );
 
         // Initialize category entry if not exists
@@ -168,7 +168,7 @@ export default {
           const subcommandEntries = Object.entries(command.subcommands);
 
           console.log(
-            `[help.commands] Found ${subcommandEntries.length} subcommands for ${commandName} in subcommands object`
+            `[help.commands] Found ${subcommandEntries.length} subcommands for ${commandName} in subcommands object`,
           );
 
           // Keep track of subcommand positions within this category
@@ -196,7 +196,7 @@ export default {
                 subName;
 
               console.log(
-                `[help.commands] Found localized name: "${subTitle}" for locale ${locale}`
+                `[help.commands] Found localized name: "${subTitle}" for locale ${locale}`,
               );
             }
             // Check localizer directly
@@ -212,7 +212,7 @@ export default {
                 subName;
 
               console.log(
-                `[help.commands] Found localized name in localizer: "${subTitle}"`
+                `[help.commands] Found localized name in localizer: "${subTitle}"`,
               );
             }
             // Check for name_localizations
@@ -223,7 +223,7 @@ export default {
             ) {
               subTitle = subcommand.data.name_localizations[locale] || subName;
               console.log(
-                `[help.commands] Found name_localizations: "${subTitle}"`
+                `[help.commands] Found name_localizations: "${subTitle}"`,
               );
             }
 
@@ -232,7 +232,7 @@ export default {
 
             // Log all possible places we could find descriptions
             console.log(
-              `[help.commands] Looking for description for ${subName} with locale ${locale}`
+              `[help.commands] Looking for description for ${subName} with locale ${locale}`,
             );
 
             // Check in data.builder.localizationStrings (most common)
@@ -243,7 +243,7 @@ export default {
               subcommand.data.builder.localizationStrings.description
             ) {
               console.log(
-                `[help.commands] Found localizationStrings.description in builder`
+                `[help.commands] Found localizationStrings.description in builder`,
               );
 
               // Get description in this user's locale or fall back to English
@@ -255,7 +255,7 @@ export default {
                 "No description";
 
               console.log(
-                `[help.commands] Found description: "${subDescription}" for locale ${locale}`
+                `[help.commands] Found description: "${subDescription}" for locale ${locale}`,
               );
             }
             // Also check data.localizer directly
@@ -266,7 +266,7 @@ export default {
               subcommand.data.localizer.localizationStrings.description
             ) {
               console.log(
-                `[help.commands] Found localizationStrings.description in localizer`
+                `[help.commands] Found localizationStrings.description in localizer`,
               );
 
               // Get description in this user's locale or fall back to English
@@ -278,7 +278,7 @@ export default {
                 "No description";
 
               console.log(
-                `[help.commands] Found description: "${subDescription}" for locale ${locale}`
+                `[help.commands] Found description: "${subDescription}" for locale ${locale}`,
               );
             }
             // Check for direct description on data
@@ -338,13 +338,13 @@ export default {
           categories.add(category);
 
           console.log(
-            `[help.commands] Added ${commandSubcommands.length} subcommands to category: ${category}`
+            `[help.commands] Added ${commandSubcommands.length} subcommands to category: ${category}`,
           );
         }
         // If there are data.options but no subcommands object, check there
         else if (command.data.options && command.data.options.length > 0) {
           console.log(
-            `[help.commands] Found ${command.data.options.length} subcommands for ${commandName} in data.options`
+            `[help.commands] Found ${command.data.options.length} subcommands for ${commandName} in data.options`,
           );
 
           // Keep track of subcommand positions within this category
@@ -367,7 +367,7 @@ export default {
             ) {
               subTitle = subcommand.name_localizations[locale];
               console.log(
-                `[help.commands] Found name_localization: "${subTitle}"`
+                `[help.commands] Found name_localization: "${subTitle}"`,
               );
             } else if (
               subcommand &&
@@ -385,7 +385,7 @@ export default {
             let subDescription = "No description";
 
             console.log(
-              `[help.commands] Looking for description for ${subName} with locale ${locale}`
+              `[help.commands] Looking for description for ${subName} with locale ${locale}`,
             );
 
             // Check for localized description in various places
@@ -395,7 +395,7 @@ export default {
             ) {
               subDescription = subcommand.description_localizations[locale];
               console.log(
-                `[help.commands] Found description_localization: "${subDescription}"`
+                `[help.commands] Found description_localization: "${subDescription}"`,
               );
             } else if (
               subcommand &&
@@ -408,12 +408,12 @@ export default {
                 subcommand.description ||
                 "No description";
               console.log(
-                `[help.commands] Found builder description: "${subDescription}"`
+                `[help.commands] Found builder description: "${subDescription}"`,
               );
             } else if (subcommand.description) {
               subDescription = subcommand.description;
               console.log(
-                `[help.commands] Using direct description: "${subDescription}"`
+                `[help.commands] Using direct description: "${subDescription}"`,
               );
             }
 
@@ -442,7 +442,7 @@ export default {
           categories.add(category);
 
           console.log(
-            `[help.commands] Added ${commandSubcommands.length} subcommands to category: ${category}`
+            `[help.commands] Added ${commandSubcommands.length} subcommands to category: ${category}`,
           );
         }
         // If no options, add the command directly
@@ -475,7 +475,7 @@ export default {
           `[help.commands] Error processing command: ${
             command.data?.name || "unnamed"
           }`,
-          error
+          error,
         );
       }
     });
@@ -484,7 +484,7 @@ export default {
     console.log("[help.commands] Processed categories:");
     processedCategories.forEach((commandIndexes, category) => {
       console.log(
-        `[help.commands] Category: ${category}, Commands: ${commandIndexes.length}`
+        `[help.commands] Category: ${category}, Commands: ${commandIndexes.length}`,
       );
     });
 
@@ -514,7 +514,7 @@ export default {
 
     console.log(`[help.commands] Initial category: ${currentCategory}`);
     console.log(
-      `[help.commands] Initial highlighted position: ${highlightedPosition}`
+      `[help.commands] Initial highlighted position: ${highlightedPosition}`,
     );
 
     const generateCommandImage = async () => {
@@ -551,7 +551,7 @@ export default {
           maxSettingsHidedWidth: 450,
         },
         { image: 1, emoji: 1 },
-        i18n
+        i18n,
       );
 
       const attachment = new AttachmentBuilder(pngBuffer, {
@@ -572,7 +572,7 @@ export default {
       })
         .addText(
           await getTranslation("commands.help.commands.title"),
-          "header3"
+          "header3",
         )
         .addImage("attachment://commands.avif");
 
@@ -583,20 +583,20 @@ export default {
           .setCustomId("category")
           .setPlaceholder(
             await getTranslation(
-              "commands.help.commands.categoryMenu.placeholder"
-            )
+              "commands.help.commands.categoryMenu.placeholder",
+            ),
           )
           .addOptions(
             Array.from(categories)
               .filter(
                 (category) =>
-                  typeof category === "string" && category.trim() !== ""
+                  typeof category === "string" && category.trim() !== "",
               )
               .map((category) => ({
                 label: category || "Unknown Category",
                 value: category,
                 default: category === currentCategory,
-              }))
+              })),
           );
 
         const categoryRow = new ActionRowBuilder().addComponents(categoryMenu);
@@ -622,7 +622,7 @@ export default {
           options = [
             {
               label: await getTranslation(
-                "commands.help.commands.noCommandsAvailable"
+                "commands.help.commands.noCommandsAvailable",
               ),
               value: "none",
             },
@@ -633,13 +633,13 @@ export default {
           .setCustomId("subcommand")
           .setPlaceholder(
             await getTranslation(
-              "commands.help.commands.subcommandMenu.placeholder"
-            )
+              "commands.help.commands.subcommandMenu.placeholder",
+            ),
           )
           .addOptions(options);
 
         const subcommandRow = new ActionRowBuilder().addComponents(
-          subcommandMenu
+          subcommandMenu,
         );
         commandComponent.addActionRow(subcommandRow);
       }
@@ -657,7 +657,7 @@ export default {
       if (i.user.id !== interaction.user.id) {
         await i.reply({
           content: await getTranslation(
-            "commands.help.commands.youCannotUseThisMenu"
+            "commands.help.commands.youCannotUseThisMenu",
           ),
           ephemeral: true,
         });
@@ -673,7 +673,7 @@ export default {
         // Update the currentCategory
         currentCategory = categoryName;
         console.log(
-          `[help.commands] Updated currentCategory to: ${currentCategory}`
+          `[help.commands] Updated currentCategory to: ${currentCategory}`,
         );
 
         // Get commands for this category from our map
@@ -684,7 +684,7 @@ export default {
           // Set the highlighted position to the first command in this category
           highlightedPosition = categoryCommandIndexes[0];
           console.log(
-            `[help.commands] Setting highlightedPosition to ${highlightedPosition}`
+            `[help.commands] Setting highlightedPosition to ${highlightedPosition}`,
           );
 
           // Update the message with new menus
@@ -703,13 +703,13 @@ export default {
         if (cmdIndex >= 0 && cmdIndex < commands.length) {
           highlightedPosition = cmdIndex;
           console.log(
-            `[help.commands] Setting highlightedPosition to ${highlightedPosition}`
+            `[help.commands] Setting highlightedPosition to ${highlightedPosition}`,
           );
 
           // Make sure we update the currentCategory to match the selected command's category
           currentCategory = commands[cmdIndex].category;
           console.log(
-            `[help.commands] Ensuring currentCategory is set to: ${currentCategory}`
+            `[help.commands] Ensuring currentCategory is set to: ${currentCategory}`,
           );
 
           // Update the message with new menus

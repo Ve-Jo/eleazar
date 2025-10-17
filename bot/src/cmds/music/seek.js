@@ -11,7 +11,7 @@ export default {
           .setName("time")
           .setDescription("Time to seek to (format: m:ss or ss)")
           .setRequired(true)
-          .setAutocomplete(true)
+          .setAutocomplete(true),
       );
 
     return builder;
@@ -73,7 +73,7 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
-      interaction.guild.id
+      interaction.guild.id,
     );
     if (!player) {
       return interaction.editReply({
@@ -118,7 +118,7 @@ export default {
   async autocomplete(interaction) {
     await interaction.deferReply();
     const player = interaction.client.lavalink.players.get(
-      interaction.guild.id
+      interaction.guild.id,
     );
     if (!player || !player.queue.current) return;
 

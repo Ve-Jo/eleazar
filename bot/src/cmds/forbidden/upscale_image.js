@@ -12,7 +12,7 @@ export default {
         option
           .setName("image")
           .setDescription("The image to upscale")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addIntegerOption((option) =>
         option
@@ -20,7 +20,7 @@ export default {
           .setDescription("Scale factor (2-4)")
           .setRequired(true)
           .setMinValue(2)
-          .setMaxValue(4)
+          .setMaxValue(4),
       );
 
     return builder;
@@ -153,7 +153,7 @@ export default {
       return interaction.editReply(
         await i18n.__("not_an_image", {
           content_type: attachment.contentType || "unknown",
-        })
+        }),
       );
     }
 
@@ -194,7 +194,7 @@ export default {
       ) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         finalPrediction = await interaction.client.replicate.predictions.get(
-          prediction.id
+          prediction.id,
         );
       }
 
@@ -221,7 +221,7 @@ export default {
 
       // Send the result
       const resultAttachment = new AttachmentBuilder(
-        Buffer.from(upscaledImageBuffer)
+        Buffer.from(upscaledImageBuffer),
       ).setName("upscaled_image.avif");
 
       await interaction.editReply({

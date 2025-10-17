@@ -16,15 +16,15 @@ export default {
             memer_list.map((filter) => ({
               name: filter,
               value: filter,
-            }))
-          )
+            })),
+          ),
       )
       .addStringOption((option) =>
         option
           .setName("text")
           .setDescription("The text to use")
           .setRequired(true)
-          .setMaxLength(75)
+          .setMaxLength(75),
       );
 
     return builder;
@@ -82,7 +82,7 @@ export default {
     } catch (error) {
       console.error("Error applying text meme filter:", error);
       await interaction.editReply(
-        await i18n.__("commands.filters.text_memer.errorApplyingFilter")
+        await i18n.__("commands.filters.text_memer.errorApplyingFilter"),
       );
     }
   },

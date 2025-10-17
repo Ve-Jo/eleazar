@@ -38,9 +38,9 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    service: 'database', 
+  res.json({
+    status: 'healthy',
+    service: 'database',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     version: '1.0.0'
@@ -73,7 +73,7 @@ app.use('*', (req, res) => {
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Database service error:', error);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
   });

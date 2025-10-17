@@ -61,7 +61,7 @@ export default {
             const timeLeft = (expirationTime - now) / 1000;
             return interaction.reply({
               content: `Please wait ${timeLeft.toFixed(
-                1
+                1,
               )} more second(s) before reusing the \`${fullCommandName}\` command.`,
               ephemeral: true,
             });
@@ -88,7 +88,7 @@ export default {
       }
 
       console.log(
-        `Setting locale to ${locale} for user ${interaction.user.tag}`
+        `Setting locale to ${locale} for user ${interaction.user.tag}`,
       );
 
       // Create a fresh i18n instance for this interaction to maintain thread safety
@@ -102,7 +102,7 @@ export default {
         .catch((err) => {
           console.error(
             `Failed to save locale for user ${interaction.user.id}:`,
-            err
+            err,
           );
         });
 
@@ -111,7 +111,7 @@ export default {
         // Execute the subcommand with the i18n instance
         await command.subcommands[subcommandName].execute(
           interaction,
-          commandI18n
+          commandI18n,
         );
       }
       // Regular command without subcommands
@@ -129,7 +129,7 @@ export default {
       // Update user's last activity - with guild creation if needed
       await hubClient.ensureGuildUser(
         interaction.user.id,
-        interaction.guild.id
+        interaction.guild.id,
       );
 
       // Increment command count
@@ -137,7 +137,7 @@ export default {
         interaction.guild.id,
         interaction.user.id,
         "commandCount",
-        1
+        1,
       );
 
       // Add XP for using a command
@@ -152,7 +152,7 @@ export default {
         const xpResult = await hubClient.addXP(
           interaction.guild.id,
           interaction.user.id,
-          xpPerCommand
+          xpPerCommand,
         );
 
         // Handle level-up notification if user leveled up
@@ -163,7 +163,7 @@ export default {
             interaction.user.id,
             xpResult.levelUp,
             xpResult.type,
-            interaction.channel
+            interaction.channel,
           );
         }
       }

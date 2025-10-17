@@ -21,7 +21,7 @@ router.patch('/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
     const updateData = req.body;
-    
+
     const stats = await Database.updateStatistics(guildId, userId, updateData);
     res.json(serializeBigInt(stats));
   } catch (error) {
@@ -34,7 +34,7 @@ router.patch('/:guildId/:userId', async (req, res) => {
 router.get('/interactions/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     const stats = await Database.getInteractionStats(guildId, userId);
     res.json(serializeBigInt(stats));
   } catch (error) {
@@ -48,12 +48,12 @@ router.get('/interactions/:guildId/:userId/top', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
     const { limit } = req.query;
-    
+
     const limitNum = limit ? parseInt(limit) : 10;
     if (isNaN(limitNum)) {
       return res.status(400).json({ error: 'Invalid limit number' });
     }
-    
+
     const stats = await Database.getMostUsedInteractions(guildId, userId, limitNum);
     res.json(serializeBigInt(stats));
   } catch (error) {

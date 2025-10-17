@@ -5,7 +5,7 @@ export default async function autoPlayFunction(player, previousTrack) {
   console.log(`CURRENT AUTOPLAY STATUS: ${player.get("autoplay_enabled")}`);
   console.log(
     "Previous track:",
-    previousTrack ? previousTrack.info.title : "None"
+    previousTrack ? previousTrack.info.title : "None",
   );
 
   if (!player.get("autoplay_enabled")) {
@@ -36,7 +36,7 @@ export default async function autoPlayFunction(player, previousTrack) {
           (v) =>
             v.info.identifier ||
             v.info.uri.split("/")?.reverse()?.[0] ||
-            v.info.uri.split("/")?.reverse()?.[1]
+            v.info.uri.split("/")?.reverse()?.[1],
         );
         console.log("Spotify track IDs:", ids);
 
@@ -48,23 +48,23 @@ export default async function autoPlayFunction(player, previousTrack) {
                 query: `seed_tracks=${ids.join(",")}`,
                 source: "sprec",
               },
-              previousTrack.requester
+              previousTrack.requester,
             )
             .then((response) => {
               console.log(
                 "Spotify recommendations response:",
                 response.loadType,
-                response.tracks.length
+                response.tracks.length,
               );
               response.tracks = response.tracks.filter(
-                (v) => v.info.identifier !== previousTrack.info.identifier
+                (v) => v.info.identifier !== previousTrack.info.identifier,
               );
               return response;
             })
             .catch((error) => {
               console.warn(
                 "Error searching with Spotify recommendations:",
-                error
+                error,
               );
               return null;
             });
@@ -72,7 +72,7 @@ export default async function autoPlayFunction(player, previousTrack) {
 
         if (!res || res.loadType === "error" || res.tracks.length === 0) {
           console.log(
-            "Spotify recommendation search failed or not enough tracks, trying regular search"
+            "Spotify recommendation search failed or not enough tracks, trying regular search",
           );
           res = await player
             .search(
@@ -80,13 +80,13 @@ export default async function autoPlayFunction(player, previousTrack) {
                 query: `${previousTrack.info.author} ${previousTrack.info.title}`,
                 source: "ytmsearch",
               },
-              previousTrack.requester
+              previousTrack.requester,
             )
             .then((response) => {
               console.log(
                 "YouTube Music search response:",
                 response.loadType,
-                response.tracks.length
+                response.tracks.length,
               );
               return response;
             })
@@ -107,7 +107,7 @@ export default async function autoPlayFunction(player, previousTrack) {
                 fromAutoplay: true,
               };
               return track;
-            })
+            }),
           );
           console.log("Added tracks to queue");
         } else {
@@ -127,12 +127,12 @@ export default async function autoPlayFunction(player, previousTrack) {
             query: `https://www.youtube.com/watch?v=${previousTrack.info.identifier}`,
             source: "youtube",
           },
-          previousTrack.requester
+          previousTrack.requester,
         );
         console.log(
           "Related tracks search response:",
           res.loadType,
-          res.tracks.length
+          res.tracks.length,
         );
 
         // If related tracks search fails or returns no results, try a more specific search
@@ -144,12 +144,12 @@ export default async function autoPlayFunction(player, previousTrack) {
               query: searchQuery,
               source: "ytmsearch",
             },
-            previousTrack.requester
+            previousTrack.requester,
           );
           console.log(
             "Specific search response:",
             res.loadType,
-            res.tracks.length
+            res.tracks.length,
           );
         }
       }

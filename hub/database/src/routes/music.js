@@ -8,11 +8,11 @@ const router = express.Router();
 router.post('/players', async (req, res) => {
   try {
     const { player } = req.body;
-    
+
     if (!player) {
       return res.status(400).json({ error: 'player data is required' });
     }
-    
+
     const result = await Database.savePlayer(player);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -37,11 +37,11 @@ router.get('/players/:guildId', async (req, res) => {
   try {
     const { guildId } = req.params;
     const player = await Database.getPlayer(guildId);
-    
+
     if (!player) {
       return res.status(404).json({ error: 'Player not found' });
     }
-    
+
     res.json(serializeBigInt(player));
   } catch (error) {
     console.error('Error getting player:', error);
@@ -54,7 +54,7 @@ router.put('/players/:guildId', async (req, res) => {
   try {
     const { guildId } = req.params;
     const data = req.body;
-    
+
     const result = await Database.updatePlayer(guildId, data);
     res.json(serializeBigInt(result));
   } catch (error) {

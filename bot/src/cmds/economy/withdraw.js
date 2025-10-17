@@ -17,7 +17,7 @@ export default {
         option
           .setName("amount")
           .setDescription("Amount to withdraw (or 'all', 'half')")
-          .setRequired(true)
+          .setRequired(true),
       );
 
     return builder;
@@ -123,12 +123,11 @@ export default {
         partnerData = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true
+          true,
         );
         if (partnerData?.economy) {
-          partnerBankBalance = await hubClient.calculateBankBalance(
-            partnerData
-          );
+          partnerBankBalance =
+            await hubClient.calculateBankBalance(partnerData);
           combinedAvailableBalance += partnerBankBalance;
         }
       }
@@ -171,7 +170,7 @@ export default {
       if (amountToWithdraw <= 0) {
         return interaction.editReply({
           content: await i18n.__(
-            "commands.economy.withdraw.amountGreaterThanZero"
+            "commands.economy.withdraw.amountGreaterThanZero",
           ),
           ephemeral: true,
         });
@@ -192,7 +191,7 @@ export default {
         const updatedPartner = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true
+          true,
         );
         const userBankBalance =
           Number(await hubClient.calculateBankBalance(finalUserData)) || 0;
@@ -243,7 +242,7 @@ export default {
           returnDominant: true,
         },
         { image: 2, emoji: 1 },
-        i18n
+        i18n,
       );
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -269,7 +268,7 @@ export default {
       if (partnerData) {
         try {
           const partnerDiscordUser = await interaction.client.users.fetch(
-            partnerData.id
+            partnerData.id,
           );
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
@@ -280,14 +279,14 @@ export default {
                   amount: amountToWithdraw.toFixed(2),
                   partnerAmount: "0.00", // No money taken from partner
                   guild: interaction.guild.name,
-                }
+                },
               ),
             });
           }
         } catch (dmError) {
           console.error(
             `Failed to send withdraw DM to partner ${partnerData.id}:`,
-            dmError
+            dmError,
           );
         }
       }

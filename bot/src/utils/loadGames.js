@@ -31,7 +31,7 @@ export async function loadGames() {
         const gamePath = path.join(gamesDir, file);
         const relativePath = path.relative(
           path.join(__dirname, ".."),
-          gamePath
+          gamePath,
         );
         try {
           const gameModule = await import(gamePath);
@@ -60,14 +60,14 @@ export async function loadGames() {
               hubClient.registerLocalizations(
                 "games",
                 gameId,
-                gameModule.default.localization_strings
+                gameModule.default.localization_strings,
               );
               gameData.title =
                 (await hubClient.getTranslation(`games.${gameId}.name`)) ||
                 gameData.title;
               gameData.description =
                 (await hubClient.getTranslation(
-                  `games.${gameId}.description`
+                  `games.${gameId}.description`,
                 )) || gameData.description;
             } else if (gameModule.default.game_info) {
               gameData.title = gameModule.default.game_info.name || gameId;
@@ -78,12 +78,12 @@ export async function loadGames() {
           }
           games.set(gameId, gameData);
           console.log(
-            `[loadGames] Loaded game: ${gameId} (Legacy: ${gameData.isLegacy})`
+            `[loadGames] Loaded game: ${gameId} (Legacy: ${gameData.isLegacy})`,
           );
         } catch (error) {
           console.error(
             `Error loading game ${gameId} from ${gamePath}:`,
-            error
+            error,
           );
         }
       }
@@ -112,7 +112,7 @@ export async function getGameModule(gameId) {
     }
     if (!gamePath) {
       console.error(
-        `Game file not found for ${gameId} in checked directories.`
+        `Game file not found for ${gameId} in checked directories.`,
       );
       return null;
     }
@@ -126,7 +126,7 @@ export async function getGameModule(gameId) {
       hubClient.registerLocalizations(
         "games",
         gameId,
-        gameModule.default.localization_strings
+        gameModule.default.localization_strings,
       );
     }
     return gameModule.default;

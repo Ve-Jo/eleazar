@@ -20,7 +20,7 @@ export default {
       const guildId = guild.id;
 
       console.log(
-        `[Voice XP] Processing state update for user ${member.user.tag} in guild ${guild.name}`
+        `[Voice XP] Processing state update for user ${member.user.tag} in guild ${guild.name}`,
       );
 
       // Small delay to ensure bot's voice state is stable
@@ -32,17 +32,17 @@ export default {
         const nonBotMembers = channel.members.filter((m) => !m.user.bot);
 
         console.log(
-          `[Voice XP] User joined channel ${channel.name} with ${nonBotMembers.size} non-bot members`
+          `[Voice XP] User joined channel ${channel.name} with ${nonBotMembers.size} non-bot members`,
         );
 
         if (nonBotMembers.size >= 1) {
           console.log(
-            `[Voice XP] Starting voice session for ${member.user.tag}`
+            `[Voice XP] Starting voice session for ${member.user.tag}`,
           );
           await hubClient.createVoiceSession(
             userId,
             guildId,
-            newState.channelId
+            newState.channelId,
           );
         } else {
           console.log(`[Voice XP] Not enough users in channel for XP tracking`);
@@ -57,7 +57,7 @@ export default {
 
         if (session) {
           console.log(
-            `[Voice XP] Found active session for ${member.user.tag}, processing XP`
+            `[Voice XP] Found active session for ${member.user.tag}, processing XP`,
           );
           const sessionDuration = Date.now() - session.joinTime;
           const { timeSpent, xpAmount, levelUp } =
@@ -65,7 +65,7 @@ export default {
           console.log(
             `[Voice XP] Session ended: ${
               timeSpent / 1000
-            }s, earned ${xpAmount} XP`
+            }s, earned ${xpAmount} XP`,
           );
 
           // Handle level-up notification if user leveled up
@@ -79,7 +79,7 @@ export default {
                 const botMember = await guild.members.fetchMe();
                 if (!botMember.permissions.has("ManageRoles")) {
                   console.warn(
-                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`
+                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`,
                   );
                 } else {
                   // Add the new role
@@ -93,10 +93,10 @@ export default {
                       // Check hierarchy
                       await member.roles.add(
                         roleToAdd,
-                        "Voice level up reward"
+                        "Voice level up reward",
                       );
                       console.log(
-                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`
+                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`,
                       );
 
                       // Remove any lower level roles if specified
@@ -111,34 +111,34 @@ export default {
                           if (
                             roleToRemove &&
                             botMember.roles.highest.comparePositionTo(
-                              roleToRemove
+                              roleToRemove,
                             ) > 0
                           ) {
                             await member.roles.remove(
                               roleToRemove,
-                              "Replaced by higher level role"
+                              "Replaced by higher level role",
                             );
                             console.log(
-                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`
+                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`,
                             );
                           }
                         }
                       }
                     } else {
                       console.warn(
-                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`
+                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`,
                       );
                     }
                   } else {
                     console.warn(
-                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`
+                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`,
                     );
                   }
                 }
               } catch (roleError) {
                 console.error(
                   `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
-                  roleError
+                  roleError,
                 );
               }
             }
@@ -149,14 +149,14 @@ export default {
               userId,
               levelUp,
               "voice",
-              channel
+              channel,
             );
           }
 
           await hubClient.removeVoiceSession(guildId, userId);
         } else {
           console.log(
-            `[Voice XP] No active session found for ${member.user.tag}`
+            `[Voice XP] No active session found for ${member.user.tag}`,
           );
         }
         return;
@@ -175,7 +175,7 @@ export default {
         // Process XP for the old channel if there was an active session
         if (session) {
           console.log(
-            `[Voice XP] Found active session during channel switch for ${member.user.tag}`
+            `[Voice XP] Found active session during channel switch for ${member.user.tag}`,
           );
           const sessionDuration = Date.now() - session.joinTime;
           const { timeSpent, xpAmount, levelUp } =
@@ -183,7 +183,7 @@ export default {
           console.log(
             `[Voice XP] Channel switch: ${
               timeSpent / 1000
-            }s in previous channel, earned ${xpAmount} XP`
+            }s in previous channel, earned ${xpAmount} XP`,
           );
 
           // Handle level-up notification if user leveled up
@@ -195,7 +195,7 @@ export default {
                 const botMember = await guild.members.fetchMe();
                 if (!botMember.permissions.has("ManageRoles")) {
                   console.warn(
-                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`
+                    `[Voice XP] Bot lacks ManageRoles permission in guild ${guildId} to assign level roles.`,
                   );
                 } else {
                   // Add the new role
@@ -209,10 +209,10 @@ export default {
                       // Check hierarchy
                       await member.roles.add(
                         roleToAdd,
-                        "Voice level up reward"
+                        "Voice level up reward",
                       );
                       console.log(
-                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`
+                        `[Voice XP] Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag}`,
                       );
 
                       // Remove any lower level roles if specified
@@ -227,34 +227,34 @@ export default {
                           if (
                             roleToRemove &&
                             botMember.roles.highest.comparePositionTo(
-                              roleToRemove
+                              roleToRemove,
                             ) > 0
                           ) {
                             await member.roles.remove(
                               roleToRemove,
-                              "Replaced by higher level role"
+                              "Replaced by higher level role",
                             );
                             console.log(
-                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`
+                              `[Voice XP] Removed level role ${roleToRemove.name} (${roleToRemove.id}) from ${member.user.tag}`,
                             );
                           }
                         }
                       }
                     } else {
                       console.warn(
-                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`
+                        `[Voice XP] Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${member.user.tag} due to role hierarchy.`,
                       );
                     }
                   } else {
                     console.warn(
-                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`
+                      `[Voice XP] Level role ID ${levelUp.assignedRole} not found in guild ${guildId}.`,
                     );
                   }
                 }
               } catch (roleError) {
                 console.error(
                   `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
-                  roleError
+                  roleError,
                 );
               }
             }
@@ -265,7 +265,7 @@ export default {
               userId,
               levelUp,
               "voice",
-              oldChannel
+              oldChannel,
             );
           }
 
@@ -277,16 +277,16 @@ export default {
         const nonBotMembers = newChannel.members.filter((m) => !m.user.bot);
         if (nonBotMembers.size >= 1) {
           console.log(
-            `[Voice XP] Starting new session in channel ${newChannel.name}`
+            `[Voice XP] Starting new session in channel ${newChannel.name}`,
           );
           await hubClient.createVoiceSession(
             userId,
             guildId,
-            newState.channelId
+            newState.channelId,
           );
         } else {
           console.log(
-            `[Voice XP] Not enough users in new channel for XP tracking`
+            `[Voice XP] Not enough users in new channel for XP tracking`,
           );
         }
       }

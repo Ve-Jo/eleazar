@@ -57,7 +57,7 @@ Object.keys(localization_strings).forEach((category) => {
       category,
       component,
       localization_strings[category][component],
-      true
+      true,
     );
   });
 });
@@ -81,12 +81,12 @@ function getAvatarUrl(user) {
     }
     // Last resort - default avatar
     return `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-      Math.random() * 5
+      Math.random() * 5,
     )}.png`;
   } catch (error) {
     console.error("Error getting avatar URL:", error);
     return `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-      Math.random() * 5
+      Math.random() * 5,
     )}.png`;
   }
 }
@@ -161,7 +161,7 @@ export default {
         } catch (error) {
           console.log(
             (await i18n.__("music.update.messageDeleted")) + ":",
-            error.message
+            error.message,
           );
           client.musicMessageMap.delete(player.guildId); // Clean up map
           player.set("isUpdatingMessage", false);
@@ -171,14 +171,14 @@ export default {
         // Generate the updated message data using the ComponentBuilder function
         const updatedPlayerData = await createOrUpdateMusicPlayerEmbed(
           track,
-          player
+          player,
         );
 
         // Edit the message with the new component data
         await message.edit(updatedPlayerData).catch(async (error) => {
           console.error(
             (await i18n.__("music.update.updateError")) + ":",
-            error
+            error,
           );
           // If editing fails (e.g., message deleted), remove from map
           if (error.code === 10008) {
@@ -189,7 +189,7 @@ export default {
       } catch (error) {
         console.error(
           (await i18n.__("music.update.errorInHandler")) + ":",
-          error
+          error,
         );
       } finally {
         player.set("isUpdatingMessage", false);

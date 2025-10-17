@@ -95,7 +95,7 @@ export default {
       const cooldownResponse = await hubClient.getCooldown(
         guild.id,
         user.id,
-        "crime"
+        "crime",
       );
 
       // Extract cooldown value from response object
@@ -105,7 +105,7 @@ export default {
       console.log("cooldownTime:", cooldownTime);
       console.log(
         "crimeLevel:",
-        userData.upgrades.find((u) => u.type === "crime")?.level || 1
+        userData.upgrades.find((u) => u.type === "crime")?.level || 1,
       );
 
       if (cooldownTime > 0) {
@@ -141,7 +141,7 @@ export default {
             returnDominant: true,
           },
           { image: 2, emoji: 2 },
-          i18n
+          i18n,
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -170,7 +170,7 @@ export default {
       //filter targets to not be the same user id and have balance > 1
       validTargets = validTargets.filter(
         (target) =>
-          target.id !== user.id && Number(target.economy?.balance || 0) > 1
+          target.id !== user.id && Number(target.economy?.balance || 0) > 1,
       );
 
       if (validTargets.length === 0) {
@@ -199,12 +199,12 @@ export default {
               return {
                 label: member.displayName,
                 description: `${Number(userData.economy?.balance || 0).toFixed(
-                  0
+                  0,
                 )} coins`,
                 value: userData.id,
               };
-            })
-          ).then((options) => options.filter((opt) => opt !== null))
+            }),
+          ).then((options) => options.filter((opt) => opt !== null)),
         );
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
@@ -249,20 +249,20 @@ export default {
         if (success) {
           // Calculate steal amount (between 1% and maxStealPercent of target's balance)
           const minStealAmount = Math.floor(
-            Number(targetData.economy?.balance || 0) * 0.01
+            Number(targetData.economy?.balance || 0) * 0.01,
           ); // Minimum 1%
           const maxStealAmount = Math.floor(
-            Number(targetData.economy?.balance || 0) * maxStealPercent
+            Number(targetData.economy?.balance || 0) * maxStealPercent,
           );
           amount = Math.floor(
-            minStealAmount + Math.random() * (maxStealAmount - minStealAmount)
+            minStealAmount + Math.random() * (maxStealAmount - minStealAmount),
           );
           // Ensure minimum of 10 coins
           amount = Math.max(10, amount);
         } else {
           // Calculate fine amount (between 10 coins and 10% of user's balance)
           const maxFine = Math.floor(
-            Number(userData.economy?.balance || 0) * 0.1
+            Number(userData.economy?.balance || 0) * 0.1,
           );
           amount = Math.max(10, Math.floor(Math.random() * maxFine));
         }
@@ -342,7 +342,7 @@ export default {
             success: success,
           },
           { image: 2, emoji: 1 },
-          i18n
+          i18n,
         );
 
         const attachment = new AttachmentBuilder(pngBuffer, {
@@ -361,7 +361,7 @@ export default {
                   amount,
                   target: target.displayName,
                 })
-              : await i18n.__("commands.economy.crime.failTarget", { amount })
+              : await i18n.__("commands.economy.crime.failTarget", { amount }),
           )
           .addImage(`attachment://crime_result.avif`);
 

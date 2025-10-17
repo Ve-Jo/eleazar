@@ -44,7 +44,7 @@ export default {
     }
 
     const channel = await guild.channels.fetch(
-      guildData.settings.counting.channel_id
+      guildData.settings.counting.channel_id,
     );
     const pinnedRole = guildData.settings.counting.pinnedrole
       ? await guild.roles.fetch(guildData.settings.counting.pinnedrole)

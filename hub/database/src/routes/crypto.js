@@ -8,11 +8,11 @@ const router = express.Router();
 router.post('/positions', async (req, res) => {
   try {
     const { userId, guildId, symbol, amount, price, type } = req.body;
-    
+
     if (!userId || !guildId || !symbol || amount === undefined || price === undefined || !type) {
       return res.status(400).json({ error: 'userId, guildId, symbol, amount, price, and type are required' });
     }
-    
+
     const position = await Database.createCryptoPosition(guildId, userId, symbol, amount, price, type);
     res.json(serializeBigInt(position));
   } catch (error) {
@@ -25,7 +25,7 @@ router.post('/positions', async (req, res) => {
 router.get('/positions/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     const positions = await Database.getUserCryptoPositions(guildId, userId);
     res.json(serializeBigInt(positions));
   } catch (error) {
@@ -38,13 +38,13 @@ router.get('/positions/:guildId/:userId', async (req, res) => {
 router.get('/positions/id/:positionId', async (req, res) => {
   try {
     const { positionId } = req.params;
-    
+
     const position = await Database.getCryptoPositionById(positionId);
-    
+
     if (!position) {
       return res.status(404).json({ error: 'Crypto position not found' });
     }
-    
+
     res.json(serializeBigInt(position));
   } catch (error) {
     console.error('Error getting crypto position:', error);
@@ -57,7 +57,7 @@ router.put('/positions/:positionId', async (req, res) => {
   try {
     const { positionId } = req.params;
     const updateData = req.body;
-    
+
     const position = await Database.updateCryptoPosition(positionId, updateData);
     res.json(serializeBigInt(position));
   } catch (error) {
@@ -70,7 +70,7 @@ router.put('/positions/:positionId', async (req, res) => {
 router.delete('/positions/:positionId', async (req, res) => {
   try {
     const { positionId } = req.params;
-    
+
     const result = await Database.deleteCryptoPosition(positionId);
     res.json(serializeBigInt(result));
   } catch (error) {

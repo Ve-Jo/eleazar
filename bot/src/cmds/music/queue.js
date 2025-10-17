@@ -54,12 +54,12 @@ export default {
   async execute(interaction, i18n) {
     await interaction.deferReply();
     const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id
+      interaction.guild.id,
     );
 
     if (!player) {
       return interaction.editReply(
-        await i18n.__("commands.music.queue.noMusicPlaying")
+        await i18n.__("commands.music.queue.noMusicPlaying"),
       );
     } else {
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
@@ -77,13 +77,13 @@ export default {
       "commands.music.queue.currentPlaying",
       {
         title: current.info.title,
-      }
+      },
     )}\n${await i18n.__("commands.music.queue.nextInQueue", {
       tracks: nextTrack.map((t) => t.info.title).join(", "),
     })}`;
 
     await interaction.editReply(
-      `${await i18n.__("commands.music.queue.currentQueue")}\n${queueString}`
+      `${await i18n.__("commands.music.queue.currentQueue")}\n${queueString}`,
     );
   },
 };

@@ -29,20 +29,20 @@ export default {
             memer_list.map((filter) => ({
               name: filter,
               value: filter,
-            }))
-          )
+            })),
+          ),
       )
       .addAttachmentOption((option) =>
         option
           .setName("image")
           .setDescription("The name of the image to apply")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addStringOption((option) =>
         option
           .setName("youtube_text")
           .setDescription("[YOUTUBE FILTER] The first word USERNAME and TEXT")
-          .setMaxLength(75)
+          .setMaxLength(75),
       );
 
     return builder;
@@ -149,7 +149,7 @@ export default {
         result = await interaction.client.memer[filter](
           image.url,
           username,
-          all_text_after_username
+          all_text_after_username,
         );
       } else {
         result = await interaction.client.memer[filter](image.url);
@@ -158,7 +158,7 @@ export default {
     } catch (error) {
       console.error("Error applying meme filter:", error);
       await interaction.editReply(
-        await i18n.__("commands.filters.image_memer.errorApplyingFilter")
+        await i18n.__("commands.filters.image_memer.errorApplyingFilter"),
       );
     }
   },

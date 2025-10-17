@@ -41,8 +41,8 @@ export default {
             ...sfwImages.map((key) => ({
               name: key,
               value: key,
-            }))
-          )
+            })),
+          ),
       );
 
     return builder;
@@ -155,7 +155,7 @@ export default {
       })
         .addText(
           imageData.category || (await i18n.__("commands.images.sfw.title")), // Use category as title
-          "header3"
+          "header3",
         )
         .addImage(imageData.url) // Use direct URL
         .addTimestamp(interaction.locale);

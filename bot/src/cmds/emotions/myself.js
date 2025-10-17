@@ -34,8 +34,8 @@ export default {
             { name: "lick", value: "lick" },
             { name: "sleep", value: "sleep" },
             { name: "coffee", value: "coffee" },
-            { name: "gah", value: "gah" }
-          )
+            { name: "gah", value: "gah" },
+          ),
       );
 
     return builder;
@@ -275,7 +275,7 @@ export default {
                   image: imageUrl,
                   category: emotionType,
                   emotion: await i18n.__(
-                    `commands.emotions.myself.${emotionType}.title`
+                    `commands.emotions.myself.${emotionType}.title`,
                   ),
                 };
               }
@@ -307,12 +307,12 @@ export default {
       })
         .addText(
           await i18n.__(`commands.emotions.myself.${emotionType}.title`),
-          "header3"
+          "header3",
         )
         .addText(
           await i18n.__(`commands.emotions.myself.${emotionType}.description`, {
             user: user.id,
-          })
+          }),
         )
         .addImage(emotionUrl.image)
         .addTimestamp(interaction.locale);
@@ -343,7 +343,7 @@ export default {
           try {
             // Fetch the latest message state to remove components
             const latestMessage = await message.channel.messages.fetch(
-              message.id
+              message.id,
             );
             if (latestMessage.components.length > 0) {
               await latestMessage.edit({ components: [] });
@@ -351,7 +351,7 @@ export default {
           } catch (error) {
             console.error(
               "Failed to remove components on collector end:",
-              error
+              error,
             );
           }
         }

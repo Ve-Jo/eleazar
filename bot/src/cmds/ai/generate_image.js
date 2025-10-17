@@ -24,14 +24,14 @@ export default {
               value: "artiwaifu-diffusion",
             },
 
-            { name: "FLUX.1 Schnell (Gradio)", value: "gradio" }
-          )
+            { name: "FLUX.1 Schnell (Gradio)", value: "gradio" },
+          ),
       )
       .addStringOption((option) =>
         option
           .setName("prompt")
           .setDescription("Enter your prompt (English gives better results)")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addIntegerOption((option) =>
         option
@@ -44,8 +44,8 @@ export default {
             { name: "256", value: 256 },
             { name: "512", value: 512 },
             { name: "768", value: 768 },
-            { name: "1024", value: 1024 }
-          )
+            { name: "1024", value: 1024 },
+          ),
       )
       .addIntegerOption((option) =>
         option
@@ -58,24 +58,24 @@ export default {
             { name: "256", value: 256 },
             { name: "512", value: 512 },
             { name: "768", value: 768 },
-            { name: "1024", value: 1024 }
-          )
+            { name: "1024", value: 1024 },
+          ),
       )
       .addIntegerOption((option) =>
         option
           .setName("interference_steps")
           .setDescription(
-            "Number of inference steps (higher = better quality but slower)"
+            "Number of inference steps (higher = better quality but slower)",
           )
           .setRequired(false)
           .setMinValue(4)
-          .setMaxValue(50)
+          .setMaxValue(50),
       )
       .addIntegerOption((option) =>
         option
           .setName("seed")
           .setDescription("Random seed for generation (0 for random)")
-          .setRequired(false)
+          .setRequired(false),
       );
 
     return builder;
@@ -214,7 +214,7 @@ export default {
       height,
       interferenceSteps,
       seed,
-      modelId
+      modelId,
     );
   },
 
@@ -226,7 +226,7 @@ export default {
     height,
     interferenceSteps,
     seed,
-    modelId
+    modelId,
   ) {
     try {
       // Update status
@@ -248,15 +248,15 @@ export default {
             height,
             interferenceSteps,
             seed,
-            modelId
+            modelId,
           );
           console.log(
-            `Successfully generated image with NanoGPT model: ${modelId}`
+            `Successfully generated image with NanoGPT model: ${modelId}`,
           );
         } catch (nanoGptError) {
           console.error(
             `NanoGPT generation failed for model ${modelId}:`,
-            nanoGptError
+            nanoGptError,
           );
           // Fallback to Gradio
           console.log("Falling back to Gradio model...");
@@ -265,7 +265,7 @@ export default {
             width,
             height,
             interferenceSteps,
-            seed
+            seed,
           );
           modelId = "gradio"; // Update model ID to reflect fallback
         }
@@ -276,13 +276,13 @@ export default {
           width,
           height,
           interferenceSteps,
-          seed
+          seed,
         );
       }
 
       // Create attachment and send result
       const attachment = new AttachmentBuilder(imageBuffer).setName(
-        "generated_image.avif"
+        "generated_image.avif",
       );
 
       const responseContent = await i18n.__(
@@ -291,7 +291,7 @@ export default {
           prompt,
           seed: usedSeed || "random",
           steps: interferenceSteps,
-        }
+        },
       );
 
       await interaction.editReply({
@@ -360,7 +360,7 @@ export default {
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(
-            `NanoGPT API error: ${response.status} - ${errorText}`
+            `NanoGPT API error: ${response.status} - ${errorText}`,
           );
         }
 
@@ -373,7 +373,7 @@ export default {
           const result = await response.json();
           console.log(
             `NanoGPT JSON response from ${endpoint}:`,
-            JSON.stringify(result, null, 2)
+            JSON.stringify(result, null, 2),
           );
 
           let imageUrl;
@@ -393,7 +393,7 @@ export default {
               base64Data = result.data[0].b64_json;
             } else {
               throw new Error(
-                "No image URL or base64 data in NanoGPT response"
+                "No image URL or base64 data in NanoGPT response",
               );
             }
           } else {
@@ -404,7 +404,7 @@ export default {
               base64Data = result.b64_json;
             } else {
               throw new Error(
-                "No image URL or base64 data in NanoGPT response"
+                "No image URL or base64 data in NanoGPT response",
               );
             }
           }
@@ -417,7 +417,7 @@ export default {
             const imageResponse = await fetch(imageUrl);
             if (!imageResponse.ok) {
               throw new Error(
-                `Failed to fetch image from NanoGPT: ${imageResponse.statusText}`
+                `Failed to fetch image from NanoGPT: ${imageResponse.statusText}`,
               );
             }
             return Buffer.from(await imageResponse.arrayBuffer());
@@ -426,8 +426,8 @@ export default {
           // Binary response - assume it's the image data directly
           console.log(
             `Received binary response from ${endpoint}, size: ${response.headers.get(
-              "content-length"
-            )} bytes`
+              "content-length",
+            )} bytes`,
           );
           return Buffer.from(await response.arrayBuffer());
         }
@@ -440,7 +440,7 @@ export default {
 
     // If we get here, all endpoints failed
     throw new Error(
-      `All NanoGPT endpoints failed. Last error: ${lastError.message}`
+      `All NanoGPT endpoints failed. Last error: ${lastError.message}`,
     );
   },
 
@@ -463,7 +463,7 @@ export default {
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(
-          `Failed to fetch image from Gradio: ${response.statusText}`
+          `Failed to fetch image from Gradio: ${response.statusText}`,
         );
       }
       return Buffer.from(await response.arrayBuffer());

@@ -8,11 +8,11 @@ const router = express.Router();
 router.post('/add', async (req, res) => {
   try {
     const { userId, guildId, amount } = req.body;
-    
+
     if (!userId || !guildId || amount === undefined) {
       return res.status(400).json({ error: 'userId, guildId, and amount are required' });
     }
-    
+
     const result = await Database.addXP(guildId, userId, amount);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -26,7 +26,7 @@ router.get('/level/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
     const { type } = req.query; // 'activity', 'gaming', or 'season'
-    
+
     const level = await Database.getLevel(guildId, userId, type);
     res.json(serializeBigInt(level));
   } catch (error) {
@@ -39,7 +39,7 @@ router.get('/level/:guildId/:userId', async (req, res) => {
 router.get('/levels/:guildId/:userId', async (req, res) => {
   try {
     const { userId, guildId } = req.params;
-    
+
     const levels = await Database.getAllLevels(guildId, userId);
     res.json(serializeBigInt(levels));
   } catch (error) {
@@ -52,11 +52,11 @@ router.get('/levels/:guildId/:userId', async (req, res) => {
 router.post('/calculate', async (req, res) => {
   try {
     const { xp } = req.body;
-    
+
     if (xp === undefined) {
       return res.status(400).json({ error: 'xp is required' });
     }
-    
+
     const result = await Database.calculateLevel(xp);
     res.json(serializeBigInt(result));
   } catch (error) {
@@ -69,11 +69,11 @@ router.post('/calculate', async (req, res) => {
 router.post('/check-levelup', async (req, res) => {
   try {
     const { oldXp, newXp } = req.body;
-    
+
     if (oldXp === undefined || newXp === undefined) {
       return res.status(400).json({ error: 'oldXp and newXp are required' });
     }
-    
+
     const result = await Database.checkLevelUp(oldXp, newXp);
     res.json(serializeBigInt(result));
   } catch (error) {

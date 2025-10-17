@@ -24,7 +24,7 @@ const monitor = async (client) => {
         diff > 0 ? "increased" : "decreased"
       }: ${lastRSS} MB -> ${currentRSS} MB ` +
         `(${diff > 0 ? "+" : ""}${diff} MB) ` +
-        `(uptime: ${Math.round(process.uptime())}s)${labelInfo}`
+        `(uptime: ${Math.round(process.uptime())}s)${labelInfo}`,
     );
     lastRSS = currentRSS;
   }
@@ -52,7 +52,7 @@ const monitor = async (client) => {
         console.log(
           `${key}: ${value.old} -> ${value.new} (${value.diff > 0 ? "+" : ""}${
             value.diff
-          })`
+          })`,
         );
       });
     }

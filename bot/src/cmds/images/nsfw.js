@@ -45,8 +45,8 @@ export default {
             { name: "Pussy", value: "pussy" },
             { name: "Ahegao", value: "ahegao" },
             { name: "Uniform", value: "uniform" },
-            { name: "GIF", value: "gif" }
-          )
+            { name: "GIF", value: "gif" },
+          ),
       );
 
     return builder;
@@ -172,7 +172,7 @@ export default {
       })
         .addText(
           imageData.category || (await i18n.__("commands.images.nsfw.title")), // Use category as title
-          "header3"
+          "header3",
         )
         .addImage(imageData.url) // Use direct URL
         .addTimestamp(interaction.locale);

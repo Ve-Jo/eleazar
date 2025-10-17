@@ -27,7 +27,7 @@ export async function transcribeAudio(client, audioUrl, language = "auto") {
 
     const response = await fetch(audioUrl);
     const originalFilePath = `./temp_original_audio_file${path.extname(
-      audioUrl
+      audioUrl,
     )}`;
     await pipeline(response.body, fs.createWriteStream(originalFilePath));
 
@@ -87,13 +87,13 @@ export default {
         option
           .setName("audio")
           .setDescription("The audio file to transcribe")
-          .setRequired(true)
+          .setRequired(true),
       )
       .addStringOption((option) =>
         option
           .setName("language")
           .setDescription("The language of the audio (default: auto)")
-          .setRequired(false)
+          .setRequired(false),
       );
 
     return builder;
@@ -199,7 +199,7 @@ export default {
     const attachment = interaction.options.getAttachment("audio");
     if (!attachment) {
       return interaction.editReply(
-        await i18n.__("commands.ai.transcribe_audio.no_attachment")
+        await i18n.__("commands.ai.transcribe_audio.no_attachment"),
       );
     }
 
@@ -223,8 +223,8 @@ export default {
             accepted_types: acceptedTypes.join(", "),
             received_type: attachment.contentType || "unknown",
           },
-          userLocale
-        )
+          userLocale,
+        ),
       );
     }
 
@@ -232,20 +232,20 @@ export default {
     if (attachment.size > 25 * 1024 * 1024) {
       // 25 MB
       return interaction.editReply(
-        await i18n.__("commands.ai.transcribe_audio.file_too_large")
+        await i18n.__("commands.ai.transcribe_audio.file_too_large"),
       );
     }
 
     try {
       // Download the file
       await interaction.editReply(
-        await i18n.__("commands.ai.transcribe_audio.downloading")
+        await i18n.__("commands.ai.transcribe_audio.downloading"),
       );
 
       const response = await fetch(attachment.url);
       if (!response.ok) {
         throw new Error(
-          `Failed to download file: ${response.status} ${response.statusText}`
+          `Failed to download file: ${response.status} ${response.statusText}`,
         );
       }
 
@@ -253,7 +253,7 @@ export default {
 
       // Transcribe the audio
       await interaction.editReply(
-        await i18n.__("commands.ai.transcribe_audio.transcribing")
+        await i18n.__("commands.ai.transcribe_audio.transcribing"),
       );
 
       const formData = new FormData();
@@ -268,13 +268,13 @@ export default {
             Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
           },
           body: formData,
-        }
+        },
       );
 
       if (!transcriptionResponse.ok) {
         const errorText = await transcriptionResponse.text();
         throw new Error(
-          `OpenAI API error: ${transcriptionResponse.status} ${transcriptionResponse.statusText}\n${errorText}`
+          `OpenAI API error: ${transcriptionResponse.status} ${transcriptionResponse.statusText}\n${errorText}`,
         );
       }
 
@@ -289,7 +289,7 @@ export default {
     } catch (error) {
       console.error("Error transcribing audio:", error);
       return interaction.editReply(
-        await i18n.__("commands.ai.transcribe_audio.error")
+        await i18n.__("commands.ai.transcribe_audio.error"),
       );
     }
   },

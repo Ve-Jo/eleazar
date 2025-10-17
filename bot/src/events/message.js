@@ -52,21 +52,21 @@ export default {
     } catch (dbError) {
       console.error(
         `Error fetching user locale for ${author.id}, defaulting to 'en':`,
-        dbError
+        dbError,
       );
     }
 
     // Handle voice message transcription
     if (message.attachments.size > 0) {
       const audioAttachment = message.attachments.find((att) =>
-        att.contentType?.startsWith("audio/")
+        att.contentType?.startsWith("audio/"),
       );
       if (audioAttachment) {
         try {
           await message.channel.sendTyping();
           const transcription = await transcribeAudio(
             message.client,
-            audioAttachment.url
+            audioAttachment.url,
           );
 
           if (transcription && transcription.text) {
@@ -82,16 +82,16 @@ export default {
                 await i18n.__(
                   "events.message.transcription.success",
                   { text: transcriptionText },
-                  effectiveLocale
-                )
+                  effectiveLocale,
+                ),
               );
             }
           } else {
             await message.reply(
               await i18n.__(
                 "events.message.transcription.failed",
-                effectiveLocale
-              )
+                effectiveLocale,
+              ),
             );
           }
         } catch (error) {
@@ -99,8 +99,8 @@ export default {
           await message.reply(
             await i18n.__(
               "events.message.transcription.failed",
-              effectiveLocale
-            )
+              effectiveLocale,
+            ),
           );
         }
       }
@@ -153,11 +153,11 @@ export default {
               ) {
                 const role = guild.roles.cache.get(countingData.pinnedrole);
                 let member = guild.members.cache.get(
-                  countingData.lastpinnedmember
+                  countingData.lastpinnedmember,
                 );
                 if (!member) {
                   member = await guild.members.fetch(
-                    countingData.lastpinnedmember
+                    countingData.lastpinnedmember,
                   );
                 }
                 await member.roles.remove(role);
@@ -192,7 +192,7 @@ export default {
       const cooldownTime = await hubClient.getCooldown(
         author.id,
         guild.id,
-        "message"
+        "message",
       );
 
       if (cooldownTime === 0) {
@@ -233,7 +233,7 @@ export default {
           author.id,
           guild.id,
           xpPerMessage,
-          "chat"
+          "chat",
         );
 
         // --- Handle Level Roles --- //
@@ -242,14 +242,14 @@ export default {
             const member = message.member;
             if (!member) {
               console.warn(
-                `Could not find member ${author.id} in guild ${guild.id} for role assignment.`
+                `Could not find member ${author.id} in guild ${guild.id} for role assignment.`,
               );
             } else {
               // Check bot permissions
               const botMember = await guild.members.fetchMe();
               if (!botMember.permissions.has("ManageRoles")) {
                 console.warn(
-                  `Bot lacks ManageRoles permission in guild ${guild.id} to assign level roles.`
+                  `Bot lacks ManageRoles permission in guild ${guild.id} to assign level roles.`,
                 );
               } else {
                 // Add the new role
@@ -263,16 +263,16 @@ export default {
                     // Check hierarchy
                     await member.roles.add(roleToAdd, "Level up reward");
                     console.log(
-                      `Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag}`
+                      `Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag}`,
                     );
                   } else {
                     console.warn(
-                      `Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag} due to role hierarchy.`
+                      `Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag} due to role hierarchy.`,
                     );
                   }
                 } else {
                   console.warn(
-                    `Level role ID ${xpResult.assignedRole} not found in guild ${guild.id}.`
+                    `Level role ID ${xpResult.assignedRole} not found in guild ${guild.id}.`,
                   );
                 }
 
@@ -290,14 +290,14 @@ export default {
                     ) {
                       if (
                         botMember.roles.highest.comparePositionTo(
-                          roleToRemove
+                          roleToRemove,
                         ) > 0
                       ) {
                         // Check hierarchy
                         rolesToRemove.push(roleToRemove);
                       } else {
                         console.warn(
-                          `Cannot remove role ${roleToRemove.name} (${roleToRemove.id}) from ${author.tag} due to role hierarchy.`
+                          `Cannot remove role ${roleToRemove.name} (${roleToRemove.id}) from ${author.tag} due to role hierarchy.`,
                         );
                       }
                     }
@@ -305,12 +305,12 @@ export default {
                   if (rolesToRemove.length > 0) {
                     await member.roles.remove(
                       rolesToRemove,
-                      "Level up role update"
+                      "Level up role update",
                     );
                     console.log(
                       `Removed roles ${rolesToRemove
                         .map((r) => `${r.name} (${r.id})`)
-                        .join(", ")} from ${author.tag}`
+                        .join(", ")} from ${author.tag}`,
                     );
                   }
                 }
@@ -319,7 +319,7 @@ export default {
           } catch (roleError) {
             console.error(
               `Error managing level roles for ${author.tag} in guild ${guild.id}:`,
-              roleError
+              roleError,
             );
           }
         }
@@ -333,7 +333,7 @@ export default {
             author.id,
             xpResult.levelUp,
             xpResult.type,
-            channel
+            channel,
           );
         }
 

@@ -91,7 +91,7 @@ setInterval(
     });
     console.log("Manual message sweep completed");
   },
-  process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000
+  process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000,
 );
 
 console.log("Loading commands...");
@@ -124,11 +124,11 @@ client.replicate = new Replicate({
 client.deepinfra = {
   whisper: new AutomaticSpeechRecognition(
     "openai/whisper-large-v3-turbo",
-    process.env.DEEPINFRA_API_KEY
+    process.env.DEEPINFRA_API_KEY,
   ),
   flux_schnell: new TextToImage(
     "black-forest-labs/FLUX-1-schnell",
-    process.env.DEEPINFRA_API_KEY
+    process.env.DEEPINFRA_API_KEY,
   ),
 };
 
