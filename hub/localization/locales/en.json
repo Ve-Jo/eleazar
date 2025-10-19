@@ -624,6 +624,142 @@
       },
       "error_permissions": "You need the Administrator permission to manage level roles.",
       "error_generic": "An error occurred while managing level roles."
+    },
+    "profile": {
+      "command": {
+        "name": "profile",
+        "description": "Manage your personal profile information"
+      },
+      "subcommands": {
+        "view": {
+          "name": "view",
+          "description": "View your profile or someone else's profile",
+          "options": {
+            "user": {
+              "name": "user",
+              "description": "The user whose profile you want to view"
+            }
+          },
+          "title": "Profile",
+          "no_profile": "No profile information set yet."
+        },
+        "set": {
+          "name": "set",
+          "description": "Set your profile information",
+          "options": {
+            "name": {
+              "name": "name",
+              "description": "Your real name (1-50 characters)"
+            },
+            "age": {
+              "name": "age",
+              "description": "Your age (13-120)"
+            },
+            "gender": {
+              "name": "gender",
+              "description": "Your gender (male, female, non-binary, or custom)"
+            },
+            "pronouns": {
+              "name": "pronouns",
+              "description": "Your pronouns (e.g., he/him, she/her, they/them)"
+            },
+            "country": {
+              "name": "country",
+              "description": "Your country code (2 letters, e.g., US, GB, CA)"
+            }
+          },
+          "success": "Profile updated successfully!",
+          "errors": {
+            "invalid_name": "Name must be 1-50 characters and contain only letters, spaces, hyphens, and apostrophes",
+            "invalid_age": "Age must be between 13 and 120",
+            "invalid_gender": "Gender must be 1-20 characters and contain only letters",
+            "invalid_pronouns": "Pronouns must be in format 'word/word' (e.g., he/him, they/them)",
+            "invalid_country": "Country code must be a valid 2-letter ISO code (e.g., US, GB, CA)"
+          }
+        },
+        "reset": {
+          "name": "reset",
+          "description": "Reset your profile information",
+          "options": {
+            "field": {
+              "name": "field",
+              "description": "Which field to reset (leave empty to reset all)"
+            }
+          },
+          "success": "Profile reset successfully!",
+          "errors": {
+            "nothing_to_reset": "Nothing to reset - your profile is already empty."
+          }
+        }
+      },
+      "fields": {
+        "name": "Name",
+        "age": "Age",
+        "gender": "Gender",
+        "pronouns": "Pronouns",
+        "country": "Country",
+        "privacy": "Privacy"
+      },
+      "view": {
+        "name": "view",
+        "description": "View your profile or someone else's profile",
+        "options": {
+          "user": {
+            "name": "user",
+            "description": "The user whose profile you want to view"
+          }
+        },
+        "title": "Profile",
+        "no_profile": "No profile information set yet."
+      },
+      "set": {
+        "name": "set",
+        "description": "Set your profile information",
+        "options": {
+          "name": {
+            "name": "name",
+            "description": "Your real name (1-50 characters)"
+          },
+          "age": {
+            "name": "age",
+            "description": "Your age (13-120)"
+          },
+          "gender": {
+            "name": "gender",
+            "description": "Your gender (male, female, non-binary, or custom)"
+          },
+          "pronouns": {
+            "name": "pronouns",
+            "description": "Your pronouns (e.g., he/him, she/her, they/them)"
+          },
+          "country": {
+            "name": "country",
+            "description": "Your country code (2 letters, e.g., US, GB, CA)"
+          }
+        },
+        "success": "Profile updated successfully!",
+        "errors": {
+          "invalid_name": "Name must be 1-50 characters and contain only letters, spaces, hyphens, and apostrophes",
+          "invalid_age": "Age must be between 13 and 120",
+          "invalid_gender": "Gender must be 1-20 characters and contain only letters",
+          "invalid_pronouns": "Pronouns must be in format 'word/word' (e.g., he/him, they/them)",
+          "invalid_country": "Country code must be a valid 2-letter ISO code (e.g., US, GB, CA)"
+        }
+      },
+      "reset": {
+        "name": "reset",
+        "description": "Reset your profile information",
+        "options": {
+          "field": {
+            "name": "field",
+            "description": "Which field to reset (leave empty to reset all)"
+          }
+        },
+        "success": "Profile reset successfully!",
+        "errors": {
+          "nothing_to_reset": "Nothing to reset - your profile is already empty."
+        }
+      }
     }
   },
   "levelUp": {
@@ -684,7 +820,8 @@
             "off": "Reasoning: OFF",
             "offModel": "Reasoning: OFF (Model)"
           },
-          "clearContext": "Context ({current}/{max})"
+          "clearContext": "Context ({current}/{max})",
+          "contextCleared": "Context memory has been cleared."
         },
         "menus": {
           "modelSelect": {
@@ -829,6 +966,17 @@
         "stream": {
           "stop": "Stop"
         }
+      },
+      "errorMenu": {
+        "placeholder": "Fix this error...",
+        "retry": "Retry",
+        "retryDescription": "Try the request again",
+        "switchModel": "Switch Model",
+        "switchModelDescription": "Try a different AI model",
+        "settings": "Settings",
+        "settingsDescription": "Configure AI settings",
+        "clearContext": "Clear Context",
+        "clearContextDescription": "Reset conversation memory"
       }
     }
   },
