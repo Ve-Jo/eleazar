@@ -1,4 +1,5 @@
 import i18n from "../../utils/i18n.js";
+import processAiRequest from "../../handlers/processAiRequest.js";
 import {
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -18,7 +19,6 @@ import {
   getModelDetails,
   supportsReasoning,
 } from "../../ai.js";
-import processAiRequest from "../../handlers/processAiRequest.js";
 
 // Track the last message with components for each user
 const lastUserComponentMessages = new Map();
@@ -329,6 +329,84 @@ export async function buildInteractionComponents(
   return components;
 }
 
+/**
+ * Build components specifically for error messages to allow users to fix issues manually
+ */
+export async function buildErrorComponents(
+  userId,
+  availableModels,
+  isVision = false,
+  locale = "en",
+  client = null,
+) {
+  const prefs = getUserPreferences(userId);
+  const components = [];
+
+  i18n.setLocale(locale);
+
+  // Create error action menu with retry and settings options
+  const errorMenu = new StringSelectMenuBuilder()
+    .setCustomId(`ai_error_menu_${userId}`)
+    .setPlaceholder(
+      (await i18n.__("events.ai.errorMenu.placeholder", locale)) ||
+        "Fix this error...",
+    );
+
+  const options = [];
+
+  // Retry option
+  options.push({
+    label: (await i18n.__("events.ai.errorMenu.retry", locale)) || "Retry",
+    description:
+      (await i18n.__("events.ai.errorMenu.retryDescription", locale)) ||
+      "Try the request again",
+    value: "retry",
+    emoji: "🔄",
+  });
+
+  // Switch model option
+  options.push({
+    label:
+      (await i18n.__("events.ai.errorMenu.switchModel", locale)) ||
+      "Switch Model",
+    description:
+      (await i18n.__("events.ai.errorMenu.switchModelDescription", locale)) ||
+      "Try a different AI model",
+    value: "switch_model",
+    emoji: "🤖",
+  });
+
+  // Settings access option
+  options.push({
+    label:
+      (await i18n.__("events.ai.errorMenu.settings", locale)) || "Settings",
+    description:
+      (await i18n.__("events.ai.errorMenu.settingsDescription", locale)) ||
+      "Configure AI settings",
+    value: "settings",
+    emoji: "⚙️",
+  });
+
+  // Clear context option (in case of context-related errors)
+  const current = prefs.messageHistory.length;
+  options.push({
+    label:
+      (await i18n.__("events.ai.errorMenu.clearContext", locale)) ||
+      "Clear Context",
+    description:
+      (await i18n.__("events.ai.errorMenu.clearContextDescription", locale)) ||
+      "Reset conversation memory",
+    value: "clear_context",
+    emoji: "🗑️",
+    disabled: current === 0,
+  });
+
+  errorMenu.addOptions(options);
+  components.push(new ActionRowBuilder().addComponents(errorMenu));
+
+  return components;
+}
+
 export async function sendResponse(
   message,
   processingMessage,
@@ -425,8 +503,109 @@ export async function sendResponse(
     });
     collector.on("collect", async (interaction) => {
       try {
-        // Handle settings menu selection
+        // Handle error menu selection
         if (
+          interaction.isStringSelectMenu() &&
+          interaction.customId === `ai_error_menu_${userId}`
+        ) {
+          const selectedValue = interaction.values[0];
+          const prefs = getUserPreferences(userId);
+
+          console.log(
+            `Error menu selection for user ${userId}: ${selectedValue}`,
+          );
+
+          switch (selectedValue) {
+            case "retry":
+              // Retry the AI request
+              await interaction.deferUpdate();
+              const messageContent = message.content
+                .replace(new RegExp(`<@!?${message.client.user.id}>`, "g"), "")
+                .trim();
+              const newVisionRequest =
+                message.attachments.size > 0 &&
+                message.attachments.first().contentType?.startsWith("image/");
+
+              // Stop the current collector
+              collector.stop();
+
+              // Process the request again
+              await processAiRequest(
+                message,
+                userId,
+                messageContent,
+                newVisionRequest,
+                finalMsg,
+                locale,
+              );
+              return; // Return early
+
+            case "switch_model":
+              // Show model selection menu
+              const isVisionRequest =
+                message.attachments.size > 0 &&
+                message.attachments.first().contentType?.startsWith("image/");
+
+              const models = await getAvailableModels(
+                message.client,
+                isVisionRequest ? "vision" : null,
+              );
+
+              const modelMenu = new StringSelectMenuBuilder()
+                .setCustomId(`ai_select_model_${userId}`)
+                .setPlaceholder(
+                  await i18n.__(
+                    "events.ai.buttons.menus.modelSelect.placeholder",
+                  ),
+                );
+
+              // Use the shared function to build options
+              const opts = await buildModelOptions(
+                models,
+                prefs.selectedModel,
+                locale,
+              );
+
+              modelMenu.addOptions(opts);
+
+              await interaction.update({
+                components: [new ActionRowBuilder().addComponents(modelMenu)],
+              });
+              return; // Return early to prevent updating components
+
+            case "settings":
+              // Switch to regular settings menu
+              const regularModels = await getAvailableModels(
+                message.client,
+                isVisionRequest ? "vision" : null,
+              );
+              const newComponents = await buildInteractionComponents(
+                userId,
+                regularModels,
+                isVisionRequest,
+                false,
+                locale,
+                message.client,
+              );
+
+              await interaction.update({ components: newComponents });
+              return; // Return early
+
+            case "clear_context":
+              // Clear context memory
+              clearUserHistory(userId);
+              await interaction.reply({
+                content: await i18n.__(
+                  "events.ai.buttons.systemPrompt.contextCleared",
+                  locale,
+                ),
+                ephemeral: true,
+              });
+              break;
+          }
+        }
+        // Handle settings menu selection
+        else if (
           interaction.isStringSelectMenu() &&
           interaction.customId === `ai_settings_menu_${userId}`
         ) {
@@ -541,7 +720,7 @@ export async function sendResponse(
         const isVisionRequest =
           message.attachments.size > 0 &&
           message.attachments.first().contentType?.startsWith("image/");
-        const models = await getAvailableModels(
+        const models = getAvailableModels(
           message.client,
           isVisionRequest ? "vision" : null,
         );

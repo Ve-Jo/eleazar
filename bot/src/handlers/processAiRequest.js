@@ -26,6 +26,7 @@ import {
   splitMessage,
   sendResponse,
   buildInteractionComponents,
+  buildErrorComponents,
 
   // Tools
   generateToolsFromCommands,
@@ -3002,6 +3003,42 @@ ${
       { error: error.message },
       effectiveLocale,
     );
-    await sendResponse(message, procMsg, errMsg, [], effectiveLocale, false);
+
+    // Get available models for error components
+    let availableModels = [];
+    try {
+      availableModels = await getAvailableModels(
+        client,
+        isVisionRequest ? "vision" : null,
+      );
+    } catch (modelsError) {
+      console.error(
+        "Error getting available models for error components:",
+        modelsError,
+      );
+    }
+
+    // Build error-specific components
+    let errorComponents = [];
+    try {
+      errorComponents = await buildErrorComponents(
+        userId,
+        availableModels,
+        isVisionRequest,
+        effectiveLocale,
+        client,
+      );
+    } catch (componentsError) {
+      console.error("Error building error components:", componentsError);
+    }
+
+    await sendResponse(
+      message,
+      procMsg,
+      errMsg,
+      errorComponents,
+      effectiveLocale,
+      false,
+    );
   }
 }

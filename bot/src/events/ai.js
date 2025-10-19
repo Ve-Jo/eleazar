@@ -192,6 +192,11 @@ const localization_strings = {
         ru: "Контекст ({current}/{max})",
         uk: "Контекст ({current}/{max})",
       },
+      contextCleared: {
+        en: "Context memory has been cleared.",
+        ru: "Память контекста была очищена.",
+        uk: "Пам'ять контексту була очищена.",
+      },
     },
     menus: {
       modelSelect: {
@@ -672,6 +677,53 @@ const localization_strings = {
         ru: "Стоп",
         uk: "Стоп",
       },
+    },
+  },
+  errorMenu: {
+    placeholder: {
+      en: "Fix this error...",
+      ru: "Исправить ошибку...",
+      uk: "Виправити помилку...",
+    },
+    retry: {
+      en: "Retry",
+      ru: "Повторить",
+      uk: "Повторити",
+    },
+    retryDescription: {
+      en: "Try the request again",
+      ru: "Попробуйте запрос снова",
+      uk: "Спробуйте запит знову",
+    },
+    switchModel: {
+      en: "Switch Model",
+      ru: "Сменить модель",
+      uk: "Змінити модель",
+    },
+    switchModelDescription: {
+      en: "Try a different AI model",
+      ru: "Попробуйте другую модель ИИ",
+      uk: "Спробуйте іншу модель ШІ",
+    },
+    settings: {
+      en: "Settings",
+      ru: "Настройки",
+      uk: "Налаштування",
+    },
+    settingsDescription: {
+      en: "Configure AI settings",
+      ru: "Настроить параметры ИИ",
+      uk: "Налаштувати параметри ШІ",
+    },
+    clearContext: {
+      en: "Clear Context",
+      ru: "Очистить контекст",
+      uk: "Очистити контекст",
+    },
+    clearContextDescription: {
+      en: "Reset conversation memory",
+      ru: "Сбросить память разговора",
+      uk: "Скинути пам'ять розмови",
     },
   },
 };

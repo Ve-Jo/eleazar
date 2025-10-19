@@ -51,6 +51,7 @@ import {
   buildInteractionComponents,
   sendResponse,
   handleFinetuneModal,
+  buildErrorComponents,
 } from "./services/ai/messages.js";
 
 // Import from services/tools.js
@@ -96,6 +97,7 @@ export {
   splitMessage,
   buildInteractionComponents,
   sendResponse,
+  buildErrorComponents,
 
   // ----- TOOL HANDLING -----
   generateToolsFromCommands,
