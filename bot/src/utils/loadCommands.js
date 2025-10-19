@@ -25,6 +25,7 @@ export async function loadCommands(
     "counting",
     "marriage",
     "settings",
+    "personalization",
   ],
 ) {
   console.log(
