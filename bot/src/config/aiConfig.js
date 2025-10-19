@@ -57,6 +57,8 @@ const CONFIG = {
         "moonshotai/Kimi-K2-Instruct-0905",
         "z-ai/glm-4.6:thinking",
         "zai-org/GLM-4.5-FP8:thinking",
+        "inclusionai/ling-1t",
+        "inclusionai/ring-1t",
         "deepseek-ai/deepseek-v3.2-exp-thinking",
         "deepseek-ai/DeepSeek-V3.1-Terminus:thinking",
         "deepseek-ai/DeepSeek-V3.1:thinking",
@@ -111,6 +113,8 @@ const CONFIG = {
     "openrouter/qwen/qwen-vl-plus": 32000,
 
     // NanoGPT models
+    "nanogpt/inclusionai/ling-1t": 128000,
+    "nanogpt/inclusionai/ring-1t": 128000,
     "nanogpt/moonshotai/Kimi-K2-Instruct-0905": 200000,
     "nanogpt/z-ai/glm-4.6:thinking": 32000,
     "nanogpt/zai-org/GLM-4.5-FP8:thinking": 32000,
