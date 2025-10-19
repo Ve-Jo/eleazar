@@ -117,7 +117,12 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
   if (!emoji) return null;
 
   const emojiCode = twemoji.convert.toCodePoint(emoji);
+  console.log(`Emoji conversion debug: ${emoji} -> ${emojiCode}`);
   if (!emojiCode) return null;
+
+  // For gender symbols, remove the variation selector to use base character
+  const cleanEmojiCode = emojiCode.replace(/-fe0f$/, '');
+  console.log(`Cleaned emoji code: ${cleanEmojiCode}`);
 
   // Validate scaling factor
   const validatedScaling = Math.min(Math.max(emojiScaling, 0.5), 3);
@@ -126,30 +131,39 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
   const emojiFilePath = join(EMOJI_DIR, emojiFileName);
 
   // Check in-memory cache first
-  if (emojiCache.has(cacheKey)) {
-    return emojiCache.get(cacheKey);
+  const cleanCacheKey = `${cleanEmojiCode}-${validatedScaling}`;
+  if (emojiCache.has(cleanCacheKey)) {
+    return emojiCache.get(cleanCacheKey);
   }
 
   // Check if emoji file exists on disk
+  const cleanEmojiFilePath = join(EMOJI_DIR, `${cleanEmojiCode}-${validatedScaling}.png`);
   try {
-    await fs.stat(emojiFilePath);
+    await fs.stat(cleanEmojiFilePath);
     // File exists, read it and add to cache
-    const fileBuffer = await fs.readFile(emojiFilePath);
+    const fileBuffer = await fs.readFile(cleanEmojiFilePath);
     const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
-    emojiCache.set(cacheKey, base64);
+    emojiCache.set(cleanCacheKey, base64);
     return base64;
   } catch (fileError) {
     // File doesn't exist, continue with fetching
-    console.log(`Emoji file not found, fetching from CDN: ${emojiFileName}`);
+    console.log(`Emoji file not found, fetching from CDN: ${cleanEmojiCode}-${validatedScaling}.png`);
   }
 
   try {
-    const svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${emojiCode}.svg`;
-    const response = await fetch(svgUrl);
+    let svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${cleanEmojiCode}.svg`;
+    console.log(`Fetching emoji from URL: ${svgUrl}`);
+    let response = await fetch(svgUrl);
 
     if (!response.ok) {
-      console.warn(`Failed to fetch emoji ${emojiCode}: ${response.status}`);
-      return null;
+      console.log(`Primary CDN failed, trying GitHub repository fallback for ${cleanEmojiCode}`);
+      svgUrl = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${cleanEmojiCode}.svg`;
+      response = await fetch(svgUrl);
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch emoji ${cleanEmojiCode} (${emoji}): ${response.status}`);
+        return null;
+      }
     }
 
     const svgData = await response.text();
@@ -201,8 +215,8 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
     // Save emoji to disk for future use
     if (pngBuffer) {
       try {
-        await fs.writeFile(emojiFilePath, pngBuffer);
-        console.log(`Saved emoji to disk: ${emojiFileName}`);
+        await fs.writeFile(cleanEmojiFilePath, pngBuffer);
+        console.log(`Saved emoji to disk: ${cleanEmojiCode}-${validatedScaling}.png`);
       } catch (saveError) {
         console.warn(`Failed to save emoji to disk: ${saveError.message}`);
         // Continue even if save fails - we still have the base64
@@ -216,7 +230,7 @@ export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
     }
 
     if (base64) {
-      emojiCache.set(cacheKey, base64);
+      emojiCache.set(cleanCacheKey, base64);
       return base64;
     }
     return null;
