@@ -216,6 +216,27 @@ class HubClient {
     });
   }
 
+  // Personalization API methods
+  async getUserProfile(guildId, userId) {
+    return await apiRequest(
+      `${this.databaseUrl}/users/${guildId}/${userId}/profile`,
+    );
+  }
+
+  async updateUserProfile(guildId, userId, profileData) {
+    return await apiRequest(
+      `${this.databaseUrl}/users/${guildId}/${userId}/profile`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(profileData),
+      },
+    );
+  }
+
+  async setUserPersonalization(guildId, userId, personalizationData) {
+    return await this.updateUserProfile(guildId, userId, personalizationData);
+  }
+
   async ensureUser(guildId, userId) {
     return await apiRequest(`${this.databaseUrl}/users/ensure`, {
       method: "POST",

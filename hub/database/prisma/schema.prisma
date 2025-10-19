@@ -21,6 +21,11 @@ model User {
   bannerUrl       String?          @map("banner_url")
   lastActivity    BigInt           @default(0) @map("last_activity")
   locale          String?          @map("locale")
+  realName        String?          @map("real_name")
+  age             Int?             @map("age")
+  gender          String?          @map("gender")
+  countryCode     String?          @map("country_code")
+
   cooldowns       Cooldown?
   crates          Crate[]
   cryptoPositions CryptoPosition[]

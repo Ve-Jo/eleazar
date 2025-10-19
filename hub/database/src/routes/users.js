@@ -87,4 +87,73 @@ router.put('/:guildId/:userId/locale', async (req, res) => {
   }
 });
 
+// Get user profile (personalization data)
+router.get('/:guildId/:userId/profile', async (req, res) => {
+  try {
+    const { userId, guildId } = req.params;
+
+    // Ensure user exists before getting profile
+    await Database.ensureGuildUser(guildId, userId);
+    const user = await Database.getUser(guildId, userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Return only personalization fields
+    const profile = {
+      realName: user.realName,
+      age: user.age,
+      gender: user.gender,
+      countryCode: user.countryCode,
+      pronouns: user.pronouns,
+      locale: user.locale
+    };
+
+    res.json(serializeBigInt(profile));
+  } catch (error) {
+    console.error('Error getting user profile:', error);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
+// Update user profile (personalization data)
+router.patch('/:guildId/:userId/profile', async (req, res) => {
+  try {
+    const { userId, guildId } = req.params;
+    const profileData = req.body;
+
+    // Validate input data
+    const allowedFields = ['realName', 'age', 'gender', 'countryCode', 'pronouns', 'locale'];
+    const updateData = {};
+
+    for (const field of allowedFields) {
+      if (profileData[field] !== undefined) {
+        updateData[field] = profileData[field];
+      }
+    }
+
+    // Ensure user exists before updating profile
+    await Database.ensureGuildUser(guildId, userId);
+
+    // Update user with profile data
+    const user = await Database.updateUser(guildId, userId, updateData);
+
+    // Return only the updated profile fields
+    const profile = {
+      realName: user.realName,
+      age: user.age,
+      gender: user.gender,
+      countryCode: user.countryCode,
+      pronouns: user.pronouns,
+      locale: user.locale
+    };
+
+    res.json(serializeBigInt(profile));
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+});
+
 export default router;
