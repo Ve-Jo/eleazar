@@ -1,7 +1,67 @@
 import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
+import { getCountryFlag, countryFlags } from "../utils/countryFlagsRender.js";
+
+// Function to get gender emoji
+const getGenderEmoji = (gender) => {
+  if (!gender) return null;
+  const genderLower = gender.toLowerCase();
+
+  switch (genderLower) {
+    case "male":
+    case "man":
+    case "boy":
+      return "♂️";
+    case "female":
+    case "woman":
+    case "girl":
+      return "♀️";
+    case "non-binary":
+    case "nonbinary":
+      return "⚧️";
+    case "other":
+    case "prefer not to say":
+      return "🧑";
+    default:
+      return "🧑";
+  }
+};
 
 const Balance = (props) => {
+  const { interaction, database, i18n, coloring } = props;
+
+  // --- Personalization Data ---
+  const userRealName = database?.realName;
+  const userAge = database?.age;
+  const userCountryCode = database?.countryCode;
+  const userGender = database?.gender;
+
+  // Function to format personalization display
+  const formatPersonalizationDisplay = () => {
+    if (!userRealName && !userAge) return null;
+
+    const parts = [];
+    if (userRealName) parts.push(userRealName);
+    if (userAge) parts.push(`${userAge}y.o`);
+
+    // Add gender emoji if available
+    if (userGender) {
+      const genderEmoji = getGenderEmoji(userGender);
+      if (genderEmoji) parts.push(genderEmoji);
+    }
+
+    if (userCountryCode) {
+      const countryFlag = getCountryFlag(userCountryCode);
+      if (countryFlag) parts.push(countryFlag);
+    }
+
+    return parts.join(", ");
+  };
+
+  // Update component dimensions if personalization is shown
+
+  // --- End Personalization Data ---
+
   const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
 
   const renderBanknotes = (
@@ -203,10 +263,6 @@ const Balance = (props) => {
 
     return banknotes;
   };
-
-  const { interaction, database, i18n, coloring } = props;
-
-  // --- Marriage Check ---
 
   const combinedBankBalanceProp = database?.combinedBankBalance;
   // --- End Marriage Check ---
@@ -820,6 +876,33 @@ const Balance = (props) => {
               #{interaction?.user?.id || "{id}"}
             </div>
           </div>
+
+          {/* Personalization Display - User Profile Info */}
+          {(userRealName || userAge || userCountryCode) && (
+            <div
+              style={{
+                position: "absolute",
+                textAlign: "center",
+                top: "115px",
+                right: "5px",
+                display: "flex",
+                fontSize: "14px",
+                fontWeight: "600",
+                color: "#ffffff",
+                width: "90px",
+                justifyContent: "center",
+                alignItems: "center",
+                minHeight: "21px",
+                fontFamily: "Inter600, sans-serif",
+                lineHeight: "1.2",
+                zIndex: 2,
+              }}
+            >
+              <span className="text-node">
+                {formatPersonalizationDisplay()}
+              </span>
+            </div>
+          )}
         </div>
         <div
           style={{
@@ -1136,7 +1219,8 @@ Balance.dimensions = {
   width: 400,
   height: function (props) {
     const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
-    return isMarried ? 267 : 235;
+    const hasPersonalization = props?.database?.realName || props?.database?.age;
+    return isMarried ? 267 : (hasPersonalization ? 255 : 235);
   },
 };
 
