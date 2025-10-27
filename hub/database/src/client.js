@@ -1162,6 +1162,42 @@ class Database {
     return crates;
   }
 
+  // Get user's balance (main balance, not bank)
+  async getBalance(guildId, userId) {
+    try {
+      const user = await this.getUser(guildId, userId);
+      return user?.economy?.balance || new Prisma.Decimal(0);
+    } catch (error) {
+      console.error(
+        `Error getting balance for user ${userId} in guild ${guildId}:`,
+        error
+      );
+      return new Prisma.Decimal(0);
+    }
+  }
+
+  // Get user's total bank balance (bankBalance + bankDistributed)
+  async getTotalBankBalance(guildId, userId) {
+    try {
+      const user = await this.getUser(guildId, userId);
+      if (!user?.economy) {
+        return new Prisma.Decimal(0);
+      }
+
+      const bankBalance = user.economy.bankBalance || new Prisma.Decimal(0);
+      const bankDistributed =
+        user.economy.bankDistributed || new Prisma.Decimal(0);
+
+      return bankBalance.plus(bankDistributed);
+    } catch (error) {
+      console.error(
+        `Error getting total bank balance for user ${userId} in guild ${guildId}:`,
+        error
+      );
+      return new Prisma.Decimal(0);
+    }
+  }
+
   // Get a specific crate or create it if not exists
   async getUserCrate(guildId, userId, type) {
     // Redis caching disabled - fetch directly from database
@@ -1728,6 +1764,211 @@ class Database {
     return result;
   }
 
+  // === Guild Vault Methods ===
+
+  /**
+   * Получить или создать guild vault
+   * @param {string} guildId
+   * @returns {Promise<object>} Guild vault record
+   */
+  async getOrCreateGuildVault(guildId) {
+    return this.client.guildVault.upsert({
+      where: { guildId },
+      create: { guildId, balance: 0, totalFees: 0 },
+      update: {},
+    });
+  }
+
+  /**
+   * Добавить сумму в guild vault и запустить автоматическое распределение
+   * @param {string} guildId
+   * @param {object} amount - Decimal сумма комиссии для добавления
+   * @param {string} userId - ID пользователя, инициировавшего операцию
+   * @param {string} operationType - 'deposit' или 'withdraw'
+   * @returns {Promise<object>} Updated guild vault
+   */
+  async addToGuildVault(guildId, amount, userId, operationType) {
+    return this.client.$transaction(async (tx) => {
+      // Получаем или создаем guild vault
+      const vault = await tx.guildVault.upsert({
+        where: { guildId },
+        create: { guildId, balance: 0, totalFees: 0 },
+        update: {},
+      });
+
+      // Разделяем комиссию на две части: 50% для распределения, 50% для накопления
+      const distributableAmount = amount.times(0.5); // 2.5% от операции
+      const accumulativeAmount = amount.times(0.5); // 2.5% от операции
+
+      // Добавляем всю сумму в общий баланс vault
+      const updatedVault = await tx.guildVault.update({
+        where: { guildId },
+        data: {
+          balance: {
+            increment: amount,
+          },
+          totalFees: {
+            increment: amount,
+          },
+        },
+      });
+
+      // Запускаем автоматическое распределение только для части, предназначенной для распределения
+      await this.distributeGuildVaultFunds(
+        tx,
+        guildId,
+        userId,
+        distributableAmount
+      );
+
+      return updatedVault;
+    });
+  }
+
+  /**
+   * Автоматическое распределение средств из guild vault
+   * Распределяет 50% от комиссии (2.5% от операции) всем участникам с банковскими балансами
+   * @param {object} tx - Transaction instance
+   * @param {string} guildId
+   * @param {string} excludedUserId - ID пользователя для исключения из распределения
+   * @param {object} distributionAmount - Decimal сумма для распределения (половина от комиссии)
+   */
+  async distributeGuildVaultFunds(
+    tx,
+    guildId,
+    excludedUserId,
+    distributionAmount
+  ) {
+    try {
+      // Получаем всех пользователей гильдии с их банковскими балансами
+      const guildUsers = await tx.user.findMany({
+        where: { guildId },
+        include: { economy: true },
+      });
+
+      // Фильтруем пользователей, у которых есть банковский баланс (больше 0)
+      const usersWithBankBalance = guildUsers.filter(
+        (user) =>
+          user.id !== excludedUserId &&
+          user.economy &&
+          user.economy.bankBalance > 0
+      );
+
+      if (usersWithBankBalance.length === 0) {
+        console.log(
+          `No users with bank balance found in guild ${guildId} for distribution`
+        );
+        return;
+      }
+
+      // Проверяем что сумма для распределения положительная
+      if (!distributionAmount || distributionAmount.lessThanOrEqualTo(0)) {
+        console.log(`No distribution amount provided for guild ${guildId}`);
+        return;
+      }
+
+      // Вычисляем общую сумму банковских балансов всех участников
+      const totalBankBalance = usersWithBankBalance.reduce(
+        (sum, user) => sum + Number(user.economy.bankBalance),
+        0
+      );
+
+      if (totalBankBalance <= 0) {
+        console.log(`Total bank balance is 0 in guild ${guildId}`);
+        return;
+      }
+
+      // Распределяем средства пропорционально банковским балансам
+      for (const user of usersWithBankBalance) {
+        const userBankBalance = Number(user.economy.bankBalance);
+        const userShare = new Prisma.Decimal(userBankBalance)
+          .dividedBy(totalBankBalance)
+          .times(distributionAmount);
+
+        if (userShare.greaterThan(0)) {
+          // Добавляем долю пользователю на банковское распределение
+          await tx.economy.update({
+            where: {
+              guildId_userId: {
+                guildId,
+                userId: user.id,
+              },
+            },
+            data: {
+              bankDistributed: {
+                increment: userShare,
+              },
+            },
+          });
+
+          // Создаем запись о получении средств пользователем
+          await tx.guildVaultDistribution.create({
+            data: {
+              guildId,
+              userId: user.id,
+              amount: userShare,
+              source: "automatic",
+              triggeredBy: excludedUserId,
+            },
+          });
+        }
+      }
+
+      // Обновляем vault - вычитаем распределенную сумму
+      await tx.guildVault.update({
+        where: { guildId },
+        data: {
+          balance: {
+            decrement: distributionAmount,
+          },
+          lastDistribution: new Date(),
+        },
+      });
+
+      console.log(
+        `Distributed ${distributionAmount} to ${usersWithBankBalance.length} users in guild ${guildId}`
+      );
+    } catch (error) {
+      console.error(
+        `Error distributing guild vault funds for guild ${guildId}:`,
+        error
+      );
+      // Не пробрасываем ошибку, чтобы не нарушить основную транзакцию
+    }
+  }
+
+  /**
+   * Получить историю распределений для гильдии
+   * @param {string} guildId
+   * @param {number} limit - Лимит записей
+   * @returns {Promise<Array>} Массив записей о распределениях
+   */
+  async getGuildVaultDistributions(guildId, limit = 10) {
+    return this.client.guildVaultDistribution.findMany({
+      where: { guildId },
+      orderBy: { distributionDate: "desc" },
+      take: limit,
+    });
+  }
+
+  /**
+   * Получить личные распределения пользователя
+   * @param {string} guildId
+   * @param {string} userId
+   * @param {number} limit - Лимит записей
+   * @returns {Promise<Array>} Массив личных распределений
+   */
+  async getUserVaultDistributions(guildId, userId, limit = 10) {
+    return this.client.guildVaultDistribution.findMany({
+      where: {
+        guildId,
+        userId,
+      },
+      orderBy: { distributionDate: "desc" },
+      take: limit,
+    });
+  }
+
   async deposit(guildId, userId, amount) {
     console.log(
       `Deposit initiated for user ${userId} in guild ${guildId} with amount ${amount}`
@@ -1788,7 +2029,7 @@ class Database {
         console.log(`Bank balance after interest: ${currentBankBalance}`);
       }
 
-      // Calculate new bank rate: 300 + (5 * chatting level) + (5 * gaming level)
+      // Calculate new bank rate based on levels and bank_rate upgrade (no 300% base)
       const chattingLevel = user.Level
         ? this.calculateLevel(user.Level.xp).level
         : 1;
@@ -1799,16 +2040,31 @@ class Database {
         `User levels - Chatting: ${chattingLevel}, Gaming: ${gamingLevel}`
       );
 
+      // Remove base 300% small-balance rate; include bank_rate upgrade
+      const userUpgrades = await tx.upgrade.findMany({
+        where: { guildId, userId },
+      });
+      const bankRateUpgradeLevel =
+        userUpgrades.find((u) => u.type === "bank_rate")?.level || 1;
+      const upgradeBoostPercent =
+        (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
       const newBankRate = new Prisma.Decimal(
-        300 + 5 * chattingLevel + 5 * gamingLevel
+        5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
       );
       console.log(`New bank rate calculated: ${newBankRate}`);
 
+      // Calculate 5% fee for guild vault
+      const feeAmount = depositAmount.times(0.05);
+      const finalDepositAmount = depositAmount.minus(feeAmount);
+      console.log(
+        `Deposit fee (5%): ${feeAmount}, final deposit amount: ${finalDepositAmount}`
+      );
+
       // Calculate final bank balance after deposit using Decimal arithmetic
-      const finalBankBalance = currentBankBalance.plus(depositAmount);
+      const finalBankBalance = currentBankBalance.plus(finalDepositAmount);
       console.log(`Final bank balance after deposit: ${finalBankBalance}`);
 
-      // Update economy: subtract from balance, set calculated bank balance with new rate and reset timer
+      // Update economy: subtract full amount from balance, add final deposit amount to bank balance
       const updatedEconomy = await tx.economy.update({
         where: {
           guildId_userId: {
@@ -1825,6 +2081,16 @@ class Database {
           bankStartTime: Date.now(),
         },
       });
+
+      console.log(`Economy updated successfully for user ${userId}`);
+
+      // Add fee to guild vault and trigger automatic distribution
+      if (feeAmount.greaterThan(0)) {
+        await this.addToGuildVault(guildId, feeAmount, userId, "deposit");
+        console.log(
+          `Added ${feeAmount} fee to guild vault for guild ${guildId}`
+        );
+      }
 
       console.log(`Economy updated successfully for user ${userId}`);
 
@@ -1877,7 +2143,7 @@ class Database {
         throw new Error("User economy data not found");
       }
 
-      // Calculate current bank balance with any accumulated interest
+      // Calculate current bank balance with any accumulated interest (only for active deposits)
       let currentBankBalance = user.economy.bankBalance;
       if (
         user.economy.bankStartTime > 0 &&
@@ -1891,33 +2157,81 @@ class Database {
         );
       }
 
-      // Check if user has enough bank balance to withdraw using Decimal comparison
-      if (currentBankBalance.lessThan(withdrawAmount)) {
+      // Add distributed funds (they don't earn interest)
+      const bankDistributed =
+        user.economy.bankDistributed || new Prisma.Decimal(0);
+      const totalBankBalance = currentBankBalance.plus(bankDistributed);
+
+      // Check if user has enough total bank balance to withdraw using Decimal comparison
+      if (totalBankBalance.lessThan(withdrawAmount)) {
         throw new Error("Insufficient bank balance");
       }
 
+      // Determine withdrawal distribution between bankBalance and bankDistributed
+      let newBankBalance = currentBankBalance;
+      let newBankDistributed = bankDistributed;
+      let remainingToWithdraw = withdrawAmount;
+
+      // First withdraw from distributed funds (no interest calculations needed)
+      if (bankDistributed.greaterThan(0)) {
+        const distributedWithdrawal = Prisma.Decimal.min(
+          bankDistributed,
+          remainingToWithdraw
+        );
+        newBankDistributed = bankDistributed.minus(distributedWithdrawal);
+        remainingToWithdraw = remainingToWithdraw.minus(distributedWithdrawal);
+      }
+
+      // Then withdraw from active bank balance if needed
+      if (
+        remainingToWithdraw.greaterThan(0) &&
+        currentBankBalance.greaterThan(0)
+      ) {
+        const bankWithdrawal = Prisma.Decimal.min(
+          currentBankBalance,
+          remainingToWithdraw
+        );
+        newBankBalance = currentBankBalance.minus(bankWithdrawal);
+        remainingToWithdraw = remainingToWithdraw.minus(bankWithdrawal);
+      }
+
       // Calculate remaining balance after withdrawal using Decimal arithmetic
-      const remainingBalance = currentBankBalance.minus(withdrawAmount);
-      const isWithdrawingAll = remainingBalance.lessThanOrEqualTo(0);
+      const totalRemainingBalance = newBankBalance.plus(newBankDistributed);
+      const isWithdrawingAll = totalRemainingBalance.lessThanOrEqualTo(0);
 
       let newBankRate = new Prisma.Decimal(0);
       let newBankStartTime = 0;
 
-      // If not withdrawing everything, calculate new bank rate and reset timer
-      if (!isWithdrawingAll) {
+      // If not withdrawing everything from active bank balance, calculate new bank rate and reset timer
+      if (!isWithdrawingAll && newBankBalance.greaterThan(0)) {
         const chattingLevel = user.Level
           ? this.calculateLevel(user.Level.xp).level
           : 1;
         const gamingLevel = user.Level
           ? this.calculateLevel(user.Level.gameXp).level
           : 1;
+        // Remove base 300% small-balance rate; include bank_rate upgrade
+        const userUpgrades = await tx.upgrade.findMany({
+          where: { guildId, userId },
+        });
+        const bankRateUpgradeLevel =
+          userUpgrades.find((u) => u.type === "bank_rate")?.level || 1;
+        const upgradeBoostPercent =
+          (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
         newBankRate = new Prisma.Decimal(
-          300 + 5 * chattingLevel + 5 * gamingLevel
+          5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
         );
         newBankStartTime = Date.now();
       }
 
-      // Update economy: add to balance, set calculated bank balance
+      // Calculate 5% fee for guild vault
+      const feeAmount = withdrawAmount.times(0.05);
+      const finalWithdrawAmount = withdrawAmount.minus(feeAmount);
+      console.log(
+        `Withdraw fee (5%): ${feeAmount}, final withdraw amount: ${finalWithdrawAmount}`
+      );
+
+      // Update economy: add final withdraw amount to balance, update both bank fields
       const updatedEconomy = await tx.economy.update({
         where: {
           guildId_userId: {
@@ -1927,15 +2241,26 @@ class Database {
         },
         data: {
           balance: {
-            increment: withdrawAmount,
+            increment: finalWithdrawAmount,
           },
           bankBalance: isWithdrawingAll
             ? new Prisma.Decimal(0)
-            : remainingBalance,
+            : newBankBalance,
+          bankDistributed: isWithdrawingAll
+            ? new Prisma.Decimal(0)
+            : newBankDistributed,
           bankRate: newBankRate,
           bankStartTime: newBankStartTime,
         },
       });
+
+      // Add fee to guild vault and trigger automatic distribution
+      if (feeAmount.greaterThan(0)) {
+        await this.addToGuildVault(guildId, feeAmount, userId, "withdraw");
+        console.log(
+          `Added ${feeAmount} fee to guild vault for guild ${guildId}`
+        );
+      }
 
       // Update user activity
       await tx.user.update({
@@ -1959,10 +2284,12 @@ class Database {
   }
 
   // Bank Operations
-  async updateBankBalance(guildId, userId, amount, rate = 0) {
-    const result = await this.client.$transaction(async (tx) => {
-      // Always calculate current balance first within the transaction
-      const currentBank = await tx.economy.findUnique({
+  async updateBankBalance(guildId, userId, tx = null) {
+    const result = await this.client.$transaction(async (prismaTx) => {
+      const db = prismaTx;
+
+      // Fetch current bank and user activity
+      const currentBank = await db.economy.findUnique({
         where: {
           guildId_userId: {
             guildId,
@@ -1970,72 +2297,65 @@ class Database {
           },
         },
         include: {
-          user: true, // Include user for activity check
+          user: true,
         },
       });
 
-      let currentBalance = new Prisma.Decimal(0);
-      if (currentBank) {
-        // Calculate interest if there's an existing balance
-        const inactiveTime = Date.now() - Number(currentBank.user.lastActivity);
+      if (!currentBank) {
+        // Nothing to update
+        return null;
+      }
+
+      let finalBalance = currentBank.bankBalance;
+      let finalRate = currentBank.bankRate;
+      let finalStartTime = currentBank.bankStartTime;
+
+      // Only accrue if there is an active bank with a positive rate
+      if (
+        currentBank.bankStartTime > 0 &&
+        currentBank.bankRate.greaterThan(0)
+      ) {
+        const now = Date.now();
+        const inactiveTime = now - Number(currentBank.user.lastActivity);
+
         if (inactiveTime > BANK_MAX_INACTIVE_MS) {
-          currentBalance = this.calculateInterestDecimal(
+          // Cap interest accrual during inactivity to the max window and then reset
+          finalBalance = this.calculateInterestDecimal(
             currentBank.bankBalance,
             currentBank.bankRate,
             BANK_MAX_INACTIVE_MS
           );
-        } else if (currentBank.bankStartTime > 0) {
-          const timeElapsed = Date.now() - Number(currentBank.bankStartTime);
-          currentBalance = this.calculateInterestDecimal(
+          finalRate = new Prisma.Decimal(0);
+          finalStartTime = 0;
+        } else {
+          const timeElapsed = now - Number(currentBank.bankStartTime);
+          finalBalance = this.calculateInterestDecimal(
             currentBank.bankBalance,
             currentBank.bankRate,
             timeElapsed
           );
-        } else {
-          currentBalance = currentBank.bankBalance;
+          // Keep the same rate but reset the start time so future accruals start from now
+          finalRate = currentBank.bankRate;
+          finalStartTime = now;
         }
       }
 
-      // Convert amount and rate to Decimal for precise handling
-      const decimalAmount = new Prisma.Decimal(amount);
-      const decimalRate = new Prisma.Decimal(rate);
-
-      // If withdrawing all money, reset bank data
-      const isEmptyingBank = decimalAmount.lessThanOrEqualTo(0);
-
-      // For deposits, add to current balance. For withdrawals, use the provided amount
-      const finalBalance = isEmptyingBank
-        ? decimalAmount
-        : currentBalance.plus(decimalAmount);
-
-      const result = await tx.economy.upsert({
+      const updated = await db.economy.update({
         where: {
           guildId_userId: {
             guildId,
             userId,
           },
         },
-        create: {
-          guildId,
-          userId,
-          balance: new Prisma.Decimal(0),
+        data: {
           bankBalance: finalBalance,
-          bankRate: decimalRate,
-          bankStartTime: decimalRate.greaterThan(0) ? Date.now() : 0,
-        },
-        update: {
-          bankBalance: finalBalance,
-          bankRate: isEmptyingBank ? new Prisma.Decimal(0) : decimalRate,
-          bankStartTime: isEmptyingBank
-            ? 0
-            : decimalRate.greaterThan(0)
-            ? Date.now()
-            : 0,
+          bankRate: finalRate,
+          bankStartTime: finalStartTime,
         },
       });
 
       // Update user activity
-      await tx.user.update({
+      await db.user.update({
         where: {
           guildId_id: {
             guildId,
@@ -2047,7 +2367,7 @@ class Database {
         },
       });
 
-      return result;
+      return updated;
     });
 
     // Redis cache invalidation disabled
@@ -2059,33 +2379,87 @@ class Database {
     // Convert milliseconds to years with proper precision
     const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000; // milliseconds in a year
     const timeInYears = Number((timeMs / MS_PER_YEAR).toFixed(10)); // limit decimal precision
+
+    // If no time elapsed, return principal as-is
+    if (timeInYears <= 0) {
+      return Number(principal).toFixed(5);
+    }
+
+    // Piecewise interest: apply +300% only while balance < $1000
+    if (principal > 0 && principal < 1000) {
+      const smallRate = (annualRate + 300) / 100; // effective rate while under $1000
+      const tThresholdYears = (1000 - principal) / (principal * smallRate); // time to reach $1000
+
+      if (timeInYears <= tThresholdYears) {
+        // Entire period under threshold
+        const interest = principal * smallRate * timeInYears;
+        const finalAmount = principal + interest;
+        return Number(finalAmount).toFixed(5);
+      } else {
+        // Cross threshold mid-period: accrue at +300% until $1000, then at base bankRate
+        const remainingYears = timeInYears - tThresholdYears;
+        const normalRate = annualRate / 100;
+        const crossPrincipal = 1000; // amount at the crossing moment
+        const interestAfter = crossPrincipal * normalRate * remainingYears;
+        const finalAmount = crossPrincipal + interestAfter;
+        return Number(finalAmount).toFixed(5);
+      }
+    }
+
+    // No small-balance baseline needed (>= $1000 or principal == 0)
     const rate = annualRate / 100;
-
-    // Calculate simple interest for the elapsed time period
-    // I = P * r * t where:
-    // P = principal
-    // r = interest rate (as decimal)
-    // t = time in years
-    const interest = Number((principal * rate * timeInYears).toFixed(10));
-
-    // Return principal plus earned interest with 5 decimal places
-    return (principal + interest).toFixed(5);
+    const interest = principal * rate * timeInYears;
+    const finalAmount = principal + interest;
+    return Number(finalAmount).toFixed(5);
   }
 
   calculateInterestDecimal(principal, annualRate, timeMs) {
     // Convert milliseconds to years with proper precision using Decimal
     const MS_PER_YEAR = new Prisma.Decimal(365 * 24 * 60 * 60 * 1000); // milliseconds in a year
     const timeInYears = new Prisma.Decimal(timeMs).dividedBy(MS_PER_YEAR);
+
+    // If no time elapsed, return principal as-is
+    if (
+      timeInYears.lessThan(new Prisma.Decimal(0)) ||
+      timeInYears.equals(new Prisma.Decimal(0))
+    ) {
+      return principal;
+    }
+
+    // Piecewise interest: apply +300% only while balance < $1000
+    const threshold = new Prisma.Decimal(1000);
+    if (
+      principal.lessThan(threshold) &&
+      !principal.equals(new Prisma.Decimal(0))
+    ) {
+      const smallRate = annualRate.plus(new Prisma.Decimal(300)).dividedBy(100); // effective rate while under $1000
+      const tThresholdYears = threshold
+        .minus(principal)
+        .dividedBy(principal.times(smallRate)); // time to reach $1000
+
+      const timeLeqThreshold =
+        timeInYears.lessThan(tThresholdYears) ||
+        timeInYears.equals(tThresholdYears);
+
+      if (timeLeqThreshold) {
+        // Entire period under threshold
+        const interest = principal.times(smallRate).times(timeInYears);
+        return principal.plus(interest);
+      } else {
+        // Cross threshold mid-period: accrue at +300% until $1000, then at base bankRate
+        const remainingYears = timeInYears.minus(tThresholdYears);
+        const normalRate = annualRate.dividedBy(100);
+        const crossPrincipal = threshold; // amount at the crossing moment
+        const interestAfter = crossPrincipal
+          .times(normalRate)
+          .times(remainingYears);
+        return crossPrincipal.plus(interestAfter);
+      }
+    }
+
+    // No small-balance baseline needed (>= $1000 or principal == 0)
     const rate = annualRate.dividedBy(100);
-
-    // Calculate simple interest for the elapsed time period using Decimal arithmetic
-    // I = P * r * t where:
-    // P = principal (Decimal)
-    // r = interest rate (as Decimal)
-    // t = time in years (Decimal)
     const interest = principal.times(rate).times(timeInYears);
-
-    // Return principal plus earned interest as Decimal
     return principal.plus(interest);
   }
 
