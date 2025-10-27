@@ -17,7 +17,7 @@ export default {
         option
           .setName("amount")
           .setDescription("Amount to deposit (or 'all', 'half')")
-          .setRequired(true),
+          .setRequired(true)
       );
     return builder;
   },
@@ -135,7 +135,7 @@ export default {
         partnerData = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true,
+          true
         );
       }
 
@@ -170,7 +170,7 @@ export default {
       if (amountToDeposit <= 0) {
         return interaction.editReply({
           content: await i18n.__(
-            "commands.economy.deposit.amountGreaterThanZero",
+            "commands.economy.deposit.amountGreaterThanZero"
           ),
           ephemeral: true,
         });
@@ -183,10 +183,32 @@ export default {
       // Get updated user data after deposit
       const updatedUser = await hubClient.getUser(guildId, userId, true);
 
-      // Calculate current bank balance with interest for display
-      const currentBankBalance = updatedUser.economy
-        ? await hubClient.calculateBankBalance(updatedUser)
-        : 0;
+      // Calculate total bank balance for display (active with interest + distributed)
+      const userActiveBalance = await hubClient.calculateBankBalance(
+        updatedUser
+      );
+      const userBalanceData = await hubClient.getBalance(guildId, userId);
+      const userDistributedBalance = Number(
+        userBalanceData?.bankDistributed || 0
+      );
+      const currentBankBalance =
+        Number(userActiveBalance) + userDistributedBalance;
+
+      // DEBUG LOGS FOR TESTING
+      console.log("=== DEPOSIT DEBUG ===");
+      console.log(`User ID: ${userId}`);
+      console.log(`Amount deposited: ${amountToDeposit}`);
+      console.log(`Active bank balance (with interest): ${userActiveBalance}`);
+      console.log(`Distributed balance: ${userDistributedBalance}`);
+      console.log(`Total bank balance after deposit: ${currentBankBalance}`);
+      console.log(
+        `Raw bankDistributed field: ${userBalanceData?.bankDistributed}`
+      );
+      console.log(`Raw bankBalance field: ${userBalanceData?.bankBalance}`);
+      console.log(
+        `Raw totalBankBalance field: ${userBalanceData?.totalBankBalance}`
+      );
+      console.log("=====================");
 
       // Calculate combined balance for visual display if married
       if (
@@ -197,12 +219,21 @@ export default {
         const updatedPartner = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true,
+          true
         );
         const userBankBalance = Number(currentBankBalance) || 0;
-        const partnerBankBalance = updatedPartner?.economy
-          ? Number(await hubClient.calculateBankBalance(updatedPartner)) || 0
-          : 0;
+        const partnerActiveBalance = await hubClient.calculateBankBalance(
+          updatedPartner
+        );
+        const partnerBalanceData = await hubClient.getBalance(
+          guildId,
+          marriageStatus.partnerId
+        );
+        const partnerDistributedBalance = Number(
+          partnerBalanceData?.bankDistributed || 0
+        );
+        const partnerBankBalance =
+          Number(partnerActiveBalance) + partnerDistributedBalance;
         const combinedBankBalance = userBankBalance + partnerBankBalance;
 
         updatedUser.partnerData = updatedPartner;
@@ -217,6 +248,28 @@ export default {
       // Update the economy bankBalance for display purposes
       if (updatedUser.economy) {
         updatedUser.economy.bankBalance = currentBankBalance;
+      }
+
+      // Get guild vault information and calculate fee
+      let guildVault = null;
+      const feeAmount = amountToDeposit * 0.05; // 5% commission
+
+      try {
+        console.log("Getting guild vault for deposit display");
+        guildVault = await hubClient.getGuildVault(guildId);
+        console.log("Guild vault response:", guildVault);
+
+        // Add vault info to updatedUser for display
+        if (guildVault) {
+          updatedUser.guild = {
+            vault: guildVault,
+          };
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to get guild vault info for deposit in guild ${guildId}:`,
+          error
+        );
       }
 
       // Generate deposit confirmation image
@@ -244,19 +297,22 @@ export default {
           },
           locale: interaction.locale,
           isDeposit: true,
+          isTransfer: false,
           amount: amountToDeposit,
           afterBalance: updatedUser.economy.balance,
           afterBank: updatedUser.economy.bankBalance, // Still show user's individual bank balance here
           returnDominant: true,
           database: updatedUser, // Pass updated user data (incl. combinedBankBalance etc.)
           partnerData: partnerData, // Pass final partner data
+          guildVault: guildVault, // Pass guild vault information
+          feeAmount: feeAmount, // Pass calculated fee amount
           type: "deposit",
           amount: amountToDeposit,
           dominantColor: "user",
           returnDominant: true,
         },
         { image: 2, emoji: 1 },
-        i18n,
+        i18n
       );
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -271,7 +327,7 @@ export default {
         .addText(
           await i18n.__("commands.economy.deposit.depositSuccess", {
             amount: amountToDeposit.toFixed(2),
-          }),
+          })
         )
         .addImage("attachment://deposit_receipt.avif")
         .addTimestamp(interaction.locale);
@@ -287,7 +343,7 @@ export default {
       if (partnerData) {
         try {
           const partnerDiscordUser = await interaction.client.users.fetch(
-            partnerData.id,
+            partnerData.id
           );
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
@@ -297,14 +353,14 @@ export default {
                   user: interaction.user.tag,
                   amount: amountToDeposit.toFixed(2),
                   guild: interaction.guild.name,
-                },
+                }
               ),
             });
           }
         } catch (dmError) {
           console.error(
             `Failed to send deposit DM to partner ${partnerData.id}:`,
-            dmError,
+            dmError
           );
         }
       }

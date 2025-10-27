@@ -17,7 +17,7 @@ export default {
         option
           .setName("amount")
           .setDescription("Amount to withdraw (or 'all', 'half')")
-          .setRequired(true),
+          .setRequired(true)
       );
 
     return builder;
@@ -114,22 +114,48 @@ export default {
         });
       }
 
-      // Calculate user's bank balance
-      userBankBalance = await hubClient.calculateBankBalance(initialUserData);
+      // Calculate user's total bank balance (active bank with interest + distributed)
+      const activeBankBalance = await hubClient.calculateBankBalance(
+        initialUserData
+      );
+      const balanceData = await hubClient.getBalance(guildId, userId);
+      const distributedBalance = Number(balanceData?.bankDistributed || 0);
+
+      // Total balance = active bank balance (with interest) + distributed funds
+      userBankBalance = Number(activeBankBalance) + distributedBalance;
+
+      // DEBUG LOGS FOR TESTING
+      console.log("=== WITHDRAW DEBUG ===");
+      console.log(`User ID: ${userId}`);
+      console.log(`Active bank balance (with interest): ${activeBankBalance}`);
+      console.log(`Distributed balance: ${distributedBalance}`);
+      console.log(`Total withdrawable balance: ${userBankBalance}`);
+      console.log(`Raw bankDistributed field: ${balanceData?.bankDistributed}`);
+      console.log(`Raw bankBalance field: ${balanceData?.bankBalance}`);
+      console.log(
+        `Raw totalBankBalance field: ${balanceData?.totalBankBalance}`
+      );
+      console.log("=====================");
+
       combinedAvailableBalance = userBankBalance;
 
       // Fetch partner data if married (for visual display only)
       if (marriageStatus && marriageStatus.status === "MARRIED") {
-        partnerData = await hubClient.getUser(
-          guildId,
-          marriageStatus.partnerId,
-          true,
+        const partnerActiveBalance = await hubClient.calculateBankBalance(
+          partnerData
         );
-        if (partnerData?.economy) {
-          partnerBankBalance =
-            await hubClient.calculateBankBalance(partnerData);
-          combinedAvailableBalance += partnerBankBalance;
-        }
+        const partnerBalanceData = await hubClient.getBalance(
+          guildId,
+          marriageStatus.partnerId
+        );
+        const partnerDistributedBalance = Number(
+          partnerBalanceData?.bankDistributed || 0
+        );
+
+        // Total partner balance = active bank balance (with interest) + distributed funds
+        partnerBankBalance =
+          Number(partnerActiveBalance) + partnerDistributedBalance;
+        combinedAvailableBalance += partnerBankBalance;
       }
 
       if (userBankBalance === 0) {
@@ -170,7 +196,7 @@ export default {
       if (amountToWithdraw <= 0) {
         return interaction.editReply({
           content: await i18n.__(
-            "commands.economy.withdraw.amountGreaterThanZero",
+            "commands.economy.withdraw.amountGreaterThanZero"
           ),
           ephemeral: true,
         });
@@ -182,6 +208,28 @@ export default {
       // Get user data after the transaction for the receipt
       const finalUserData = await hubClient.getUser(guildId, userId, true);
 
+      // Get guild vault information and calculate fee
+      let guildVault = null;
+      const feeAmount = amountToWithdraw * 0.05; // 5% commission
+
+      try {
+        console.log("Getting guild vault for withdraw display");
+        guildVault = await hubClient.getGuildVault(guildId);
+        console.log("Guild vault response:", guildVault);
+
+        // Add vault info to finalUserData for display
+        if (guildVault) {
+          finalUserData.guild = {
+            vault: guildVault,
+          };
+        }
+      } catch (error) {
+        console.warn(
+          `Failed to get guild vault info for withdraw in guild ${guildId}:`,
+          error
+        );
+      }
+
       // Calculate combined balance for visual display if married
       if (
         marriageStatus &&
@@ -191,13 +239,33 @@ export default {
         const updatedPartner = await hubClient.getUser(
           guildId,
           marriageStatus.partnerId,
-          true,
+          true
+        );
+        // Calculate user total balance with interest + distributed
+        const userActiveBalance = await hubClient.calculateBankBalance(
+          finalUserData
+        );
+        const userBalanceData = await hubClient.getBalance(guildId, userId);
+        const userDistributedBalance = Number(
+          userBalanceData?.bankDistributed || 0
         );
         const userBankBalance =
-          Number(await hubClient.calculateBankBalance(finalUserData)) || 0;
-        const partnerBankBalance = updatedPartner?.economy
-          ? Number(await hubClient.calculateBankBalance(updatedPartner)) || 0
-          : 0;
+          Number(userActiveBalance) + userDistributedBalance;
+
+        // Calculate partner total balance with interest + distributed
+        const partnerActiveBalance = await hubClient.calculateBankBalance(
+          updatedPartner
+        );
+        const partnerBalanceData = await hubClient.getBalance(
+          guildId,
+          marriageStatus.partnerId
+        );
+        const partnerDistributedBalance = Number(
+          partnerBalanceData?.bankDistributed || 0
+        );
+        const partnerBankBalance =
+          Number(partnerActiveBalance) + partnerDistributedBalance;
+
         const combinedBankBalance = userBankBalance + partnerBankBalance;
 
         finalUserData.partnerData = updatedPartner;
@@ -206,8 +274,17 @@ export default {
           Number(combinedBankBalance).toFixed(5);
         partnerData = updatedPartner;
       } else {
+        // Calculate user total balance with interest + distributed
+        const userActiveBalance = await hubClient.calculateBankBalance(
+          finalUserData
+        );
+        const userBalanceData = await hubClient.getBalance(guildId, userId);
+        const userDistributedBalance = Number(
+          userBalanceData?.bankDistributed || 0
+        );
         const userBankBalance =
-          Number(await hubClient.calculateBankBalance(finalUserData)) || 0;
+          Number(userActiveBalance) + userDistributedBalance;
+
         finalUserData.combinedBankBalance = Number(userBankBalance).toFixed(5);
       }
 
@@ -234,15 +311,19 @@ export default {
             },
           },
           locale: interaction.locale,
+          isDeposit: false,
+          isTransfer: false,
           database: finalUserData, // Pass final user data
           partnerData: partnerData, // Pass final partner data if married
+          guildVault: guildVault, // Pass guild vault information
+          feeAmount: feeAmount, // Pass calculated fee amount
           type: "withdraw",
           amount: amountToWithdraw, // Pass the actual withdrawn amount
           dominantColor: "user",
           returnDominant: true,
         },
         { image: 2, emoji: 1 },
-        i18n,
+        i18n
       );
 
       const attachment = new AttachmentBuilder(buffer, {
@@ -268,7 +349,7 @@ export default {
       if (partnerData) {
         try {
           const partnerDiscordUser = await interaction.client.users.fetch(
-            partnerData.id,
+            partnerData.id
           );
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
@@ -279,14 +360,14 @@ export default {
                   amount: amountToWithdraw.toFixed(2),
                   partnerAmount: "0.00", // No money taken from partner
                   guild: interaction.guild.name,
-                },
+                }
               ),
             });
           }
         } catch (dmError) {
           console.error(
             `Failed to send withdraw DM to partner ${partnerData.id}:`,
-            dmError,
+            dmError
           );
         }
       }
