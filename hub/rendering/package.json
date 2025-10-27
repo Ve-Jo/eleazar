@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@takumi-rs/core": "^0.39.0",
+    "@takumi-rs/helpers": "^0.39.0",
     "@twemoji/api": "^15.1.0",
     "chokidar": "^4.0.1",
     "color-thief-bun": "^1.0.3",

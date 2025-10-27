@@ -3,6 +3,8 @@ import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 import React from "react";
+import { Renderer } from "@takumi-rs/core";
+import { fromJsx } from "@takumi-rs/helpers/jsx";
 import twemoji from "@twemoji/api";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -26,17 +28,80 @@ const EMOJI_DIR = join(TEMP_DIR, "emoji");
 const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5MB limit
 const BANNER_TIMEOUT = 5000; // 5 seconds
 
-// Cache instances
+// Enhanced cache instances with TTL and metrics
 const emojiCache = new Map();
 const colorCache = new Map(); // Cache for processImageColors results
+
+// Cache configuration
 const COLOR_CACHE_MAX_SIZE = 50; // Increased cache size slightly
+const COLOR_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours TTL (increased from 30 minutes)
+const CACHE_COMPRESSION_ENABLED = true;
+const DEBUG_CACHE = true; // Enable cache debugging
+
+// AVIF and sharp tuning (configurable via env)
+const DEFAULT_AVIF_QUALITY = parseInt(process.env.AVIF_QUALITY) || 80;
+const DEFAULT_AVIF_EFFORT = parseInt(process.env.AVIF_EFFORT) || 1;
+const DEFAULT_AVIF_SUBSAMPLE = process.env.AVIF_SUBSAMPLING || "4:2:0";
+const SHARP_CONCURRENCY = parseInt(process.env.SHARP_CONCURRENCY) || 2;
+const USE_RESVG_RASTER = parseInt(process.env.USE_RESVG_RASTER) || true;
+const RENDER_BACKEND = (process.env.RENDER_BACKEND || "satori").toLowerCase();
+
+// Per-user gradient cache and in-flight deduplication
+const userGradientCache = new Map();
+const USER_GRADIENT_TTL_MS = 60 * 1000; // 1 minute TTL for per-user gradient processing
+const inflightColorRequests = new Map();
+
+// Cache metrics
+const cacheMetrics = {
+  hits: 0,
+  misses: 0,
+  evictions: 0,
+  expirations: 0,
+  size: 0,
+  memoryUsage: 0,
+};
+
+// Per-user gradient cache metrics
+const userCacheMetrics = {
+  hits: 0,
+  misses: 0,
+  expirations: 0,
+  size: 0,
+};
+
+// Cache entry structure
+class CacheEntry {
+  constructor(data, ttl = COLOR_CACHE_TTL) {
+    this.data = data;
+    this.timestamp = Date.now();
+    this.ttl = ttl;
+    this.accessCount = 0;
+    this.lastAccess = Date.now();
+    this.size = this.calculateSize();
+  }
+
+  calculateSize() {
+    // Rough size calculation in bytes
+    const dataString = JSON.stringify(this.data);
+    return new Blob([dataString]).size;
+  }
+
+  isExpired() {
+    return Date.now() - this.timestamp > this.ttl;
+  }
+
+  access() {
+    this.accessCount++;
+    this.lastAccess = Date.now();
+  }
+}
 
 // Fonts configuration
 let fonts = null;
 
 // Initialize sharp (needed for color processing and potentially output)
 sharp.cache(false);
-sharp.concurrency(1); // Keep concurrency low for lower peak CPU
+sharp.concurrency(SHARP_CONCURRENCY);
 
 // Initialize fonts
 const defaultFontConfig = [
@@ -91,10 +156,33 @@ async function loadFonts() {
   }
 }
 
-// Enhanced cleanup function with GC trigger
+// Enhanced cleanup function with GC trigger and cache metrics reset
 export async function cleanup(forceGC = true) {
-  emojiCache.clear();
-  colorCache.clear(); // Clear color cache too
+  // Log cache statistics before cleanup
+
+  if (forceGC) {
+    // Full cleanup only when forced: clear caches and reset metrics
+    emojiCache.clear();
+    colorCache.clear();
+    userGradientCache.clear();
+    inflightColorRequests.clear();
+
+    cacheMetrics.hits = 0;
+    cacheMetrics.misses = 0;
+    cacheMetrics.evictions = 0;
+    cacheMetrics.expirations = 0;
+    cacheMetrics.size = 0;
+    cacheMetrics.memoryUsage = 0;
+
+    userCacheMetrics.hits = 0;
+    userCacheMetrics.misses = 0;
+    userCacheMetrics.expirations = 0;
+    userCacheMetrics.size = 0;
+  } else {
+    // Light cleanup between renders: prune expired entries and keep caches intact
+    manageColorCache();
+  }
+
   sharp.cache(false);
   if (forceGC && global.gc) {
     global.gc();
@@ -102,145 +190,377 @@ export async function cleanup(forceGC = true) {
   // Consider if Bun.gc needs explicit call here too if issues persist
 }
 
-// Helper function to manage color cache size
-function manageColorCache() {
-  while (colorCache.size > COLOR_CACHE_MAX_SIZE) {
-    // Use while loop for safety
-    const oldestKey = colorCache.keys().next().value;
-    colorCache.delete(oldestKey);
+// Enhanced cache management with TTL and LRU
+function normalizeUrl(url) {
+  if (!url) return url;
+
+  try {
+    const urlObj = new URL(url);
+
+    // Remove query parameters and fragments for caching
+    urlObj.search = "";
+    urlObj.hash = "";
+
+    // Aggressive hostname normalization
+    urlObj.hostname = urlObj.hostname.toLowerCase().replace(/^www\./, "");
+
+    // Remove default ports
+    if (
+      (urlObj.protocol === "http:" && urlObj.port === "80") ||
+      (urlObj.protocol === "https:" && urlObj.port === "443")
+    ) {
+      urlObj.port = "";
+    }
+
+    // Remove trailing slashes from pathname
+    let pathname = urlObj.pathname;
+    if (pathname.length > 1 && pathname.endsWith("/")) {
+      pathname = pathname.slice(0, -1);
+    }
+    urlObj.pathname = pathname;
+
+    // Convert to lowercase for consistency (excluding protocol)
+    const normalized = urlObj.toString();
+
+    if (DEBUG_CACHE) {
+      console.log(`[ColorCache Debug] Normalize: "${url}" -> "${normalized}"`);
+    }
+
+    return normalized;
+  } catch {
+    // If URL parsing fails, return lowercase original
+    const fallback = url.toLowerCase();
+    if (DEBUG_CACHE) {
+      console.log(
+        `[ColorCache Debug] Parse failed, using fallback: "${url}" -> "${fallback}"`
+      );
+    }
+    return fallback;
   }
+}
+
+function updateCacheMetrics() {
+  cacheMetrics.size = colorCache.size;
+
+  // Calculate approximate memory usage
+  let totalSize = 0;
+  colorCache.forEach((entry) => {
+    totalSize += entry.size;
+  });
+  cacheMetrics.memoryUsage = totalSize;
+}
+
+function cleanupExpiredEntries() {
+  const now = Date.now();
+  let expiredCount = 0;
+
+  for (const [key, entry] of colorCache.entries()) {
+    if (entry.isExpired()) {
+      colorCache.delete(key);
+      expiredCount++;
+    }
+  }
+
+  if (expiredCount > 0) {
+    cacheMetrics.expirations += expiredCount;
+    console.log(`[ColorCache] Cleaned up ${expiredCount} expired entries`);
+  }
+}
+
+function manageColorCache() {
+  // Clean expired entries first
+  cleanupExpiredEntries();
+
+  // LRU eviction if over max size
+  while (colorCache.size > COLOR_CACHE_MAX_SIZE) {
+    let oldestKey = null;
+    let oldestAccess = Infinity;
+
+    // Find least recently used entry
+    for (const [key, entry] of colorCache.entries()) {
+      if (entry.lastAccess < oldestAccess) {
+        oldestAccess = entry.lastAccess;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      colorCache.delete(oldestKey);
+      cacheMetrics.evictions++;
+    } else {
+      // Fallback to first entry if LRU fails
+      const firstKey = colorCache.keys().next().value;
+      if (firstKey) {
+        colorCache.delete(firstKey);
+        cacheMetrics.evictions++;
+      }
+      break;
+    }
+  }
+
+  updateCacheMetrics();
+}
+
+// Per-user gradient caching helpers
+function getCachedUserGradient(userId) {
+  if (!userId) return null;
+  const entry = userGradientCache.get(userId);
+  if (!entry) {
+    userCacheMetrics.misses++;
+    userCacheMetrics.size = userGradientCache.size;
+    return null;
+  }
+  if (Date.now() - entry.timestamp > USER_GRADIENT_TTL_MS) {
+    userGradientCache.delete(userId);
+    userCacheMetrics.expirations++;
+    userCacheMetrics.size = userGradientCache.size;
+    return null;
+  }
+  userCacheMetrics.hits++;
+  return entry.data;
+}
+
+function setCachedUserGradient(userId, data) {
+  if (!userId) return data;
+  userGradientCache.set(userId, { data, timestamp: Date.now() });
+  userCacheMetrics.size = userGradientCache.size;
+  return data;
+}
+
+async function getOrProcessImageColorsDedup(url) {
+  // Prefer URL-based color cache first
+  const cached = getCachedColor(url);
+  if (cached) return cached;
+
+  const key = normalizeUrl(url);
+  if (inflightColorRequests.has(key)) {
+    return inflightColorRequests.get(key);
+  }
+
+  const promise = (async () => {
+    try {
+      const res = await processImageColors(url);
+      return res;
+    } finally {
+      inflightColorRequests.delete(key);
+    }
+  })();
+
+  inflightColorRequests.set(key, promise);
+  return promise;
+}
+
+async function getOrProcessUserGradient(userId, imageUrl) {
+  const cachedUser = getCachedUserGradient(userId);
+  if (cachedUser) {
+    return cachedUser;
+  }
+
+  const result = await getOrProcessImageColorsDedup(imageUrl);
+  setCachedUserGradient(userId, result);
+  return result;
+}
+
+// Enhanced cache get/set operations
+function getCachedColor(url) {
+  const normalizedUrl = normalizeUrl(url);
+  const entry = colorCache.get(normalizedUrl);
+
+  if (entry) {
+    if (entry.isExpired()) {
+      colorCache.delete(normalizedUrl);
+      cacheMetrics.misses++;
+      return null;
+    }
+
+    entry.access();
+    cacheMetrics.hits++;
+    return entry.data;
+  }
+
+  cacheMetrics.misses++;
+  return null;
+}
+
+function setCachedColor(url, data) {
+  const normalizedUrl = normalizeUrl(url);
+  const entry = new CacheEntry(data);
+
+  colorCache.set(normalizedUrl, entry);
+  manageColorCache();
+
+  return data;
 }
 
 // Enhanced emoji handling with proper resource cleanup and file storage
 export async function fetchEmojiSvg(emoji, emojiScaling = 1) {
-  // Handle undefined/null emoji
   if (!emoji) return null;
 
   const emojiCode = twemoji.convert.toCodePoint(emoji);
-  console.log(`Emoji conversion debug: ${emoji} -> ${emojiCode}`);
   if (!emojiCode) return null;
 
-  // For gender symbols, remove the variation selector to use base character
-  const cleanEmojiCode = emojiCode.replace(/-fe0f$/, '');
-  console.log(`Cleaned emoji code: ${cleanEmojiCode}`);
+  // Remove variation selector for base character consistency
+  const cleanEmojiCode = emojiCode.replace(/-fe0f$/, "");
 
-  // Validate scaling factor
+  // Clamp scaling
   const validatedScaling = Math.min(Math.max(emojiScaling, 0.5), 3);
-  const cacheKey = `${emojiCode}-${validatedScaling}`;
-  const emojiFileName = `${emojiCode}-${validatedScaling}.png`;
-  const emojiFilePath = join(EMOJI_DIR, emojiFileName);
-
-  // Check in-memory cache first
   const cleanCacheKey = `${cleanEmojiCode}-${validatedScaling}`;
+  const cleanEmojiFilePath = join(
+    EMOJI_DIR,
+    `${cleanEmojiCode}-${validatedScaling}.svg`
+  );
+
+  // In-memory cache
   if (emojiCache.has(cleanCacheKey)) {
     return emojiCache.get(cleanCacheKey);
   }
 
-  // Check if emoji file exists on disk
-  const cleanEmojiFilePath = join(EMOJI_DIR, `${cleanEmojiCode}-${validatedScaling}.png`);
+  // Disk cache
   try {
-    await fs.stat(cleanEmojiFilePath);
-    // File exists, read it and add to cache
     const fileBuffer = await fs.readFile(cleanEmojiFilePath);
-    const base64 = `data:image/png;base64,${fileBuffer.toString("base64")}`;
+    const base64 = `data:image/svg+xml;base64,${fileBuffer.toString("base64")}`;
     emojiCache.set(cleanCacheKey, base64);
     return base64;
-  } catch (fileError) {
-    // File doesn't exist, continue with fetching
-    console.log(`Emoji file not found, fetching from CDN: ${cleanEmojiCode}-${validatedScaling}.png`);
+  } catch {}
+
+  // Fetch from CDN and scale attributes
+  console.time(`[imageGenerator] emoji-fetch-${emoji}`);
+  let svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${cleanEmojiCode}.svg`;
+  let response = await fetch(svgUrl);
+  if (!response.ok) {
+    svgUrl = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${cleanEmojiCode}.svg`;
+    response = await fetch(svgUrl);
+    if (!response.ok) {
+      console.timeEnd(`[imageGenerator] emoji-fetch-${emoji}`);
+      return null;
+    }
   }
 
+  const svgData = await response.text();
+  const scaledSize = Math.round(64 * validatedScaling);
+  let scaledSvg = svgData
+    .replace(/width="([^"]+)"/, `width="${scaledSize}"`)
+    .replace(/height="([^"]+)"/, `height="${scaledSize}"`);
+  if (!scaledSvg.includes("viewBox")) {
+    scaledSvg = scaledSvg.replace(
+      "<svg",
+      `<svg viewBox="0 0 ${scaledSize} ${scaledSize}"`
+    );
+  }
+
+  const svgBuffer = Buffer.from(scaledSvg, "utf-8");
+  const base64 = `data:image/svg+xml;base64,${svgBuffer.toString("base64")}`;
+
+  // Persist to disk for future renders
   try {
-    let svgUrl = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${cleanEmojiCode}.svg`;
-    console.log(`Fetching emoji from URL: ${svgUrl}`);
-    let response = await fetch(svgUrl);
+    await fs.writeFile(cleanEmojiFilePath, svgBuffer);
+  } catch {}
 
-    if (!response.ok) {
-      console.log(`Primary CDN failed, trying GitHub repository fallback for ${cleanEmojiCode}`);
-      svgUrl = `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/${cleanEmojiCode}.svg`;
-      response = await fetch(svgUrl);
+  emojiCache.set(cleanCacheKey, base64);
+  console.timeEnd(`[imageGenerator] emoji-fetch-${emoji}`);
+  return base64;
+}
 
-      if (!response.ok) {
-        console.warn(`Failed to fetch emoji ${cleanEmojiCode} (${emoji}): ${response.status}`);
-        return null;
-      }
+// Enhanced batch processing for color preparation
+const batchProcessingQueue = new Map();
+const MAX_CONCURRENT_BATCHES = 3;
+const BATCH_SIZE = 5;
+const BATCH_TIMEOUT = 10000; // 10 seconds
+
+class BatchProcessor {
+  constructor() {
+    this.currentBatches = new Map();
+    this.processingCount = 0;
+  }
+
+  async processBatch(urls, batchId) {
+    if (this.processingCount >= MAX_CONCURRENT_BATCHES) {
+      throw new Error("Maximum concurrent batches reached");
     }
 
-    const svgData = await response.text();
-    const scaledSize = Math.round(64 * validatedScaling);
-
-    // Fix: Ensure we're correctly replacing both width and height attributes
-    // The previous regex might not match all SVG formats
-    let scaledSvg = svgData;
-
-    // Replace width attribute
-    scaledSvg = scaledSvg.replace(/width="([^"]+)"/, `width="${scaledSize}"`);
-
-    // Replace height attribute
-    scaledSvg = scaledSvg.replace(/height="([^"]+)"/, `height="${scaledSize}"`);
-
-    // Also add viewBox if it doesn't exist to ensure proper scaling
-    if (!scaledSvg.includes("viewBox")) {
-      scaledSvg = scaledSvg.replace(
-        "<svg",
-        `<svg viewBox="0 0 ${scaledSize} ${scaledSize}"`
-      );
-    }
-
-    let resvg = null;
-    let pngData = null;
-    let base64 = null;
-    let pngBuffer = null;
+    this.processingCount++;
+    const batch = {
+      urls,
+      id: batchId,
+      startTime: Date.now(),
+      results: new Map(),
+      errors: new Map(),
+    };
 
     try {
-      resvg = new Resvg(scaledSvg, {
-        fitTo: {
-          mode: "width",
-          value: scaledSize,
-        },
+      const promises = urls.map(async (url) => {
+        try {
+          const result = await processImageColors(url);
+          batch.results.set(url, result);
+        } catch (error) {
+          batch.errors.set(url, error);
+        }
       });
-      pngData = resvg.render();
-      pngBuffer = pngData.asPng();
 
-      base64 = `data:image/png;base64,${pngBuffer.toString("base64")}`;
-    } catch (error) {
-      console.error(`Failed to render emoji ${emoji}:`, error);
-      return null;
+      await Promise.allSettled(promises);
+      return batch;
     } finally {
-      // Ensure resources are freed even if there's an error
-      if (pngData) pngData.free?.();
-      if (resvg) resvg.free?.();
+      this.processingCount--;
+      this.currentBatches.delete(batchId);
     }
+  }
 
-    // Save emoji to disk for future use
-    if (pngBuffer) {
-      try {
-        await fs.writeFile(cleanEmojiFilePath, pngBuffer);
-        console.log(`Saved emoji to disk: ${cleanEmojiCode}-${validatedScaling}.png`);
-      } catch (saveError) {
-        console.warn(`Failed to save emoji to disk: ${saveError.message}`);
-        // Continue even if save fails - we still have the base64
-      }
-    }
+  addToBatch(urls) {
+    const batchId = `batch_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
-    if (emojiCache.size > 100) {
-      const firstKey = emojiCache.keys().next().value;
-      emojiCache.delete(firstKey);
-      await cleanup(); // Trigger cleanup when cache is cleared
-    }
+    return new Promise((resolve, reject) => {
+      // Set timeout for batch processing
+      const timeout = setTimeout(() => {
+        this.currentBatches.delete(batchId);
+        reject(new Error(`Batch processing timeout after ${BATCH_TIMEOUT}ms`));
+      }, BATCH_TIMEOUT);
 
-    if (base64) {
-      emojiCache.set(cleanCacheKey, base64);
-      return base64;
-    }
-    return null;
-  } catch (error) {
-    console.error(`Failed to load emoji ${emoji}:`, error);
-    return null;
+      this.currentBatches.set(batchId, { urls, timeout, resolve, reject });
+
+      // Process batch immediately if we have capacity, or queue it
+      this.processBatch(urls, batchId)
+        .then((result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        })
+        .catch((error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+    });
   }
 }
 
-// Helper function to format values
+const batchProcessor = new BatchProcessor();
+
+// Enhanced formatValue with caching
+const formatValueCache = new Map();
+const FORMAT_CACHE_MAX_SIZE = 100;
+
+function getCachedFormattedValue(value) {
+  const cacheKey = JSON.stringify(value, (_, value) =>
+    typeof value === "bigint" ? value.toString() : value
+  );
+
+  if (formatValueCache.has(cacheKey)) {
+    return formatValueCache.get(cacheKey);
+  }
+
+  const formatted = formatValue(value);
+  formatValueCache.set(cacheKey, formatted);
+
+  // Manage cache size
+  if (formatValueCache.size > FORMAT_CACHE_MAX_SIZE) {
+    const firstKey = formatValueCache.keys().next().value;
+    formatValueCache.delete(firstKey);
+  }
+
+  return formatted;
+}
+
+// Helper function to format values (enhanced)
 export function formatValue(value) {
   // Handle null or undefined
   if (value === null || value === undefined) {
@@ -285,6 +605,64 @@ export function formatValue(value) {
   }
 
   return value;
+}
+
+// Batch color processing function
+export async function processBatchImageColors(urls) {
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return [];
+  }
+
+  console.log(`[BatchProcessor] Processing ${urls.length} URLs...`);
+
+  try {
+    const batch = await batchProcessor.addToBatch(urls);
+
+    const results = urls.map((url) => {
+      if (batch.errors.has(url)) {
+        console.warn(
+          `[BatchProcessor] Failed to process ${url}:`,
+          batch.errors.get(url)
+        );
+        return {
+          url,
+          error: batch.errors.get(url),
+          colors: getDefaultColors(),
+        };
+      }
+      return { url, colors: batch.results.get(url) };
+    });
+
+    console.log(
+      `[BatchProcessor] Completed batch in ${Date.now() - batch.startTime}ms`
+    );
+    return results;
+  } catch (error) {
+    console.error("[BatchProcessor] Batch processing failed:", error);
+    // Fallback to individual processing
+    const fallbackResults = await Promise.allSettled(
+      urls.map(async (url) => ({
+        url,
+        colors: await processImageColors(url),
+      }))
+    );
+
+    return fallbackResults.map((result, index) => {
+      if (result.status === "fulfilled") {
+        return result.value;
+      } else {
+        console.warn(
+          `[BatchProcessor] Fallback failed for ${urls[index]}:`,
+          result.reason
+        );
+        return {
+          url: urls[index],
+          error: result.reason,
+          colors: getDefaultColors(),
+        };
+      }
+    });
+  }
 }
 
 // Helper function to validate RGB values
@@ -561,8 +939,12 @@ function processColors(dominantColorRgbArray, options = {}) {
   };
 }
 
-// Updated processImageColors with caching
+// Enhanced processImageColors with advanced caching
 export async function processImageColors(imageUrl) {
+  console.time(
+    `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
+  );
+
   // Check if imageUrl is not a valid string
   if (
     !imageUrl ||
@@ -572,78 +954,112 @@ export async function processImageColors(imageUrl) {
     console.warn(
       `Invalid image URL type: ${typeof imageUrl}. Using default colors.`
     );
+    console.timeEnd(
+      `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
+    );
     return getDefaultColors();
   }
 
-  // Check cache first
-  if (colorCache.has(imageUrl)) {
-    console.log("Cache hit for image colors:", imageUrl);
-    return colorCache.get(imageUrl);
+  // Try to get from enhanced cache first
+  const cachedColor = getCachedColor(imageUrl);
+  if (cachedColor) {
+    console.timeEnd(`[imageGenerator] color-processing-${imageUrl.slice(-10)}`);
+    return cachedColor;
   }
 
-  console.log("Processing image colors for URL:", imageUrl); // Debug log
-
-  try {
-    // Fetch and preprocess the image with blur
-    const response = await fetch(imageUrl, {
-      signal: AbortSignal.timeout(BANNER_TIMEOUT),
-    }); // Add timeout
-    if (!response.ok) {
-      console.error(
-        `Failed to fetch image: ${response.status} for ${imageUrl}`
-      );
-      return getDefaultColors();
-    }
-
-    const imageBuffer = Buffer.from(await response.arrayBuffer());
-    console.log(`Image fetched (${imageUrl}), size:`, imageBuffer.length); // Debug log
-    if (imageBuffer.length > MAX_BANNER_SIZE) {
-      console.warn(
-        `Image ${imageUrl} exceeds size limit: ${imageBuffer.length} > ${MAX_BANNER_SIZE}`
-      );
-      return getDefaultColors();
-    }
-
-    const blurredBuffer = await sharp(imageBuffer)
-      .resize(50, 50, { fit: "inside" }) // Keep resize small for performance
-      .blur(10) // Reduced blur slightly
-      .toBuffer();
-    console.log("Image processed with sharp"); // Debug log
-
-    // Get dominant color from the blurred image
-    // Ensure getColorFromURL expects an ArrayBuffer
-    const dominantColorRgb = await getColorFromURL(blurredBuffer.buffer);
-    console.log("Extracted dominant color:", dominantColorRgb); // Debug log
-
-    if (
-      !dominantColorRgb ||
-      dominantColorRgb.length !== 3 ||
-      !validateRGB(...dominantColorRgb)
-    ) {
-      console.error(
-        "Invalid or no color extracted from image:",
-        imageUrl,
-        dominantColorRgb
-      );
-      return getDefaultColors();
-    }
-
-    // Use the updated processColors function
-    const processedResult = processColors(dominantColorRgb);
-
-    // Store result in cache
-    colorCache.set(imageUrl, processedResult);
-    manageColorCache(); // Ensure cache size is managed
-
-    return processedResult;
-  } catch (error) {
-    if (error.name === "TimeoutError") {
-      console.error(`Timeout fetching image colors for ${imageUrl}`);
-    } else {
-      console.error(`Failed to process image colors for ${imageUrl}:`, error);
-    }
-    return getDefaultColors();
+  const inflightKey = normalizeUrl(imageUrl);
+  if (inflightColorRequests.has(inflightKey)) {
+    const joined = await inflightColorRequests.get(inflightKey);
+    console.timeEnd(`[imageGenerator] color-processing-${imageUrl.slice(-10)}`);
+    return joined;
   }
+
+  const inflightPromise = (async () => {
+    try {
+      // Fetch and preprocess the image with blur
+      const response = await fetch(imageUrl, {
+        signal: AbortSignal.timeout(BANNER_TIMEOUT),
+      });
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch image: ${response.status} for ${imageUrl}`
+        );
+        return getDefaultColors();
+      }
+
+      const imageBuffer = Buffer.from(await response.arrayBuffer());
+      console.log(`Image fetched (${imageUrl}), size:`, imageBuffer.length);
+
+      if (imageBuffer.length > MAX_BANNER_SIZE) {
+        console.warn(
+          `Image ${imageUrl} exceeds size limit: ${imageBuffer.length} > ${MAX_BANNER_SIZE}`
+        );
+        return getDefaultColors();
+      }
+
+      console.time(
+        `[imageGenerator] image-sharp-processing-${imageUrl.slice(-10)}`
+      );
+      const blurredBuffer = await sharp(imageBuffer)
+        .resize(50, 50, { fit: "inside" }) // Keep resize small for performance
+        .blur(10) // Reduced blur slightly
+        .toBuffer();
+      console.timeEnd(
+        `[imageGenerator] image-sharp-processing-${imageUrl.slice(-10)}`
+      );
+
+      // Get dominant color from the blurred image
+      console.time(`[imageGenerator] color-extraction-${imageUrl.slice(-10)}`);
+      const dominantColorRgb = await getColorFromURL(blurredBuffer.buffer);
+      console.timeEnd(
+        `[imageGenerator] color-extraction-${imageUrl.slice(-10)}`
+      );
+
+      console.log("Extracted dominant color:", dominantColorRgb);
+
+      if (
+        !dominantColorRgb ||
+        dominantColorRgb.length !== 3 ||
+        !validateRGB(...dominantColorRgb)
+      ) {
+        console.error(
+          "Invalid or no color extracted from image:",
+          imageUrl,
+          dominantColorRgb
+        );
+        return getDefaultColors();
+      }
+
+      // Use the updated processColors function
+      console.time(
+        `[imageGenerator] color-processing-algorithm-${imageUrl.slice(-10)}`
+      );
+      const processedResult = processColors(dominantColorRgb);
+      console.timeEnd(
+        `[imageGenerator] color-processing-algorithm-${imageUrl.slice(-10)}`
+      );
+
+      // Store result in enhanced cache
+      setCachedColor(imageUrl, processedResult);
+
+      return processedResult;
+    } catch (error) {
+      if (error.name === "TimeoutError") {
+        console.error(`Timeout fetching image colors for ${imageUrl}`);
+      } else {
+        console.error(`Failed to process image colors for ${imageUrl}:`, error);
+      }
+      return getDefaultColors();
+    } finally {
+      inflightColorRequests.delete(inflightKey);
+      console.timeEnd(
+        `[imageGenerator] color-processing-${imageUrl.slice(-10)}`
+      );
+    }
+  })();
+
+  inflightColorRequests.set(inflightKey, inflightPromise);
+  return inflightPromise;
 }
 
 // Helper function to provide default colors when color extraction fails
@@ -672,29 +1088,41 @@ function getDefaultColors() {
 // Helper function to load image assets (Moved from generateImage)
 async function loadImageAsset(url) {
   try {
-    const response = await fetch(url);
+    const cached = getCachedImageAsset(url);
+    if (cached) return cached;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BANNER_TIMEOUT);
+    const response = await fetch(url, {
+      headers: { Accept: "image/*" },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type");
-    // Only allow specific image types
     if (
       !contentType ||
-      !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(
-        contentType.toLowerCase()
-      )
+      ![
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ].includes(contentType.toLowerCase())
     ) {
-      console.warn(
-        `Unsupported image type: ${contentType || "unknown"} for URL: ${url}`
-      );
       return null;
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString(
-      "base64"
-    )}`;
+    const dataUri = `data:${contentType};base64,${Buffer.from(
+      arrayBuffer
+    ).toString("base64")}`;
+    setCachedImageAsset(url, dataUri);
+    return dataUri;
   } catch (error) {
-    console.warn("Failed to load image asset:", error.message);
     return null;
   }
 }
@@ -797,6 +1225,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
     }
 
     // --- Props/Color Preparation ---
+    console.time(`[imageGenerator] color-preparation`);
     let colorProps;
     const defaultImageUrl = props.interaction?.user?.avatarURL
       ? props.interaction.user.avatarURL
@@ -806,7 +1235,8 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
     if (props.dominantColor === "user" || !props.dominantColor) {
       const imageUrl = bannerUrl || defaultImageUrl;
       if (imageUrl) {
-        colorProps = await processImageColors(imageUrl);
+        const userId = props?.interaction?.user?.id || "guest";
+        colorProps = await getOrProcessUserGradient(userId, imageUrl);
       } else {
         console.warn(
           "No image URL found for 'user' dominant color. Using defaults."
@@ -829,6 +1259,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       );
       colorProps = getDefaultColors(); // Fallback to default if dominantColor is invalid format
     }
+    console.timeEnd(`[imageGenerator] color-preparation`);
 
     // Create props object with coloring added - used for dimension funcs
     const propsWithColoring = { ...props, coloring: { ...colorProps } };
@@ -861,6 +1292,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
     // --- End Dimension Calculation ---
 
     // --- Props Formatting/Sanitization (for Satori rendering) ---
+    console.time(`[imageGenerator] props-sanitization`);
     // Now sanitize and format the props for the actual rendering
     const sanitizedProps = JSON.parse(
       // Use propsWithColoring here so coloring info is included if needed by component
@@ -894,25 +1326,62 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
         "Locale provided but i18n instance is missing. Skipping localization."
       );
     }
+    console.timeEnd(`[imageGenerator] props-sanitization`);
     // --- End Props Formatting/Sanitization ---
 
     // --- SVG Generation (uses dimensions and formattedProps) ---
+    console.time(`[imageGenerator] svg-generation`);
     try {
-      svg = await satori(React.createElement(Component, formattedProps), {
-        width: dimensions.width,
-        height: dimensions.height,
-        fonts,
-        debug: scaling.debug,
-        loadAdditionalAsset: async (code, segment) => {
-          if (code === "emoji") {
-            return await fetchEmojiSvg(segment, scaling.emoji);
+      // Attempt Takumi rendering when enabled
+      if (RENDER_BACKEND === "takumi") {
+        console.time(`[imageGenerator] takumi-generation`);
+        try {
+          const renderer = new Renderer();
+          await renderer.loadFonts(fonts);
+
+          const tree = await fromJsx(React.createElement(Component, formattedProps));
+          
+          // Validate that the tree has the required structure
+          if (!tree || typeof tree.type !== 'string') {
+            throw new Error(`Invalid tree structure: expected object with 'type' field, got ${typeof tree}`);
           }
-          if (code === "image") {
-            return await loadImageAsset(segment);
-          }
-          return null;
-        },
-      });
+          
+          const result = await renderer.render(tree, {
+            width: dimensions.width,
+            height: dimensions.height,
+            format: "avif",
+            quality: DEFAULT_AVIF_QUALITY,
+            drawDebugBorder: scaling.debug,
+          });
+          pngBuffer = Buffer.isBuffer(result) ? result : Buffer.from(result);
+          console.timeEnd(`[imageGenerator] takumi-generation`);
+        } catch (takumiError) {
+          console.error(
+            "Takumi render failed, falling back to Satori:",
+            takumiError
+          );
+        }
+      }
+
+      // If Takumi produced output, skip Satori path
+      if (!pngBuffer) {
+        svg = await satori(React.createElement(Component, formattedProps), {
+          width: dimensions.width,
+          height: dimensions.height,
+          fonts,
+          debug: scaling.debug,
+          loadAdditionalAsset: async (code, segment) => {
+            if (code === "emoji") {
+              return await fetchEmojiSvg(segment, scaling.emoji);
+            }
+            if (code === "image") {
+              return await loadImageAsset(segment);
+            }
+            return null;
+          },
+        });
+      }
+      console.timeEnd(`[imageGenerator] svg-generation`);
     } catch (satoriError) {
       console.error("Satori SVG generation failed:", satoriError);
       if (satoriError.message?.includes("Image size cannot be determined")) {
@@ -930,77 +1399,91 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
               return null;
             },
           });
+          console.timeEnd(`[imageGenerator] svg-generation`);
         } catch (fallbackError) {
           console.error("Satori fallback render also failed:", fallbackError);
+          console.timeEnd(`[imageGenerator] svg-generation`);
           throw fallbackError;
         }
       } else {
+        console.timeEnd(`[imageGenerator] svg-generation`);
         throw satoriError;
       }
     }
 
-    try {
-      if (!svg || typeof svg !== "string") {
-        throw new Error("Invalid SVG generated by satori");
+    // Only convert SVG to AVIF if Takumi didn't already produce the final buffer
+    if (!pngBuffer) {
+      try {
+        if (!svg || typeof svg !== "string") {
+          throw new Error("Invalid SVG generated by satori");
+        }
+        const targetWidth = Math.round(dimensions.width * scaling.image);
+        const targetHeight = Math.round(dimensions.height * scaling.image);
+        if (USE_RESVG_RASTER) {
+          console.time(`[imageGenerator] reSVG-rasterization`);
+          const resvgInst = new Resvg(svg, {
+            fitTo: {
+              mode: "width",
+              value: targetWidth,
+            },
+            background: "transparent",
+            shapeRendering: 2,
+            imageRendering: 1,
+          });
+          const raster = resvgInst.render();
+          const pngData = raster.asPng();
+          console.timeEnd(`[imageGenerator] reSVG-rasterization`);
+          console.time(`[imageGenerator] sharp-avif-encode`);
+          pngBuffer = await sharp(pngData)
+            .avif({
+              quality: DEFAULT_AVIF_QUALITY,
+              effort: DEFAULT_AVIF_EFFORT,
+              chromaSubsampling: DEFAULT_AVIF_SUBSAMPLE,
+            })
+            .toBuffer();
+          console.timeEnd(`[imageGenerator] sharp-avif-encode`);
+        } else {
+          console.time(`[imageGenerator] sharp-conversion`);
+          pngBuffer = await sharp(Buffer.from(svg), {
+            density: Math.max(
+              72,
+              Math.min(300, targetWidth / (dimensions.width / 72))
+            ),
+          })
+            .resize(targetWidth, targetHeight)
+            .avif({
+              quality: DEFAULT_AVIF_QUALITY,
+              effort: DEFAULT_AVIF_EFFORT,
+              chromaSubsampling: DEFAULT_AVIF_SUBSAMPLE,
+            })
+            .toBuffer();
+          console.timeEnd(`[imageGenerator] sharp-conversion`);
+        }
+        console.log("AVIF Buffer created:", pngBuffer?.length ?? 0, "bytes");
+      } catch (sharpError) {
+        console.error("AVIF conversion failed:", sharpError);
+        throw sharpError;
       }
-      pngBuffer = await sharp(Buffer.from(svg))
-        .resize(
-          Math.round(dimensions.width * scaling.image),
-          Math.round(dimensions.height * scaling.image)
-        )
-        .avif({
-          quality: 90,
-          effort: 4,
-          chromaSubsampling: "4:2:0",
-        })
-        .toBuffer();
+    } else {
       console.log(
-        "AVIF Buffer created via sharp:",
+        "Using Takumi-generated buffer:",
         pngBuffer?.length ?? 0,
         "bytes"
       );
-    } catch (sharpError) {
-      console.error("Sharp AVIF conversion failed:", sharpError);
-      throw sharpError;
-
-      /*const resvg = new Resvg(svg, {
-        fitTo: {
-          mode: "width",
-          value: Math.round(dimensions.width * scaling.image),
-        },
-        background: "transparent",
-        shapeRendering: 2,
-        textRendering: 2,
-        imageRendering: 0,
-      });
-
-      const pngData = resvg.render();
-      pngBuffer = pngData.asPng();
-
-      console.log(
-        "PNG Buffer created via resvg-js:",
-        pngBuffer?.length ?? 0,
-        "bytes"
-      );*/
-    } finally {
-      svg = null; // Release SVG memory
     }
+
+    // Release SVG memory
+    svg = null;
 
     // Return final result
     const finalBuffer = pngBuffer;
-    console.log(
-      ">>> DEBUG: In performActualGenerationLogic - props.returnDominant:",
-      props.returnDominant
-    );
-    console.log(
-      ">>> DEBUG: In performActualGenerationLogic - props.coloring:",
-      propsWithColoring.coloring
-    );
+    console.timeEnd(`[imageGenerator] core-generation`);
     return props.returnDominant
       ? [finalBuffer, propsWithColoring.coloring]
       : finalBuffer;
   } catch (error) {
     console.error("Core image generation logic failed:", error);
+    console.timeEnd(`[imageGenerator] core-generation`);
     // Clean up potentially large objects from memory in case of error
     pngBuffer = null;
     svg = null;
@@ -1078,6 +1561,8 @@ export async function generateImage(
   i18n,
   options = {} // Add options object
 ) {
+  console.time(`[imageGenerator] total-generation`);
+
   const { disableThrottle = false } = options; // Extract disableThrottle flag
 
   // --- Direct execution if throttling is disabled ---
@@ -1092,10 +1577,12 @@ export async function generateImage(
         i18n
       );
       await cleanup(false);
+      console.timeEnd(`[imageGenerator] total-generation`);
       return result;
     } catch (error) {
       console.error("Direct image generation failed:", error);
       await cleanup(true);
+      console.timeEnd(`[imageGenerator] total-generation`);
       throw error; // Now includes formattedProps if available
     }
   }
@@ -1145,6 +1632,7 @@ export async function generateImage(
       state.lastExecuted = Date.now();
       state.latestArgs = null;
       await cleanup(false);
+      console.timeEnd(`[imageGenerator] total-generation`);
       return result;
     } catch (error) {
       console.error(
@@ -1152,6 +1640,7 @@ export async function generateImage(
         error
       );
       await cleanup(true);
+      console.timeEnd(`[imageGenerator] total-generation`);
       throw error; // Now includes formattedProps if available
     }
   }
@@ -1176,5 +1665,87 @@ export async function generateImage(
   return state.promise;
 }
 // --- End Exported generateImage Function ---
+
+// Enhanced cache performance reporting
+export function generateCachePerformanceReport() {
+  // Silent report: return metrics without console logs
+  const totalRequests = cacheMetrics.hits + cacheMetrics.misses;
+  const hitRate =
+    totalRequests > 0
+      ? ((cacheMetrics.hits / totalRequests) * 100).toFixed(2)
+      : "0.00";
+
+  const totalUserRequests = userCacheMetrics.hits + userCacheMetrics.misses;
+  const userHitRate =
+    totalUserRequests > 0
+      ? ((userCacheMetrics.hits / totalUserRequests) * 100).toFixed(2)
+      : "0.00";
+
+  return {
+    metrics: { ...cacheMetrics },
+    userMetrics: { ...userCacheMetrics },
+    hitRate: parseFloat(hitRate),
+    userHitRate: parseFloat(userHitRate),
+    configuration: {
+      maxSize: COLOR_CACHE_MAX_SIZE,
+      ttl: COLOR_CACHE_TTL,
+      compressionEnabled: CACHE_COMPRESSION_ENABLED,
+    },
+  };
+}
+
+// Enhanced performance report with cache metrics (silent)
+export function generatePerformanceReport() {
+  // Silent: return current cache performance metrics only
+  return generateCachePerformanceReport();
+}
+
+// Enhanced reset function
+export function resetPerformanceStats() {
+  emojiCache.clear();
+  colorCache.clear();
+
+  // Reset all cache metrics
+  cacheMetrics.hits = 0;
+  cacheMetrics.misses = 0;
+  cacheMetrics.evictions = 0;
+  cacheMetrics.expirations = 0;
+  cacheMetrics.size = 0;
+  cacheMetrics.memoryUsage = 0;
+
+  // timing-only policy: keep logs minimal
+}
+
+// Utility function to force cache cleanup
+export function forceCacheCleanup() {
+  console.log("🧹 Performing forced cache cleanup...");
+  manageColorCache();
+  console.log(`✅ Cache cleanup completed. Current size: ${colorCache.size}`);
+}
+
+// Function to warm up cache with popular URLs (can be called during app initialization)
+export async function warmupCache(urls, maxUrls = 10) {
+  console.log(
+    `🔥 Warming up color cache with ${Math.min(urls.length, maxUrls)} URLs...`
+  );
+
+  const urlsToProcess = urls.slice(0, maxUrls);
+  let successCount = 0;
+
+  for (const url of urlsToProcess) {
+    try {
+      await processImageColors(url);
+      successCount++;
+      console.log(`✅ Warmed cache for: ${url}`);
+    } catch (error) {
+      console.warn(`⚠️ Failed to warm cache for: ${url}`, error.message);
+    }
+  }
+
+  console.log(
+    `🎯 Cache warmup completed: ${successCount}/${urlsToProcess.length} URLs processed`
+  );
+  return successCount;
+}
 
 // Cleanup function for temporary files (Moved from generateImage)
