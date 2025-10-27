@@ -8,7 +8,27 @@ const Transfer = (props) => {
     recipient,
     i18n,
     coloring,
+    feeAmount,
   } = props;
+
+  // Access guildVault directly from props without destructuring
+  const guildVault =
+    typeof props.guildVault === "string"
+      ? JSON.parse(props.guildVault)
+      : props.guildVault;
+
+  // Debug logging for guildVault specifically
+  console.log("Raw props:", props);
+  console.log("guildVault from props:", props.guildVault);
+  console.log("guildVault.balance from props:", props.guildVault?.balance);
+  console.log("guildVault variable:", guildVault);
+  console.log("guildVault.balance variable:", guildVault?.balance);
+  console.log("Object.keys(guildVault):", Object.keys(guildVault || {}));
+  console.log(
+    "guildVault hasOwnProperty('balance'):",
+    guildVault?.hasOwnProperty("balance")
+  );
+  console.log("typeof guildVault:", typeof guildVault);
   const {
     textColor,
     secondaryTextColor,
@@ -36,6 +56,21 @@ const Transfer = (props) => {
     : isDeposit
     ? translations.deposit
     : translations.withdraw;
+
+  // Debug logging
+  console.log("=== TRANSFER COMPONENT DEBUG ===");
+  console.log("isDeposit:", isDeposit);
+  console.log("isTransfer:", isTransfer);
+  console.log("guildVault:", guildVault);
+  console.log("guildVault.balance:", guildVault?.balance);
+  console.log("Number(guildVault.balance):", Number(guildVault?.balance || 0));
+  console.log(
+    "Number(guildVault.balance) > 0:",
+    Number(guildVault?.balance || 0) > 0
+  );
+  console.log("feeAmount:", feeAmount);
+  console.log("!isTransfer:", !isTransfer);
+  console.log("==============================");
 
   return (
     <div
@@ -202,6 +237,7 @@ const Transfer = (props) => {
                 alignItems: "center",
                 alignSelf: "flex-start",
                 minWidth: "130px",
+                position: "relative",
               }}
             >
               <div
@@ -240,6 +276,120 @@ const Transfer = (props) => {
                   {amount?.toFixed(2) || "{amount}"}
                 </div>
               </div>
+
+              {/* Fee Information (for deposits/withdrawals only, not transfers) */}
+              {!isTransfer && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-12px",
+                    right: "-20px",
+                    display: "flex",
+                    backgroundColor: "rgba(255, 193, 7, 0.9)",
+                    borderRadius: "12px",
+                    padding: "4px 8px",
+                    alignItems: "center",
+                    zIndex: 2,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: "14px",
+                      marginRight: "4px",
+                    }}
+                  >
+                    💸
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "9px",
+                        color: "#000",
+                        opacity: "0.8",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {translations.fee || "FEE"}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        color: "#000",
+                      }}
+                    >
+                      {isTransfer ? "0.00" : Number(feeAmount).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Server Vault Balance (for deposits/withdrawals only, not transfers) */}
+              {guildVault && Number(guildVault.balance) > 0 && !isTransfer && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "-5px",
+                    right: "-45px",
+                    display: "flex",
+                    backgroundColor: "rgba(138, 43, 226, 0.9)",
+                    borderRadius: "10px",
+                    padding: "4px 8px",
+                    alignItems: "center",
+                    zIndex: 2,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: "12px",
+                      marginRight: "3px",
+                    }}
+                  >
+                    🏛️
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "8px",
+                        color: "#fff",
+                        opacity: "0.9",
+                        fontWeight: "bold",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {translations.vault || "VAULT"}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                        color: "#fff",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {Number(guildVault.balance || 0).toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bank Balance or Recipient Balance */}
@@ -300,21 +450,26 @@ const Transfer = (props) => {
                   >
                     {isTransfer
                       ? recipient?.balance?.toFixed(2) || "{balance}"
-                      : (database.combinedBankBalance ? Number(database.combinedBankBalance).toFixed(2) : database.economy.bankBalance.toFixed(2)) || "{bank}"}
+                      : (database.combinedBankBalance
+                          ? Number(database.combinedBankBalance).toFixed(2)
+                          : database.economy.bankBalance.toFixed(2)) ||
+                        "{bank}"}
                   </div>
-                  {!isTransfer && database.combinedBankBalance && database.marriageStatus?.status === "MARRIED" && (
-                    <div
-                      style={{
-                        display: "flex",
-                        fontSize: "12px",
-                        color: secondaryTextColor,
-                        opacity: "0.7",
-                        marginTop: "2px",
-                      }}
-                    >
-                      ({database.economy.bankBalance.toFixed(2)})
-                    </div>
-                  )}
+                  {!isTransfer &&
+                    database.combinedBankBalance &&
+                    database.marriageStatus?.status === "MARRIED" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          fontSize: "12px",
+                          color: secondaryTextColor,
+                          opacity: "0.7",
+                          marginTop: "2px",
+                        }}
+                      >
+                        ({database.economy.bankBalance.toFixed(2)})
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -331,7 +486,6 @@ const Transfer = (props) => {
                     borderRadius: "50%",
                     overflow: "hidden",
                     border: "2px solid rgba(255, 255, 255, 0.5)",
-                    boxShadow: "0 2px 5px rgba(0, 0, 0, 0.2)",
                   }}
                 >
                   <img
@@ -477,6 +631,21 @@ Transfer.localization_strings = {
     en: "BALANCE",
     ru: "БАЛАНС",
     uk: "БАЛАНС",
+  },
+  fee: {
+    en: "Fee",
+    ru: "Комиссия",
+    uk: "Комісія",
+  },
+  serverVault: {
+    en: "Server Vault",
+    ru: "Серверный Vault",
+    uk: "Серверний Vault",
+  },
+  vault: {
+    en: "VAULT",
+    ru: "КАЗНА",
+    uk: "КАЗНА",
   },
 };
 
