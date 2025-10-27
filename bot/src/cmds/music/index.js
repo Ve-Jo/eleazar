@@ -82,6 +82,16 @@ export default {
       ru: "Переход к следующему треку",
       uk: "Перехід до наступного треку",
     },
+    noPreviousSongs: {
+      en: "There are no previous songs in the queue",
+      ru: "В очереди нет предыдущих песен",
+      uk: "В черзі немає попередніх пісень",
+    },
+    addedPreviousToQueue: {
+      en: "Added previous song to queue: {{title}}",
+      ru: "Добавлена предыдущая песня в очередь: {{title}}",
+      uk: "Додано попередню пісню в чергу: {{title}}",
+    },
   },
   async preExecute(interaction, i18n) {
     /*return interaction.reply({
