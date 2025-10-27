@@ -19,7 +19,7 @@ export default {
         option
           .setName("user")
           .setDescription("User to check")
-          .setRequired(false),
+          .setRequired(false)
       );
 
     return builder;
@@ -69,7 +69,7 @@ export default {
     // Marriage functionality will need to be implemented in hub services
     const marriageStatus = await hubClient.getMarriageStatus(
       interaction.guild.id,
-      user.id,
+      user.id
     );
 
     let partnerData = null;
@@ -87,11 +87,33 @@ export default {
       });
     }
 
-    // Calculate user's bank balance (including interest)
+    // Calculate user's total bank balance (active bank with interest + distributed)
     let individualBankBalance = 0; // Initialize
     if (userData.economy) {
-      // Calculate current bank balance with interest
-      individualBankBalance = await hubClient.calculateBankBalance(userData);
+      // Get active bank balance with interest calculation
+      const activeBankBalance = await hubClient.calculateBankBalance(userData);
+      // Get balance data for distributed funds
+      const balanceData = await hubClient.getBalance(
+        interaction.guild.id,
+        user.id
+      );
+      const distributedBalance = Number(balanceData?.bankDistributed || 0);
+
+      // Total balance = active bank balance (with interest) + distributed funds
+      individualBankBalance = Number(activeBankBalance) + distributedBalance;
+
+      // DEBUG LOGS FOR TESTING
+      console.log("=== BALANCE DEBUG ===");
+      console.log(`User ID: ${user.id}`);
+      console.log(`Active bank balance (with interest): ${activeBankBalance}`);
+      console.log(`Distributed balance: ${distributedBalance}`);
+      console.log(`Total bank balance: ${individualBankBalance}`);
+      console.log(`Raw bankDistributed field: ${balanceData?.bankDistributed}`);
+      console.log(`Raw bankBalance field: ${balanceData?.bankBalance}`);
+      console.log(
+        `Raw totalBankBalance field: ${balanceData?.totalBankBalance}`
+      );
+      console.log("=====================");
 
       userData.economy.bankBalance = individualBankBalance; // Update with calculated balance
       combinedBankBalance =
@@ -104,15 +126,16 @@ export default {
       // Ensure partner exists in database before fetching data
       await hubClient.ensureGuildUser(
         interaction.guild.id,
-        marriageStatus.partnerId,
+        marriageStatus.partnerId
       );
       partnerData = await hubClient.getUser(
         interaction.guild.id,
-        marriageStatus.partnerId,
+        marriageStatus.partnerId
       );
       if (partnerData && partnerData.economy) {
-        const partnerBankBalance =
-          await hubClient.calculateBankBalance(partnerData);
+        const partnerBankBalance = await hubClient.calculateBankBalance(
+          partnerData
+        );
         partnerData.economy.bankBalance = partnerBankBalance;
         combinedBankBalance =
           Number(combinedBankBalance) + Number(partnerBankBalance);
@@ -126,7 +149,7 @@ export default {
       // --- Fetch Partner's Discord User for Avatar ---
       try {
         partnerDiscordUser = await interaction.client.users.fetch(
-          marriageStatus.partnerId,
+          marriageStatus.partnerId
         );
         // Add avatar URL to the data passed to the image generator
         userData.partnerAvatarUrl = partnerDiscordUser?.displayAvatarURL({
@@ -138,7 +161,7 @@ export default {
       } catch (fetchError) {
         console.error(
           `Failed to fetch partner Discord user (${marriageStatus.partnerId}):`,
-          fetchError,
+          fetchError
         );
         userData.partnerAvatarUrl =
           "https://cdn.discordapp.com/embed/avatars/0.png"; // Fallback avatar
@@ -162,7 +185,126 @@ export default {
     }
     // --- End Calculate Level Progress ---
 
-    console.log(userData);
+    console.log("=== DEBUG GUILD VAULT ===");
+    console.log("UserData keys:", Object.keys(userData));
+
+    // Get guild vault information
+    let guildVault = null;
+    let userVaultDistributions = [];
+    const guildId = interaction.guild.id;
+    const userId = user.id;
+
+    try {
+      console.log("Getting guild vault for guildId:", guildId);
+      guildVault = await hubClient.getGuildVault(guildId);
+      console.log("Guild vault response:", guildVault);
+
+      console.log("Getting user vault distributions for userId:", userId);
+      userVaultDistributions = await hubClient.getUserVaultDistributions(
+        guildId,
+        userId,
+        5
+      );
+      console.log("User vault distributions:", userVaultDistributions);
+    } catch (error) {
+      console.warn(
+        `Failed to get guild vault info for guild ${guildId}:`,
+        error
+      );
+    }
+
+    // Calculate total earnings from vault distributions
+    console.log("Processing vault distributions:", userVaultDistributions);
+    console.log(
+      "Type of userVaultDistributions:",
+      typeof userVaultDistributions
+    );
+
+    // Ensure we have an array - handle JSON string parsing
+    let distributions = [];
+    if (typeof userVaultDistributions === "string") {
+      // Parse JSON string to array
+      try {
+        distributions = JSON.parse(userVaultDistributions);
+        console.log("Parsed JSON string to array:", distributions);
+      } catch (parseError) {
+        console.error("Failed to parse JSON string:", parseError);
+        distributions = [];
+      }
+    } else if (Array.isArray(userVaultDistributions)) {
+      // Already an array
+      distributions = userVaultDistributions;
+    } else if (
+      userVaultDistributions &&
+      typeof userVaultDistributions === "object"
+    ) {
+      // Maybe it's wrapped in an object like {data: [...]}
+      if (Array.isArray(userVaultDistributions.data)) {
+        distributions = userVaultDistributions.data;
+      } else if (Array.isArray(userVaultDistributions.distributions)) {
+        distributions = userVaultDistributions.distributions;
+      } else {
+        console.log(
+          "Unexpected object structure:",
+          Object.keys(userVaultDistributions)
+        );
+      }
+    } else {
+      console.log(
+        "userVaultDistributions is neither string, array nor object:",
+        userVaultDistributions
+      );
+    }
+
+    console.log("Final distributions array:", distributions);
+    console.log("Distributions array length:", distributions.length);
+
+    // Normalize distribution data - convert ISO dates to timestamps and ensure proper structure
+    const normalizedDistributions = distributions.map((dist) => ({
+      amount: parseFloat(dist.amount) || 0,
+      timestamp:
+        dist.timestamp ||
+        (dist.distributionDate
+          ? new Date(dist.distributionDate).getTime()
+          : Date.now()),
+      type: dist.type || "distribution",
+      id: dist.id,
+      source: dist.source,
+      triggeredBy: dist.triggeredBy,
+    }));
+
+    console.log("Normalized distributions:", normalizedDistributions);
+
+    // Calculate total earnings more explicitly
+    let totalVaultEarnings = 0;
+    for (const dist of normalizedDistributions) {
+      console.log("Processing distribution:", dist);
+      console.log("Amount value:", dist.amount);
+      console.log("Amount type:", typeof dist.amount);
+      console.log("Timestamp value:", dist.timestamp);
+      console.log("Timestamp type:", typeof dist.timestamp);
+
+      const amount = parseFloat(dist.amount) || 0;
+      console.log("Converted amount:", amount);
+
+      totalVaultEarnings += amount;
+      console.log("Current total:", totalVaultEarnings);
+    }
+
+    console.log("Final total vault earnings:", totalVaultEarnings);
+
+    // Add vault data to userData for database pass
+    userData.vaultEarnings = totalVaultEarnings;
+    userData.vaultDistributions = normalizedDistributions; // Add the normalized distributions array
+    userData.guild = {
+      vault: guildVault,
+    };
+
+    console.log("Final userData with vault:", {
+      vaultEarnings: userData.vaultEarnings,
+      guild: userData.guild,
+    });
+    console.log("=== END DEBUG ===");
 
     const [buffer, dominantColor] = await generateImage(
       "Balance",
@@ -199,7 +341,7 @@ export default {
         },
       },
       { image: 2, emoji: 2 },
-      i18n,
+      i18n
     );
 
     if (!buffer) {
