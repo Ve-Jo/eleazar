@@ -78,7 +78,7 @@ import { hubClient } from "../api/hubClient.js";
         category,
         component,
         localization_strings[category][component],
-        true,
+        true
       );
     }
   }
@@ -95,10 +95,10 @@ let lastGeneratedImageTimestamp = 0;
 export async function createOrUpdateMusicPlayerEmbed(
   track,
   player,
-  oldEmbed = null,
+  oldEmbed = null
 ) {
   console.log(
-    `[MusicPlayerEmbed] Starting generation for track: ${track?.info?.title}`,
+    `[MusicPlayerEmbed] Starting generation for track: ${track?.info?.title}`
   );
   let locale = track.requester?.locale || "en";
   if (locale.includes("-")) {
@@ -125,13 +125,13 @@ export async function createOrUpdateMusicPlayerEmbed(
   const getAvatarUrl = (user) => {
     if (!user)
       return `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-        Math.random() * 5,
+        Math.random() * 5
       )}.png`;
     return typeof user.displayAvatarURL === "function"
       ? user.displayAvatarURL({ extension: "png", size: 256 })
       : user.avatarURL ||
           `https://cdn.discordapp.com/embed/avatars/${Math.floor(
-            Math.random() * 5,
+            Math.random() * 5
           )}.png`;
   };
 
@@ -149,13 +149,15 @@ export async function createOrUpdateMusicPlayerEmbed(
                 track.requester?.username ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale,
+                  {},
+                  locale
                 )),
               displayName:
                 track.requester?.displayName ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale,
+                  {},
+                  locale
                 )),
               avatarURL: getAvatarUrl(track.requester),
               locale: track.requester?.locale || "en",
@@ -164,14 +166,26 @@ export async function createOrUpdateMusicPlayerEmbed(
           currentSong: {
             title:
               track.info.title ||
-              (await hubClient.getTranslation("music.player.noTitle", locale)),
+              (await hubClient.getTranslation(
+                "music.player.noTitle",
+                {},
+                locale
+              )),
             artist:
               track.info.author ||
-              (await hubClient.getTranslation("music.player.noArtist", locale)),
+              (await hubClient.getTranslation(
+                "music.player.noArtist",
+                {},
+                locale
+              )),
             thumbnail: track.info.artworkUrl,
             addedBy:
               track.requester?.username ||
-              (await hubClient.getTranslation("music.player.noTitle", locale)),
+              (await hubClient.getTranslation(
+                "music.player.noTitle",
+                {},
+                locale
+              )),
             addedByAvatar: getAvatarUrl(track.requester),
             duration: track.info.duration,
             user: {
@@ -180,13 +194,15 @@ export async function createOrUpdateMusicPlayerEmbed(
                 track.requester?.username ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale,
+                  {},
+                  locale
                 )),
               displayName:
                 track.requester?.displayName ||
                 (await hubClient.getTranslation(
                   "music.player.noTitle",
-                  locale,
+                  {},
+                  locale
                 )),
               avatarURL: getAvatarUrl(track.requester),
             },
@@ -196,60 +212,86 @@ export async function createOrUpdateMusicPlayerEmbed(
             ? {
                 title:
                   previousSong.info.title ||
-                  (await hubClient.getTranslation(
-                    "music.player.noTitle",
-                    locale,
-                  )),
+                  (
+                    await hubClient.getTranslation(
+                      "music.player.noTitle",
+                      {},
+                      locale
+                    )
+                  ).translation,
                 duration: previousSong.info.duration,
                 thumbnail: previousSong.info.artworkUrl,
                 user: {
                   id: previousSong.requester?.id || "unknown",
                   username:
                     previousSong.requester?.username ||
-                    (await hubClient.getTranslation(
-                      "music.player.noTitle",
-                      locale,
-                    )),
+                    (
+                      await hubClient.getTranslation(
+                        "music.player.noTitle",
+                        {},
+                        locale
+                      )
+                    ).translation,
                   displayName:
                     previousSong.requester?.displayName ||
-                    (await hubClient.getTranslation(
-                      "music.player.noTitle",
-                      locale,
-                    )),
+                    (
+                      await hubClient.getTranslation(
+                        "music.player.noTitle",
+                        {},
+                        locale
+                      )
+                    ).translation,
                   avatarURL: getAvatarUrl(previousSong.requester),
                 },
               }
             : undefined,
-          nextSongs: player.queue.tracks.slice(0, 5).map(async (t) => ({
-            title:
-              t.info.title ||
-              (await hubClient.getTranslation("music.player.noTitle", locale)),
-            duration: t.info.duration,
-            thumbnail: t.info.artworkUrl,
-            user: {
-              id: t.requester?.id || "unknown",
-              username:
-                t.requester?.username ||
-                (await hubClient.getTranslation(
-                  "music.player.noTitle",
-                  locale,
-                )),
-              displayName:
-                t.requester?.displayName ||
-                (await hubClient.getTranslation(
-                  "music.player.noTitle",
-                  locale,
-                )),
-              avatarURL: getAvatarUrl(t.requester),
-            },
-          })),
+          nextSongs: await Promise.all(
+            player.queue.tracks.slice(0, 5).map(async (t) => ({
+              title:
+                t.info.title ||
+                (
+                  await hubClient.getTranslation(
+                    "music.player.noTitle",
+                    {},
+                    locale
+                  )
+                ).translation,
+              duration: t.info.duration,
+              thumbnail: t.info.artworkUrl,
+              user: {
+                id: t.requester?.id || "unknown",
+                username:
+                  t.requester?.username ||
+                  (
+                    await hubClient.getTranslation(
+                      "music.player.noTitle",
+                      {},
+                      locale
+                    )
+                  ).translation,
+                displayName:
+                  t.requester?.displayName ||
+                  (
+                    await hubClient.getTranslation(
+                      "music.player.noTitle",
+                      {},
+                      locale
+                    )
+                  ).translation,
+                avatarURL: getAvatarUrl(t.requester),
+              },
+            }))
+          ),
           queueLength: player.queue.tracks.length,
           currentTime: player.position,
           duration: track.info.duration,
           userAvatar: getAvatarUrl(track.requester),
+          // Add proper queue info for the component
+          hasPrevious: !!previousSong,
+          hasNext: player.queue.tracks.length > 0,
         },
         { image: 1, emoji: 1 },
-        i18n,
+        { getLocale: () => locale }
       );
       console.log(`[MusicPlayerEmbed] Image generation successful.`);
       lastGeneratedImage = { buffer };
@@ -268,15 +310,19 @@ export async function createOrUpdateMusicPlayerEmbed(
 
   // Create the main component using ComponentBuilder
   const musicPlayerComponent = new ComponentBuilder()
-    .addText(await i18n.__("music.player.title"), "header3")
+    .addText(
+      (await hubClient.getTranslation("music.player.title", {}, locale))
+        .translation,
+      "header3"
+    )
     .setColor(process.env.EMBED_COLOR ?? 0x0099ff)
     // Add the generated image
     .addImage(`attachment://${attachment.name}`)
     // Add the music control buttons
-    .addActionRow(createMusicButtons(player));
+    .addActionRow(await createMusicButtons(player));
 
   console.log(
-    `[MusicPlayerEmbed] Finished generation for track: ${track?.info?.title}`,
+    `[MusicPlayerEmbed] Finished generation for track: ${track?.info?.title}`
   );
   // Return the structure expected for interaction replies/edits
   return {

@@ -1,75 +1,11 @@
 import { Events } from "discord.js";
-import i18n from "../utils/i18n.js";
+import { hubClient } from "../api/hubClient.js";
 import { createOrUpdateMusicPlayerEmbed } from "../utils/musicPlayerEmbed.js";
 
-// Register required localizations for the button handler
-const localization_strings = {
-  music: {
-    previous: {
-      noPreviousSongs: {
-        en: "There are no previous songs in the queue",
-        ru: "В очереди нет предыдущих песен",
-        uk: "В черзі немає попередніх пісень",
-      },
-      addedPreviousToQueue: {
-        en: "Added previous song to queue: {{title}}",
-        ru: "Добавлена предыдущая песня в очередь: {{title}}",
-        uk: "Додано попередню пісню в чергу: {{title}}",
-      },
-    },
+// Use the centralized music localization strings from the hub system
+// The strings are already registered in bot/src/cmds/music/index.js
 
-    loopApplied: {
-      en: "Loop is now {{type}}",
-      ru: "Цикл теперь {{type}}",
-      uk: "Цикл теперь {{type}}",
-    },
-    skipApplied: {
-      en: "Skipped song",
-      ru: "Песня пропущена",
-      uk: "Пісня пропущена",
-    },
-    pauseApplied: {
-      en: "Paused",
-      ru: "Пауза",
-      uk: "Пауза",
-    },
-    pauseResumed: {
-      en: "Resumed",
-      ru: "Продолжено",
-      uk: "Продовжено",
-    },
-    buttons: {
-      on: "On",
-      off: "Off",
-    },
-
-    autoplay: {
-      autoplayApplied: {
-        en: "Autoplay is now {{state}}",
-        ru: "Автоплей теперь {{state}}",
-        uk: "Автоплей теперь {{state}}",
-      },
-    },
-
-    errorOccurred: {
-      en: "An error occurred while processing the interaction: {{error}}",
-      ru: "Произошла ошибка при обработке взаимодействия: {{error}}",
-      uk: "Виникла помилка при обробці взаємодії: {{error}}",
-    },
-  },
-};
-
-// Register translations with i18n system
-Object.keys(localization_strings).forEach((category) => {
-  Object.keys(localization_strings[category]).forEach((component) => {
-    i18n.registerLocalizations(
-      category,
-      component,
-      localization_strings[category][component],
-      true,
-    );
-  });
-});
+// No need to register translations here - they're already registered in the music command
 
 export default {
   name: Events.InteractionCreate,
@@ -79,7 +15,7 @@ export default {
     if (interaction.customId.startsWith("music_")) {
       const option = interaction.customId.split("_")[1];
       const player = interaction.client.lavalink.getPlayer(
-        interaction.guild.id,
+        interaction.guild.id
       );
 
       if (!player) {
@@ -87,15 +23,21 @@ export default {
       }
 
       if (interaction.member.voice.channelId !== player.voiceChannelId) {
+        const locale = interaction.user.locale || "en";
         return interaction.reply({
-          content: await i18n.__("music.notInVoiceChannel"),
+          content: (
+            await hubClient.getTranslation(
+              "commands.music.notInVoiceChannel",
+              {},
+              locale
+            )
+          ).translation,
           ephemeral: true,
         });
       }
 
-      if (interaction.user.locale) {
-        i18n.setLocale(interaction.user.locale);
-      }
+      // Get user locale for translations
+      const locale = interaction.user.locale || "en";
 
       await interaction.deferUpdate();
 
@@ -109,52 +51,80 @@ export default {
             const newMode = modes[(currentIndex + 1) % modes.length];
             player.repeatMode = newMode;
             player.emit("playerRepeatModeUpdate", player, newMode);
-            interactionResponseContent = await i18n.__("music.loopApplied", {
-              type: newMode,
-            });
+            interactionResponseContent = (
+              await hubClient.getTranslation(
+                "commands.music.loopApplied",
+                { type: newMode },
+                locale
+              )
+            ).translation;
             break;
           }
           case "pause": {
             if (player.paused) {
               await player.resume();
-              interactionResponseContent = await i18n.__("music.pauseResumed");
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.pauseResumed",
+                  {},
+                  locale
+                )
+              ).translation;
             } else {
               await player.pause();
-              interactionResponseContent = await i18n.__("music.pauseApplied");
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.pauseApplied",
+                  {},
+                  locale
+                )
+              ).translation;
             }
             break;
           }
           case "skip": {
             try {
               await player.skip();
-              interactionResponseContent = await i18n.__("music.skipApplied");
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.skipApplied",
+                  {},
+                  locale
+                )
+              ).translation;
             } catch (error) {
               console.error("Skip error:", error);
-              interactionResponseContent = await hubClient.getTranslation(
-                "music.skippingSongError",
-                { error: error.message },
-                locale,
-              );
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.skippingSongError",
+                  { error: error.message },
+                  locale
+                )
+              ).translation;
             }
             break;
           }
           case "previous": {
             if (!player.queue.previous || player.queue.previous.length === 0) {
-              interactionResponseContent = await hubClient.getTranslation(
-                "music.previous.noPreviousSongs",
-                {},
-                locale,
-              );
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.noPreviousSongs",
+                  {},
+                  locale
+                )
+              ).translation;
             } else {
               const previousTrack = player.queue.previous[0];
               player.queue.tracks.unshift(previousTrack);
               player.queue.previous.shift();
               await player.skip();
-              interactionResponseContent = await hubClient.getTranslation(
-                "music.previous.addedPreviousToQueue",
-                { title: previousTrack.info.title },
-                locale,
-              );
+              interactionResponseContent = (
+                await hubClient.getTranslation(
+                  "commands.music.addedPreviousToQueue",
+                  { title: previousTrack.info.title },
+                  locale
+                )
+              ).translation;
             }
             break;
           }
@@ -165,23 +135,29 @@ export default {
               guildId: player.guildId,
               state: player.state,
             });
-            interactionResponseContent = await hubClient.getTranslation(
-              "music.autoplay.autoplayApplied",
-              {
-                state: newState
-                  ? await hubClient.getTranslation(
-                      "music.buttons.on",
-                      {},
-                      locale,
-                    )
-                  : await hubClient.getTranslation(
-                      "music.buttons.off",
-                      {},
-                      locale,
-                    ),
-              },
-              locale,
-            );
+            interactionResponseContent = (
+              await hubClient.getTranslation(
+                "commands.music.autoplay.autoplayApplied",
+                {
+                  enabled: newState
+                    ? (
+                        await hubClient.getTranslation(
+                          "commands.music.buttons.on",
+                          {},
+                          locale
+                        )
+                      ).translation
+                    : (
+                        await hubClient.getTranslation(
+                          "commands.music.buttons.off",
+                          {},
+                          locale
+                        )
+                      ).translation,
+                },
+                locale
+              )
+            ).translation;
             break;
           }
         }
@@ -189,7 +165,7 @@ export default {
         if (player.queue.current) {
           const updatedPlayerData = await createOrUpdateMusicPlayerEmbed(
             player.queue.current,
-            player,
+            player
           );
 
           await interaction.message
@@ -197,7 +173,7 @@ export default {
             .catch((editError) => {
               console.error(
                 "Failed to edit music player message after button interaction:",
-                editError,
+                editError
               );
               if (editError.code === 10008) {
                 interaction.client.musicMessageMap?.delete(interaction.guildId);
@@ -210,7 +186,7 @@ export default {
           } catch (deleteError) {
             console.error(
               "Failed to delete music message when queue became empty:",
-              deleteError,
+              deleteError
             );
           }
         }
@@ -224,12 +200,15 @@ export default {
       } catch (error) {
         console.error("Error processing music button interaction:", error);
         try {
+          const errorLocale = interaction.user.locale || "en";
           await interaction.followUp({
-            content: await hubClient.getTranslation(
-              "music.errorOccurred",
-              { error: error.message },
-              locale,
-            ),
+            content: (
+              await hubClient.getTranslation(
+                "commands.music.errorOccurred",
+                { error: error.message },
+                errorLocale
+              )
+            ).translation,
             ephemeral: true,
           });
         } catch (replyError) {
