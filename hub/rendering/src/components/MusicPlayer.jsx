@@ -12,11 +12,11 @@ const MusicPlayer = (props) => {
     height = 200,
   } = props;
 
-  // Get translations from i18n based on the static translation object
+  // Get translations from i18n based on the static translation object (like Balance.jsx)
   const translations = Object.entries(MusicPlayer.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
+      [key]: translations[i18n?.getLocale()] || translations.en,
     }),
     {}
   );
@@ -51,7 +51,10 @@ const MusicPlayer = (props) => {
   currentSong = currentSong || exampleCurrentSong;
   previousSong = previousSong;
   nextSongs = nextSongs;
-  queueLength = (queueLength || (nextSongs ? nextSongs.length : 0)) + 1;
+  // Calculate total queue length including current song
+  const totalQueueLength =
+    (queueLength || (nextSongs ? nextSongs.length : 0)) +
+    (previousSong ? 1 : 0);
   currentTime = currentTime || 32;
   duration = duration || currentSong.duration;
 
@@ -351,7 +354,7 @@ const MusicPlayer = (props) => {
           {renderSongThumbnails(previousSong, nextSongs)}
 
           {/* More songs indicator */}
-          {queueLength > 5 && (
+          {totalQueueLength > 5 && (
             <div
               style={{
                 fontSize: "14px",
@@ -369,8 +372,7 @@ const MusicPlayer = (props) => {
                 whiteSpace: "nowrap",
               }}
             >
-              +{queueLength - 6 + (previousSong ? 1 : 0)}{" "}
-              {translations.moreItems}
+              +{totalQueueLength - 5} {translations.moreItems}
             </div>
           )}
         </div>
