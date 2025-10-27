@@ -374,10 +374,14 @@ async function createMockData(lang = "en", Component = null) {
     const generateEconomyData = () => {
       const balance = parseFloat((Math.random() * 500).toFixed(2));
       const bank = parseFloat((Math.random() * 500).toFixed(2));
+      const distributed = parseFloat((Math.random() * 300).toFixed(2));
       return {
         balance,
         bank,
-        value: balance + bank,
+        distributed,
+        value: balance + bank + distributed,
+        totalBalance: balance + bank + distributed,
+        totalBankBalance: bank + distributed,
       };
     };
 
@@ -404,7 +408,8 @@ async function createMockData(lang = "en", Component = null) {
             value: economyData.value,
             balance: economyData.balance,
             bank: economyData.bank,
-            totalBalance: economyData.value,
+            distributed: economyData.distributed,
+            totalBalance: economyData.totalBalance,
             level: Math.floor(Math.random() * 100) + 1,
             xp: Math.floor(Math.random() * 100000),
             xpStats: {
@@ -578,6 +583,21 @@ async function createMockData(lang = "en", Component = null) {
       balance: 750.25,
     };
 
+    // Mock guild vault data
+    const mockGuildVault = {
+      id: "vault123",
+      guildId: "987654321",
+      balance: 125.75, // Accumulated vault balance
+      totalFees: 250.5, // Total fees collected
+      lastDistribution: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+      createdAt: new Date(Date.now() - 86400000 * 7).toISOString(), // 7 days ago
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Calculate mock fee amount (5% of transaction)
+    const transactionAmount = 250.5;
+    const mockFeeAmount = transactionAmount * 0.05; // 5% fee
+
     return {
       locale: lang,
       i18n: i18nMock,
@@ -599,15 +619,90 @@ async function createMockData(lang = "en", Component = null) {
         economy: {
           balance: 1000.5,
           bankBalance: 5000.75,
+          bankDistributed: 1250.25,
           bankRate: 25,
           bankStartTime: 25,
         },
       },
-      amount: 250.5,
+      amount: transactionAmount,
       // Add these properties to test different modes
       isDeposit: false,
       isTransfer: true, // Set to true to test transfer mode
       recipient: recipientUser, // Include recipient data
+      guildVault: mockGuildVault, // Include guild vault data
+      feeAmount: mockFeeAmount, // Include calculated fee amount
+      dominantColor: "user",
+    };
+  }
+
+  // Mock data for Balance component with distributed funds support
+  if (Component?.name === "Balance") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "Test User",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+        guild: {
+          id: "987654321",
+          name: "Test Guild",
+          iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      database: {
+        economy: {
+          balance: 1000.5,
+          bankBalance: 5000.75,
+          bankDistributed: 1250.25,
+          bankRate: 25,
+          bankStartTime: Date.now() - 86400000, // 1 day ago in milliseconds
+        },
+        individualBankBalance: 6251.0,
+        combinedBankBalance: 7500.75,
+        guildVault: {
+          id: "vault123",
+          guildId: "1282078106202669148",
+          balance: 125.75, // Current vault balance
+          totalFees: 250.5, // Total fees collected
+          lastDistribution: new Date(Date.now() - 86400000).toISOString(),
+          createdAt: new Date(Date.now() - 86400000 * 7).toISOString(), // 7 days ago
+          updatedAt: new Date().toISOString(),
+        },
+        vaultEarnings: 125.25, // ← Добавлено поле для отображения распределенных средств
+        vaultDistributions: [
+          {
+            id: "cmh7qsan5000d96vjmmptwe7c",
+            guildId: "1282078106202669148",
+            userId: "831217341454090272",
+            amount: "25.50",
+            distributionDate: new Date(Date.now() - 3600000).toISOString(),
+            source: "automatic",
+            triggeredBy: "287275956744355841",
+          },
+          {
+            id: "cmh6vqbgt000b96m1lsxxafcz",
+            guildId: "1282078106202669148",
+            userId: "831217341454090272",
+            amount: "18.75",
+            distributionDate: new Date(Date.now() - 7200000).toISOString(),
+            source: "automatic",
+            triggeredBy: "287275956744355841",
+          },
+          {
+            id: "cmh6vqbgt000c96m1lsxxafcy",
+            guildId: "1282078106202669148",
+            userId: "831217341454090272",
+            amount: "12.00",
+            distributionDate: new Date(Date.now() - 10800000).toISOString(),
+            source: "automatic",
+            triggeredBy: "287275956744355841",
+          },
+        ], // ← Последние 3 операции распределения с реальной структурой данных
+      },
       dominantColor: "user",
     };
   }
@@ -647,8 +742,9 @@ async function createMockData(lang = "en", Component = null) {
       economy: {
         balance: 1000.5,
         bankBalance: 5000.75,
+        bankDistributed: 1250.25,
         bankRate: 25,
-        bankStartTime: 25,
+        bankStartTime: Date.now() - 86400000, // 1 day ago in milliseconds
       },
       // Add marriage status data for testing dynamic height
       marriageStatus: {
@@ -658,7 +754,7 @@ async function createMockData(lang = "en", Component = null) {
       partnerUsername: "Partner User",
       partnerAvatarUrl: "https://cdn.discordapp.com/embed/avatars/3.png",
       combinedBankBalance: 7500.75,
-      individualBankBalance: 5000.75,
+      individualBankBalance: 6251.0,
       avatar_url: "https://cdn.discordapp.com/embed/avatars/0.png",
       bot_stats: {
         guilds_stats: Array(100)
@@ -846,6 +942,45 @@ async function createMockData(lang = "en", Component = null) {
     currentUpgrade: 0,
     balance: 1000.5,
     // Coloring will be set in the image generation route based on theme
+    guildVault: {
+      totalFunds: 2500.0,
+      lastDistribution: new Date(Date.now() - 86400000).toISOString(), // вчера
+      participants: 25,
+      distributionAmount: 500.0,
+      balance: 125.75, // Accumulated vault balance
+      totalFees: 250.5, // Total fees collected
+    },
+    feeAmount: 12.53, // 5% fee for testing
+    vaultEarnings: 125.25, // ← Добавлено поле для отображения распределенных средств
+    vaultDistributions: [
+      {
+        id: "cmh7qsan5000d96vjmmptwe7c",
+        guildId: "1282078106202669148",
+        userId: "831217341454090272",
+        amount: "25.50",
+        distributionDate: new Date(Date.now() - 3600000).toISOString(),
+        source: "automatic",
+        triggeredBy: "287275956744355841",
+      },
+      {
+        id: "cmh6vqbgt000b96m1lsxxafcz",
+        guildId: "1282078106202669148",
+        userId: "831217341454090272",
+        amount: "18.75",
+        distributionDate: new Date(Date.now() - 7200000).toISOString(),
+        source: "automatic",
+        triggeredBy: "287275956744355841",
+      },
+      {
+        id: "cmh6vqbgt000c96m1lsxxafcy",
+        guildId: "1282078106202669148",
+        userId: "831217341454090272",
+        amount: "12.00",
+        distributionDate: new Date(Date.now() - 10800000).toISOString(),
+        source: "automatic",
+        triggeredBy: "287275956744355841",
+      },
+    ], // ← Последние 3 операции распределения с реальной структурой данных
   };
 }
 
@@ -1080,6 +1215,60 @@ app.get("/:componentName", async (req, res) => {
               // Update mock data to include/exclude marriage status
               try {
                 const mockData = JSON.parse(mockDataJson);
+                
+                // Ensure the new distributed funds data is preserved
+                if (!mockData.database.economy) {
+                  mockData.database.economy = {};
+                }
+                if (!mockData.database.economy.bankDistributed) {
+                  mockData.database.economy.bankDistributed = 1250.25;
+                }
+                if (!mockData.database.individualBankBalance) {
+                  mockData.database.individualBankBalance = 6251.0;
+                }
+                if (!mockData.database.guildVault) {
+                  mockData.database.guildVault = {
+                    totalFunds: 2500.0,
+                    lastDistribution: new Date(Date.now() - 86400000).toISOString(),
+                    participants: 25,
+                    distributionAmount: 500.0
+                  };
+                }
+                if (!mockData.database.vaultEarnings) {
+                  mockData.database.vaultEarnings = 125.25;
+                }
+                if (!mockData.database.vaultDistributions) {
+                  mockData.database.vaultDistributions = [
+                    {
+                      id: "cmh7qsan5000d96vjmmptwe7c",
+                      guildId: "1282078106202669148",
+                      userId: "831217341454090272",
+                      amount: "25.50",
+                      distributionDate: new Date(Date.now() - 3600000).toISOString(),
+                      source: "automatic",
+                      triggeredBy: "287275956744355841"
+                    },
+                    {
+                      id: "cmh6vqbgt000b96m1lsxxafcz",
+                      guildId: "1282078106202669148",
+                      userId: "831217341454090272",
+                      amount: "18.75",
+                      distributionDate: new Date(Date.now() - 7200000).toISOString(),
+                      source: "automatic",
+                      triggeredBy: "287275956744355841"
+                    },
+                    {
+                      id: "cmh6vqbgt000c96m1lsxxafcy",
+                      guildId: "1282078106202669148",
+                      userId: "831217341454090272",
+                      amount: "12.00",
+                      distributionDate: new Date(Date.now() - 10800000).toISOString(),
+                      source: "automatic",
+                      triggeredBy: "287275956744355841"
+                    }
+                  ];
+                }
+                
                 if (isMarried) {
                   mockData.database.marriageStatus = {
                     status: "MARRIED",
@@ -1087,12 +1276,15 @@ app.get("/:componentName", async (req, res) => {
                   };
                   mockData.database.partnerUsername = "Partner User";
                   mockData.database.partnerAvatarUrl = "https://cdn.discordapp.com/embed/avatars/3.png";
-                  mockData.database.combinedBankBalance = 7500.75;
+                  // Preserve combined bank balance for married users
+                  if (!mockData.database.combinedBankBalance) {
+                    mockData.database.combinedBankBalance = 7500.75;
+                  }
                 } else {
                   delete mockData.database.marriageStatus;
                   delete mockData.database.partnerUsername;
                   delete mockData.database.partnerAvatarUrl;
-                  delete mockData.database.combinedBankBalance;
+                  // Don't delete combinedBankBalance - let it be managed by the component
                 }
                 mockDataJson = JSON.stringify(mockData, null, 2);
                 const editor = document.getElementById('mockDataEditor');
@@ -1554,17 +1746,42 @@ app.get("/:componentName/image", async (req, res) => {
 
     // Use custom mock data if provided, otherwise generate default
     let mockData;
-    if (req.query.mockData) {
+    if (req.query.mockData && customMockData) {
       console.log("Using custom mock data as base");
       mockData = customMockData;
       // Ensure locale and debug are set for custom data
-      mockData.locale = lang;
-      mockData.debug = debug;
+      if (mockData) {
+        mockData.locale = lang;
+        mockData.debug = debug;
+      }
 
       // Apply mode/type/theme settings to custom mock data
       if (componentName === "Transfer" && mockData) {
         mockData.isDeposit = mode === "deposit";
         mockData.isTransfer = mode === "transfer";
+
+        // Update fee amount based on transaction amount and mode
+        const transactionAmount = mockData.amount || 100;
+        if (mode === "deposit" || mode === "withdraw") {
+          mockData.feeAmount = transactionAmount * 0.05; // 5% fee
+        } else {
+          mockData.feeAmount = 0; // No fee for transfers
+        }
+
+        // Update guild vault balance based on mode
+        if (!mockData.guildVault) {
+          mockData.guildVault = {
+            balance: 125.75,
+            totalFees: 250.5,
+            lastDistribution: new Date(Date.now() - 3600000).toISOString(),
+          };
+        }
+
+        // Adjust vault balance based on operation
+        if (mode === "deposit" || mode === "withdraw") {
+          mockData.guildVault.balance += mockData.feeAmount;
+          mockData.guildVault.totalFees += mockData.feeAmount;
+        }
       }
       if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
@@ -1593,6 +1810,29 @@ app.get("/:componentName/image", async (req, res) => {
       if (componentName === "Transfer" && mockData) {
         mockData.isDeposit = mode === "deposit";
         mockData.isTransfer = mode === "transfer";
+
+        // Update fee amount based on transaction amount and mode
+        const transactionAmount = mockData.amount || 100;
+        if (mode === "deposit" || mode === "withdraw") {
+          mockData.feeAmount = transactionAmount * 0.05; // 5% fee
+        } else {
+          mockData.feeAmount = 0; // No fee for transfers
+        }
+
+        // Update guild vault balance based on mode
+        if (!mockData.guildVault) {
+          mockData.guildVault = {
+            balance: 125.75,
+            totalFees: 250.5,
+            lastDistribution: new Date(Date.now() - 3600000).toISOString(),
+          };
+        }
+
+        // Adjust vault balance based on operation
+        if (mode === "deposit" || mode === "withdraw") {
+          mockData.guildVault.balance += mockData.feeAmount;
+          mockData.guildVault.totalFees += mockData.feeAmount;
+        }
       }
       if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
@@ -1904,7 +2144,7 @@ app.get("/health", (req, res) => {
 
 // Start server if run directly
 if (import.meta.main) {
-  const PORT = process.env.PREVIEW_PORT || 3003;
+  const PORT = process.env.PREVIEW_PORT || 3008;
   const server = app.listen(PORT, () => {
     console.log(`🔧 Component preview server running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
