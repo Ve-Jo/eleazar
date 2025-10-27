@@ -170,7 +170,7 @@ async function getUserInfoForPrompt(message) {
               : "unknown time",
           });
         }
-      }),
+      })
     );
   }
 
@@ -246,7 +246,7 @@ function getRelativeTimeString(date) {
 // Function to process the AI response with reasoning tokens
 function processResponseWithReasoning(
   responseContent,
-  reasoningContent = null,
+  reasoningContent = null
 ) {
   // Per user request, don't include reasoning in the final response
   // Just return the response content without adding reasoning
@@ -259,7 +259,7 @@ export default async function processAiRequest(
   messageContent,
   isVisionRequest,
   processingMessage = null,
-  effectiveLocale = "en",
+  effectiveLocale = "en"
 ) {
   console.log(`Starting processAiRequest for user ${userId}`);
 
@@ -279,7 +279,7 @@ export default async function processAiRequest(
   const prefs = getUserPreferences(userId);
   if (!prefs.selectedModel) {
     console.error(
-      `processAiRequest called for user ${userId} without a selected model.`,
+      `processAiRequest called for user ${userId} without a selected model.`
     );
     if (channel)
       await channel
@@ -303,7 +303,7 @@ export default async function processAiRequest(
   } catch (error) {
     console.error(
       `Failed to get provider or capabilities for ${prefs.selectedModel}:`,
-      error,
+      error
     );
     const errMsg = `😥 Error checking model details: ${error.message}`;
     if (processingMessage) {
@@ -318,7 +318,7 @@ export default async function processAiRequest(
   if (isVisionRequest && !capabilities.vision) {
     const errMsg = `Model \`${prefs.selectedModel}\` does not support image input. Please select a model with 'Vision' capability for this request.`;
     console.log(
-      `Vision request blocked for non-vision model ${prefs.selectedModel}.`,
+      `Vision request blocked for non-vision model ${prefs.selectedModel}.`
     );
     const visionModels = await getAvailableModels(client, "vision");
     const comps = await buildInteractionComponents(
@@ -327,7 +327,7 @@ export default async function processAiRequest(
       true,
       false,
       effectiveLocale,
-      client,
+      client
     );
     // Send prompt with vision model selector
     channel.sendTyping();
@@ -351,7 +351,7 @@ export default async function processAiRequest(
         content: await i18n.__(
           "events.ai.messages.modelSelectedProcessing",
           { model: selectedModelId },
-          effectiveLocale,
+          effectiveLocale
         ),
         components: [],
       });
@@ -362,7 +362,7 @@ export default async function processAiRequest(
         messageContent,
         true,
         promptMsg,
-        effectiveLocale,
+        effectiveLocale
       );
     });
     return;
@@ -389,7 +389,7 @@ export default async function processAiRequest(
     procMsg = await channel.send(
       await i18n.__("events.ai.messages.processing", {
         model: prefs.selectedModel,
-      }),
+      })
     );
   } else {
     await procMsg
@@ -413,11 +413,11 @@ export default async function processAiRequest(
         console.log(
           `Trimming OpenRouter context from ${apiMessages.length} to ${
             maxOpenRouterMessagePairs * 2
-          } messages`,
+          } messages`
         );
         const systemMessage = apiMessages.find((m) => m.role === "system");
         const nonSystemMessages = apiMessages.filter(
-          (m) => m.role !== "system",
+          (m) => m.role !== "system"
         );
         apiMessages = nonSystemMessages.slice(-maxOpenRouterMessagePairs * 2);
         if (systemMessage) {
@@ -431,12 +431,12 @@ export default async function processAiRequest(
         console.log(
           `Trimming context from ${apiMessages.length} to ${
             maxContextPairs * 2
-          } messages (standard)`,
+          } messages (standard)`
         );
         // Similar trimming logic but with the standard limit
         const systemMessage = apiMessages.find((m) => m.role === "system");
         const nonSystemMessages = apiMessages.filter(
-          (m) => m.role !== "system",
+          (m) => m.role !== "system"
         );
         apiMessages = nonSystemMessages.slice(-maxContextPairs * 2);
         if (systemMessage) {
@@ -482,8 +482,8 @@ export default async function processAiRequest(
         currentChannelInfo.isThread
           ? "Thread"
           : currentChannelInfo.isDM
-            ? "Direct Message"
-            : "Text Channel"
+          ? "Direct Message"
+          : "Text Channel"
       }
 - Topic: ${currentChannelInfo.topic || "No topic set"}
 ${
@@ -514,8 +514,8 @@ ${
     channel.isThread
       ? "Thread"
       : channel.isDM
-        ? "Direct Message"
-        : "Text Channel"
+      ? "Direct Message"
+      : "Text Channel"
   }
   - Topic: ${channel.topic || "No topic set"}
   ${channel.parentName ? `- Parent: ${channel.parentName}` : ""}`;
@@ -537,14 +537,14 @@ ${
         content: enhancedSystemPrompt,
       });
       console.log(
-        `Prepending enhanced system prompt with user info for model: ${prefs.selectedModel}`,
+        `Prepending enhanced system prompt with user info for model: ${prefs.selectedModel}`
       );
     } else {
       // Remove any existing system message if disabled by pref, config, or missing context
       apiMessages = apiMessages.filter((m) => m.role !== "system");
       if (shouldDisableSysPromptForModel) {
         console.log(
-          `System prompt disabled for model ${prefs.selectedModel} via config.`,
+          `System prompt disabled for model ${prefs.selectedModel} via config.`
         );
       }
     }
@@ -568,23 +568,25 @@ ${
     // Generate command reference for AI awareness
     console.log(
       `Tools enabled in preferences for user ${userId}:`,
-      prefs.toolsEnabled,
+      prefs.toolsEnabled
     );
     let shouldUseTools = false; // Always set to false to disable tools
     const modelToolSupportKey = `${apiClientInfo.provider}/${apiClientInfo.modelId}`;
 
-    // Get command definitions for AI awareness, but don't send them to the model
-    const commandDefinitions = generateToolsFromCommands(client);
-    console.log(
-      `Generated ${commandDefinitions.length} command definitions for AI reference`,
-    );
+    // Skip generating tool definitions when tools are disabled or unsupported
+    if (capabilities.tools && prefs.toolsEnabled) {
+      const commandDefinitions = generateToolsFromCommands(client);
+      console.log(
+        `Generated ${commandDefinitions.length} command definitions for AI reference`
+      );
+    }
 
     // Always use an empty array for baseTools when sending to AI
     const baseTools = [];
 
     if (capabilities.tools) {
       console.warn(
-        `Tools are supported by the model but disabled by configuration. Commands are scanned for reference only.`,
+        `Tools are supported by the model but disabled by configuration. Commands are scanned for reference only.`
       );
     }
 
@@ -595,7 +597,7 @@ ${
       !state.modelStatus.toolSupport.get(modelToolSupportKey)
     ) {
       console.log(
-        `Model ${prefs.selectedModel} is known to not support tools, disabling tools for this request`,
+        `Model ${prefs.selectedModel} is known to not support tools, disabling tools for this request`
       );
       shouldUseTools = false;
     }
@@ -613,11 +615,11 @@ ${
       let internalToolFollowUpDone = false; // Initialize flag
 
       console.log(
-        `[DEBUG] makeApiRequest called with withTools=${withTools}, effectiveShouldUseTools=${effectiveShouldUseTools}`,
+        `[DEBUG] makeApiRequest called with withTools=${withTools}, effectiveShouldUseTools=${effectiveShouldUseTools}`
       );
       console.log(`[DEBUG] Capabilities: ${JSON.stringify(capabilities)}`);
       console.log(
-        `[DEBUG] prefs.toolsEnabled: ${prefs.toolsEnabled}, baseTools.length: ${baseTools.length}`,
+        `[DEBUG] prefs.toolsEnabled: ${prefs.toolsEnabled}, baseTools.length: ${baseTools.length}`
       );
 
       // Set up common parameters (provider-agnostic)
@@ -641,7 +643,7 @@ ${
         prefs.reasoningLevel !== "off"
       ) {
         console.log(
-          `[DEBUG] Adding reasoning configuration for ${modelId} with level ${prefs.reasoningLevel}`,
+          `[DEBUG] Adding reasoning configuration for ${modelId} with level ${prefs.reasoningLevel}`
         );
 
         // Add reasoning configuration to the payload
@@ -651,18 +653,18 @@ ${
         };
 
         console.log(
-          `[DEBUG] Reasoning config: ${JSON.stringify(payload.reasoning)}`,
+          `[DEBUG] Reasoning config: ${JSON.stringify(payload.reasoning)}`
         );
       } else if (supportsReasoning(modelId)) {
         // Explicitly set reasoning to be disabled with max_tokens: 0 instead of exclude: true
         if (prefs.reasoningLevel === "off") {
           console.log(
-            `[DEBUG] Explicitly disabling reasoning for ${modelId} by setting max_tokens: 0`,
+            `[DEBUG] Explicitly disabling reasoning for ${modelId} by setting max_tokens: 0`
           );
           payload.reasoning = { max_tokens: 0 };
         } else {
           console.log(
-            `[DEBUG] Model supports reasoning, but reasoning is disabled in user preferences`,
+            `[DEBUG] Model supports reasoning, but reasoning is disabled in user preferences`
           );
         }
       }
@@ -729,12 +731,12 @@ ${
       }
 
       console.log(
-        `Final tools decision: Using tools? ${effectiveShouldUseTools}`,
+        `Final tools decision: Using tools? ${effectiveShouldUseTools}`
       );
       console.log(
         `Making ${provider} API request ${
           effectiveShouldUseTools ? "with" : "without"
-        } tools and custom parameters:`,
+        } tools and custom parameters:`
       );
       console.log(
         `Parameters: temperature=${payload.temperature}, top_p=${
@@ -743,7 +745,7 @@ ${
           payload.repetition_penalty
             ? `, repetition_penalty=${payload.repetition_penalty}`
             : ""
-        }`,
+        }`
       );
 
       try {
@@ -752,7 +754,7 @@ ${
           .setCustomId(`ai_stop_stream_${userId}`)
           .setLabel(
             (await i18n.__("events.ai.buttons.stream.stop", effectiveLocale)) ||
-              "Stop",
+              "Stop"
           )
           .setStyle(4) // Red button (DANGER)
           .setEmoji("⏹️");
@@ -764,9 +766,10 @@ ${
           content:
             (await i18n.__(
               "events.ai.messages.streamStart",
-              effectiveLocale,
+              effectiveLocale
             )) || "Thinking...",
           components: [stopRow],
+          allowedMentions: { parse: [] },
         });
         console.log(`[DEBUG] Stream message updated with stop button`);
 
@@ -781,8 +784,10 @@ ${
         let lastUpdateLength = 0; // Track content length at last update
         let lastReasoningUpdateTime = Date.now(); // Track reasoning update time
         let lastReasoningLength = 0; // Track reasoning length at last update (now uses same logic as content)
-        const UPDATE_INTERVAL = 1000; // Update message every 1 second
-        const MIN_CONTENT_CHANGE = 20; // Minimum characters added before allowing update
+        const DEBUG_STREAM = process.env.DEBUG_AI_STREAM === "1";
+        let editCooldownMs = 0; // Backoff on rate-limit errors
+        const UPDATE_INTERVAL = 1500; // Throttle edits to ~1.5s
+        const MIN_CONTENT_CHANGE = 60; // Minimum characters added before allowing update
         let finalFinishReason = null; // Store the final finish reason
         let needsImmediateExecution = false; // Flag for immediate execution after stream completion
 
@@ -807,7 +812,7 @@ ${
             content:
               (await i18n.__(
                 "events.ai.messages.streamStopped",
-                effectiveLocale,
+                effectiveLocale
               )) || "Generation stopped.",
             components: [],
           });
@@ -818,7 +823,7 @@ ${
         console.log(
           `[DEBUG] Payload: model=${payload.model}, stream=${
             payload.stream
-          }, has_tools=${!!payload.tools}`,
+          }, has_tools=${!!payload.tools}`
         );
 
         // Start streaming with timeout handling
@@ -831,10 +836,10 @@ ${
               () =>
                 reject(
                   new Error(
-                    `API request timed out after ${timeoutMs / 1000} seconds`,
-                  ),
+                    `API request timed out after ${timeoutMs / 1000} seconds`
+                  )
                 ),
-              timeoutMs,
+              timeoutMs
             );
           });
 
@@ -853,13 +858,13 @@ ${
             streamError.message.includes("timed out")
           ) {
             throw new Error(
-              `API request timed out. Provider: ${provider}, Model: ${modelId}`,
+              `API request timed out. Provider: ${provider}, Model: ${modelId}`
             );
           } else if (streamError.status) {
             throw new Error(
               `API returned status ${streamError.status}: ${
                 streamError.message || "Unknown error"
-              }`,
+              }`
             );
           } else {
             throw streamError; // Rethrow original error
@@ -892,7 +897,7 @@ ${
 
           if (finishReason) {
             console.log(
-              `[DEBUG] Stream chunk has finish_reason: ${finishReason}`,
+              `[DEBUG] Stream chunk has finish_reason: ${finishReason}`
             );
             finalFinishReason = finishReason; // Store the final finish reason
             if (finishReason === "tool_calls") {
@@ -907,7 +912,7 @@ ${
           if (reasoning) {
             reasoningAccumulator += reasoning;
             console.log(
-              `[DEBUG] Received reasoning chunk: ${reasoning.length} chars`,
+              `[DEBUG] Received reasoning chunk: ${reasoning.length} chars`
             );
 
             // Use same update logic as nanogpt thinking - every 1 second if at least 20 characters changed
@@ -922,50 +927,40 @@ ${
               lastReasoningUpdateTime = now;
               lastReasoningLength = reasoningAccumulator.length;
 
-              // Format reasoning for display with -# at the beginning of each line
-              // Only add -# to lines that actually contain text
-              const sanitizedReasoning = reasoningAccumulator
-                .replace(
-                  /<@[!&]?\d+>/g,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.mention",
-                    effectiveLocale,
-                  ),
-                )
-                .replace(
-                  /@everyone/gi,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.everyone",
-                    effectiveLocale,
-                  ),
-                )
-                .replace(
-                  /@here/gi,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.here",
-                    effectiveLocale,
-                  ),
-                );
-              let formattedReasoning = sanitizedReasoning
+              // Simplified reasoning display; avoid per-chunk i18n sanitization
+              const formattedReasoning = reasoningAccumulator
                 .split("\n")
                 .map((line) => (line.trim() ? `-# ${line}` : ""))
                 .join("\n");
 
               // Limit reasoning display to 500 characters
-              if (formattedReasoning.length > 500) {
-                formattedReasoning =
-                  "-# . . . " + formattedReasoning.slice(-497);
-              }
+              const limitedReasoning =
+                formattedReasoning.length > 500
+                  ? "-# . . . " + formattedReasoning.slice(-497)
+                  : formattedReasoning;
 
+              if (editCooldownMs > 0) {
+                await new Promise((res) => setTimeout(res, editCooldownMs));
+              }
               await procMsg
                 .edit({
-                  content: formattedReasoning || "Thinking...",
+                  content: limitedReasoning || "Thinking...",
                   components: [stopRow],
+                  allowedMentions: { parse: [] },
                 })
                 .catch((error) => {
-                  console.log(
-                    `[DEBUG] Rate limit hit on reasoning edit: ${error.message}`,
-                  );
+                  // Back off when rate limited
+                  if (/rate limit/i.test(error?.message || "")) {
+                    editCooldownMs = Math.min(
+                      Math.max(editCooldownMs || UPDATE_INTERVAL, UPDATE_INTERVAL) * 2,
+                      5000
+                    );
+                  }
+                  if (DEBUG_STREAM) {
+                    console.log(
+                      `[DEBUG] Rate limit (reasoning edit): ${error?.message || "unknown"}`
+                    );
+                  }
                 });
             }
           }
@@ -976,7 +971,7 @@ ${
 
             // Check for thinking tags in the accumulated content
             const thinkingMatch = responseAccumulator.match(
-              /<think>([\s\S]*?)<\/think>/i,
+              /<think>([\s\S]*?)<\/think>/i
             );
 
             if (thinkingMatch && !thinkingEnded) {
@@ -993,10 +988,10 @@ ${
               console.log(
                 `[DEBUG] Extracted thinking content: "${thinkingContent.substring(
                   0,
-                  50,
+                  50
                 )}${thinkingContent.length > 50 ? "..." : ""}" (${
                   thinkingContent.length
-                } chars)`,
+                } chars)`
               );
 
               // Check if this thinking block has ended (we have the complete closing tag)
@@ -1005,12 +1000,12 @@ ${
                 isInThinkingMode = false;
                 finalResponseStarted = true;
                 console.log(
-                  `[DEBUG] Thinking block ended, final response started`,
+                  `[DEBUG] Thinking block ended, final response started`
                 );
 
                 // Extract final response content (everything after the complete thinking block)
                 const finalResponseMatch = responseAccumulator.split(
-                  thinkingMatch[0],
+                  thinkingMatch[0]
                 );
                 if (finalResponseMatch.length > 1) {
                   finalResponseContent = finalResponseMatch[1] || "";
@@ -1029,7 +1024,7 @@ ${
                 // Force immediate update to show the end of thinking
                 lastUpdateTime = 0; // Reset update time to force immediate update
                 console.log(
-                  `[DEBUG] Forced immediate update to show end of thinking`,
+                  `[DEBUG] Forced immediate update to show end of thinking`
                 );
               }
             } else if (!thinkingMatch && thinkingStarted && !thinkingEnded) {
@@ -1042,10 +1037,10 @@ ${
                 console.log(
                   `[DEBUG] Partial thinking content: "${thinkingContent.substring(
                     0,
-                    50,
+                    50
                   )}${thinkingContent.length > 50 ? "..." : ""}" (${
                     thinkingContent.length
-                  } chars)`,
+                  } chars)`
                 );
               }
             } else if (thinkingEnded && finalResponseStarted) {
@@ -1054,10 +1049,10 @@ ${
               console.log(
                 `[DEBUG] Final response content updated: "${finalResponseContent.substring(
                   0,
-                  50,
+                  50
                 )}${finalResponseContent.length > 50 ? "..." : ""}" (${
                   finalResponseContent.length
-                } chars)`,
+                } chars)`
               );
             }
 
@@ -1096,7 +1091,7 @@ ${
               thinkingStarted = true;
               isInThinkingMode = true;
               const newThinkingMatch = responseAccumulator.match(
-                /<think>([\s\S]*?)<\/think>/i,
+                /<think>([\s\S]*?)<\/think>/i
               );
               if (newThinkingMatch) {
                 thinkingContent = newThinkingMatch[1] || "";
@@ -1108,7 +1103,7 @@ ${
                   isInThinkingMode = false;
                   finalResponseStarted = true;
                   const finalMatch = responseAccumulator.split(
-                    newThinkingMatch[0],
+                    newThinkingMatch[0]
                   );
                   finalResponseContent =
                     finalMatch.length > 1 ? finalMatch[1] : "";
@@ -1150,26 +1145,26 @@ ${
                   /<@[!&]?\d+>/g,
                   await i18n.__(
                     "events.ai.buttons.sanitization.mention",
-                    effectiveLocale,
-                  ),
+                    effectiveLocale
+                  )
                 )
                 .replace(
                   /@everyone/gi,
                   await i18n.__(
                     "events.ai.buttons.sanitization.everyone",
-                    effectiveLocale,
-                  ),
+                    effectiveLocale
+                  )
                 )
                 .replace(
                   /@here/gi,
                   await i18n.__(
                     "events.ai.buttons.sanitization.here",
-                    effectiveLocale,
-                  ),
+                    effectiveLocale
+                  )
                 );
 
               console.log(
-                `[DEBUG] Updating message with content (${contentToShow.length} chars), thinkingStarted: ${thinkingStarted}, thinkingEnded: ${thinkingEnded}, shouldShowReasoning: ${shouldShowReasoning}`,
+                `[DEBUG] Updating message with content (${contentToShow.length} chars), thinkingStarted: ${thinkingStarted}, thinkingEnded: ${thinkingEnded}, shouldShowReasoning: ${shouldShowReasoning}`
               );
 
               // Format content for display
@@ -1192,22 +1187,34 @@ ${
               }
 
               // Show periodic updates
+              if (editCooldownMs > 0) {
+                await new Promise((res) => setTimeout(res, editCooldownMs));
+              }
               await procMsg
                 .edit({
                   content:
                     formattedContent ||
                     (await i18n.__(
                       "events.ai.messages.streamProcessing",
-                      effectiveLocale,
+                      effectiveLocale
                     )) ||
                     "Processing...",
                   components: [stopRow],
+                  allowedMentions: { parse: [] },
                 })
                 .catch((error) => {
                   // Handle potential edit errors due to rate limits
-                  console.log(
-                    `[DEBUG] Rate limit hit on message edit: ${error.message}`,
-                  );
+                  if (/rate limit/i.test(error?.message || "")) {
+                    editCooldownMs = Math.min(
+                      Math.max(editCooldownMs || UPDATE_INTERVAL, UPDATE_INTERVAL) * 2,
+                      5000
+                    );
+                  }
+                  if (DEBUG_STREAM) {
+                    console.log(
+                      `[DEBUG] Rate limit (nanogpt content edit): ${error?.message || "unknown"}`
+                    );
+                  }
                 });
             }
           }
@@ -1217,7 +1224,7 @@ ${
             responseAccumulator += content;
             if (content.length > 50) {
               console.log(
-                `[DEBUG] Received large content chunk: ${content.length} chars`,
+                `[DEBUG] Received large content chunk: ${content.length} chars`
               );
             }
 
@@ -1234,62 +1241,56 @@ ${
               lastUpdateLength = responseAccumulator.length;
               isFirstChunk = false;
 
-              // Sanitize and remove thinking tags
-              let sanitizedText = removeThinkTags(responseAccumulator);
-              sanitizedText = sanitizedText
-                .replace(
-                  /<@[!&]?\d+>/g,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.mention",
-                    effectiveLocale,
-                  ),
-                )
-                .replace(
-                  /@everyone/gi,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.everyone",
-                    effectiveLocale,
-                  ),
-                )
-                .replace(
-                  /@here/gi,
-                  await i18n.__(
-                    "events.ai.buttons.sanitization.here",
-                    effectiveLocale,
-                  ),
+              // Remove thinking tags only; avoid per-chunk i18n mention sanitization
+              const sanitizedText = removeThinkTags(responseAccumulator);
+              if (DEBUG_STREAM && sanitizedText.length > 50) {
+                console.log(
+                  `[DEBUG] Updating message with accumulated content (${sanitizedText.length} chars)`
                 );
-              console.log(
-                `[DEBUG] Updating message with accumulated content (${responseAccumulator.length} chars)`,
-              );
+              }
 
               // Show periodic updates (only show content if we're not showing reasoning)
+              if (editCooldownMs > 0) {
+                await new Promise((res) => setTimeout(res, editCooldownMs));
+              }
               await procMsg
                 .edit({
                   content:
                     sanitizedText ||
                     (await i18n.__(
                       "events.ai.messages.streamProcessing",
-                      effectiveLocale,
+                      effectiveLocale
                     )) ||
                     "Processing...",
                   components: [stopRow],
+                  allowedMentions: { parse: [] },
                 })
                 .catch((error) => {
-                  // Handle potential edit errors due to rate limits
-                  console.log(
-                    `[DEBUG] Rate limit hit on message edit: ${error.message}`,
-                  );
+                  // Back off when rate limited
+                  if (/rate limit/i.test(error?.message || "")) {
+                    editCooldownMs = Math.min(
+                      Math.max(editCooldownMs || UPDATE_INTERVAL, UPDATE_INTERVAL) * 2,
+                      5000
+                    );
+                  }
+                  if (DEBUG_STREAM) {
+                    console.log(
+                      `[DEBUG] Rate limit (content edit): ${error?.message || "unknown"}`
+                    );
+                  }
                 });
             }
           }
 
           // Handle function/tool calls in stream
           if (functionDelta) {
-            console.log(
-              `[DEBUG] Received functionDelta in chunk: ${JSON.stringify(
-                functionDelta,
-              )}`,
-            );
+            if (DEBUG_STREAM) {
+              console.log(
+                `[DEBUG] Received functionDelta in chunk: ${JSON.stringify(
+                  functionDelta
+                )}`
+              );
+            }
             if (functionDelta.index === 0 && !functionCall) {
               functionCall = {
                 id: functionDelta.id,
@@ -1299,9 +1300,11 @@ ${
                   arguments: functionDelta.function?.arguments || "",
                 },
               };
-              console.log(
-                `[DEBUG] Started new functionCall: ${functionCall.function.name}, type: ${functionCall.type}`,
-              );
+              if (DEBUG_STREAM) {
+                console.log(
+                  `[DEBUG] Started functionCall: ${functionCall.function.name}, type: ${functionCall.type}`
+                );
+              }
             } else if (functionCall && functionDelta.function) {
               // Append more data to function call
               if (functionDelta.function.name) {
@@ -1311,23 +1314,25 @@ ${
                 functionCall.function.arguments +=
                   functionDelta.function.arguments;
               }
-              console.log(
-                `[DEBUG] Appended to functionCall: name=${functionCall.function.name}, args length=${functionCall.function.arguments.length}`,
-              );
+              if (DEBUG_STREAM && functionCall.function.arguments.length > 32) {
+                console.log(
+                  `[DEBUG] Appended functionCall args length=${functionCall.function.arguments.length}`
+                );
+              }
             }
           }
 
           // Handle end of function call
           if (chunk.choices[0]?.delta?.tool_calls === null && functionCall) {
             console.log(
-              `[DEBUG] Completed tool call in stream: ${functionCall.function.name} with args: ${functionCall.function.arguments}`,
+              `[DEBUG] Completed tool call in stream: ${functionCall.function.name} with args: ${functionCall.function.arguments}`
             );
             completedToolCalls.push(functionCall);
 
             // Execute tool call as soon as it's complete
             if (functionCall.function && functionCall.function.name) {
               console.log(
-                `[DEBUG] Executing streaming tool call: ${functionCall.function.name}`,
+                `[DEBUG] Executing streaming tool call: ${functionCall.function.name}`
               );
               isWaitingForToolResults = true;
 
@@ -1339,7 +1344,7 @@ ${
                 ) {
                   functionCall.function.arguments = "{}";
                   console.log(
-                    `[DEBUG] Empty arguments detected, defaulting to {}`,
+                    `[DEBUG] Empty arguments detected, defaulting to {}`
                   );
                 } else {
                   // Validate JSON format
@@ -1347,24 +1352,24 @@ ${
                     JSON.parse(functionCall.function.arguments);
                   } catch (jsonError) {
                     console.log(
-                      `[DEBUG] Invalid JSON in arguments, attempting to fix: ${jsonError.message}`,
+                      `[DEBUG] Invalid JSON in arguments, attempting to fix: ${jsonError.message}`
                     );
                     // Try to fix common JSON issues (missing quotes around keys, etc)
                     const fixedJson = functionCall.function.arguments.replace(
                       /([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g,
-                      '$1"$2"$3',
+                      '$1"$2"$3'
                     ); // Add quotes to keys
 
                     try {
                       JSON.parse(fixedJson);
                       functionCall.function.arguments = fixedJson;
                       console.log(
-                        `[DEBUG] Successfully fixed JSON arguments: ${fixedJson}`,
+                        `[DEBUG] Successfully fixed JSON arguments: ${fixedJson}`
                       );
                     } catch (fixError) {
                       // If we still can't parse it, just use an empty object
                       console.log(
-                        `[DEBUG] Could not fix JSON arguments, defaulting to {}`,
+                        `[DEBUG] Could not fix JSON arguments, defaulting to {}`
                       );
                       functionCall.function.arguments = "{}";
                     }
@@ -1372,15 +1377,19 @@ ${
                 }
 
                 // Update message to show tool execution
+                if (editCooldownMs > 0) {
+                  await new Promise((res) => setTimeout(res, editCooldownMs));
+                }
                 await procMsg.edit({
                   content: `${removeThinkTags(responseAccumulator)}\n\n${
                     (await i18n.__(
                       "events.ai.messages.streamToolExecution",
                       { tool: functionCall.function.name },
-                      effectiveLocale,
+                      effectiveLocale
                     )) || `Executing ${functionCall.function.name}...`
                   }`,
                   components: [stopRow],
+                  allowedMentions: { parse: [] },
                 });
 
                 // --- Direct command execution for all tools ---
@@ -1388,7 +1397,7 @@ ${
                 let result;
 
                 console.log(
-                  `[DEBUG] Attempting direct execution for ${functionCall.function.name}`,
+                  `[DEBUG] Attempting direct execution for ${functionCall.function.name}`
                 );
 
                 // Parse the command parts
@@ -1402,7 +1411,7 @@ ${
                 // Get the command directly
                 const command = message.client.commands.get(commandName);
                 console.log(
-                  `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`,
+                  `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`
                 );
                 if (command) {
                   console.log(`[DEBUG] Found base command: ${commandName}`);
@@ -1430,7 +1439,7 @@ ${
                     command[`execute_${subCommandName}`]
                   ) {
                     console.log(
-                      `[DEBUG] Found alternate execution method: execute_${subCommandName}`,
+                      `[DEBUG] Found alternate execution method: execute_${subCommandName}`
                     );
                     targetCommand = {
                       execute:
@@ -1442,11 +1451,11 @@ ${
                     console.log(
                       `[DEBUG] Target command found, has execute: ${
                         typeof targetCommand.execute === "function"
-                      }`,
+                      }`
                     );
                   } else {
                     console.log(
-                      `[DEBUG] No target command found for ${functionCall.function.name}`,
+                      `[DEBUG] No target command found for ${functionCall.function.name}`
                     );
                   }
 
@@ -1463,22 +1472,22 @@ ${
                     });
 
                     // Create a proxy for the command
+                    const parsedArgs = (() => { try { return JSON.parse(functionCall.function.arguments || '{}'); } catch { return {}; } })();
                     const proxy = {
                       _isAiProxy: true,
                       options: {
                         getMember: (name) => {
                           if (
                             name === "user" &&
-                            (!functionCall.function.arguments.user ||
-                              functionCall.function.arguments.user === "")
+                            (!parsedArgs.user || parsedArgs.user === "")
                           ) {
                             console.log(
-                              `[DEBUG] Returning message.member for empty user param`,
+                              `[DEBUG] Returning message.member for empty user param`
                             );
                             return message.member;
                           }
                           // Handle user parameter
-                          const value = functionCall.function.arguments[name];
+                          const value = parsedArgs[name];
                           if (!value) return null;
                           // Rest of getMember logic
                           if (/^\d{17,19}$/.test(value)) {
@@ -1496,22 +1505,21 @@ ${
                             message.guild?.members.cache.find(
                               (member) =>
                                 member.user.username.toLowerCase() ===
-                                value.toLowerCase().replace("@", ""),
+                                value.toLowerCase().replace("@", "")
                             );
                           return memberByName || null;
                         },
-                        getString: (name) =>
-                          functionCall.function.arguments[name] || null,
+                        getString: (name) => parsedArgs[name] || null,
                         getInteger: (name) => {
-                          const val = functionCall.function.arguments[name];
+                          const val = parsedArgs[name];
                           return val !== undefined ? parseInt(val, 10) : null;
                         },
                         getNumber: (name) => {
-                          const val = functionCall.function.arguments[name];
+                          const val = parsedArgs[name];
                           return val !== undefined ? parseFloat(val) : null;
                         },
                         getBoolean: (name) => {
-                          const val = functionCall.function.arguments[name];
+                          const val = parsedArgs[name];
                           if (val === undefined) return null;
                           if (typeof val === "boolean") return val;
                           if (val === "true" || val === "1") return true;
@@ -1519,7 +1527,7 @@ ${
                           return null;
                         },
                         getChannel: (name) => {
-                          const val = functionCall.function.arguments[name];
+                          const val = parsedArgs[name];
                           if (!val) return null;
                           if (/^\d{17,19}$/.test(val)) {
                             return (
@@ -1536,8 +1544,7 @@ ${
                           return (
                             message.guild?.channels.cache.find(
                               (channel) =>
-                                channel.name.toLowerCase() ===
-                                val.toLowerCase(),
+                                channel.name.toLowerCase() === val.toLowerCase()
                             ) || null
                           );
                         },
@@ -1556,7 +1563,7 @@ ${
                           return (
                             message.guild?.roles.cache.find(
                               (role) =>
-                                role.name.toLowerCase() === val.toLowerCase(),
+                                role.name.toLowerCase() === val.toLowerCase()
                             ) || null
                           );
                         },
@@ -1589,15 +1596,15 @@ ${
                     try {
                       // Execute command directly
                       console.log(
-                        `[DEBUG] Executing ${functionCall.function.name} command with proxy`,
+                        `[DEBUG] Executing ${functionCall.function.name} command with proxy`
                       );
                       const cmdResult = await targetCommand.execute(
                         proxy,
-                        i18n,
+                        i18n
                       );
                       console.log(
                         `[DEBUG] Command execution result:`,
-                        cmdResult,
+                        cmdResult
                       );
                       console.log(`[DEBUG] Command replied:`, proxy.replied);
 
@@ -1610,12 +1617,12 @@ ${
                       });
 
                       console.log(
-                        `[DEBUG] Successfully executed ${functionCall.function.name} command directly`,
+                        `[DEBUG] Successfully executed ${functionCall.function.name} command directly`
                       );
                     } catch (cmdError) {
                       console.error(
                         `[DEBUG] Error in direct command execution: ${cmdError.message}`,
-                        cmdError.stack,
+                        cmdError.stack
                       );
                       pendingToolResults.push({
                         tool_call_id: functionCall.id,
@@ -1626,13 +1633,13 @@ ${
                     }
                   } else {
                     console.log(
-                      `[DEBUG] Target command not found or not executable, falling back to normal execution`,
+                      `[DEBUG] Target command not found or not executable, falling back to normal execution`
                     );
                     try {
                       const result = await executeToolCall(
                         functionCall,
                         message,
-                        effectiveLocale,
+                        effectiveLocale
                       );
                       pendingToolResults.push({
                         tool_call_id: functionCall.id,
@@ -1645,7 +1652,7 @@ ${
                     } catch (error) {
                       console.error(
                         `[DEBUG] Error in immediate execution:`,
-                        error,
+                        error
                       );
                       pendingToolResults.push({
                         tool_call_id: functionCall.id,
@@ -1657,13 +1664,13 @@ ${
                   }
                 } else {
                   console.log(
-                    `[DEBUG] Base command not found, falling back to normal execution`,
+                    `[DEBUG] Base command not found, falling back to normal execution`
                   );
                   try {
                     const result = await executeToolCall(
                       functionCall,
                       message,
-                      effectiveLocale,
+                      effectiveLocale
                     );
                     pendingToolResults.push({
                       tool_call_id: functionCall.id,
@@ -1676,7 +1683,7 @@ ${
                   } catch (error) {
                     console.error(
                       `[DEBUG] Error in immediate execution:`,
-                      error,
+                      error
                     );
                     pendingToolResults.push({
                       tool_call_id: functionCall.id,
@@ -1712,14 +1719,14 @@ ${
         // Ensure any in-progress functionCall is added if the stream ended with tool_calls
         if (finalFinishReason === "tool_calls" && functionCall) {
           console.log(
-            `[DEBUG] Stream ended with tool_calls and an active functionCall: ${functionCall.function.name}. Adding to completedToolCalls.`,
+            `[DEBUG] Stream ended with tool_calls and an active functionCall: ${functionCall.function.name}. Adding to completedToolCalls.`
           );
           completedToolCalls.push(functionCall);
           functionCall = null; // Clear it as it's now processed
         }
 
         console.log(
-          `[DEBUG] Stream processing complete after ${chunkCount} chunks. Stopping collector. Final reason: ${finalFinishReason}, needsImmediateExecution: ${needsImmediateExecution}`,
+          `[DEBUG] Stream processing complete after ${chunkCount} chunks. Stopping collector. Final reason: ${finalFinishReason}, needsImmediateExecution: ${needsImmediateExecution}`
         );
         // Stop the collector when stream ends
         collector.stop("stream_complete");
@@ -1728,24 +1735,24 @@ ${
         // This is necessary because the streaming code might end before our tool calls are fully processed
         if (needsImmediateExecution && completedToolCalls.length > 0) {
           console.log(
-            `[DEBUG] Processing ${completedToolCalls.length} completed tool calls after stream`,
+            `[DEBUG] Processing ${completedToolCalls.length} completed tool calls after stream`
           );
 
           // Debug the available commands
           console.log(
             `[DEBUG] Available commands for lookup:`,
-            Array.from(message.client.commands.keys()).join(", "),
+            Array.from(message.client.commands.keys()).join(", ")
           );
 
           for (const toolCall of completedToolCalls) {
             console.log(
-              `[DEBUG] Processing post-stream tool call: ${toolCall.function.name}`,
+              `[DEBUG] Processing post-stream tool call: ${toolCall.function.name}`
             );
 
             // Special handling for economy_balance command
             if (toolCall.function.name === "economy_balance") {
               console.log(
-                `[DEBUG] Special handling for economy_balance command`,
+                `[DEBUG] Special handling for economy_balance command`
               );
 
               try {
@@ -1760,7 +1767,7 @@ ${
                   }
                 } catch (e) {
                   console.error(
-                    `[DEBUG] Error parsing arguments: ${e.message}`,
+                    `[DEBUG] Error parsing arguments: ${e.message}`
                   );
                   args = {};
                 }
@@ -1780,7 +1787,7 @@ ${
                 // Find the balance subcommand in the economy folder directly
                 const balancePath = `../cmds/economy/balance.js`;
                 console.log(
-                  `[DEBUG] Attempting to import balance command directly`,
+                  `[DEBUG] Attempting to import balance command directly`
                 );
 
                 await import(balancePath) // Added await here
@@ -1793,7 +1800,7 @@ ${
                       typeof balanceCommand.execute !== "function"
                     ) {
                       console.error(
-                        `[DEBUG] Balance command import failed or has no execute method`,
+                        `[DEBUG] Balance command import failed or has no execute method`
                       );
                       throw new Error("Balance command has no execute method");
                     }
@@ -1815,7 +1822,7 @@ ${
                             (!args.user || args.user === "")
                           ) {
                             console.log(
-                              `[DEBUG] Returning message.member for empty user param`,
+                              `[DEBUG] Returning message.member for empty user param`
                             );
                             return message.member;
                           }
@@ -1846,7 +1853,7 @@ ${
                             message.guild?.members.cache.find(
                               (member) =>
                                 member.user.username.toLowerCase() ===
-                                value.toLowerCase().replace("@", ""),
+                                value.toLowerCase().replace("@", "")
                             );
 
                           return memberByName || message.member;
@@ -1886,8 +1893,7 @@ ${
                           return (
                             message.guild?.channels.cache.find(
                               (channel) =>
-                                channel.name.toLowerCase() ===
-                                val.toLowerCase(),
+                                channel.name.toLowerCase() === val.toLowerCase()
                             ) || null
                           );
                         },
@@ -1906,7 +1912,7 @@ ${
                           return (
                             message.guild?.roles.cache.find(
                               (role) =>
-                                role.name.toLowerCase() === val.toLowerCase(),
+                                role.name.toLowerCase() === val.toLowerCase()
                             ) || null
                           );
                         },
@@ -1939,13 +1945,13 @@ ${
                     try {
                       // Execute command directly
                       console.log(
-                        `[DEBUG] Executing balance command with proxy`,
+                        `[DEBUG] Executing balance command with proxy`
                       );
                       // MODIFICATION: Assume balanceCommand.execute now returns the balance string
                       // e.g., "Your current balance is 1000 credits."
                       const executionOutcome = await balanceCommand.execute(
                         proxy,
-                        i18n,
+                        i18n
                       );
                       let toolResultContent;
 
@@ -1955,7 +1961,7 @@ ${
                       ) {
                         toolResultContent = executionOutcome;
                         console.log(
-                          `[DEBUG economy_balance_handler] Received string outcome: "${executionOutcome}"`,
+                          `[DEBUG economy_balance_handler] Received string outcome: "${executionOutcome}"`
                         );
                       } else if (
                         typeof executionOutcome === "object" &&
@@ -1965,7 +1971,7 @@ ${
                       ) {
                         toolResultContent = executionOutcome.textForAI;
                         console.log(
-                          `[DEBUG economy_balance_handler] Received object outcome with textForAI: "${executionOutcome.textForAI}"`,
+                          `[DEBUG economy_balance_handler] Received object outcome with textForAI: "${executionOutcome.textForAI}"`
                         );
                         // If executionOutcome.replyText exists, balanceCommand.execute should have used it with proxy.reply/editReply
                       } else {
@@ -1973,17 +1979,17 @@ ${
                         toolResultContent = `Successfully executed economy_balance command.`;
                         console.log(
                           `[DEBUG economy_balance_handler] executionOutcome was not a string or expected object, using default success message. Outcome:`,
-                          executionOutcome,
+                          executionOutcome
                         );
                       }
 
                       console.log(
                         `[DEBUG] Balance command execution outcome raw:`,
-                        executionOutcome,
+                        executionOutcome
                       );
                       console.log(
                         `[DEBUG] Balance command proxy replied state after execution:`,
-                        proxy.replied,
+                        proxy.replied
                       );
 
                       // Add result to pendingToolResults
@@ -1996,12 +2002,12 @@ ${
                       });
 
                       console.log(
-                        `[DEBUG] Successfully executed economy_balance command directly. Content for AI: "${toolResultContent}"`,
+                        `[DEBUG] Successfully executed economy_balance command directly. Content for AI: "${toolResultContent}"`
                       );
                     } catch (cmdError) {
                       console.error(
                         `[DEBUG] Error in balance command execution:`,
-                        cmdError,
+                        cmdError
                       );
                       pendingToolResults.push({
                         tool_call_id: toolCall.id,
@@ -2014,7 +2020,7 @@ ${
                   .catch((importError) => {
                     console.error(
                       `[DEBUG] Failed to import balance module:`,
-                      importError,
+                      importError
                     );
                     pendingToolResults.push({
                       tool_call_id: toolCall.id,
@@ -2029,7 +2035,7 @@ ${
               } catch (error) {
                 console.error(
                   `[DEBUG] Error in special economy_balance handling:`,
-                  error,
+                  error
                 );
                 pendingToolResults.push({
                   tool_call_id: toolCall.id,
@@ -2057,20 +2063,24 @@ ${
 
               console.log(
                 `[DEBUG] Executing ${toolCall.function.name} with args:`,
-                args,
+                args
               );
 
               // Update message to show tool execution
-              await procMsg.edit({
-                content: `${removeThinkTags(responseAccumulator)}\n\n${
-                  (await i18n.__(
-                    "events.ai.messages.streamToolExecution",
-                    { tool: toolCall.function.name },
-                    effectiveLocale,
-                  )) || `Executing ${toolCall.function.name}...`
-                }`,
-                components: [stopRow],
-              });
+              if (editCooldownMs > 0) {
+                  await new Promise((res) => setTimeout(res, editCooldownMs));
+                }
+                await procMsg.edit({
+                  content: `${removeThinkTags(responseAccumulator)}\n\n${
+                    (await i18n.__(
+                      "events.ai.messages.streamToolExecution",
+                      { tool: toolCall.function.name },
+                      effectiveLocale
+                    )) || `Executing ${toolCall.function.name}...`
+                  }`,
+                  components: [stopRow],
+                  allowedMentions: { parse: [] },
+                });
 
               // Parse the command parts
               const commandParts = toolCall.function.name.split("_");
@@ -2083,7 +2093,7 @@ ${
               // Get the command directly
               const command = message.client.commands.get(commandName);
               console.log(
-                `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`,
+                `[DEBUG] Immediate execution - Command lookup for '${commandName}': ${!!command}`
               );
               if (command) {
                 console.log(`[DEBUG] Found base command: ${commandName}`);
@@ -2111,7 +2121,7 @@ ${
                   command[`execute_${subCommandName}`]
                 ) {
                   console.log(
-                    `[DEBUG] Found alternate execution method: execute_${subCommandName}`,
+                    `[DEBUG] Found alternate execution method: execute_${subCommandName}`
                   );
                   targetCommand = {
                     execute: command[`execute_${subCommandName}`].bind(command),
@@ -2122,11 +2132,11 @@ ${
                   console.log(
                     `[DEBUG] Target command found, has execute: ${
                       typeof targetCommand.execute === "function"
-                    }`,
+                    }`
                   );
                 } else {
                   console.log(
-                    `[DEBUG] No target command found for ${toolCall.function.name}`,
+                    `[DEBUG] No target command found for ${toolCall.function.name}`
                   );
                 }
 
@@ -2152,7 +2162,7 @@ ${
                           (!args.user || args.user === "")
                         ) {
                           console.log(
-                            `[DEBUG] Returning message.member for empty user param`,
+                            `[DEBUG] Returning message.member for empty user param`
                           );
                           return message.member;
                         }
@@ -2174,7 +2184,7 @@ ${
                         const memberByName = message.guild?.members.cache.find(
                           (member) =>
                             member.user.username.toLowerCase() ===
-                            value.toLowerCase().replace("@", ""),
+                            value.toLowerCase().replace("@", "")
                         );
                         return memberByName || null;
                       },
@@ -2210,7 +2220,7 @@ ${
                         return (
                           message.guild?.channels.cache.find(
                             (channel) =>
-                              channel.name.toLowerCase() === val.toLowerCase(),
+                              channel.name.toLowerCase() === val.toLowerCase()
                           ) || null
                         );
                       },
@@ -2227,7 +2237,7 @@ ${
                         return (
                           message.guild?.roles.cache.find(
                             (role) =>
-                              role.name.toLowerCase() === val.toLowerCase(),
+                              role.name.toLowerCase() === val.toLowerCase()
                           ) || null
                         );
                       },
@@ -2259,7 +2269,7 @@ ${
                   try {
                     // Execute command directly
                     console.log(
-                      `[DEBUG] Executing ${toolCall.function.name} command with proxy`,
+                      `[DEBUG] Executing ${toolCall.function.name} command with proxy`
                     );
                     const cmdResult = await targetCommand.execute(proxy, i18n);
                     console.log(`[DEBUG] Command execution result:`, cmdResult);
@@ -2274,12 +2284,12 @@ ${
                     });
 
                     console.log(
-                      `[DEBUG] Successfully executed ${toolCall.function.name} command directly`,
+                      `[DEBUG] Successfully executed ${toolCall.function.name} command directly`
                     );
                   } catch (cmdError) {
                     console.error(
                       `[DEBUG] Error in direct command execution:`,
-                      cmdError,
+                      cmdError
                     );
                     pendingToolResults.push({
                       tool_call_id: toolCall.id,
@@ -2290,13 +2300,13 @@ ${
                   }
                 } else {
                   console.log(
-                    `[DEBUG] Target command not found or not executable, falling back to normal execution`,
+                    `[DEBUG] Target command not found or not executable, falling back to normal execution`
                   );
                   try {
                     const result = await executeToolCall(
                       toolCall,
                       message,
-                      effectiveLocale,
+                      effectiveLocale
                     );
                     pendingToolResults.push({
                       tool_call_id: toolCall.id,
@@ -2309,7 +2319,7 @@ ${
                   } catch (error) {
                     console.error(
                       `[DEBUG] Error in immediate execution:`,
-                      error,
+                      error
                     );
                     pendingToolResults.push({
                       tool_call_id: toolCall.id,
@@ -2335,7 +2345,7 @@ ${
         // If we have tool results, we need to make another API call to continue the conversation
         if (pendingToolResults.length > 0) {
           console.log(
-            `[DEBUG] Making a follow-up API call with ${pendingToolResults.length} tool results`,
+            `[DEBUG] Making a follow-up API call with ${pendingToolResults.length} tool results`
           );
 
           // Add the assistant message with tool calls
@@ -2354,26 +2364,27 @@ ${
               content: `${removeThinkTags(responseAccumulator)}\n\n${
                 (await i18n.__(
                   "events.ai.messages.streamContinuation",
-                  effectiveLocale,
+                  effectiveLocale
                 )) || "Continuing with tool results..."
               }`,
               components: [stopRow],
+              allowedMentions: { parse: [] },
             });
 
             // Log the messages we're about to send to verify they're correct
             console.log(
-              `[DEBUG] Preparing to send ${apiMessages.length} messages to follow-up API call`,
+              `[DEBUG] Preparing to send ${apiMessages.length} messages to follow-up API call`
             );
             apiMessages.forEach((msg, index) => {
               if (msg.role === "tool") {
                 console.log(
                   `[DEBUG] API message ${index} (tool): ${msg.name} - ${
                     msg.content ? msg.content.substring(0, 50) : "null"
-                  }`,
+                  }`
                 );
               } else if (msg.tool_calls) {
                 console.log(
-                  `[DEBUG] API message ${index} (${msg.role} with tool_calls): ${msg.tool_calls.length} tool calls`,
+                  `[DEBUG] API message ${index} (${msg.role} with tool_calls): ${msg.tool_calls.length} tool calls`
                 );
               } else {
                 console.log(
@@ -2381,14 +2392,14 @@ ${
                     typeof msg.content === "string"
                       ? msg.content.substring(0, 50)
                       : "complex content"
-                  }`,
+                  }`
                 );
               }
             });
 
             // Make non-streaming follow-up call to finish the conversation
             console.log(
-              `[DEBUG] Starting non-streaming follow-up API call with tool results`,
+              `[DEBUG] Starting non-streaming follow-up API call with tool results`
             );
             const followUpPayload = {
               model: modelId,
@@ -2405,11 +2416,12 @@ ${
               JSON.stringify({
                 ...followUpPayload,
                 messages: `[${apiMessages.length} messages]`, // Don't log full messages
-              }),
+              })
             );
 
-            const secondResponseData =
-              await apiClient.chat.completions.create(followUpPayload);
+            const secondResponseData = await apiClient.chat.completions.create(
+              followUpPayload
+            );
 
             console.log(`[DEBUG] Follow-up API call succeeded`);
             const finalAiMsg = secondResponseData.choices[0].message;
@@ -2417,8 +2429,8 @@ ${
             console.log(
               `[DEBUG] Follow-up response content: ${finalAiMsg.content?.substring(
                 0,
-                100,
-              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`,
+                100
+              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`
             );
             responseAccumulator =
               (responseAccumulator ? responseAccumulator + "\n\n" : "") +
@@ -2426,12 +2438,12 @@ ${
           } catch (followUpError) {
             console.error(
               `[DEBUG] Error in tool results follow-up:`,
-              followUpError,
+              followUpError
             );
             responseAccumulator += `\n\n${
               (await i18n.__(
                 "events.ai.messages.streamToolError",
-                effectiveLocale,
+                effectiveLocale
               )) || "Error processing tool results."
             }`;
           }
@@ -2443,7 +2455,7 @@ ${
         ) {
           // This case handles when we have tool calls but no results were added
           console.log(
-            `[DEBUG] Stream ended with tool_calls but no pendingToolResults were added. Making follow-up API call anyway.`,
+            `[DEBUG] Stream ended with tool_calls but no pendingToolResults were added. Making follow-up API call anyway.`
           );
 
           // Add the assistant message with tool calls
@@ -2456,7 +2468,7 @@ ${
           // Add empty results for any tool calls that didn't get results
           const emptyResults = completedToolCalls.map((tool) => {
             console.log(
-              `[DEBUG] Adding empty result for tool: ${tool.function.name}`,
+              `[DEBUG] Adding empty result for tool: ${tool.function.name}`
             );
             return {
               tool_call_id: tool.id,
@@ -2474,7 +2486,7 @@ ${
               console.log(
                 `[DEBUG] API message ${index} (tool): ${
                   msg.name
-                } - ${msg.content.substring(0, 50)}`,
+                } - ${msg.content.substring(0, 50)}`
               );
             } else {
               console.log(
@@ -2482,7 +2494,7 @@ ${
                   typeof msg.content === "string"
                     ? msg.content.substring(0, 50)
                     : "complex content"
-                }`,
+                }`
               );
             }
           });
@@ -2492,15 +2504,16 @@ ${
               content: `${removeThinkTags(responseAccumulator)}\n\n${
                 (await i18n.__(
                   "events.ai.messages.streamContinuation",
-                  effectiveLocale,
+                  effectiveLocale
                 )) || "Continuing after tool calls..."
               }`,
               components: [stopRow],
+              allowedMentions: { parse: [] },
             });
 
             // Make a second API call with the tool results
             console.log(
-              `[DEBUG] Starting non-streaming follow-up API call with tool results`,
+              `[DEBUG] Starting non-streaming follow-up API call with tool results`
             );
             const followUpPayload = {
               model: modelId,
@@ -2517,11 +2530,12 @@ ${
               JSON.stringify({
                 ...followUpPayload,
                 messages: `[${apiMessages.length} messages]`, // Don't log full messages
-              }),
+              })
             );
 
-            const secondResponseData =
-              await apiClient.chat.completions.create(followUpPayload);
+            const secondResponseData = await apiClient.chat.completions.create(
+              followUpPayload
+            );
 
             console.log(`[DEBUG] Follow-up API call succeeded`);
             const finalAiMsg = secondResponseData.choices[0].message;
@@ -2529,8 +2543,8 @@ ${
             console.log(
               `[DEBUG] Follow-up response content: ${finalAiMsg.content?.substring(
                 0,
-                100,
-              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`,
+                100
+              )}${finalAiMsg.content?.length > 100 ? "..." : ""}`
             );
             responseAccumulator =
               (responseAccumulator ? responseAccumulator + "\n\n" : "") +
@@ -2538,12 +2552,12 @@ ${
           } catch (followUpError) {
             console.error(
               `[DEBUG] Error in empty tool results follow-up:`,
-              followUpError,
+              followUpError
             );
             responseAccumulator += `\n\n${
               (await i18n.__(
                 "events.ai.messages.streamToolError",
-                effectiveLocale,
+                effectiveLocale
               )) || "Error processing tool results."
             }`;
           }
@@ -2577,7 +2591,7 @@ ${
               (await i18n.__(
                 "events.ai.messages.streamError",
                 { error: error.message },
-                effectiveLocale,
+                effectiveLocale
               )) || `Error: ${error.message}`,
             components: [],
           })
@@ -2603,25 +2617,25 @@ ${
             provider === "openrouter" &&
             ((toolError.status === 404 &&
               toolError.error?.message?.includes(
-                "No endpoints found that support tool use",
+                "No endpoints found that support tool use"
               )) ||
               (toolError.error?.message?.includes("tool") &&
                 toolError.error?.message?.includes("support")))
           ) {
             console.log(
-              `[DEBUG] Model ${prefs.selectedModel} doesn't support tools, retrying without tools`,
+              `[DEBUG] Model ${prefs.selectedModel} doesn't support tools, retrying without tools`
             );
             // Use the helper function instead of directly setting cache
             markModelAsNotSupportingTools(modelToolSupportKey);
             // Retry without tools
             responseData = await makeApiRequest(false);
             console.log(
-              `[DEBUG] API request without tools after tool-support error succeeded`,
+              `[DEBUG] API request without tools after tool-support error succeeded`
             );
           } else {
             // Not a tool support error, rethrow
             console.error(
-              `[DEBUG] API request error is not related to tool support, rethrowing`,
+              `[DEBUG] API request error is not related to tool support, rethrowing`
             );
             throw toolError;
           }
@@ -2641,7 +2655,7 @@ ${
     if (shouldUseTools && baseTools.length && responseData._toolsDisabled) {
       // If we initially tried with tools but ended up using a request without tools
       console.warn(
-        `Model ${prefs.selectedModel} failed with tools but succeeded without. Marking as not supporting tools.`,
+        `Model ${prefs.selectedModel} failed with tools but succeeded without. Marking as not supporting tools.`
       );
       // Use the helper function instead of directly setting cache
       markModelAsNotSupportingTools(modelToolSupportKey);
@@ -2655,7 +2669,7 @@ ${
     ) {
       console.error("Invalid API response format:", responseData);
       throw new Error(
-        "Invalid response from AI provider. The model may be experiencing issues.",
+        "Invalid response from AI provider. The model may be experiencing issues."
       );
     }
 
@@ -2666,16 +2680,16 @@ ${
 
     // Debug the AI message structure
     console.log(
-      `[DEBUG] AI Message structure keys: ${Object.keys(aiMsg).join(", ")}`,
+      `[DEBUG] AI Message structure keys: ${Object.keys(aiMsg).join(", ")}`
     );
     // Special handling for the response object to check for reasoning or thinking fields
     if (aiMsg.reasoning) {
       console.log(
-        `[DEBUG] Found reasoning field in response with length: ${aiMsg.reasoning.length}`,
+        `[DEBUG] Found reasoning field in response with length: ${aiMsg.reasoning.length}`
       );
     } else if (aiMsg.thinking) {
       console.log(
-        `[DEBUG] Found thinking field in response with length: ${aiMsg.thinking.length}`,
+        `[DEBUG] Found thinking field in response with length: ${aiMsg.thinking.length}`
       );
     } else {
       console.log(`[DEBUG] No reasoning or thinking field found in response`);
@@ -2686,8 +2700,8 @@ ${
         console.log(
           `[DEBUG] Full aiMsg (length ${aiMsgStr.length}): ${aiMsgStr.substring(
             0,
-            500,
-          )}${aiMsgStr.length > 500 ? "..." : ""}`,
+            500
+          )}${aiMsgStr.length > 500 ? "..." : ""}`
         );
       } catch (e) {
         console.log(`[DEBUG] Could not stringify aiMsg: ${e.message}`);
@@ -2700,7 +2714,7 @@ ${
     if (!finalText && !toolCalls.length)
       finalText = await i18n.__(
         "events.ai.messages.noTextResponse",
-        effectiveLocale,
+        effectiveLocale
       );
 
     // Process tool calls if there are any and tools are enabled
@@ -2719,7 +2733,7 @@ ${
         const result = await executeToolCall(
           toolCall,
           message,
-          effectiveLocale,
+          effectiveLocale
         );
 
         console.log(
@@ -2728,7 +2742,7 @@ ${
           }. ` +
             `Replied: ${result.commandReplied}, Visual: ${
               result.visualResponse
-            }, V2Edit: ${result.wasV2Edit}, Withheld: ${!!result.withheldData}`,
+            }, V2Edit: ${result.wasV2Edit}, Withheld: ${!!result.withheldData}`
         );
 
         // Track if any tool performed a V2 edit (important for final component handling)
@@ -2740,7 +2754,7 @@ ${
         if (result.wasV2Edit && result.withheldData) {
           console.log(
             `Sending withheld data from ${toolCall.function.name} via channel.send:`,
-            result.withheldData,
+            result.withheldData
           );
           try {
             const followUpOptions = {
@@ -2756,7 +2770,7 @@ ${
           } catch (followUpError) {
             console.error(
               `Error sending withheld data followUp:`,
-              followUpError,
+              followUpError
             );
             // If sending the withheld data fails, append an error message for the AI
             toolResponsesForApi.push({
@@ -2793,7 +2807,7 @@ ${
         ) {
           if (finalText) {
             console.log(
-              "Sending pending AI text before next tool call or final response due to visual/V2 tool action.",
+              "Sending pending AI text before next tool call or final response due to visual/V2 tool action."
             );
             await message.channel.send(finalText).catch(console.error);
             finalText = ""; // Clear text, it has been sent
@@ -2818,10 +2832,10 @@ ${
         ) {
           console.error(
             "Invalid API response format after tool results:",
-            secondResponseData,
+            secondResponseData
           );
           throw new Error(
-            "Invalid response from AI provider after processing tools.",
+            "Invalid response from AI provider after processing tools."
           );
         }
 
@@ -2837,14 +2851,14 @@ ${
     } else if (toolCalls.length && !prefs.toolsEnabled) {
       finalText += `\n\n${await i18n.__(
         "events.ai.messages.toolsDisabledNote",
-        effectiveLocale,
+        effectiveLocale
       )}`;
     } else if (!toolCalls.length) {
       // Check if the AI tried to use a "fake" tool in text format
       const fakeToolCall = detectFakeToolCalls(finalText);
       if (fakeToolCall && prefs.toolsEnabled) {
         console.log(
-          `Detected fake tool call in AI response: ${fakeToolCall.name}`,
+          `Detected fake tool call in AI response: ${fakeToolCall.name}`
         );
 
         // Create a proper tool call from the fake one
@@ -2862,7 +2876,7 @@ ${
         const response = `Tools have been disabled. Please use the /${fakeToolCall.name} command manually.`;
 
         console.log(
-          `Detected fake tool call ${fakeToolCall.name}, instructing user to use commands manually`,
+          `Detected fake tool call ${fakeToolCall.name}, instructing user to use commands manually`
         );
 
         // Replace the fake tool text with the real response
@@ -2879,12 +2893,12 @@ ${
             ? await i18n.__(
                 "events.ai.buttons.toolResult.successPrefix",
                 { command: toolName },
-                effectiveLocale,
+                effectiveLocale
               )
             : await i18n.__(
                 "events.ai.buttons.toolResult.errorPrefix",
                 { command: toolName },
-                effectiveLocale,
+                effectiveLocale
               );
 
           // Add the real tool response
@@ -2904,7 +2918,7 @@ ${
     // Apply settings menu after streaming is complete
     const models = await getAvailableModels(
       client,
-      isVisionRequest ? "vision" : null,
+      isVisionRequest ? "vision" : null
     );
     const comps = await buildInteractionComponents(
       userId,
@@ -2912,19 +2926,19 @@ ${
       isVisionRequest,
       false,
       effectiveLocale,
-      client,
+      client
     );
 
     // If any tool used V2, we should not send the V1 components.
     // The message state might already be V2 from the tool.
     if (anyToolUsedV2) {
       console.log(
-        "Skipping final sendResponse with V1 components because a tool performed a V2 edit.",
+        "Skipping final sendResponse with V1 components because a tool performed a V2 edit."
       );
       // If there's remaining AI text after tool calls, send it as a plain message.
       if (finalText) {
         console.log(
-          "Sending final AI text as plain message after V2 tool use.",
+          "Sending final AI text as plain message after V2 tool use."
         );
         await message.channel.send(finalText).catch(console.error);
       }
@@ -2949,17 +2963,17 @@ ${
         // so the user can see all reasoning provided by the model
         if (aiMsg.reasoning) {
           console.log(
-            `[DEBUG] Response includes reasoning of length ${aiMsg.reasoning.length}`,
+            `[DEBUG] Response includes reasoning of length ${aiMsg.reasoning.length}`
           );
           console.log(
-            `[DEBUG] Sample reasoning: ${aiMsg.reasoning.substring(0, 100)}...`,
+            `[DEBUG] Sample reasoning: ${aiMsg.reasoning.substring(0, 100)}...`
           );
           formattedText = processResponseWithReasoning(
             finalText,
-            aiMsg.reasoning,
+            aiMsg.reasoning
           );
           console.log(
-            `[DEBUG] Final formatted text length: ${formattedText.length}`,
+            `[DEBUG] Final formatted text length: ${formattedText.length}`
           );
         } else {
           console.log(`[DEBUG] No reasoning found in AI response`);
@@ -2967,17 +2981,17 @@ ${
           // Check if there's any other field that might contain reasoning
           if (aiMsg.thinking) {
             console.log(
-              `[DEBUG] Found 'thinking' field instead of 'reasoning'`,
+              `[DEBUG] Found 'thinking' field instead of 'reasoning'`
             );
             formattedText = processResponseWithReasoning(
               finalText,
-              aiMsg.thinking,
+              aiMsg.thinking
             );
           } else if (typeof aiMsg === "object") {
             console.log(
               `[DEBUG] Available fields in aiMsg: ${Object.keys(aiMsg).join(
-                ", ",
-              )}`,
+                ", "
+              )}`
             );
           }
         }
@@ -2989,7 +3003,7 @@ ${
           formattedText,
           comps,
           effectiveLocale,
-          false,
+          false
         );
       } else if (procMsg) {
         // If only tools ran (no V2) and AI had no final text, delete processing message
@@ -3001,7 +3015,7 @@ ${
     const errMsg = await i18n.__(
       "events.ai.messages.errorOccurred",
       { error: error.message },
-      effectiveLocale,
+      effectiveLocale
     );
 
     // Get available models for error components
@@ -3009,12 +3023,12 @@ ${
     try {
       availableModels = await getAvailableModels(
         client,
-        isVisionRequest ? "vision" : null,
+        isVisionRequest ? "vision" : null
       );
     } catch (modelsError) {
       console.error(
         "Error getting available models for error components:",
-        modelsError,
+        modelsError
       );
     }
 
@@ -3026,7 +3040,7 @@ ${
         availableModels,
         isVisionRequest,
         effectiveLocale,
-        client,
+        client
       );
     } catch (componentsError) {
       console.error("Error building error components:", componentsError);
@@ -3038,7 +3052,7 @@ ${
       errMsg,
       errorComponents,
       effectiveLocale,
-      false,
+      false
     );
   }
 }
