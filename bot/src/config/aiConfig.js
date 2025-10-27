@@ -58,7 +58,6 @@ const CONFIG = {
         "z-ai/glm-4.6:thinking",
         "zai-org/GLM-4.5-FP8:thinking",
         "inclusionai/ling-1t",
-        "inclusionai/ring-1t",
         "deepseek-ai/deepseek-v3.2-exp-thinking",
         "deepseek-ai/DeepSeek-V3.1-Terminus:thinking",
         "deepseek-ai/DeepSeek-V3.1:thinking",
@@ -66,6 +65,7 @@ const CONFIG = {
         "qwen3-vl-235b-a22b-thinking",
         "qvq-max",
         "nousresearch/hermes-4-405b:thinking",
+        "MiniMax-M2",
         "nvidia/Llama-3.1-Nemotron-Ultra-253B-v1",
         "openai/gpt-oss-120b",
         "minimax/minimax-01",
@@ -131,6 +131,7 @@ const CONFIG = {
     "nanogpt/Gemma-3-27B-it-Abliterated": 32000,
     "nanogpt/meta-llama/llama-4-maverick": 128000,
     "nanogpt/meta-llama/llama-4-scout": 16000,
+    "nanogpt/MiniMax-M2": 200000,
   },
 
   // Context and system configuration
