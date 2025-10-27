@@ -526,7 +526,9 @@
         "skippingSongError": "Failed to skip the current song",
         "noMusicPlaying": "No music is currently playing",
         "notInVoiceChannel": "You are not in a voice channel (or the player is not in the same voice channel)"
-      }
+      },
+      "noPreviousSongs": "There are no previous songs in the queue",
+      "addedPreviousToQueue": "Added previous song to queue: {{title}}"
     },
     "counting": {
       "no_perms": "You don't have permissions to manage channels",
@@ -759,6 +761,88 @@
         "errors": {
           "nothing_to_reset": "Nothing to reset - your profile is already empty."
         }
+      }
+    },
+    "crypto": {
+      "notImplemented": "This crypto feature is not yet implemented",
+      "errorOccurred": "An error occurred: {{error}}",
+      "withdraw": {
+        "command": {
+          "name": "withdraw",
+          "description": "Withdraw cryptocurrency to an external wallet"
+        },
+        "processingWithdrawal": "Processing withdrawal request...",
+        "withdrawalRequested": "✅ Withdrawal Requested",
+        "withdrawalDetails": "Your withdrawal request has been submitted and is being processed.",
+        "amount": "💰 Amount",
+        "fee": "💸 Network Fee",
+        "netAmount": "📤 Net Amount",
+        "toAddress": "📍 To Address",
+        "transactionId": "🆔 Transaction ID",
+        "status": "📊 Status",
+        "processing": "Processing",
+        "estimatedTime": "⏱️ Estimated Time",
+        "withdrawalWarning": "⚠️ Please double-check the withdrawal address. Transactions cannot be reversed!",
+        "insufficientBalance": "❌ Insufficient balance. You need at least {{required}} {{currency}} (including fees).",
+        "invalidAddress": "❌ Invalid {{currency}} address format. Please check and try again.",
+        "minimumAmount": "❌ Minimum withdrawal amount is 0.0001 {{currency}}.",
+        "errorOccurred": "❌ An error occurred: {{error}}"
+      },
+      "history": {
+        "command": {
+          "name": "history",
+          "description": "View your crypto transaction history"
+        },
+        "loadingHistory": "Loading transaction history...",
+        "transactionHistory": "📊 Crypto Transaction History",
+        "noTransactions": "No transactions found for the specified criteria.",
+        "deposits": "💰 Deposits",
+        "withdrawals": "📤 Withdrawals",
+        "date": "Date",
+        "amount": "Amount",
+        "status": "Status",
+        "txHash": "Transaction Hash",
+        "confirmations": "Confirmations",
+        "pending": "⏳ Pending",
+        "confirmed": "✅ Confirmed",
+        "failed": "❌ Failed",
+        "processing": "🔄 Processing",
+        "errorOccurred": "❌ An error occurred: {{error}}"
+      },
+      "deposit": {
+        "command": {
+          "name": "deposit",
+          "description": "Get a deposit address for cryptocurrency"
+        },
+        "generatingAddress": "Generating deposit address...",
+        "depositAddress": "💰 Deposit Address for {{currency}}",
+        "address": "📍 Address",
+        "currency": "💎 Currency",
+        "network": "🌐 Network",
+        "important": "⚠️ Important Instructions",
+        "depositWarning": "1. **Copy the deposit address exactly**\n2. **Include the verification memo** in your transaction\n3. **Only send the specified cryptocurrency** to this address\n4. **Wait for network confirmations** (usually 6+)\n\n⚠️ **Without the memo, your deposit may not be credited!**",
+        "qrCode": "📱 QR Code",
+        "scanToDeposit": "Scan to deposit {{currency}}",
+        "errorOccurred": "❌ An error occurred: {{error}}",
+        "walletCreated": "✅ Crypto wallet created successfully!",
+        "verificationMemo": "🔑 Verification Memo (REQUIRED)",
+        "verificationInstructions": "**IMPORTANT: Include this memo in your transaction to verify the deposit!**"
+      },
+      "balance": {
+        "command": {
+          "name": "balance",
+          "description": "View your cryptocurrency wallet balances"
+        },
+        "loadingBalances": "Loading crypto wallet balances...",
+        "noWallets": "You don't have any crypto wallets yet. Use `/crypto deposit` to create one!",
+        "yourBalances": "💰 Your Crypto Wallet Balances",
+        "totalPortfolio": "📊 Total Portfolio Value",
+        "available": "Available",
+        "locked": "Locked",
+        "address": "Address",
+        "noDeposits": "No recent deposits",
+        "recentDeposits": "Recent Deposits",
+        "errorOccurred": "❌ An error occurred: {{error}}"
       }
     }
   },
@@ -1010,6 +1094,16 @@
     },
     "autoplay": {
       "autoplayApplied": "Autoplay is now {{state}}"
+    },
+    "update": {
+      "noMessage": "No now playing message found",
+      "trackInfoMissing": "Missing track info, cannot update player message",
+      "channelNotFound": "Channel not found, cannot update now playing message",
+      "messageNotFound": "Message not found, cannot update",
+      "messageDeleted": "Error fetching message, may be deleted",
+      "updateError": "Error updating now playing message",
+      "errorInHandler": "Error in playerUpdate handler",
+      "errorInEvent": "Error in playerUpdate event"
     }
   },
   "games": {
