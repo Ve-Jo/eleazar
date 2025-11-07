@@ -1284,26 +1284,30 @@
             "off": "Рассуждение: ВЫКЛ",
             "offModel": "Рассуждение: ВЫКЛ (Модель)"
           },
-          "clearContext": "Контекст ({current}/{max})",
+          "clearContext": "Очистить контекст ({current}/{max})",
           "contextCleared": "Память контекста была очищена."
         },
         "menus": {
           "modelSelect": {
-            "placeholder": "Выберите модель AI",
+            "placeholder": "Выберите модель ИИ",
             "visionSupport": "Изображения",
-            "reasoningSupport": "Рассуждение"
+            "reasoningSupport": "Рассуждение",
+            "providerPlaceholder": "Выберите провайдера",
+            "pageNext": "Следующая страница",
+            "pagePrev": "Предыдущая страница",
+            "backProviders": "Назад к провайдерам"
           },
           "settingsSelect": {
             "placeholder": "Настройки",
-            "systemPrompt": "Системный промт",
+            "systemPrompt": "Системные инструкции",
             "systemPromptEnabled": "Системные инструкции включены",
             "systemPromptDisabled": "Системные инструкции отключены",
-            "tools": "Инструменты ИИ",
+            "tools": "Инструменты",
             "toolsEnabled": "Инструменты включены",
             "toolsDisabled": "Инструменты отключены",
-            "webSearch": "Поиск в интернете",
-            "webSearchEnabled": "Поиск в интернете включен",
-            "webSearchDisabled": "Поиск в интернете отключен",
+            "webSearch": "Веб-поиск",
+            "webSearchEnabled": "Поиск включен",
+            "webSearchDisabled": "Поиск отключен",
             "reasoning": "Рассуждение ИИ",
             "reasoningOff": "Рассуждение отключено"
           },
@@ -1441,6 +1445,12 @@
         "settingsDescription": "Настроить параметры ИИ",
         "clearContext": "Очистить контекст",
         "clearContextDescription": "Сбросить память разговора"
+      }
+    },
+    "messageCreate": {
+      "transcription": {
+        "success": "Расшифровка голосового сообщения:\n\n{text}",
+        "failed": "К сожалению, я не смог расшифровать это голосовое сообщение."
       }
     }
   },

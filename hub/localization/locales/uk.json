@@ -1284,26 +1284,30 @@
             "off": "Міркування: ВИМК",
             "offModel": "Міркування: ВИМК (Модель)"
           },
-          "clearContext": "Контекст ({current}/{max})",
+          "clearContext": "Очистити контекст ({current}/{max})",
           "contextCleared": "Пам'ять контексту була очищена."
         },
         "menus": {
           "modelSelect": {
-            "placeholder": "Виберіть модель AI",
+            "placeholder": "Виберіть модель ШІ",
             "visionSupport": "Зображення",
-            "reasoningSupport": "Міркування"
+            "reasoningSupport": "Міркування",
+            "providerPlaceholder": "Виберіть провайдера",
+            "pageNext": "Наступна сторінка",
+            "pagePrev": "Попередня сторінка",
+            "backProviders": "Назад до провайдерів"
           },
           "settingsSelect": {
             "placeholder": "Налаштування",
-            "systemPrompt": "Системне повідомлення",
+            "systemPrompt": "Системні інструкції",
             "systemPromptEnabled": "Системні інструкції увімкнено",
             "systemPromptDisabled": "Системні інструкції вимкнено",
-            "tools": "Інструменти ШІ",
+            "tools": "Інструменти",
             "toolsEnabled": "Інструменти увімкнено",
             "toolsDisabled": "Інструменти вимкнено",
-            "webSearch": "Пошук в інтернеті",
-            "webSearchEnabled": "Пошук в інтернеті увімкнено",
-            "webSearchDisabled": "Пошук в інтернеті вимкнено",
+            "webSearch": "Веб-пошук",
+            "webSearchEnabled": "Пошук увімкнено",
+            "webSearchDisabled": "Пошук вимкнено",
             "reasoning": "Міркування ШІ",
             "reasoningOff": "Міркування вимкнено"
           },
@@ -1441,6 +1445,12 @@
         "settingsDescription": "Налаштувати параметри ШІ",
         "clearContext": "Очистити контекст",
         "clearContextDescription": "Скинути пам'ять розмови"
+      }
+    },
+    "messageCreate": {
+      "transcription": {
+        "success": "Розшифровка голосового повідомлення:\n\n{text}",
+        "failed": "На жаль, я не зміг розшифрувати це голосове повідомлення."
       }
     }
   },

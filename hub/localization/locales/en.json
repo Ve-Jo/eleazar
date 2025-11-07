@@ -904,26 +904,30 @@
             "off": "Reasoning: OFF",
             "offModel": "Reasoning: OFF (Model)"
           },
-          "clearContext": "Context ({current}/{max})",
+          "clearContext": "Clear Context ({current}/{max})",
           "contextCleared": "Context memory has been cleared."
         },
         "menus": {
           "modelSelect": {
             "placeholder": "Select an AI model",
             "visionSupport": "Images",
-            "reasoningSupport": "Reasoning"
+            "reasoningSupport": "Reasoning",
+            "providerPlaceholder": "Select a provider",
+            "pageNext": "Next Page",
+            "pagePrev": "Previous Page",
+            "backProviders": "Back to Providers"
           },
           "settingsSelect": {
             "placeholder": "Settings",
             "systemPrompt": "System Prompt",
-            "systemPromptEnabled": "System instructions enabled",
-            "systemPromptDisabled": "System instructions disabled",
-            "tools": "AI Tools",
+            "systemPromptEnabled": "System prompt enabled",
+            "systemPromptDisabled": "System prompt disabled",
+            "tools": "Tools",
             "toolsEnabled": "Tools enabled",
             "toolsDisabled": "Tools disabled",
             "webSearch": "Web Search",
-            "webSearchEnabled": "Web search enabled",
-            "webSearchDisabled": "Web search disabled",
+            "webSearchEnabled": "Search enabled",
+            "webSearchDisabled": "Search disabled",
             "reasoning": "AI Reasoning",
             "reasoningOff": "Reasoning disabled"
           },
@@ -1061,6 +1065,12 @@
         "settingsDescription": "Configure AI settings",
         "clearContext": "Clear Context",
         "clearContextDescription": "Reset conversation memory"
+      }
+    },
+    "messageCreate": {
+      "transcription": {
+        "success": "Transcription of voice message:\n\n{text}",
+        "failed": "Sorry, I couldn't transcribe that voice message."
       }
     }
   },
