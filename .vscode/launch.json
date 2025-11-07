@@ -2,15 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Launch Program",
+      "program": "${workspaceFolder}/app.js",
+      "request": "launch",
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
       "type": "bun",
       "request": "launch",
-      "name": "Debug Bun",
+      "name": "Debug Bun - Bot",
 
       // The path to a JavaScript or TypeScript file to run.
-      "program": "${workspaceFolder}/bot.js",
+      "program": "${workspaceFolder}/bot/bot.js",
 
       // The arguments to pass to the program, if any.
-      "args": [],
+      "args": ["c8 --clean --reporter=lcov --reporter=text --reporter=html"],
 
       // The working directory of the program.
       "cwd": "${workspaceFolder}",
@@ -47,6 +54,28 @@
       // The URL of the WebSocket inspector to attach to.
       // This value can be retrieved by using `bun --inspect`.
       "url": "ws://localhost:6499/"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Run Coverage Script",
+      "program": "${workspaceFolder}/bot/node_modules/.bin/c8",
+      "args": [
+        "--clean",
+        "--reporter=lcov",
+        "--reporter=text",
+        "--reporter=html",
+        "node",
+        "--expose-gc",
+        "bot.js"
+      ],
+      "cwd": "${workspaceFolder}/bot",
+      "env": {
+        "NODE_V8_COVERAGE": "./coverage/tmp",
+        "COVERAGE": "true"
+      },
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal"
     }
   ]
 }

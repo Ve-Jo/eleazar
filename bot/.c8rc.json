@@ -1,0 +1,32 @@
+{
+  "include": ["bot.js", "src/**/*.js"],
+  "exclude": [
+    "node_modules/**",
+    "coverage/**",
+    ".git/**",
+    "*.log",
+    "logs/**",
+    "temp/**",
+    "tmp/**",
+    "dist/**",
+    "build/**",
+    ".env*",
+    "*.config.js",
+    "*.test.js",
+    "*.spec.js",
+    "test-coverage.js"
+  ],
+  "reporter": ["text", "lcov", "html"],
+  "all": true,
+  "clean": false,
+  "temp-directory": "./coverage/tmp",
+  "reports-dir": "./coverage",
+  "skip-full": false,
+  "check-coverage": false,
+  "include-node-modules": false,
+  "extension": [".js"],
+  "cache": false,
+  "produce-source-map": true,
+  "source-map": true,
+  "instrument": true
+}

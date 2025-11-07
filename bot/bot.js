@@ -9,6 +9,68 @@ import Replicate from "replicate";
 import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.js";
 
+// Enable coverage collection if running under c8 or babel-plugin-istanbul
+if (
+  process.env.NODE_V8_COVERAGE ||
+  process.env.COVERAGE ||
+  process.env.BABEL_COVERAGE
+) {
+  console.log("🎯 Coverage collection enabled");
+
+  // Ensure global coverage object exists
+  if (typeof globalThis.__coverage__ === "undefined") {
+    globalThis.__coverage__ = {};
+  }
+
+  // Force V8 coverage collection (Node.js only)
+  if (globalThis.v8debug) {
+    globalThis.v8debug.collectCoverage();
+  }
+
+  // Hook into dynamic imports for ES modules
+  const originalImport = globalThis.import;
+  if (originalImport) {
+    globalThis.import = function (specifier) {
+      console.log(`📊 ES Module loading: ${specifier}`);
+      return originalImport.apply(this, arguments).then((module) => {
+        if (globalThis.__coverage__) {
+          console.log(`✅ ES Module loaded: ${specifier}`);
+        }
+        return module;
+      });
+    };
+  }
+
+  // Hook into module loading for CommonJS (if available)
+  const originalRequire = globalThis.require;
+  if (originalRequire) {
+    globalThis.require = function (id) {
+      console.log(`📊 CommonJS Module loading: ${id}`);
+      const result = originalRequire.apply(this, arguments);
+      if (globalThis.__coverage__) {
+        console.log(`✅ CommonJS Module loaded: ${id}`);
+      }
+      return result;
+    };
+  }
+
+  // Add coverage flush on exit
+  process.on("exit", () => {
+    if (globalThis.__coverage__) {
+      console.log(
+        `💾 Coverage data collected: ${
+          Object.keys(globalThis.__coverage__).length
+        } files`
+      );
+    }
+  });
+
+  // Log babel-plugin-istanbul detection
+  if (process.env.BABEL_COVERAGE) {
+    console.log("🔧 Running with babel-plugin-istanbul instrumentation");
+  }
+}
+
 // Load environment variables
 dotenv.config();
 
@@ -91,7 +153,7 @@ setInterval(
     });
     console.log("Manual message sweep completed");
   },
-  process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000,
+  process.env.NODE_ENV === "production" ? 30 * 1000 : 60 * 1000
 );
 
 console.log("Loading commands...");
@@ -124,11 +186,11 @@ client.replicate = new Replicate({
 client.deepinfra = {
   whisper: new AutomaticSpeechRecognition(
     "openai/whisper-large-v3-turbo",
-    process.env.DEEPINFRA_API_KEY,
+    process.env.DEEPINFRA_API_KEY
   ),
   flux_schnell: new TextToImage(
     "black-forest-labs/FLUX-1-schnell",
-    process.env.DEEPINFRA_API_KEY,
+    process.env.DEEPINFRA_API_KEY
   ),
 };
 
@@ -203,6 +265,97 @@ process.on("uncaughtException", (error) => {
 
 process.on("SIGINT", async () => {
   console.log("Shutting down...");
+
+  console.log("🧹 Сохраняю покрытие перед выходом...");
+
+  // Enhanced cumulative coverage collection
+  if (globalThis.__coverage__) {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+
+      // Ensure coverage directory exists
+      const coverageDir = "./coverage";
+      if (!fs.existsSync(coverageDir)) {
+        fs.mkdirSync(coverageDir, { recursive: true });
+      }
+
+      // Load existing coverage data if it exists
+      const coverageFile = path.join(coverageDir, "coverage-final.json");
+      let existingCoverage = {};
+
+      if (fs.existsSync(coverageFile)) {
+        try {
+          existingCoverage = JSON.parse(fs.readFileSync(coverageFile, "utf8"));
+          console.log(
+            `📊 Found existing coverage data for ${
+              Object.keys(existingCoverage).length
+            } files`
+          );
+        } catch (e) {
+          console.log("⚠️  Could not read existing coverage, starting fresh");
+        }
+      }
+
+      // Merge new coverage with existing coverage
+      const mergedCoverage = { ...existingCoverage };
+
+      Object.entries(globalThis.__coverage__).forEach(
+        ([filePath, coverage]) => {
+          if (mergedCoverage[filePath]) {
+            // Merge coverage data for existing files
+            console.log(`🔄 Merging coverage for: ${filePath}`);
+            // For now, we'll keep the newer coverage data
+            // In a more sophisticated implementation, you could merge the actual coverage counts
+            mergedCoverage[filePath] = coverage;
+          } else {
+            // Add new files
+            console.log(`➕ Adding new coverage for: ${filePath}`);
+            mergedCoverage[filePath] = coverage;
+          }
+        }
+      );
+
+      // Save merged coverage data
+      const coverageData = JSON.stringify(mergedCoverage, null, 2);
+      fs.writeFileSync(coverageFile, coverageData);
+
+      console.log(`✅ Coverage data saved to ${coverageFile}`);
+      console.log(
+        `📊 Total files tracked: ${Object.keys(mergedCoverage).length}`
+      );
+      console.log(
+        `🔄 New files in this run: ${
+          Object.keys(globalThis.__coverage__).length
+        }`
+      );
+
+      // Also save a timestamped backup for safety
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const backupFile = path.join(coverageDir, `coverage-${timestamp}.json`);
+      fs.writeFileSync(backupFile, coverageData);
+      console.log(`💾 Backup saved to ${backupFile}`);
+
+      // Generate cumulative coverage report
+      try {
+        const { execSync } = await import("child_process");
+        console.log("🔄 Generating cumulative coverage report...");
+        execSync(
+          "npx c8 report --reporter=text --reporter=html --temp-directory=coverage/tmp --reports-dir=coverage",
+          {
+            stdio: "inherit",
+            cwd: process.cwd(),
+          }
+        );
+        console.log("✅ Cumulative coverage report generated");
+      } catch (reportError) {
+        console.log("⚠️  Could not generate c8 report (this is optional)");
+      }
+    } catch (error) {
+      console.error("❌ Error saving coverage data:", error);
+    }
+  }
+
   try {
     console.log("Bot shutdown complete");
     process.exit(0);
