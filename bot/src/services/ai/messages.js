@@ -8,7 +8,6 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import CONFIG from "../../config/aiConfig.js";
 import {
   state,
   getUserPreferences,
@@ -74,17 +73,22 @@ export function splitMessage(message, maxLength = 2000) {
 
 // Helper function to build model options with proper descriptions and features
 async function buildModelOptions(models, selectedModel, locale = "en") {
-  const optionPromises = models.slice(0, 25).map(async (m) => {
+  const optionPromises = models.map(async (m) => {
     // Build descriptive features based on capabilities
     const features = [];
+
+    // Add featured model indicator
+    if (m.isFeatured) {
+      features.push("⭐ Featured");
+    }
 
     // Add vision capability indicator if model supports it
     if (m.capabilities && m.capabilities.vision) {
       features.push(
         `🖼️ ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.visionSupport",
-          locale,
-        )}`,
+          locale
+        )}`
       );
     }
 
@@ -93,8 +97,8 @@ async function buildModelOptions(models, selectedModel, locale = "en") {
       features.push(
         `🧠 ${await i18n.__(
           "events.ai.buttons.menus.modelSelect.reasoningSupport",
-          locale,
-        )}`,
+          locale
+        )}`
       );
     }
 
@@ -111,16 +115,136 @@ async function buildModelOptions(models, selectedModel, locale = "en") {
   return Promise.all(optionPromises);
 }
 
+// Build provider selection options from available models
+export async function buildProviderOptions(availableModels, locale = "en") {
+  const providers = ["nanogpt", "groq", "openrouter"];
+  const counts = { nanogpt: 0, groq: 0, openrouter: 0 };
+
+  for (const m of availableModels) {
+    const key = (m.provider || "").toLowerCase();
+    if (counts[key] !== undefined) counts[key] += 1;
+  }
+
+  const opts = [];
+  for (const p of providers) {
+    if (counts[p] > 0) {
+      const label =
+        p === "nanogpt" ? "NanoGPT" : p === "groq" ? "Groq" : "OpenRouter";
+      opts.push({
+        label,
+        value: `__provider_${p}__`,
+        description: `${counts[p]} models`,
+      });
+    }
+  }
+  return opts.length
+    ? opts
+    : providers.map((p) => ({
+        label:
+          p === "nanogpt" ? "NanoGPT" : p === "groq" ? "Groq" : "OpenRouter",
+        value: `__provider_${p}__`,
+        description: "0 models",
+      }));
+}
+
+// Build a paginated model menu for a specific provider
+export async function buildPaginatedModelMenu(
+  userId,
+  models,
+  provider,
+  page,
+  selectedModel,
+  locale = "en"
+) {
+  const pageSize = 22; // Leave room for controls
+  let providerModels = models.filter(
+    (m) => (m.provider || "").toLowerCase() === provider
+  );
+
+  // Sort models: featured models first, then by name
+  providerModels.sort((a, b) => {
+    // Featured models get priority
+    if (a.isFeatured && !b.isFeatured) return -1;
+    if (!a.isFeatured && b.isFeatured) return 1;
+
+    // Then sort by name alphabetically
+    return (a.name || a.id).localeCompare(b.name || b.id);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(providerModels.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * pageSize;
+  const pageModels = providerModels.slice(start, start + pageSize);
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ai_select_model_${userId}`)
+    .setPlaceholder(
+      (await i18n.__(
+        "events.ai.buttons.menus.modelSelect.placeholder",
+        locale
+      )) || "Select an AI model"
+    );
+
+  const modelOptions = await buildModelOptions(
+    pageModels,
+    selectedModel,
+    locale
+  );
+
+  // Add pagination controls
+  const controls = [];
+  if (currentPage > 1) {
+    controls.push({
+      label:
+        (await i18n.__(
+          "events.ai.buttons.menus.modelSelect.pagePrev",
+          locale
+        )) || "Previous Page",
+      value: `__page_prev__:${provider}:${currentPage}`,
+      emoji: "⬅️",
+    });
+  }
+  if (currentPage < totalPages) {
+    controls.push({
+      label:
+        (await i18n.__(
+          "events.ai.buttons.menus.modelSelect.pageNext",
+          locale
+        )) || "Next Page",
+      value: `__page_next__:${provider}:${currentPage}`,
+      emoji: "➡️",
+    });
+  }
+  controls.push({
+    label:
+      (await i18n.__(
+        "events.ai.buttons.menus.modelSelect.backProviders",
+        locale
+      )) || "Back to Providers",
+    value: `__back_providers__`,
+    emoji: "🔙",
+  });
+
+  // Limit to max 25 options
+  const finalOptions = [...modelOptions, ...controls].slice(0, 25);
+  menu.addOptions(finalOptions);
+  return new ActionRowBuilder().addComponents(menu);
+}
+
 export async function buildInteractionComponents(
   userId,
   availableModels,
   isVision = false,
   noButtons = false,
   locale = "en",
-  client = null,
+  client = null
 ) {
+  // Prewarm translation cache for AI-related keys to avoid bursty per-key requests
+  try {
+    await i18n.getTranslationGroup("events.ai", locale);
+  } catch (_) {}
   const prefs = getUserPreferences(userId);
-  let effectiveMaxContext = (CONFIG.maxContextLength || 4) * 2; // Default
+  let effectiveMaxContext = 8; // Default 8 messages (4 * 2)
   let selectedModelDetails = null;
   let modelContextWindow = 8192; // Default context window
 
@@ -130,38 +254,36 @@ export async function buildInteractionComponents(
       if (selectedModelDetails) {
         console.log(
           `Model details for ${prefs.selectedModel}:`,
-          selectedModelDetails,
+          selectedModelDetails
         );
 
         // Get the actual context window from config
         modelContextWindow =
-          CONFIG.modelContextWindows?.[prefs.selectedModel] ||
-          selectedModelDetails.capabilities?.maxContext ||
-          8192;
+          selectedModelDetails.capabilities?.maxContext || 8192;
 
         // Calculate effective max context based on token limit (rough estimate: 4 chars per token)
         const maxTokens = modelContextWindow * 0.9; // 90% safety margin
         effectiveMaxContext = Math.floor(maxTokens / 4); // Convert to characters
 
         console.log(
-          `[DEBUG] Context window for ${prefs.selectedModel}: ${modelContextWindow} tokens, effective max: ${effectiveMaxContext} chars`,
+          `[DEBUG] Context window for ${prefs.selectedModel}: ${modelContextWindow} tokens, effective max: ${effectiveMaxContext} chars`
         );
       } else {
         console.log(
-          `No selected model details available for ${prefs.selectedModel}, disabling tools button`,
+          `No selected model details available for ${prefs.selectedModel}, disabling tools button`
         );
       }
     } catch (error) {
       console.warn(
         "Error getting model details for context adjustment:",
-        error,
+        error
       );
       selectedModelDetails = null; // Ensure it's null on error to avoid disabling tools incorrectly
     }
   }
   const components = [];
 
-  // For initial model selection only - show model selection menu
+  // For initial selection - show provider selection first
   if (noButtons && availableModels?.length) {
     i18n.setLocale(locale);
 
@@ -171,28 +293,25 @@ export async function buildInteractionComponents(
       console.log(
         `Model ${m.name}: Vision=${
           m.capabilities?.vision
-        }, Reasoning=${supportsReasoning(m.id)}`,
+        }, Reasoning=${supportsReasoning(m.id)}`
       );
     });
     if (availableModels.length > 3) {
       console.log(`... and ${availableModels.length - 3} more models`);
     }
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId(`ai_select_model_${userId}`)
+    const providerMenu = new StringSelectMenuBuilder()
+      .setCustomId(`ai_select_provider_${userId}`)
       .setPlaceholder(
-        await i18n.__("events.ai.buttons.menus.modelSelect.placeholder"),
+        (await i18n.__(
+          "events.ai.buttons.menus.modelSelect.providerPlaceholder",
+          locale
+        )) || "Select a provider"
       );
 
-    // Use the shared function to build options
-    const opts = await buildModelOptions(
-      availableModels,
-      prefs.selectedModel,
-      locale,
-    );
-
-    menu.addOptions(opts);
-    components.push(new ActionRowBuilder().addComponents(menu));
+    const providerOpts = await buildProviderOptions(availableModels, locale);
+    providerMenu.addOptions(providerOpts);
+    components.push(new ActionRowBuilder().addComponents(providerMenu));
     return components;
   }
 
@@ -208,13 +327,13 @@ export async function buildInteractionComponents(
           ? `${prefs.selectedModel} - ${
               (await i18n.__(
                 "events.ai.buttons.menus.settingsSelect.placeholder",
-                locale,
+                locale
               )) || "Settings"
             }`
           : (await i18n.__(
               "events.ai.buttons.menus.settingsSelect.placeholder",
-              locale,
-            )) || "Settings",
+              locale
+            )) || "Settings"
       );
 
     const options = [];
@@ -222,14 +341,14 @@ export async function buildInteractionComponents(
     // System prompt toggle option
     options.push({
       label: await i18n.__(
-        "events.ai.buttons.menus.settingsSelect.systemPrompt",
+        "events.ai.buttons.menus.settingsSelect.systemPrompt"
       ),
       description: prefs.systemPromptEnabled
         ? await i18n.__(
-            "events.ai.buttons.menus.settingsSelect.systemPromptEnabled",
+            "events.ai.buttons.menus.settingsSelect.systemPromptEnabled"
           )
         : await i18n.__(
-            "events.ai.buttons.menus.settingsSelect.systemPromptDisabled",
+            "events.ai.buttons.menus.settingsSelect.systemPromptDisabled"
           ),
       value: "system_prompt",
       emoji: prefs.systemPromptEnabled ? "✅" : "❌",
@@ -269,9 +388,7 @@ export async function buildInteractionComponents(
     // Clear context option with token usage display
     const current = prefs.messageHistory.length;
     const modelContextWindow =
-      CONFIG.modelContextWindows?.[prefs.selectedModel] ||
-      selectedModelDetails?.capabilities?.maxContext ||
-      8192;
+      selectedModelDetails?.capabilities?.maxContext || 8192;
     const estimatedTokens = prefs.messageHistory.reduce((total, msg) => {
       return total + (msg.content ? msg.content.length * 0.75 : 0); // Rough estimate: 0.75 tokens per character
     }, 0);
@@ -283,9 +400,9 @@ export async function buildInteractionComponents(
       }),
       value: "clear_context",
       description: `Tokens: ${Math.round(
-        estimatedTokens,
+        estimatedTokens
       ).toLocaleString()} / ${modelContextWindow.toLocaleString()} (${Math.round(
-        (estimatedTokens / modelContextWindow) * 100,
+        (estimatedTokens / modelContextWindow) * 100
       )}%)`,
       emoji: "🗑️",
       disabled: current === 0,
@@ -299,7 +416,7 @@ export async function buildInteractionComponents(
       description:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.finetune",
-          locale,
+          locale
         )) || "Adjust AI generation parameters",
       emoji: "🎛️",
       default: false,
@@ -310,13 +427,13 @@ export async function buildInteractionComponents(
       label:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.label",
-          locale,
+          locale
         )) || "Switch Model",
       value: "switch_model",
       description:
         (await i18n.__(
           "events.ai.buttons.menus.settingsOptions.switchModel.description",
-          locale,
+          locale
         )) || "Change the AI model",
       emoji: "🔄",
       default: false,
@@ -337,8 +454,12 @@ export async function buildErrorComponents(
   availableModels,
   isVision = false,
   locale = "en",
-  client = null,
+  client = null
 ) {
+  // Prewarm translation cache for AI-related keys to avoid bursty per-key requests
+  try {
+    await i18n.getTranslationGroup("events.ai", locale);
+  } catch (_) {}
   const prefs = getUserPreferences(userId);
   const components = [];
 
@@ -349,7 +470,7 @@ export async function buildErrorComponents(
     .setCustomId(`ai_error_menu_${userId}`)
     .setPlaceholder(
       (await i18n.__("events.ai.errorMenu.placeholder", locale)) ||
-        "Fix this error...",
+        "Fix this error..."
     );
 
   const options = [];
@@ -413,23 +534,28 @@ export async function sendResponse(
   content,
   components = [],
   locale = "en",
-  isStreaming = false,
+  isStreaming = false
 ) {
   i18n.setLocale(locale);
+
+  // Prewarm translation cache for sanitization and UI strings used in responses
+  try {
+    await i18n.getTranslationGroup("events.ai", locale);
+  } catch (_) {}
 
   const userId = message.author.id;
   const sanitized = content
     .replace(
       /<@[!&]?\d+>/g,
-      await i18n.__("events.ai.buttons.sanitization.mention", locale),
+      await i18n.__("events.ai.buttons.sanitization.mention", locale)
     )
     .replace(
       /@everyone/gi,
-      await i18n.__("events.ai.buttons.sanitization.everyone", locale),
+      await i18n.__("events.ai.buttons.sanitization.everyone", locale)
     )
     .replace(
       /@here/gi,
-      await i18n.__("events.ai.buttons.sanitization.here", locale),
+      await i18n.__("events.ai.buttons.sanitization.here", locale)
     );
 
   const chunks = splitMessage(sanitized);
@@ -458,7 +584,7 @@ export async function sendResponse(
     // Ensure components are V1 Action Rows
     const v1Components = Array.isArray(components)
       ? components.filter(
-          (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
         )
       : [];
 
@@ -471,7 +597,7 @@ export async function sendResponse(
     // Ensure components are V1 Action Rows for fallback
     const v1Components = Array.isArray(components)
       ? components.filter(
-          (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
+          (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
         )
       : [];
 
@@ -488,7 +614,7 @@ export async function sendResponse(
   // Also use the filtered V1 components when deciding to attach the collector
   const finalV1Components = Array.isArray(components)
     ? components.filter(
-        (c) => c instanceof ActionRowBuilder || (c && c.type === 1),
+        (c) => c instanceof ActionRowBuilder || (c && c.type === 1)
       )
     : [];
 
@@ -512,7 +638,7 @@ export async function sendResponse(
           const prefs = getUserPreferences(userId);
 
           console.log(
-            `Error menu selection for user ${userId}: ${selectedValue}`,
+            `Error menu selection for user ${userId}: ${selectedValue}`
           );
 
           switch (selectedValue) {
@@ -536,40 +662,37 @@ export async function sendResponse(
                 messageContent,
                 newVisionRequest,
                 finalMsg,
-                locale,
+                locale
               );
               return; // Return early
 
             case "switch_model":
-              // Show model selection menu
+              // Show provider selection menu first (error context)
               const isVisionRequest =
                 message.attachments.size > 0 &&
                 message.attachments.first().contentType?.startsWith("image/");
 
               const models = await getAvailableModels(
                 message.client,
-                isVisionRequest ? "vision" : null,
+                isVisionRequest ? "vision" : null
               );
 
-              const modelMenu = new StringSelectMenuBuilder()
-                .setCustomId(`ai_select_model_${userId}`)
+              const providerMenu = new StringSelectMenuBuilder()
+                .setCustomId(`ai_select_provider_${userId}`)
                 .setPlaceholder(
-                  await i18n.__(
-                    "events.ai.buttons.menus.modelSelect.placeholder",
-                  ),
+                  (await i18n.__(
+                    "events.ai.buttons.menus.modelSelect.providerPlaceholder",
+                    locale
+                  )) || "Select a provider"
                 );
 
-              // Use the shared function to build options
-              const opts = await buildModelOptions(
-                models,
-                prefs.selectedModel,
-                locale,
-              );
-
-              modelMenu.addOptions(opts);
+              const providerOpts = await buildProviderOptions(models, locale);
+              providerMenu.addOptions(providerOpts);
 
               await interaction.update({
-                components: [new ActionRowBuilder().addComponents(modelMenu)],
+                components: [
+                  new ActionRowBuilder().addComponents(providerMenu),
+                ],
               });
               return; // Return early to prevent updating components
 
@@ -577,7 +700,7 @@ export async function sendResponse(
               // Switch to regular settings menu
               const regularModels = await getAvailableModels(
                 message.client,
-                isVisionRequest ? "vision" : null,
+                isVisionRequest ? "vision" : null
               );
               const newComponents = await buildInteractionComponents(
                 userId,
@@ -585,7 +708,7 @@ export async function sendResponse(
                 isVisionRequest,
                 false,
                 locale,
-                message.client,
+                message.client
               );
 
               await interaction.update({ components: newComponents });
@@ -597,7 +720,7 @@ export async function sendResponse(
               await interaction.reply({
                 content: await i18n.__(
                   "events.ai.buttons.systemPrompt.contextCleared",
-                  locale,
+                  locale
                 ),
                 ephemeral: true,
               });
@@ -618,7 +741,7 @@ export async function sendResponse(
               updateUserPreference(
                 userId,
                 "systemPromptEnabled",
-                !prefs.systemPromptEnabled,
+                !prefs.systemPromptEnabled
               );
               break;
 
@@ -647,45 +770,133 @@ export async function sendResponse(
               return; // Return early to prevent updating components
 
             case "switch_model":
-              // Show model selection menu
+              // Show provider selection menu first
               const isVisionRequest =
                 message.attachments.size > 0 &&
                 message.attachments.first().contentType?.startsWith("image/");
 
               const models = await getAvailableModels(
                 message.client,
-                isVisionRequest ? "vision" : null,
+                isVisionRequest ? "vision" : null
               );
 
-              const modelMenu = new StringSelectMenuBuilder()
-                .setCustomId(`ai_select_model_${userId}`)
+              const providerMenu = new StringSelectMenuBuilder()
+                .setCustomId(`ai_select_provider_${userId}`)
                 .setPlaceholder(
-                  await i18n.__(
-                    "events.ai.buttons.menus.modelSelect.placeholder",
-                  ),
+                  (await i18n.__(
+                    "events.ai.buttons.menus.modelSelect.providerPlaceholder",
+                    locale
+                  )) || "Select a provider"
                 );
 
-              // Use the shared function to build options
-              const opts = await buildModelOptions(
-                models,
-                prefs.selectedModel,
-                locale,
-              );
-
-              modelMenu.addOptions(opts);
+              const providerOpts = await buildProviderOptions(models, locale);
+              providerMenu.addOptions(providerOpts);
 
               await interaction.update({
-                components: [new ActionRowBuilder().addComponents(modelMenu)],
+                components: [
+                  new ActionRowBuilder().addComponents(providerMenu),
+                ],
               });
               return; // Return early to prevent updating components
           }
+        }
+        // Handle provider selection menu
+        else if (
+          interaction.isStringSelectMenu() &&
+          interaction.customId === `ai_select_provider_${userId}`
+        ) {
+          const providerToken = interaction.values[0];
+          const provider = providerToken
+            .replace("__provider_", "")
+            .replace("__", "")
+            .toLowerCase();
+
+          const isVisionRequest =
+            message.attachments.size > 0 &&
+            message.attachments.first().contentType?.startsWith("image/");
+          const models = await getAvailableModels(
+            message.client,
+            isVisionRequest ? "vision" : null
+          );
+
+          const row = await buildPaginatedModelMenu(
+            userId,
+            models,
+            provider,
+            1,
+            getUserPreferences(userId).selectedModel,
+            locale
+          );
+
+          await interaction.update({ components: [row] });
+          return;
         }
         // Handle original model select menu
         else if (
           interaction.isStringSelectMenu() &&
           interaction.customId === `ai_select_model_${userId}`
         ) {
-          const selectedModel = interaction.values[0];
+          const selectedValue = interaction.values[0];
+
+          // Handle pagination and navigation
+          if (
+            selectedValue.startsWith("__page_next__") ||
+            selectedValue.startsWith("__page_prev__")
+          ) {
+            const parts = selectedValue.split(":");
+            const directive = parts[0];
+            const provider = parts[1];
+            const cur = parseInt(parts[2] || "1", 10);
+            const nextPage = directive.includes("next")
+              ? cur + 1
+              : Math.max(1, cur - 1);
+
+            const isVisionRequest =
+              message.attachments.size > 0 &&
+              message.attachments.first().contentType?.startsWith("image/");
+            const models = await getAvailableModels(
+              message.client,
+              isVisionRequest ? "vision" : null
+            );
+
+            const row = await buildPaginatedModelMenu(
+              userId,
+              models,
+              provider,
+              nextPage,
+              getUserPreferences(userId).selectedModel,
+              locale
+            );
+
+            await interaction.update({ components: [row] });
+            return;
+          }
+
+          if (selectedValue === "__back_providers__") {
+            const isVisionRequest =
+              message.attachments.size > 0 &&
+              message.attachments.first().contentType?.startsWith("image/");
+            const models = await getAvailableModels(
+              message.client,
+              isVisionRequest ? "vision" : null
+            );
+            const providerMenu = new StringSelectMenuBuilder()
+              .setCustomId(`ai_select_provider_${userId}`)
+              .setPlaceholder(
+                (await i18n.__(
+                  "events.ai.buttons.menus.modelSelect.providerPlaceholder",
+                  locale
+                )) || "Select a provider"
+              );
+            const providerOpts = await buildProviderOptions(models, locale);
+            providerMenu.addOptions(providerOpts);
+            await interaction.update({
+              components: [new ActionRowBuilder().addComponents(providerMenu)],
+            });
+            return;
+          }
+
+          const selectedModel = selectedValue;
           updateUserPreference(userId, "selectedModel", selectedModel);
 
           // If user just selected a new model, retry the AI request with that model
@@ -701,7 +912,7 @@ export async function sendResponse(
           // Clear history before processing with the new model
           clearUserHistory(userId);
           console.log(
-            `Cleared history for user ${userId} due to model switch.`,
+            `Cleared history for user ${userId} due to model switch.`
           );
 
           // Process the request with the newly selected model
@@ -711,7 +922,7 @@ export async function sendResponse(
             messageContent,
             newVisionRequest,
             finalMsg,
-            locale,
+            locale
           );
           return; // Return early
         }
@@ -722,7 +933,7 @@ export async function sendResponse(
           message.attachments.first().contentType?.startsWith("image/");
         const models = getAvailableModels(
           message.client,
-          isVisionRequest ? "vision" : null,
+          isVisionRequest ? "vision" : null
         );
         const newComponents = await buildInteractionComponents(
           userId,
@@ -730,7 +941,7 @@ export async function sendResponse(
           isVisionRequest,
           false,
           locale,
-          message.client,
+          message.client
         );
 
         // Update original message with new components
@@ -779,8 +990,18 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
   console.log(`Handling fine-tune modal for provider: ${provider}`);
 
   // Format values for display - filter parameters based on provider
+  // Default AI parameters for hub integration
+  const defaultParams = {
+    temperature: { label: "Temperature", description: "Controls randomness" },
+    top_p: { label: "Top P", description: "Nucleus sampling parameter" },
+    max_tokens: {
+      label: "Max Tokens",
+      description: "Maximum tokens to generate",
+    },
+  };
+
   const paramOptions = await Promise.all(
-    Object.entries(CONFIG.aiParameters)
+    Object.entries(defaultParams)
       .filter(([param, config]) => {
         // If parameter has provider restriction, check if current provider is supported
         if (config.providers && Array.isArray(config.providers)) {
@@ -792,13 +1013,13 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       .map(async ([param, config]) => ({
         label: await i18n.__(
           `events.ai.buttons.finetune.parameters.${param}.label`,
-          locale,
+          locale
         ),
         value: param,
         description: `${aiParams[param] || config.default} (${config.min}-${
           config.max
         })`,
-      })),
+      }))
   );
 
   // Create selection menu
@@ -807,9 +1028,9 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
       .setCustomId(`ai_param_select_${userId}`)
       .setPlaceholder(
         (await i18n.__("events.ai.buttons.finetune.selectParameter", locale)) ||
-          "Select parameter to adjust",
+          "Select parameter to adjust"
       )
-      .addOptions(paramOptions),
+      .addOptions(paramOptions)
   );
 
   // Show parameter selection menu
@@ -817,7 +1038,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
     content:
       (await i18n.__(
         "events.ai.buttons.finetune.selectParameterPrompt",
-        locale,
+        locale
       )) || "Select an AI parameter to adjust:",
     components: [row],
     ephemeral: true,
@@ -835,14 +1056,14 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
   collector.on("collect", async (i) => {
     try {
       const selectedParam = i.values[0];
-      const paramConfig = CONFIG.aiParameters[selectedParam];
+      const paramConfig = defaultParams[selectedParam];
 
       // Create placeholder for modal input
       const placeholder = await createParameterPlaceholder(
         selectedParam,
         paramConfig,
         aiParams[selectedParam],
-        locale,
+        locale
       );
 
       // Create modal for parameter edit
@@ -851,8 +1072,8 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
         .setTitle(
           await i18n.__(
             `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
-            locale,
-          ),
+            locale
+          )
         );
 
       // Create text input for selected parameter
@@ -882,7 +1103,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
         inputValue,
         selectedParam,
         aiParams[selectedParam] || paramConfig.default,
-        paramConfig,
+        paramConfig
       );
 
       // Update user preferences
@@ -897,11 +1118,11 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
           {
             parameter: await i18n.__(
               `events.ai.buttons.finetune.parameters.${selectedParam}.label`,
-              locale,
+              locale
             ),
             value: newValue,
           },
-          locale,
+          locale
         ),
         ephemeral: true,
       });
@@ -928,7 +1149,7 @@ export async function handleFinetuneModal(interaction, userId, locale = "en") {
           content:
             (await i18n.__(
               "events.ai.buttons.finetune.selectionTimeout",
-              locale,
+              locale
             )) || "Parameter selection timed out.",
           components: [],
         })
@@ -942,12 +1163,12 @@ async function createParameterPlaceholder(
   paramName,
   paramConfig,
   currentValue,
-  locale,
+  locale
 ) {
   const defaultVal = paramConfig.default;
   const description = await i18n.__(
     `events.ai.buttons.finetune.parameters.${paramName}.description`,
-    locale,
+    locale
   );
 
   // Create display for values
@@ -986,7 +1207,7 @@ function validateParameterValue(input, paramName, currentValue, paramConfig) {
     // Check if the value is valid
     if (isNaN(parsedValue)) {
       console.warn(
-        `Invalid value for ${paramName}: ${input}, using default: ${paramConfig.default}`,
+        `Invalid value for ${paramName}: ${input}, using default: ${paramConfig.default}`
       );
       return currentValue || paramConfig.default;
     }

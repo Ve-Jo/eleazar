@@ -1,4 +1,3 @@
-import CONFIG from "../../config/aiConfig.js";
 import {
   checkModelRateLimit,
   updateModelCooldown,
@@ -100,10 +99,12 @@ export function getUserPreferences(userId) {
       messageHistory: [],
       // Group all AI parameters together from config defaults
       aiParams: Object.fromEntries(
-        Object.entries(CONFIG.aiParameters).map(([key, param]) => [
-          key,
-          param.default,
-        ]),
+        Object.entries({
+          temperature: { default: 0.7, min: 0, max: 2, step: 0.1 },
+          top_p: { default: 0.9, min: 0, max: 1, step: 0.1 },
+          max_tokens: { default: 2048, min: 1, max: 8192, step: 1 },
+          web_search: { default: false },
+        }).map(([key, param]) => [key, param.default])
       ),
     };
   } else {
@@ -113,16 +114,20 @@ export function getUserPreferences(userId) {
     state.userPreferences[userId].aiParams = {
       ...existingParams,
       ...Object.fromEntries(
-        Object.entries(CONFIG.aiParameters)
+        Object.entries({
+          temperature: { default: 0.7, min: 0, max: 2, step: 0.1 },
+          top_p: { default: 0.9, min: 0, max: 1, step: 0.1 },
+          max_tokens: { default: 2048, min: 1, max: 8192, step: 1 },
+          web_search: { default: false },
+        })
           .filter(([key]) => existingParams[key] === undefined)
-          .map(([key, param]) => [key, param.default]),
+          .map(([key, param]) => [key, param.default])
       ),
     };
 
     // Make sure web_search parameter is present
     if (state.userPreferences[userId].aiParams.web_search === undefined) {
-      state.userPreferences[userId].aiParams.web_search =
-        CONFIG.aiParameters.web_search?.default || false;
+      state.userPreferences[userId].aiParams.web_search = false;
     }
 
     // Add reasoning level if it doesn't exist
@@ -196,10 +201,7 @@ export function addConversationToHistory(userId, userMessage, aiResponse) {
   }, 0);
 
   // Get model context window
-  const modelContextWindow =
-    prefs.selectedModel && CONFIG.modelContextWindows
-      ? CONFIG.modelContextWindows[prefs.selectedModel] || 8192
-      : 8192;
+  const modelContextWindow = 8192; // Default context window
 
   // Trim history if it exceeds the model's context window (with 10% safety margin)
   const maxTokens = modelContextWindow * 0.9;
@@ -213,7 +215,7 @@ export function addConversationToHistory(userId, userMessage, aiResponse) {
     prefs.messageHistory.splice(hasSystemMessage ? 1 : 0, 2);
 
     console.log(
-      `[DEBUG] Trimmed context for user ${userId}: ${currentTokens} tokens > ${maxTokens} max tokens`,
+      `[DEBUG] Trimmed context for user ${userId}: ${currentTokens} tokens > ${maxTokens} max tokens`
     );
   }
 }

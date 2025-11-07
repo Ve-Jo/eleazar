@@ -1,8 +1,8 @@
 import { Groq } from "groq-sdk";
 import OpenAI from "openai";
 import fetch from "node-fetch";
-import CONFIG from "../../config/aiConfig.js";
 import { state } from "./index.js";
+import hubClient from "../../api/hubClient.js";
 
 // --- Model Cache ---
 let cachedModels = null; // { groq: [], openrouter: [] }
@@ -26,69 +26,16 @@ function formatModelName(model, provider) {
 export async function initializeApiClients(client) {
   const results = { groq: false, openrouter: false, nanogpt: false };
 
-  // Initialize Groq client if configured
-  if (CONFIG.groq.apiKey) {
-    const clientPath = CONFIG.groq.clientPath;
-    if (!client[clientPath]) {
-      try {
-        client[clientPath] = new Groq({
-          apiKey: CONFIG.groq.apiKey,
-        });
-        console.log("✅ Successfully initialized Groq client");
-        results.groq = true;
-      } catch (error) {
-        console.error("❌ Failed to initialize Groq client:", error.message);
-      }
-    } else {
-      console.log(`✅ Groq client already exists at client.${clientPath}`);
-      results.groq = true;
-    }
-  }
+  // Since we're using AI Hub, we don't need to initialize direct API clients
+  // The hub will handle all API communications
+  console.log(
+    "🤖 AI Hub integration active - skipping direct API client initialization"
+  );
 
-  // Initialize OpenRouter client if configured
-  if (CONFIG.openrouter.apiKey) {
-    const clientPath = CONFIG.openrouter.clientPath;
-    if (!client[clientPath]) {
-      try {
-        client[clientPath] = new OpenAI({
-          apiKey: CONFIG.openrouter.apiKey,
-          baseURL: CONFIG.openrouter.baseURL,
-        });
-        console.log("✅ Successfully initialized OpenRouter client");
-        results.openrouter = true;
-      } catch (error) {
-        console.error(
-          "❌ Failed to initialize OpenRouter client:",
-          error.message,
-        );
-      }
-    } else {
-      console.log(
-        `✅ OpenRouter client already exists at client.${clientPath}`,
-      );
-      results.openrouter = true;
-    }
-  }
-
-  // Initialize NanoGPT client if configured
-  if (CONFIG.nanogpt.apiKey) {
-    const clientPath = CONFIG.nanogpt.clientPath;
-    if (!client[clientPath]) {
-      try {
-        client[clientPath] = new OpenAI({
-          apiKey: CONFIG.nanogpt.apiKey,
-          baseURL: CONFIG.nanogpt.baseURL,
-        });
-        console.log("✅ Successfully initialized NanoGPT client");
-        results.nanogpt = true;
-      } catch (error) {
-        console.error("❌ Failed to initialize NanoGPT client:", error.message);
-      }
-    } else {
-      console.log(`✅ NanoGPT client already exists at client.${clientPath}`);
-      results.nanogpt = true;
-    }
-  }
+  // Mark all providers as available since hub will handle them
+  results.groq = true;
+  results.openrouter = true;
+  results.nanogpt = true;
 
   return results;
 }
@@ -101,50 +48,11 @@ export async function initializeApiClients(client) {
  * @returns {Array} Array of available models
  */
 async function fetchGroqModelsFromApi(groqClient) {
-  if (!groqClient) {
-    console.warn(
-      "Attempted to fetch Groq models without an initialized client.",
-    );
-    return [];
-  }
-
-  try {
-    const preferredTextModels = new Set(
-      CONFIG.groq.preferredModels?.text || [],
-    );
-    const preferredVisionModels = new Set(
-      CONFIG.groq.preferredModels?.vision || [],
-    );
-
-    // Fetch all models from API
-    const models = await groqClient.models.list();
-    console.log(`Fetched ${models.data.length} models from Groq API`);
-
-    // Filter to only include models in our preferred lists
-    const filteredModels = models.data
-      .filter((m) => m.active)
-      .filter(
-        (m) => preferredTextModels.has(m.id) || preferredVisionModels.has(m.id),
-      )
-      .map((model) => ({
-        id: model.id,
-        name: formatModelName(model, "groq"),
-        provider: "groq",
-        capabilities: {
-          vision: preferredVisionModels.has(model.id),
-          tools: true,
-          maxContext: model.context_window || 8192,
-        },
-      }));
-
-    console.log(`Filtered to ${filteredModels.length} preferred Groq models`);
-    return filteredModels;
-  } catch (error) {
-    console.error("Error fetching Groq models:", error.message);
-
-    // Fallback to config if API call fails
-    return createFallbackModels("groq");
-  }
+  // Since we're using AI Hub, we don't fetch models directly from APIs
+  console.log(
+    "🤖 AI Hub integration active - skipping direct Groq API model fetch"
+  );
+  return [];
 }
 
 /**
@@ -153,115 +61,11 @@ async function fetchGroqModelsFromApi(groqClient) {
  * @returns {Array} Array of available models
  */
 async function fetchOpenRouterModelsFromApi(openRouterClient) {
-  if (!openRouterClient) {
-    console.warn(
-      "Attempted to fetch OpenRouter models without an initialized client.",
-    );
-    return [];
-  }
-
-  try {
-    const preferredTextModels = new Set(
-      CONFIG.openrouter.preferredModels?.text || [],
-    );
-    const preferredVisionModels = new Set(
-      CONFIG.openrouter.preferredModels?.vision || [],
-    );
-    const preferredModelsSet = new Set([
-      ...preferredTextModels,
-      ...preferredVisionModels,
-    ]);
-
-    // Fetch all models from API
-    const models = await openRouterClient.models.list();
-    console.log(`Fetched ${models.data.length} models from OpenRouter API`);
-
-    // Process all models with intelligent capability detection
-    const processedModels = models.data
-      .filter((m) => m.id && m.id.trim() !== "")
-      .map((model) => {
-        // Check if the model is in our preferred list or if it meets pricing criteria
-        const isPreferred = preferredModelsSet.has(model.id);
-
-        // Vision capability detection
-        // First check our manual configuration, then look at model metadata
-        const hasVision =
-          preferredVisionModels.has(model.id) ||
-          (model.capabilities && model.capabilities.includes("vision")) ||
-          model.id.toLowerCase().includes("vision") ||
-          model.id.toLowerCase().includes("vl");
-
-        // Reasoning capability detection
-        // First check our manual configuration, then infer from model metadata
-        const hasReasoning =
-          CONFIG.reasoningCapableModels.includes(model.id) ||
-          (model.capabilities && model.capabilities.includes("reasoning")) ||
-          model.id.toLowerCase().includes("reason");
-
-        // Context window detection
-        const contextWindow = model.context_length || 8192;
-
-        return {
-          id: model.id,
-          name: formatModelName(model, "openrouter"),
-          provider: "openrouter",
-          capabilities: {
-            vision: hasVision,
-            tools: true,
-            maxContext: contextWindow,
-            reasoning: hasReasoning,
-          },
-          pricing: {
-            prompt: model.pricing?.prompt,
-            completion: model.pricing?.completion,
-          },
-          isPreferred: isPreferred,
-        };
-      });
-
-    // Filter to include preferred models and other affordable models
-    const filteredModels = processedModels.filter((model) => {
-      // Always include preferred models
-      if (model.isPreferred) {
-        return true;
-      }
-
-      // Include other models based on pricing if they're comparable to our preferred models
-      // This allows newly released models to be included
-      const averagePreferredPromptPrice =
-        processedModels
-          .filter((m) => m.isPreferred && m.pricing?.prompt)
-          .reduce((sum, m) => sum + m.pricing.prompt, 0) /
-          processedModels.filter((m) => m.isPreferred && m.pricing?.prompt)
-            .length || Infinity;
-
-      const averagePreferredCompletionPrice =
-        processedModels
-          .filter((m) => m.isPreferred && m.pricing?.completion)
-          .reduce((sum, m) => sum + m.pricing.completion, 0) /
-          processedModels.filter((m) => m.isPreferred && m.pricing?.completion)
-            .length || Infinity;
-
-      // Include if the model pricing is comparable or lower than our preferred models
-      const isPricingAcceptable =
-        (!model.pricing?.prompt ||
-          model.pricing.prompt <= averagePreferredPromptPrice * 1.5) &&
-        (!model.pricing?.completion ||
-          model.pricing.completion <= averagePreferredCompletionPrice * 1.5);
-
-      return isPricingAcceptable;
-    });
-
-    console.log(
-      `Filtered to ${filteredModels.length} OpenRouter models (${processedModels.length} total available)`,
-    );
-    return filteredModels;
-  } catch (error) {
-    console.error("Error fetching OpenRouter models:", error.message);
-
-    // Fallback to config if API call fails
-    return createFallbackModels("openrouter");
-  }
+  // Since we're using AI Hub, we don't fetch models directly from APIs
+  console.log(
+    "🤖 AI Hub integration active - skipping direct OpenRouter API model fetch"
+  );
+  return [];
 }
 
 /**
@@ -270,63 +74,11 @@ async function fetchOpenRouterModelsFromApi(openRouterClient) {
  * @returns {Array} Array of available models
  */
 async function fetchNanoGPTModelsFromApi(nanoGptClient) {
-  if (!nanoGptClient) {
-    console.warn(
-      "Attempted to fetch NanoGPT models without an initialized client.",
-    );
-    return [];
-  }
-
-  try {
-    const preferredTextModels = new Set(
-      CONFIG.nanogpt.preferredModels?.text || [],
-    );
-    const preferredVisionModels = new Set(
-      CONFIG.nanogpt.preferredModels?.vision || [],
-    );
-
-    // NanoGPT API может не иметь стандартного endpoint для получения моделей
-    // Используем модели из конфигурации как fallback
-    console.log("Fetching NanoGPT models from configuration");
-
-    const models = [];
-
-    // Добавляем текстовые модели
-    CONFIG.nanogpt.preferredModels?.text?.forEach((id) => {
-      models.push({
-        id,
-        name: `nanogpt/${id}`,
-        provider: "nanogpt",
-        capabilities: {
-          vision: false,
-          tools: true,
-          maxContext: 8192,
-        },
-      });
-    });
-
-    // Добавляем vision модели
-    CONFIG.nanogpt.preferredModels?.vision?.forEach((id) => {
-      models.push({
-        id,
-        name: `nanogpt/${id}`,
-        provider: "nanogpt",
-        capabilities: {
-          vision: true,
-          tools: true,
-          maxContext: 8192,
-        },
-      });
-    });
-
-    console.log(`Found ${models.length} NanoGPT models from configuration`);
-    return models;
-  } catch (error) {
-    console.error("Error fetching NanoGPT models:", error.message);
-
-    // Fallback to config if API call fails
-    return createFallbackModels("nanogpt");
-  }
+  // Since we're using AI Hub, we don't fetch models directly from APIs
+  console.log(
+    "🤖 AI Hub integration active - skipping direct NanoGPT API model fetch"
+  );
+  return [];
 }
 
 /**
@@ -335,46 +87,20 @@ async function fetchNanoGPTModelsFromApi(nanoGptClient) {
  * @returns {Array} Array of fallback models
  */
 function createFallbackModels(provider) {
-  console.log(`Using fallback preferred models from config for ${provider}`);
-  const fallbackModels = [];
-
-  // Add text models
-  CONFIG[provider]?.preferredModels?.text?.forEach((id) => {
-    fallbackModels.push({
-      id,
-      name: `${provider}/${id}`,
-      provider,
-      capabilities: {
-        vision: false,
-        tools: true,
-        maxContext: 8192,
-      },
-    });
-  });
-
-  // Add vision models
-  CONFIG[provider]?.preferredModels?.vision?.forEach((id) => {
-    fallbackModels.push({
-      id,
-      name: `${provider}/${id}`,
-      provider,
-      capabilities: {
-        vision: true,
-        tools: true,
-        maxContext: 8192,
-      },
-    });
-  });
-
-  return fallbackModels;
+  console.log(
+    `Using fallback models for ${provider} - AI Hub integration active`
+  );
+  // Return empty array since we're using AI Hub for all model management
+  return [];
 }
 
 /**
- * Fetches models from all configured providers and caches them
+ * Fetches models from AI Hub service
  * @param {Object} client - Discord client object
+ * @param {string} userId - User ID for personalized model fetching
  * @returns {Object} Object containing all available models by provider
  */
-async function fetchAllModels(client) {
+async function fetchAllModels(client, userId = null) {
   const now = Date.now();
   if (
     cachedModels &&
@@ -387,48 +113,71 @@ async function fetchAllModels(client) {
     return cachedModels;
   }
 
-  console.log("Fetching fresh AI models...");
+  console.log("Fetching fresh AI models from AI Hub...");
   cachedModels = { groq: [], openrouter: [], nanogpt: [] }; // Reset cache
 
-  const groqClient = client[CONFIG.groq.clientPath];
-  const openRouterClient = client[CONFIG.openrouter.clientPath];
-  const nanoGptClient = client[CONFIG.nanogpt.clientPath];
-
-  const fetchPromises = [];
-  if (groqClient) {
-    fetchPromises.push(
-      fetchGroqModelsFromApi(groqClient).then((models) => {
-        cachedModels.groq = models;
-      }),
+  try {
+    // Fetch models from AI Hub with user context for personalized models
+    // Request featured models to be sorted first
+    const hubModels = await hubClient.getAIHubModels(
+      null,
+      false,
+      userId,
+      null,
+      "featured",
+      "desc"
     );
-  } else {
-    console.warn("Groq client not available, using fallback models.");
+
+    // Log summary of featured models for debugging
+    const featuredCount = hubModels.filter((m) => m.isFeatured).length;
+    console.log(
+      `[fetchAllModels] Received ${hubModels.length} models (${featuredCount} featured) from hub`
+    );
+
+    // Group models by provider
+    hubModels.forEach((model) => {
+      const provider = model.provider || "unknown";
+      const providerKey = provider.toLowerCase();
+
+      if (cachedModels[providerKey]) {
+        cachedModels[providerKey].push({
+          id: model.id,
+          name: model.name || `${provider}/${model.id}`,
+          provider: provider,
+          capabilities: {
+            vision: model.capabilities?.vision || false,
+            tools: model.capabilities?.tools !== false, // Default to true
+            maxContext:
+              model.capabilities?.maxContext ||
+              model.context_window ||
+              model.context_length ||
+              8192,
+            reasoning: model.capabilities?.reasoning || false,
+          },
+          pricing: model.pricing || {},
+          isFeatured: model.isFeatured || false, // Preserve featured status from hub
+        });
+      }
+    });
+
+    console.log(`Fetched ${hubModels.length} models from AI Hub`);
+
+    // Fallback to config models if hub fetch fails or returns empty
+    if (hubModels.length === 0) {
+      console.warn("AI Hub returned no models, using fallback configuration");
+      cachedModels.groq = createFallbackModels("groq");
+      cachedModels.openrouter = createFallbackModels("openrouter");
+      cachedModels.nanogpt = createFallbackModels("nanogpt");
+    }
+  } catch (error) {
+    console.error("Error fetching models from AI Hub:", error);
+    console.log("Falling back to configuration-based models");
+
+    // Use fallback models from config
     cachedModels.groq = createFallbackModels("groq");
-  }
-
-  if (openRouterClient) {
-    fetchPromises.push(
-      fetchOpenRouterModelsFromApi(openRouterClient).then((models) => {
-        cachedModels.openrouter = models;
-      }),
-    );
-  } else {
-    console.warn("OpenRouter client not available, using fallback models.");
     cachedModels.openrouter = createFallbackModels("openrouter");
-  }
-
-  if (nanoGptClient) {
-    fetchPromises.push(
-      fetchNanoGPTModelsFromApi(nanoGptClient).then((models) => {
-        cachedModels.nanogpt = models;
-      }),
-    );
-  } else {
-    console.warn("NanoGPT client not available, using fallback models.");
     cachedModels.nanogpt = createFallbackModels("nanogpt");
   }
-
-  await Promise.all(fetchPromises);
 
   lastFetchTime = now;
 
@@ -445,7 +194,7 @@ async function fetchAllModels(client) {
   });
 
   console.log(
-    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length}), NanoGPT (${cachedModels.nanogpt.length})`,
+    `Total models cached: Groq (${cachedModels.groq.length}), OpenRouter (${cachedModels.openrouter.length}), NanoGPT (${cachedModels.nanogpt.length})`
   );
   return cachedModels;
 }
@@ -458,8 +207,12 @@ async function fetchAllModels(client) {
  * @param {string|null} capabilityFilter - Capability to filter by ('vision' or null for text)
  * @returns {Array} Array of available models matching the filter
  */
-export async function getAvailableModels(client, capabilityFilter = null) {
-  const allModelsData = await fetchAllModels(client);
+export async function getAvailableModels(
+  client,
+  capabilityFilter = null,
+  userId = null
+) {
+  const allModelsData = await fetchAllModels(client, userId);
 
   // Create a map of all models for quick lookup
   const availableModelsMap = new Map();
@@ -473,62 +226,50 @@ export async function getAvailableModels(client, capabilityFilter = null) {
   });
 
   const isVisionRequest = capabilityFilter === "vision";
-  let preferredModelNamesConfig = [];
   let resultModels = [];
 
-  // Determine which model list to use based on the capability filter
-  if (isVisionRequest) {
-    // Vision request - only use vision models from config
-    preferredModelNamesConfig = [
-      ...(CONFIG.groq.preferredModels?.vision || []).map((id) => `groq/${id}`),
-      ...(CONFIG.openrouter.preferredModels?.vision || []).map(
-        (id) => `openrouter/${id}`,
-      ),
-      ...(CONFIG.nanogpt.preferredModels?.vision || []).map(
-        (id) => `nanogpt/${id}`,
-      ),
-    ];
-    console.log("Filtering for VISION models based on config.");
-
-    // Remove duplicates preserving order
-    const uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
-
-    // Add models that support vision
-    for (const modelName of uniquePreferredModelNames) {
-      const model = availableModelsMap.get(modelName);
+  // Since AI Hub handles subscription filtering, return all available models
+  // and filter by capability if requested
+  for (const model of availableModelsMap.values()) {
+    if (isVisionRequest) {
+      // For vision requests, only include models with vision capability
       if (model && model.capabilities.vision) {
         resultModels.push(model);
       }
-    }
-  } else {
-    // Text request - use text models from config
-    preferredModelNamesConfig = [
-      ...(CONFIG.groq.preferredModels?.text || []).map((id) => `groq/${id}`),
-      ...(CONFIG.openrouter.preferredModels?.text || []).map(
-        (id) => `openrouter/${id}`,
-      ),
-      ...(CONFIG.nanogpt.preferredModels?.text || []).map(
-        (id) => `nanogpt/${id}`,
-      ),
-    ];
-    console.log("Prioritizing TEXT models based on config.");
-
-    // Remove duplicates preserving order
-    const uniquePreferredModelNames = [...new Set(preferredModelNamesConfig)];
-
-    // Add models from the preferred text list
-    for (const modelName of uniquePreferredModelNames) {
-      const model = availableModelsMap.get(modelName);
+    } else {
+      // For text requests, include all models (hub already filtered by subscription)
       if (model) {
         resultModels.push(model);
       }
     }
   }
 
+  // Sort models: featured models first, then by name
+  resultModels.sort((a, b) => {
+    // Featured models get priority
+    if (a.isFeatured && !b.isFeatured) return -1;
+    if (!a.isFeatured && b.isFeatured) return 1;
+
+    // Then sort by name alphabetically
+    return (a.name || a.id).localeCompare(b.name || b.id);
+  });
+
+  // Debug logging for featured models
+  const featuredCount = resultModels.filter((m) => m.isFeatured).length;
+  console.log(
+    `[getAvailableModels] Total models: ${resultModels.length}, Featured models: ${featuredCount}`
+  );
+  if (featuredCount > 0) {
+    console.log(
+      `[getAvailableModels] Featured models:`,
+      resultModels.filter((m) => m.isFeatured).map((m) => m.name)
+    );
+  }
+
   console.log(
     `Returning ${resultModels.length} available models for ${
       isVisionRequest ? "VISION" : "TEXT"
-    } request`,
+    } request`
   );
   return resultModels;
 }
@@ -568,7 +309,7 @@ export async function getModelDetails(client, prefixedModelId) {
     if (state.modelStatus.toolSupport.has(cacheKey)) {
       model.capabilities.tools = state.modelStatus.toolSupport.get(cacheKey);
       console.log(
-        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`,
+        `Updated tool support for ${prefixedModelId} from cache: ${model.capabilities.tools}`
       );
     }
     // Check against known list of models without tools
@@ -576,7 +317,7 @@ export async function getModelDetails(client, prefixedModelId) {
       model.capabilities.tools = false;
       state.modelStatus.toolSupport.set(cacheKey, false);
       console.log(
-        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`,
+        `Marked ${prefixedModelId} as not supporting tools based on dynamic list`
       );
     }
   }
@@ -594,21 +335,16 @@ export async function getApiClientForModel(client, prefixedModelId) {
   const modelDetails = await getModelDetails(client, prefixedModelId);
   if (!modelDetails) {
     throw new Error(
-      `Could not find details or client for model: ${prefixedModelId}`,
+      `Could not find details or client for model: ${prefixedModelId}`
     );
   }
 
   const provider = modelDetails.provider;
-  const clientPath = CONFIG[provider]?.clientPath;
 
-  if (!clientPath || !client[clientPath]) {
-    throw new Error(
-      `API client for provider '${provider}' not found or not initialized.`,
-    );
-  }
-
+  // Since we're using AI Hub, we don't need direct API clients
+  // The hub will handle the API communication
   return {
-    client: client[clientPath],
+    client: null, // Hub will handle this
     provider: provider,
     modelId: modelDetails.id,
   };
@@ -624,10 +360,10 @@ export async function getModelCapabilities(client, prefixedModelId) {
   const modelDetails = await getModelDetails(client, prefixedModelId);
   if (!modelDetails) {
     console.error(
-      `Could not determine capabilities for unknown model: ${prefixedModelId}`,
+      `Could not determine capabilities for unknown model: ${prefixedModelId}`
     );
     // Return default/conservative capabilities
-    return { vision: false, tools: false, maxContext: 8192 };
+    return { vision: false, tools: false, maxContext: 8192 }; // This is appropriate as a last resort fallback
   }
   return modelDetails.capabilities;
 }
@@ -705,21 +441,8 @@ export function supportsReasoning(modelId) {
     baseModelId = modelId;
   }
 
-  // First check the static configuration
-  const isInConfig = CONFIG.reasoningCapableModels.some(
-    (m) => m === baseModelId || m === modelId,
-  );
-
-  if (isInConfig) {
-    return true;
-  }
-
-  // Check the model capabilities cache for reasoning support
-  // Try both formats: full ID and base ID
-  const fullCacheKey = modelId;
-  const modelDetails =
-    state.modelStatus.modelCapabilitiesCache?.get(fullCacheKey);
-
+  // Check model capabilities from cache
+  const modelDetails = state.modelStatus.modelCapabilitiesCache?.get(modelId);
   if (modelDetails?.capabilities?.reasoning) {
     return true;
   }
@@ -728,7 +451,7 @@ export function supportsReasoning(modelId) {
   if (provider === "openrouter") {
     const reasoningKeywords = ["reason", "ration", "logic", "think"];
     return reasoningKeywords.some((keyword) =>
-      baseModelId.toLowerCase().includes(keyword),
+      baseModelId.toLowerCase().includes(keyword)
     );
   }
 
@@ -736,7 +459,7 @@ export function supportsReasoning(modelId) {
   if (provider === "nanogpt") {
     const reasoningKeywords = ["reason", "ration", "logic", "think"];
     return reasoningKeywords.some((keyword) =>
-      baseModelId.toLowerCase().includes(keyword),
+      baseModelId.toLowerCase().includes(keyword)
     );
   }
 
