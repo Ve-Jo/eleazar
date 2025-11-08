@@ -24,19 +24,19 @@ It supports localization to English, Ukraine and Russian.
 >
 > My contacts are in the bottom of this README
 
-## Setup Options
+## Setup
 
-**Choose the setup method that best fits your needs:**
+This project uses a **Hub/Bot architecture** where:
 
-### Hub/Bot Setup (Recommended)
+- **Hub** manages database operations and provides API endpoints
+- **Bot** handles Discord interactions and commands
 
-- **Simple:** Two-component setup with hub managing database operations and bot handling Discord interactions
-- **Features:**
-  - Clean separation of concerns
-  - Scalable architecture
-  - Easy to maintain and extend
-  - Supports both Bun and Node.js runtimes
-- **Note:** This is the current active setup, no Colyseus or activities required
+**Features:**
+
+- Clean separation of concerns
+- Scalable architecture
+- Easy to maintain and extend
+- Supports both Bun and Node.js runtimes
 
 > I'm also planning to add more simplier Docker or Railway template setup quide in future for this project.
 
@@ -148,57 +148,7 @@ It supports localization to English, Ukraine and Russian.
    - Configure the servers in `/src/utils/music.js` (lines 48-78)
    - No need to run your own Lavalink instance
 
----
-
-### Standalone Setup (Recommended)
-
-Based on [THIS COMMIT b7b6abb](https://github.com/Ve-Jo/eleazar/tree/b7b6abb9e1e8e68a8ba0455a5489069d21ad0b6d)
-
-**API Services Requirements:**
-You'll need to obtain and configure these API keys in your `.env` file:
-
-- **Discord Bot Token** (from Discord Developer Portal)
-- **OpenRouter** AND **Groq** (for ai text models and voice transcription with groq)
-- **HuggingFace** OR **DeepInfra** or **Replicate** (for image generating)
-- **CoinMarketCap** for the bot's Crypto game support to show coin prices.
-
-**After completing the common installation steps above:**
-
-1. **Install Dependencies**
-
-   ```bash
-   bun install
-   ```
-
-2. **Set up Database with Prisma**
-
-   ```bash
-   bunx prisma generate
-   bunx prisma db push  # For development
-   # OR for production:
-   bunx prisma migrate deploy
-   ```
-
-3. **Environment Configuration**
-
-   - Copy `.env.example` to `.env`
-   - Fill in the required environment variables:
-     - Discord bot token
-     - Database connection string (PostgreSQL)
-     - Redis connection details
-     - API keys for AI services
-     - Lavalink server configuration
-
-4. **Run the Bot**
-   ```bash
-   bun run bot
-   ```
-
----
-
-### Hub Setup
-
-This setup uses a separate hub project that manages database operations and provides API endpoints for the bot.
+### Hub/Bot Setup
 
 **API Services Requirements:**
 You'll need to obtain and configure these API keys in your `.env` file:
@@ -273,17 +223,6 @@ You'll need to obtain and configure these API keys in your `.env` file:
    cd bot && bun run start
    # Or with Node.js: cd bot && npm run start
    ```
-
----
-
-### Legacy Setups
-
-**Note:** The following setups are deprecated and no longer maintained:
-
-- **Standalone Setup** - Single-project setup (outdated but functional)
-- **Activities Setup** - Required Colyseus and complex tunneling configuration
-
-The **Hub/Bot Setup** above is the recommended and currently maintained approach.
 
 ---
 
