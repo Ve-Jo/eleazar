@@ -14,9 +14,9 @@ const envSchema = Joi.object({
     .default("development"),
 
   // AI Provider API Keys
-  GROQ_API_KEY: Joi.string().optional(),
-  OPENROUTER_API_KEY: Joi.string().optional(),
-  NANOGPT_API_KEY: Joi.string().optional(),
+  GROQ_API_KEY: Joi.string().allow("").optional(),
+  OPENROUTER_API_KEY: Joi.string().allow("").optional(),
+  NANOGPT_API_KEY: Joi.string().allow("").optional(),
 
   // Redis Configuration
   REDIS_URL: Joi.string().default("redis://localhost:6379"),
@@ -58,7 +58,7 @@ const envSchema = Joi.object({
   // Security
   CORS_ORIGINS: Joi.string().default("*"),
   API_KEY_REQUIRED: Joi.boolean().default(false),
-  API_KEY: Joi.string().optional(),
+  API_KEY: Joi.string().allow("").optional(),
 
   // Provider Specific Settings
   GROQ_BASE_URL: Joi.string().default("https://api.groq.com/openai/v1"),

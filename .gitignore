@@ -8,4 +8,7 @@ temp/*
 **/bun.lockb
 **/bun.lock
 
+**/logs
+
 **/temp/emoji/*
+lavalink/
