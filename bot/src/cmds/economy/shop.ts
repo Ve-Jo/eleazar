@@ -6,7 +6,8 @@ import {
   SlashCommandSubcommandBuilder,
   StringSelectMenuBuilder,
 } from "discord.js";
-import hubClient, { UPGRADES } from "../../api/hubClient.ts";
+import hubClient from "../../api/hubClient.ts";
+import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 
@@ -550,9 +551,16 @@ const command = {
         if (componentInteraction.customId === "purchase") {
           const upgradeTypes = Object.keys(upgradeInfo);
           const type = upgradeTypes[currentUpgrade];
+          if (!type) {
+            await componentInteraction.reply({
+              content: await i18n.__("commands.economy.shop.error"),
+              ephemeral: true,
+            });
+            return;
+          }
 
           try {
-            await (hubClient as any).purchaseUpgrade(guild.id, user.id, type);
+            await hubClient.purchaseUpgrade(guild.id, user.id, type);
             await componentInteraction.update(await generateShopMessage());
           } catch (error: any) {
             if (error?.message === "Insufficient balance") {

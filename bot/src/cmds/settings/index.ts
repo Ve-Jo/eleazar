@@ -268,7 +268,7 @@ const command = {
           }
 
           try {
-            await (hubClient as any).addLevelRole(guild.id, level, role.id);
+            await hubClient.addLevelRole(guild.id, level, role.id);
             await interaction.editReply(
               await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
@@ -326,7 +326,7 @@ const command = {
             }
           }
         } else if (subcommand === "list") {
-          const levelRoles = (await (hubClient as any).getGuildLevelRoles(guild.id)) as
+          const levelRoles = (await hubClient.getGuildLevelRoles(guild.id)) as
             | LevelRoleLike[]
             | null;
 

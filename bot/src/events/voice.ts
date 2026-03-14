@@ -1,10 +1,39 @@
 import { Events } from "discord.js";
+import type { GuildMember, VoiceState } from "discord.js";
 import hubClient from "../api/hubClient.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
 
+type HandleLevelUpClient = Parameters<typeof handleLevelUp>[0];
+type HandleLevelUpChannel = Parameters<typeof handleLevelUp>[5];
+
+type VoiceSessionLike = {
+  joinTime?: number | string;
+};
+
+type VoiceXpResult = {
+  timeSpent: number;
+  xpAmount: number;
+  levelUp?: {
+    assignedRole?: string;
+    removedRoles?: string[];
+    [key: string]: unknown;
+  } | null;
+};
+
+function toMilliseconds(value: number | string | undefined): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 const event = {
   name: Events.VoiceStateUpdate,
-  async execute(oldState: any, newState: any): Promise<void> {
+  async execute(oldState: VoiceState, newState: VoiceState): Promise<void> {
     try {
       const { guild, member } = oldState;
       if (!member) return;
@@ -25,7 +54,10 @@ const event = {
 
       if (!oldState.channelId && newState.channelId) {
         const channel = newState.channel;
-        const nonBotMembers = channel.members.filter((m: any) => !m.user.bot);
+        if (!channel) {
+          return;
+        }
+        const nonBotMembers = channel.members.filter((m: GuildMember) => !m.user.bot);
 
         console.log(
           `[Voice XP] User joined channel ${channel.name} with ${nonBotMembers.size} non-bot members`
@@ -42,18 +74,22 @@ const event = {
 
       if (oldState.channelId && !newState.channelId) {
         console.log("[Voice XP] User left voice channel completely");
-        const session = await hubClient.getVoiceSession(guildId, userId);
+        const session = (await hubClient.getVoiceSession(
+          guildId,
+          userId
+        )) as VoiceSessionLike | null;
 
-        if (session) {
+        if (session?.joinTime !== undefined) {
           console.log(
             `[Voice XP] Found active session for ${member.user.tag}, processing XP`
           );
-          const sessionDuration = Date.now() - session.joinTime;
-          const { timeSpent, xpAmount, levelUp } = await hubClient.calculateVoiceXP(
-            guildId,
-            userId,
-            sessionDuration
-          );
+          const sessionDuration = Date.now() - toMilliseconds(session.joinTime);
+          const { timeSpent, xpAmount, levelUp } =
+            (await hubClient.calculateVoiceXP(
+              guildId,
+              userId,
+              sessionDuration
+            )) as VoiceXpResult;
           console.log(
             `[Voice XP] Session ended: ${timeSpent / 1000}s, earned ${xpAmount} XP`
           );
@@ -105,7 +141,7 @@ const event = {
                     );
                   }
                 }
-              } catch (roleError) {
+              } catch (roleError: unknown) {
                 console.error(
                   `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
                   roleError
@@ -113,7 +149,14 @@ const event = {
               }
             }
 
-            await handleLevelUp(member.client, guildId, userId, levelUp, "voice", channel);
+            await handleLevelUp(
+              member.client as unknown as HandleLevelUpClient,
+              guildId,
+              userId,
+              levelUp,
+              "voice",
+              channel as unknown as HandleLevelUpChannel
+            );
           }
 
           await hubClient.removeVoiceSession(guildId, userId);
@@ -130,18 +173,25 @@ const event = {
       ) {
         const oldChannel = oldState.channel;
         const newChannel = newState.channel;
-        const session = await hubClient.getVoiceSession(guildId, userId);
+        if (!newChannel) {
+          return;
+        }
+        const session = (await hubClient.getVoiceSession(
+          guildId,
+          userId
+        )) as VoiceSessionLike | null;
 
-        if (session) {
+        if (session?.joinTime !== undefined) {
           console.log(
             `[Voice XP] Found active session during channel switch for ${member.user.tag}`
           );
-          const sessionDuration = Date.now() - session.joinTime;
-          const { timeSpent, xpAmount, levelUp } = await hubClient.calculateVoiceXP(
-            guildId,
-            userId,
-            sessionDuration
-          );
+          const sessionDuration = Date.now() - toMilliseconds(session.joinTime);
+          const { timeSpent, xpAmount, levelUp } =
+            (await hubClient.calculateVoiceXP(
+              guildId,
+              userId,
+              sessionDuration
+            )) as VoiceXpResult;
           console.log(
             `[Voice XP] Channel switch: ${timeSpent / 1000}s in previous channel, earned ${xpAmount} XP`
           );
@@ -191,7 +241,7 @@ const event = {
                     );
                   }
                 }
-              } catch (roleError) {
+              } catch (roleError: unknown) {
                 console.error(
                   `[Voice XP] Error assigning level roles to ${member.user.tag}:`,
                   roleError
@@ -199,13 +249,22 @@ const event = {
               }
             }
 
-            await handleLevelUp(member.client, guildId, userId, levelUp, "voice", oldChannel);
+            await handleLevelUp(
+              member.client as unknown as HandleLevelUpClient,
+              guildId,
+              userId,
+              levelUp,
+              "voice",
+              oldChannel as unknown as HandleLevelUpChannel
+            );
           }
 
           await hubClient.removeVoiceSession(guildId, userId);
         }
 
-        const nonBotMembers = newChannel.members.filter((m: any) => !m.user.bot);
+        const nonBotMembers = newChannel.members.filter(
+          (m: GuildMember) => !m.user.bot
+        );
         if (nonBotMembers.size >= 1) {
           console.log(`[Voice XP] Starting new session in channel ${newChannel.name}`);
           await hubClient.createVoiceSession(userId, guildId, newState.channelId);
@@ -213,7 +272,7 @@ const event = {
           console.log("[Voice XP] Not enough users in new channel for XP tracking");
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[Voice XP] Error in voice state update handler:", error);
     }
   },

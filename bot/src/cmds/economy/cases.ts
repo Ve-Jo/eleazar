@@ -7,7 +7,8 @@ import {
   SlashCommandSubcommandBuilder,
   StringSelectMenuBuilder,
 } from "discord.js";
-import hubClient, { CRATE_TYPES } from "../../api/hubClient.ts";
+import hubClient from "../../api/hubClient.ts";
+import { CRATE_TYPES } from "../../../../hub/shared/src/domain.ts";
 import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";

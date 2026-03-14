@@ -78,7 +78,8 @@
     "start": "bun --expose-gc .",
     "dev": "bun --expose-gc .",
     "coverage": "c8 --clean --reporter=lcov --reporter=text --reporter=html bun --expose-gc bot.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "ts-debt": "bun ../scripts/check-ts-debt.mjs --target ./src --max-js-files 1 --max-any 965 --max-as-any 197 --max-colon-any 139"
   },
   "author": "VeJoy",
   "license": "Eleazar Discord Bot License",

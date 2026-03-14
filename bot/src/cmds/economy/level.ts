@@ -146,17 +146,18 @@ const command = {
 
       let nextLevelRoleInfo: { name: string; color: string; requiredLevel: number } | null = null;
       try {
-        const nextRoleData = await (hubClient as any).getNextLevelRole(
+        const nextRoleData = await hubClient.getNextLevelRole(
           interaction.guild.id,
           chatLevelInfo.level
         );
-        if (nextRoleData) {
-          const role = await interaction.guild.roles.fetch(nextRoleData.roleId).catch(() => null);
+        const nextRole = nextRoleData.nextRole;
+        if (nextRole) {
+          const role = await interaction.guild.roles.fetch(nextRole.roleId).catch(() => null);
           if (role) {
             nextLevelRoleInfo = {
               name: role.name,
               color: role.hexColor,
-              requiredLevel: nextRoleData.requiredLevel,
+              requiredLevel: Number(nextRole.requiredLevel ?? 0),
             };
           }
         }

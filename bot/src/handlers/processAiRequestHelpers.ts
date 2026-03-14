@@ -80,6 +80,27 @@ type ToolResultMessage = {
   content: string;
 };
 
+type ToolExecutionRequest = {
+  toolCall: ToolCall;
+  messageContext: {
+    guildId?: string;
+    channelId?: string;
+    userId?: string;
+    messageId?: string;
+  };
+  userId: string;
+};
+
+type ToolExecutionResponse = {
+  content?: string;
+} | null;
+
+type ToolExecutionClient = {
+  processToolExecution?: (
+    payload: ToolExecutionRequest
+  ) => Promise<ToolExecutionResponse>;
+};
+
 type PromptSnapshot = {
   userInfo: UserPromptInfo;
   mentionedUsersInfo: UserPromptInfo[];
@@ -240,6 +261,11 @@ async function processToolCallsThroughHub(
   userId: string
 ): Promise<ToolResultMessage[]> {
   const toolResults: ToolResultMessage[] = [];
+  const maybeToolClient = hubClient as unknown as ToolExecutionClient;
+  const processToolExecution =
+    typeof maybeToolClient.processToolExecution === "function"
+      ? maybeToolClient.processToolExecution.bind(maybeToolClient)
+      : null;
 
   for (const toolCall of toolCalls) {
     try {
@@ -247,7 +273,11 @@ async function processToolCallsThroughHub(
         `[processAiRequest] Executing tool through hub: ${toolCall.function.name}`
       );
 
-      const toolResult = (await (hubClient as any).processToolExecution({
+      if (!processToolExecution) {
+        throw new Error("Tool execution is not available on hubClient");
+      }
+
+      const toolResult = await processToolExecution({
         toolCall,
         messageContext: {
           guildId: message.guild?.id,
@@ -256,7 +286,7 @@ async function processToolCallsThroughHub(
           messageId: message.id,
         },
         userId,
-      })) as { content?: string } | null;
+      });
 
       if (toolResult) {
         toolResults.push({

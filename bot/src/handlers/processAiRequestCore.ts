@@ -21,11 +21,10 @@ import {
   buildUserMessageContent,
 } from "./processAiRequestHelpers.ts";
 import type { MessageLike, ProcessingMessageLike } from "./processAiRequest.ts";
-
-const getAvailableModelsUnsafe = getAvailableModels as any;
-const buildInteractionComponentsUnsafe = buildInteractionComponents as any;
-const buildErrorComponentsUnsafe = buildErrorComponents as any;
-const getModelCapabilitiesUnsafe = getModelCapabilities as any;
+import type {
+  AiProcessRequest,
+  AiStreamChunk,
+} from "../../../hub/shared/src/contracts/hub.ts";
 
 type AiPreferences = {
   selectedModel?: string;
@@ -49,18 +48,25 @@ type ToolCall = {
   function: { name: string };
 };
 
-type HubChunk = {
-  content?: string;
-  reasoning?: string;
-  tool_call?: ToolCall;
+type AiFollowUpResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
 };
 
-type HubCompletion = {
-  content?: {
-    text?: string;
-    toolCalls?: ToolCall[];
-  };
-};
+function isToolCall(value: unknown): value is ToolCall {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const fn = record.function;
+  return (
+    typeof record.id === "string" &&
+    !!fn &&
+    typeof fn === "object" &&
+    typeof (fn as Record<string, unknown>).name === "string"
+  );
+}
 
 async function processAiRequestCore(
   message: MessageLike,
@@ -95,17 +101,14 @@ async function processAiRequestCore(
 
   let capabilities: ModelCapabilities;
   try {
-    capabilities = (await getModelCapabilitiesUnsafe(
-      client,
-      prefs.selectedModel
-    )) as ModelCapabilities;
+    capabilities = await getModelCapabilities(client, prefs.selectedModel);
     console.log(`Model capabilities for ${prefs.selectedModel}:`, capabilities);
   } catch (error) {
     const typedError = error as Error;
     console.error(`Failed to get capabilities for ${prefs.selectedModel}:`, error);
     const errMsg = `😥 Error checking model details: ${typedError.message}`;
     if (processingMessage) {
-      await sendResponse(message as any, processingMessage as any, errMsg, []);
+      await sendResponse(message, processingMessage, errMsg, []);
     } else if (channel) {
       await channel.send(errMsg).catch(() => {});
     }
@@ -115,12 +118,12 @@ async function processAiRequestCore(
   if (isVisionRequest && !capabilities.vision) {
     const errMsg = `Model \`${prefs.selectedModel}\` does not support image input. Please select a model with 'Vision' capability for this request.`;
     console.log(`Vision request blocked for non-vision model ${prefs.selectedModel}.`);
-    const visionModels = (await getAvailableModelsUnsafe(
+    const visionModels = await getAvailableModels(
       client,
       "vision",
       userId
-    )) as unknown;
-    const comps = await buildInteractionComponentsUnsafe(
+    );
+    const comps = await buildInteractionComponents(
       userId,
       visionModels,
       true,
@@ -131,14 +134,26 @@ async function processAiRequestCore(
     channel?.sendTyping?.();
     const promptMsg = await channel?.send({ content: errMsg, components: comps });
     const collector = promptMsg?.createMessageComponentCollector?.({
-      filter: (interaction: any) => interaction.user.id === userId && interaction.isStringSelectMenu(),
+      filter: (interaction: unknown) => {
+        const candidate = interaction as {
+          user?: { id?: string };
+          isStringSelectMenu?: () => boolean;
+        };
+        return candidate.user?.id === userId && candidate.isStringSelectMenu?.() === true;
+      },
       time: 5 * 60 * 1000,
     });
-    collector?.on("collect", async (interaction: any) => {
-      if (!interaction.isStringSelectMenu()) return;
-      const selectedModelId = interaction.values[0];
+    collector?.on("collect", async (interaction: unknown) => {
+      const candidate = interaction as {
+        isStringSelectMenu?: () => boolean;
+        values?: string[];
+        deferUpdate?: () => Promise<unknown>;
+      };
+      if (!candidate.isStringSelectMenu?.()) return;
+      const selectedModelId = candidate.values?.[0];
+      if (!selectedModelId) return;
       updateUserPreference(userId, "selectedModel", selectedModelId);
-      await interaction.deferUpdate();
+      await candidate.deferUpdate?.();
       await promptMsg.edit({
         content: await i18n.__("events.ai.messages.modelSelectedProcessing", { model: selectedModelId }, effectiveLocale),
         components: [],
@@ -149,11 +164,11 @@ async function processAiRequestCore(
   }
 
   if (isModelRateLimited(prefs.selectedModel)) {
-    const retryTime = (state as any).modelRateLimits[prefs.selectedModel];
+    const retryTime = state.modelStatus?.rateLimits?.[prefs.selectedModel] ?? Date.now();
     const minutesLeft = Math.ceil((retryTime - Date.now()) / 60000);
     const errMsg = `Model \`${prefs.selectedModel}\` is currently rate-limited. Please try again in about ${minutesLeft} minute(s) or select a different model.`;
     console.log(`Prevented call to rate-limited model ${prefs.selectedModel}.`);
-    if (processingMessage) await sendResponse(message as any, processingMessage as any, errMsg, []);
+    if (processingMessage) await sendResponse(message, processingMessage, errMsg, []);
     else await channel?.send(errMsg).catch(() => {});
     return;
   }
@@ -169,7 +184,7 @@ async function processAiRequestCore(
   try {
     let apiMessages = [...prefs.messageHistory];
     if (prefs.systemPromptEnabled) {
-      const promptSnapshot = await getUserInfoForPrompt(message as any);
+      const promptSnapshot = await getUserInfoForPrompt(message as unknown as Parameters<typeof getUserInfoForPrompt>[0]);
       const enhancedSystemPrompt = buildEnhancedSystemPrompt(promptSnapshot);
       apiMessages = apiMessages.filter((entry) => entry.role !== "system");
       apiMessages.unshift({ role: "system", content: enhancedSystemPrompt });
@@ -184,7 +199,7 @@ async function processAiRequestCore(
     };
     apiMessages.push(userMsg);
 
-    let hubPayload: any = {
+    let hubPayload: AiProcessRequest = {
       requestId: uuidv4(),
       model: prefs.selectedModel,
       messages: apiMessages,
@@ -291,12 +306,12 @@ async function processAiRequestCore(
     };
     scheduleNext();
 
-    await (hubClient as any).processAIHubStream(
+    await hubClient.processAIHubStream(
       hubPayload,
-      async (chunk: HubChunk) => {
+      async (chunk: AiStreamChunk) => {
         if (chunk.content) finalText += chunk.content;
         if (chunk.reasoning) reasoningText += chunk.reasoning;
-        if (chunk.tool_call) toolCalls.push(chunk.tool_call);
+        if (isToolCall(chunk.tool_call)) toolCalls.push(chunk.tool_call);
         const hasFinal = finalText.length > 0;
         if (hasFinal && procMsg && canEdit(Date.now())) {
           const preview = finalText.length > 1900 ? `${finalText.slice(0, 1900)}...` : finalText;
@@ -336,10 +351,8 @@ async function processAiRequestCore(
         streamDone = true;
         throw err;
       },
-      (completionData: HubCompletion) => {
-        console.log(`[processAiRequest] Stream completed with data:`, completionData);
-        if (completionData.content?.text) finalText = completionData.content.text;
-        if (completionData.content?.toolCalls) toolCalls = completionData.content.toolCalls;
+      (_completionData) => {
+        console.log(`[processAiRequest] Stream completed with data:`, _completionData);
         if (schedulerId) clearTimeout(schedulerId);
         streamDone = true;
         if (procMsg && finalText) {
@@ -354,15 +367,20 @@ async function processAiRequestCore(
 
     if (toolCalls.length > 0 && prefs.toolsEnabled) {
       console.log(`[processAiRequest] Processing ${toolCalls.length} tool calls through hub`);
-      const toolResults = await processToolCallsThroughHub(toolCalls, message as any, userId);
+      const toolResults = await processToolCallsThroughHub(
+        toolCalls,
+        message as unknown as Parameters<typeof processToolCallsThroughHub>[1],
+        userId
+      );
       if (toolResults.length > 0) {
-        const followUpResponse = await (hubClient as any).processAIHubRequest({
+        const followUpResponse = (await hubClient.processAIHubRequest({
           ...hubPayload,
           parameters: { ...(hubPayload.parameters || {}), stream: false },
           messages: [...apiMessages, { role: "assistant", content: finalText }, ...toolResults],
-        });
-        if (followUpResponse?.choices?.length > 0) {
-          finalText = followUpResponse.choices[0].message.content?.trim() || finalText;
+        })) as AiFollowUpResponse;
+        const followUpContent = followUpResponse?.choices?.[0]?.message?.content;
+        if (typeof followUpContent === "string" && followUpContent.trim()) {
+          finalText = followUpContent.trim();
         }
       }
     }
@@ -374,12 +392,12 @@ async function processAiRequestCore(
     };
 
     addConversationToHistory(userId, messageContent, finalText);
-    const models = (await getAvailableModelsUnsafe(
+    const models = await getAvailableModels(
       client,
       isVisionRequest ? "vision" : null,
       userId
-    )) as unknown;
-    const comps = await buildInteractionComponentsUnsafe(
+    );
+    const comps = await buildInteractionComponents(
       userId,
       models,
       isVisionRequest,
@@ -389,7 +407,7 @@ async function processAiRequestCore(
     );
 
     if (finalText || toolCalls.length === 0) {
-      await sendResponse(message as any, procMsg as any, finalText, comps, effectiveLocale, false);
+      await sendResponse(message, procMsg, finalText, comps, effectiveLocale, false);
     } else if (procMsg?.delete) {
       await procMsg.delete().catch(() => {});
     }
@@ -401,17 +419,17 @@ async function processAiRequestCore(
     const errMsg = await i18n.__("events.ai.messages.errorOccurred", { error: typedError.message }, effectiveLocale);
     let availableModels: unknown[] = [];
     try {
-      availableModels = (await getAvailableModelsUnsafe(
+      availableModels = await getAvailableModels(
         client,
         isVisionRequest ? "vision" : null,
         userId
-      )) as unknown[];
+      );
     } catch (modelsError) {
       console.error("Error getting available models for error components:", modelsError);
     }
     let errorComponents: unknown[] = [];
     try {
-      errorComponents = (await buildErrorComponentsUnsafe(
+      errorComponents = (await buildErrorComponents(
         userId,
         availableModels,
         isVisionRequest,
@@ -421,7 +439,7 @@ async function processAiRequestCore(
     } catch (componentsError) {
       console.error("Error building error components:", componentsError);
     }
-    await sendResponse(message as any, procMsg as any, errMsg, errorComponents, effectiveLocale, false);
+    await sendResponse(message, procMsg, errMsg, errorComponents, effectiveLocale, false);
   }
 }
 
