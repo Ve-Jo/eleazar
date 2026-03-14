@@ -2,15 +2,16 @@
   "name": "@eleazar-hub/database",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/server.js",
+  "main": "src/server.ts",
   "scripts": {
-    "start": "bun src/server.js",
-    "dev": "bun --watch src/server.js",
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "build": "echo \"Database service build complete\"",
     "db:generate": "bunx prisma generate",
     "db:push": "bunx prisma db push",
     "db:migrate": "bunx prisma migrate dev",
-    "db:studio": "bunx prisma studio"
+    "db:studio": "bunx prisma studio",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@prisma/client": "6.2.0",
