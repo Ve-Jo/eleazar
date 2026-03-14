@@ -3,12 +3,185 @@ import { generateImage } from "../utils/imageGenerator.ts";
 import hubClient from "../api/hubClient.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
 
-// Game state management for multi-user synchronization
-const activeGames = new Map();
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+  getLocale?: () => string;
+};
 
-// GameState manager for handling synchronized states
+type LevelDataLike = {
+  level: number;
+  currentXP: number;
+  requiredXP: number;
+  totalXP: number;
+};
+
+type SnakeSegment = {
+  x: number;
+  y: number;
+};
+
+type SnakeFood = {
+  x: number;
+  y: number;
+};
+
+type UserDataLike = {
+  economy?: {
+    balance?: number | string;
+  } | null;
+  Level?: {
+    xp?: number | string;
+    gameXp?: number | string;
+  } | null;
+  levelProgress?: unknown;
+  [key: string]: unknown;
+};
+
+type SnakeGameState = {
+  gridSize: number;
+  grid: number[][];
+  score: number;
+  gameOver: boolean;
+  snake: SnakeSegment[];
+  direction: "up" | "down" | "left" | "right";
+  food: SnakeFood | null;
+  moves: number;
+  startTime: number;
+  earning: number;
+  userData: UserDataLike | null;
+  balance: number;
+  chatLevelData: LevelDataLike | null;
+  gameLevelData: LevelDataLike | null;
+  lastLevel: number;
+  earningGameXP: number;
+  baseGameXP?: number;
+  gameXP?: number;
+};
+
+type MessageLike = {
+  id: string;
+  edit: (payload: Record<string, unknown>) => Promise<unknown>;
+  createMessageComponentCollector: () => CollectorLike;
+};
+
+type CollectorInteractionLike = {
+  customId: string;
+  user: { id: string };
+  channel: {
+    messages: {
+      fetch: (messageId: string | null) => Promise<MessageLike>;
+    };
+  };
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  deferUpdate: () => Promise<unknown>;
+};
+
+type CollectorLike = {
+  on: ((
+    event: "collect",
+    handler: (interaction: CollectorInteractionLike) => unknown
+  ) => void) &
+    ((event: "end", handler: () => unknown) => void);
+  stop: () => void;
+};
+
+type RoleManagerLike = {
+  add: (roleId: string) => Promise<unknown>;
+  remove: (roleIds: string[]) => Promise<unknown>;
+};
+
+type MessageChannelLike = {
+  send: (payload: {
+    content?: string;
+    embeds?: unknown[];
+    files?: unknown[];
+  }) => Promise<unknown>;
+};
+
+type ChannelLike = {
+  name: string;
+  type: number;
+  messages?: { cache: { size: number } };
+  send?: (payload: {
+    content?: string;
+    embeds?: unknown[];
+    files?: unknown[];
+  }) => Promise<unknown>;
+  permissionsFor?: (member: unknown) => { has: (permission: string) => boolean };
+};
+
+type GuildLike = {
+  name: string;
+  preferredLocale?: string | null;
+  systemChannel?: ChannelLike | null;
+  members: {
+    fetch: (userId: string) => Promise<{
+      id: string;
+      displayName: string;
+      preferredLocale?: string | null;
+      user: { username: string };
+      roles: RoleManagerLike;
+      send: (payload: { embeds: unknown[]; files: unknown[] }) => Promise<unknown>;
+      displayAvatarURL: (options: { extension: string; size: number }) => string;
+    } | null>;
+    me?: unknown;
+  };
+  channels: {
+    cache: {
+      find: (predicate: (channel: ChannelLike) => boolean) => ChannelLike | undefined;
+    };
+  };
+  iconURL: (options: { extension: string; size: number }) => string | null;
+};
+
+type ClientLike = {
+  guilds: {
+    fetch: (guildId: string) => Promise<GuildLike | null>;
+  };
+};
+
+type GameInteractionLike = {
+  channelId: string;
+  guildId?: string | null;
+  locale: string;
+  deferred?: boolean;
+  replied?: boolean;
+  channel: MessageChannelLike | null;
+  guild: {
+    id: string;
+    name: string;
+    iconURL: (options?: { extension?: string; size?: number }) => string | null;
+  };
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    displayAvatarURL: (options?: { extension?: string; size?: number }) => string;
+  };
+  client: ClientLike;
+  deferReply: () => Promise<unknown>;
+  followUp: (payload: Record<string, unknown>) => Promise<MessageLike>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const activeGames = new Map<string, GameState>();
+
 class GameState {
-  constructor(channelId, userId, messageId, guildId) {
+  channelId: string;
+  userId: string;
+  guildId?: string | null;
+  messageId: string | null;
+  lastUpdateTime: number;
+  lastImageGenTime: number;
+  state: SnakeGameState;
+  forceRenderFrame: boolean;
+
+  constructor(
+    channelId: string,
+    userId: string,
+    messageId: string | null,
+    guildId?: string | null
+  ) {
     this.channelId = channelId;
     this.userId = userId;
     this.guildId = guildId;
@@ -19,11 +192,11 @@ class GameState {
     this.forceRenderFrame = false;
   }
 
-  createInitialState() {
-    const state = {
+  createInitialState(): SnakeGameState {
+    const state: SnakeGameState = {
       gridSize: 5,
       grid: Array(5)
-        .fill()
+        .fill(0)
         .map(() => Array(5).fill(0)),
       score: 0,
       gameOver: false,
@@ -53,7 +226,7 @@ class GameState {
   }
 
   // Simple XP calculation for display purposes only
-  updateEarningGameXP(scoreDifference) {
+  updateEarningGameXP(scoreDifference: number): number {
     // Calculate XP based on score difference to prevent duplication
     const xpGained = scoreDifference * 5; // 5 XP per point gained
     this.state.earningGameXP += xpGained;
@@ -67,13 +240,12 @@ class GameState {
   }
 
   // Get current game level data based on total XP
-  getCurrentGameLevelData() {
+  getCurrentGameLevelData(): LevelDataLike | null {
     return this.state.gameLevelData;
   }
 }
 
-// Change game state management to use composite key
-function getGameKey(channelId, userId) {
+function getGameKey(channelId: string, userId: string): string {
   return `${channelId}-${userId}`;
 }
 
@@ -81,7 +253,7 @@ export default {
   id: "snake",
   title: "Snake",
   emoji: "🐍",
-  async execute(interaction, i18n) {
+  async execute(interaction: GameInteractionLike, i18n: TranslatorLike) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
@@ -115,7 +287,7 @@ export default {
     addFood(initialState.state);
 
     // Calculate earning based on score and time
-    const calculateEarning = (state) => {
+    const calculateEarning = (state: SnakeGameState): number => {
       const timeInMinutes = (Date.now() - state.startTime) / 60000;
       const moveEfficiency = state.score / (state.moves || 1);
 
@@ -129,14 +301,18 @@ export default {
     };
 
     // Helper function to wrap coordinates around grid edges
-    const wrapCoordinate = (coord, size) => {
+    const wrapCoordinate = (coord: number, size: number): number => {
       // Handle negative numbers by adding size until positive
       while (coord < 0) coord += size;
       return coord % size;
     };
 
     // Helper function to generate game board image
-    const generateGameBoard = async (state, userLocale, userAvatarURL) => {
+    const generateGameBoard = async (
+      state: SnakeGameState,
+      userLocale: string,
+      userAvatarURL: string
+    ) => {
       updateGridState(state);
 
       // Prepare user data for rendering
@@ -302,7 +478,7 @@ export default {
             });
 
             // Store user data in game state for future use
-            initialState.state.userData = userData;
+            initialState.state.userData = userData as UserDataLike;
             initialState.state.balance = balance;
             initialState.state.chatLevelData = chatLevelData;
             initialState.state.gameLevelData = gameLevelData;
@@ -333,14 +509,13 @@ export default {
       );
 
       // Send initial game board
+      const startMessage = await i18n.__("games.snake.startMessage");
+      const highScoreText = await i18n.__(`games.snake.highScore`, {
+        score: currentHighScore,
+      });
+
       const message = await interaction.followUp({
-        content:
-          (i18n.__("games.snake.name")
-            ? i18n.__("games.snake.startMessage")
-            : i18n.__("games.snake.startMessage")) +
-          `\n${i18n.__(`games.snake.highScore`, {
-            score: currentHighScore,
-          })}`,
+        content: `${startMessage}\n${highScoreText}`,
         files: [{ attachment: buffer, name: "snake.avif" }],
         components: [row1, row2],
         fetchReply: true,
@@ -358,7 +533,7 @@ export default {
 
       // Handle moves
       const collector = message.createMessageComponentCollector();
-      let inactivityTimeout;
+      let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
 
       const resetInactivityTimer = () => {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
@@ -470,7 +645,7 @@ export default {
 
       resetInactivityTimer();
 
-      collector.on("collect", async (i) => {
+      collector.on("collect", async (i: CollectorInteractionLike) => {
         const gameInstance = activeGames.get(gameKey);
 
         // Validate game exists and user has permission
@@ -533,7 +708,11 @@ export default {
           state.earning = calculateEarning(state);
 
           // Move snake
-          const head = { ...state.snake[0] };
+          const currentHead = state.snake[0];
+          if (!currentHead) {
+            return;
+          }
+          const head: SnakeSegment = { ...currentHead };
 
           // Update coordinates based on direction
           switch (state.direction) {
@@ -559,7 +738,7 @@ export default {
             state.snake.unshift(head);
 
             // Check if snake ate food
-            if (head.x === state.food.x && head.y === state.food.y) {
+            if (state.food && head.x === state.food.x && head.y === state.food.y) {
               state.score += 10;
               // Check if grid needs to expand
               if (state.snake.length > state.gridSize * state.gridSize * 0.75) {
@@ -719,7 +898,7 @@ export default {
             ? invalidMoveText
             : "Invalid move!";
         let messageComponents = [row1, row2];
-        let messageFiles = []; // Default empty
+        let messageFiles: Array<{ attachment: unknown; name: string }> = [];
 
         // Only generate a new board image if the move was valid
         if (validMove) {
@@ -847,54 +1026,66 @@ export default {
 // Game logic functions
 
 // Add food at random empty position
-function addFood(state) {
-  const emptyCells = [];
+function addFood(state: SnakeGameState): void {
+  const emptyCells: SnakeFood[] = [];
   for (let y = 0; y < state.gridSize; y++) {
     for (let x = 0; x < state.gridSize; x++) {
-      if (!state.snake.some((segment) => segment.x === x && segment.y === y)) {
+      if (!state.snake.some((segment: SnakeSegment) => segment.x === x && segment.y === y)) {
         emptyCells.push({ x, y });
       }
     }
   }
 
   if (emptyCells.length > 0) {
-    state.food = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const selectedFood = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    if (!selectedFood) {
+      return;
+    }
+    state.food = selectedFood;
   }
 }
 
 // Check if point collides with snake body
-function checkCollision(point, snake) {
+function checkCollision(point: SnakeSegment, snake: SnakeSegment[]): boolean {
   return snake.some(
-    (segment) => segment.x === point.x && segment.y === point.y,
+    (segment: SnakeSegment) => segment.x === point.x && segment.y === point.y,
   );
 }
 
 // Update grid state based on snake and food positions
-function updateGridState(state) {
+function updateGridState(state: SnakeGameState): void {
   // Clear grid
   state.grid = Array(state.gridSize)
-    .fill()
+    .fill(0)
     .map(() => Array(state.gridSize).fill(0));
 
   // Add snake segments (value 1 for body, 2 for head)
-  state.snake.forEach((segment, i) => {
+  state.snake.forEach((segment: SnakeSegment, i: number) => {
+    const gridRow = state.grid[segment.y];
+    if (!gridRow) {
+      return;
+    }
     if (i === 0) {
-      state.grid[segment.y][segment.x] = 2; // Head
+      gridRow[segment.x] = 2; // Head
     } else {
-      state.grid[segment.y][segment.x] = 1; // Body
+      gridRow[segment.x] = 1; // Body
     }
   });
 
   // Add food (value 4)
   if (state.food) {
-    state.grid[state.food.y][state.food.x] = 4;
+    const foodRow = state.grid[state.food.y];
+    if (!foodRow) {
+      return;
+    }
+    foodRow[state.food.x] = 4;
   }
 }
 
 // Expand grid when snake gets too big
-function expandGrid(state) {
+function expandGrid(state: SnakeGameState): void {
   state.gridSize++;
   state.grid = Array(state.gridSize)
-    .fill()
+    .fill(0)
     .map(() => Array(state.gridSize).fill(0));
 }

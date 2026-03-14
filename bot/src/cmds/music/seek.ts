@@ -1,9 +1,72 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type TrackLike = {
+  info: {
+    duration: number;
+  };
+};
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  position: number;
+  queue: {
+    current?: TrackLike | null;
+  };
+  seek: (position: number) => Promise<void>;
+};
+
+type AutocompleteOptionLike = {
+  name: string;
+  value: string;
+};
+
+type MusicInteractionLike = {
+  client: {
+    lavalink: {
+      players: {
+        get: (guildId: string) => PlayerLike | null;
+      };
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  options: {
+    getString: (name: string) => string | null;
+    getFocused: (required: true) => { value: string };
+  };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  respond: (options: AutocompleteOptionLike[]) => Promise<unknown>;
+};
+
+const parseTimeToMs = (timeString: string): number | null => {
+  const parts = timeString.split(":").map((part) => Number.parseInt(part, 10));
+  if (parts.length === 1 && !Number.isNaN(parts[0] ?? Number.NaN)) {
+    return (parts[0] ?? 0) * 1000;
+  }
+  if (
+    parts.length === 2 &&
+    !Number.isNaN(parts[0] ?? Number.NaN) &&
+    !Number.isNaN(parts[1] ?? Number.NaN)
+  ) {
+    return ((parts[0] ?? 0) * 60 + (parts[1] ?? 0)) * 1000;
+  }
+  return null;
+};
+
+const formatTime = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("seek")
       .setDescription("Seek to a specific time in the current track")
       .addStringOption((option) =>
@@ -13,11 +76,8 @@ export default {
           .setRequired(true)
           .setAutocomplete(true),
       );
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -70,44 +130,55 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = interaction.client.lavalink.players.get(
-      interaction.guild.id,
-    );
+    const player = interaction.client.lavalink.players.get(interaction.guild.id);
     if (!player) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.seek.noMusicPlaying"),
         ephemeral: true,
       });
+      return;
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.seek.notInVoiceChannel"),
         ephemeral: true,
       });
+      return;
     }
 
     const timeString = interaction.options.getString("time");
-    const timeInMs = parseTimeToMs(timeString);
-
-    if (timeInMs === null) {
-      return interaction.editReply({
+    if (!timeString) {
+      await interaction.editReply({
         content: await i18n.__("commands.music.seek.invalidTimeFormat"),
         ephemeral: true,
       });
+      return;
     }
 
-    if (timeInMs > player.queue.current.info.duration) {
-      return interaction.editReply({
+    const timeInMs = parseTimeToMs(timeString);
+
+    if (timeInMs === null) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.seek.invalidTimeFormat"),
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const currentTrack = player.queue.current;
+    if (!currentTrack || timeInMs > currentTrack.info.duration) {
+      await interaction.editReply({
         content: await i18n.__("commands.music.seek.seekBeyondDuration"),
         ephemeral: true,
       });
+      return;
     }
 
     await player.seek(timeInMs);
-    return interaction.editReply({
+    await interaction.editReply({
       content: await i18n.__("commands.music.seek.seekedTo", {
         time: timeString,
       }),
@@ -115,46 +186,30 @@ export default {
     });
   },
 
-  async autocomplete(interaction) {
-    await interaction.deferReply();
-    const player = interaction.client.lavalink.players.get(
-      interaction.guild.id,
-    );
-    if (!player || !player.queue.current) return;
+  async autocomplete(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
+    const player = interaction.client.lavalink.players.get(interaction.guild.id);
+    if (!player || !player.queue.current) {
+      return;
+    }
 
     const focusedValue = interaction.options.getFocused(true).value;
     const currentPosition = Math.floor(player.position / 1000);
-    const newPosition = parseTimeToMs(focusedValue) / 1000;
+    const parsedPosition = parseTimeToMs(focusedValue);
 
-    if (newPosition !== null) {
+    if (parsedPosition !== null) {
       const currentTime = formatTime(currentPosition);
-      const newTime = formatTime(newPosition);
-      return interaction.respond([
-        { name: `${currentTime} -> ${newTime}`, value: focusedValue },
-      ]);
-    } else {
-      return interaction.respond([
-        {
-          name: await i18n.__("commands.music.seek.invalidTimeFormat"),
-          value: "0:00",
-        },
-      ]);
+      const newTime = formatTime(parsedPosition / 1000);
+      await interaction.respond([{ name: `${currentTime} -> ${newTime}`, value: focusedValue }]);
+      return;
     }
+
+    await interaction.respond([
+      {
+        name: await i18n.__("commands.music.seek.invalidTimeFormat"),
+        value: "0:00",
+      },
+    ]);
   },
 };
 
-function parseTimeToMs(timeString) {
-  const parts = timeString.split(":").map((part) => parseInt(part, 10));
-  if (parts.length === 1 && !isNaN(parts[0])) {
-    return parts[0] * 1000; // seconds only
-  } else if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return (parts[0] * 60 + parts[1]) * 1000; // minutes and seconds
-  }
-  return null; // invalid format
-}
-
-function formatTime(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-}
+export default command;

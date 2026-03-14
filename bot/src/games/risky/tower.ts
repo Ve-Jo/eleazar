@@ -13,20 +13,174 @@ import { generateImage } from "../../utils/imageGenerator.ts";
 
 import hubClient from "../../api/hubClient.ts";
 
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+  setLocale?: (locale: string) => string;
+  getLocale?: () => string;
+};
+
+type TowerDifficulty = "easy" | "medium" | "hard";
+
+type LevelDataLike = {
+  level: number;
+  currentXP: number;
+  requiredXP: number;
+  totalXP: number;
+};
+
+type LevelProgressLike = {
+  chat: LevelDataLike | null;
+  game: LevelDataLike | null;
+};
+
+type UserRecordLike = {
+  economy?: {
+    balance?: string | number | null;
+  } | null;
+  Level?: {
+    xp?: string | number | null;
+    gameXp?: string | number | null;
+  } | null;
+  levelProgress?: unknown;
+};
+
+type TowerPendingState = {
+  bet: number;
+  difficulty: TowerDifficulty;
+  isPreGame: boolean;
+  balance: number;
+  levelProgress: LevelProgressLike;
+  sessionChange: number;
+};
+
+type TowerCollectorRecord = {
+  options?: {
+    filter?: unknown;
+    componentType?: ComponentType;
+  };
+  filter?: unknown;
+  stop: (reason?: string) => void;
+};
+
+type ModalSubmissionLike = {
+  customId: string;
+  user: { id: string };
+  fields: {
+    getTextInputValue: (name: string) => string;
+  };
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  update: (payload: Record<string, unknown>) => Promise<unknown>;
+};
+
+type SetupInteractionLike = {
+  customId: string;
+  user: { id: string };
+  message: { id: string };
+  replied?: boolean;
+  deferred?: boolean;
+  showModal: (modal: ModalBuilder) => Promise<unknown>;
+  awaitModalSubmit: (options: {
+    filter: (interaction: ModalSubmissionLike) => boolean;
+    time: number;
+  }) => Promise<ModalSubmissionLike>;
+  update: (payload: Record<string, unknown>) => Promise<unknown>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  followUp: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  deferUpdate: () => Promise<unknown>;
+};
+
+type GameInteractionLike = {
+  customId: string;
+  user: { id: string };
+  message: { id: string };
+  replied?: boolean;
+  deferred?: boolean;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  deferUpdate: () => Promise<unknown>;
+};
+
+type CollectorLike = {
+  on: ((
+    event: "collect",
+    handler: (interaction: SetupInteractionLike) => Promise<void>
+  ) => void) &
+    ((event: "end", handler: (collected: unknown, reason: string) => unknown) => void);
+  stop: (reason?: string) => void;
+};
+
+type GameCollectorLike = {
+  on: ((
+    event: "collect",
+    handler: (interaction: GameInteractionLike) => Promise<void>
+  ) => void) &
+    ((event: "end", handler: (collected: unknown, reason: string) => unknown) => void);
+  stop: (reason?: string) => void;
+};
+
+type MessageLike = {
+  id: string;
+  editable?: boolean;
+  collectors?: TowerCollectorRecord[];
+  edit: (payload: Record<string, unknown>) => Promise<unknown>;
+  createMessageComponentCollector: (options: {
+    filter: (interaction: SetupInteractionLike | GameInteractionLike) => boolean;
+    componentType: ComponentType;
+    time: number;
+  }) => CollectorLike | GameCollectorLike;
+};
+
+type CommandInteractionLike = {
+  channelId: string;
+  guildId?: string | null;
+  guildLocale?: string;
+  locale?: string;
+  replied?: boolean;
+  deferred?: boolean;
+  user: {
+    id: string;
+    displayAvatarURL: (options?: { extension?: string; size?: number }) => string;
+  };
+  followUp: (payload: Record<string, unknown>) => Promise<MessageLike>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type TowerGameState = {
+  channelId: string;
+  userId: string;
+  guildId?: string | null;
+  messageId: string | null;
+  difficulty: TowerDifficulty | null;
+  betAmount: number;
+  currentFloor: number;
+  tilesPerRow: number;
+  bombPositions: Record<number, number[]>;
+  currentPrize: number;
+  gameOver: boolean;
+  lastAction: "start" | "safe" | "bomb" | "prize";
+  lastUpdateTime: number;
+  sessionChange: number;
+  initialBalance: number;
+  selectedTiles: number[];
+};
+
+function parseBalance(value: string | number | null | undefined): number {
+  return parseFloat(String(value ?? 0));
+}
+
 // --- Game Constants ---
 const MAX_FLOORS = 10;
-const TILE_COUNTS = {
+const TILE_COUNTS: Record<TowerDifficulty, number> = {
   easy: 3,
   medium: 4,
   hard: 5,
 };
-const BOMB_COUNTS = {
+const BOMB_COUNTS: Record<TowerDifficulty, number> = {
   easy: 1,
   medium: 2,
   hard: 4,
 };
 // Adjusted multipliers for a slight house edge, increasing with difficulty
-const BASE_MULTIPLIERS = {
+const BASE_MULTIPLIERS: Record<TowerDifficulty, number[]> = {
   // easy: P(win) = 2/3. Fair base = 1.5. Target Edge ~3% (Factor 0.97)
   easy: [1.46, 2.18, 3.28, 4.91, 7.37, 11.06, 16.59, 24.88, 37.32, 55.98],
   // medium: P(win) = 2/4 = 1/2. Fair base = 2.0. Target Edge ~4% (Factor 0.96)
@@ -42,10 +196,32 @@ const BASE_MULTIPLIERS = {
 };
 
 // --- Game State Management ---
-const activeGames = new Map();
+const activeGames = new Map<string, GameState>();
 
 class GameState {
-  constructor(channelId, userId, messageId, guildId) {
+  channelId: string;
+  userId: string;
+  guildId?: string | null;
+  messageId: string | null;
+  difficulty: TowerDifficulty | null;
+  betAmount: number;
+  currentFloor: number;
+  tilesPerRow: number;
+  bombPositions: Record<number, number[]>;
+  currentPrize: number;
+  gameOver: boolean;
+  lastAction: "start" | "safe" | "bomb" | "prize";
+  lastUpdateTime: number;
+  sessionChange: number;
+  initialBalance: number;
+  selectedTiles: number[];
+
+  constructor(
+    channelId: string,
+    userId: string,
+    messageId: string | null,
+    guildId?: string | null
+  ) {
     this.channelId = channelId;
     this.userId = userId;
     this.guildId = guildId;
@@ -62,14 +238,18 @@ class GameState {
     this.lastUpdateTime = Date.now();
     this.sessionChange = 0; // Track money won/lost during session
     this.initialBalance = 0; // Store initial balance before game starts
+    this.selectedTiles = [];
   }
 
   // Generate bomb position for the next floor if it doesn't exist
-  ensureBombPosition(floor) {
+  ensureBombPosition(floor: number): void {
     if (!this.bombPositions[floor]) {
+      if (!this.difficulty) {
+        return;
+      }
       const bombCount = BOMB_COUNTS[this.difficulty];
       const tileCount = this.tilesPerRow;
-      const bombs = [];
+      const bombs: number[] = [];
       while (bombs.length < bombCount) {
         const pos = Math.floor(Math.random() * tileCount);
         if (!bombs.includes(pos)) {
@@ -86,11 +266,12 @@ class GameState {
     }
   }
 
-  calculatePrize(floor) {
+  calculatePrize(floor: number): number {
     if (floor < 0) return 0;
+    if (!this.difficulty) return 0;
     const multipliers = BASE_MULTIPLIERS[this.difficulty];
     const multiplier =
-      multipliers[floor] || multipliers[multipliers.length - 1];
+      multipliers[floor] ?? multipliers[multipliers.length - 1] ?? 0;
     return parseFloat((this.betAmount * multiplier).toFixed(2));
   }
 
@@ -99,15 +280,15 @@ class GameState {
   }
 }
 
-function getGameKey(channelId, userId) {
+function getGameKey(channelId: string, userId: string): string {
   return `tower-${channelId}-${userId}`;
 }
 
 // Updated to handle pre-game state
 async function generateTowerImage(
-  interaction,
-  i18n,
-  pendingState, // { bet: number, difficulty: string, isPreGame: boolean, balance: number, levelProgress: object, sessionChange: number }
+  interaction: CommandInteractionLike,
+  i18n: TranslatorLike,
+  pendingState: TowerPendingState,
 ) {
   const props = {
     interaction: {
@@ -151,11 +332,11 @@ async function generateTowerImage(
 
 // Function to generate image for active game state
 async function generateActiveTowerImage(
-  gameInstance,
-  interaction,
-  i18n,
+  gameInstance: GameState,
+  interaction: CommandInteractionLike,
+  i18n: TranslatorLike,
   balance = 0,
-  levelProgress = { chat: null, game: null },
+  levelProgress: LevelProgressLike = { chat: null, game: null },
 ) {
   // Calculate session change as current balance minus initial balance
   const sessionChange = balance - gameInstance.initialBalance;
@@ -182,7 +363,9 @@ async function generateActiveTowerImage(
     gameOver: gameInstance.gameOver,
     isPreGame: false, // Explicitly false for active game
     selectedTiles: gameInstance.selectedTiles || [],
-    floorMultipliers: BASE_MULTIPLIERS[gameInstance.difficulty],
+    floorMultipliers: gameInstance.difficulty
+      ? BASE_MULTIPLIERS[gameInstance.difficulty]
+      : BASE_MULTIPLIERS.easy,
     locale: interaction.locale || interaction.guildLocale || "en",
     dominantColor: "user",
     // Pass balance and level progress data
@@ -202,7 +385,7 @@ export default {
   id: "tower",
   title: "Tower",
   emoji: "🗼",
-  async execute(interaction, i18n) {
+  async execute(interaction: CommandInteractionLike, i18n: TranslatorLike) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const guildId = interaction.guildId;
@@ -213,13 +396,16 @@ export default {
     }
 
     // Helper function to safely get translation with fallback (same as 2048.js)
-    const getTranslation = async (key, variables = {}) => {
+    const getTranslation = async (
+      key: string,
+      variables: Record<string, unknown> = {}
+    ): Promise<string> => {
       try {
         const result = await i18n.__(key, variables);
-        return typeof result === "string" ? result : key.split(".").pop();
+        return typeof result === "string" ? result : (key.split(".").pop() ?? key);
       } catch (error) {
         console.warn(`Translation error for key: ${key}`, error);
-        return key.split(".").pop();
+        return key.split(".").pop() ?? key;
       }
     };
 
@@ -234,14 +420,14 @@ export default {
 
     // --- Initial Setup Phase ---
     let pendingBet = 0;
-    let pendingDifficulty = "easy"; // Default difficulty
-    let setupMessage = null;
-    let setupCollector = null; // Add this to the outer scope
+    let pendingDifficulty: TowerDifficulty = "easy"; // Default difficulty
+    let setupMessage: MessageLike | null = null;
+    let setupCollector: CollectorLike | null = null; // Add this to the outer scope
 
     // Create a reusable function for setting up the game
     const setupGame = async (
       initialBet = 0,
-      initialDifficulty = "easy",
+      initialDifficulty: TowerDifficulty = "easy",
       initialSessionChange = 0,
     ) => {
       pendingBet = initialBet;
@@ -257,7 +443,7 @@ export default {
         try {
           // Ensure user exists in database
           await hubClient.ensureGuildUser(guildId, userId);
-          userData = await hubClient.getUser(guildId, userId);
+          userData = (await hubClient.getUser(guildId, userId)) as UserRecordLike | null;
 
           if (userData) {
             // Get wallet balance
@@ -343,43 +529,40 @@ export default {
     };
 
     // Create filter function for setup collector
-    const setupCollectorFilter = (i) =>
-      i.user.id === userId && i.message.id === setupMessage.id;
+    const setupCollectorFilter = (i: SetupInteractionLike) =>
+      i.user.id === userId && i.message.id === setupMessage?.id;
 
     // Create restart collector function
-    const createRestartCollector = (gameInstance) => {
-      // Clean up any previous restart collectors that might exist
-      if (setupMessage.createMessageComponentCollector) {
-        // Get all active collectors on the message
-        const collectors = setupMessage.collectors || [];
-
-        // Stop any collectors that might be for restart buttons
-        collectors.forEach((collector) => {
-          if (
-            collector.options &&
-            collector.options.filter &&
-            collector.filter &&
-            collector.options.componentType === ComponentType.Button
-          ) {
-            try {
-              // Only stop collectors that aren't our new one
-              collector.stop("replaced");
-            } catch (err) {
-              console.error("[Tower] Error stopping previous collector:", err);
-            }
-          }
-        });
+    const createRestartCollector = (gameInstance: GameState) => {
+      if (!setupMessage) {
+        return null;
       }
+      const currentSetupMessage = setupMessage;
 
-      // Create new collector with proper filter
-      const restartCollector = setupMessage.createMessageComponentCollector({
-        filter: (i) =>
+      const collectors = currentSetupMessage.collectors || [];
+      collectors.forEach((collector) => {
+        if (
+          collector.options &&
+          collector.options.filter &&
+          collector.filter &&
+          collector.options.componentType === ComponentType.Button
+        ) {
+          try {
+            collector.stop("replaced");
+          } catch (err) {
+            console.error("[Tower] Error stopping previous collector:", err);
+          }
+        }
+      });
+
+      const restartCollector = currentSetupMessage.createMessageComponentCollector({
+        filter: (i: SetupInteractionLike | GameInteractionLike) =>
           i.user.id === userId && i.customId === `tower_restart_game_${userId}`,
         componentType: ComponentType.Button,
         time: 60000 * 15, // 15 minutes to decide to restart
-      });
+      }) as CollectorLike;
 
-      restartCollector.on("collect", async (restartInteraction) => {
+      restartCollector.on("collect", async (restartInteraction: SetupInteractionLike) => {
         try {
           // Stop collecting restart button clicks immediately to prevent duplicate handling
           restartCollector.stop("restart_clicked");
@@ -393,7 +576,7 @@ export default {
 
           // Re-initialize with the previous settings
           const prevBet = gameInstance.betAmount;
-          const prevDifficulty = gameInstance.difficulty;
+          const prevDifficulty = gameInstance.difficulty ?? "easy";
 
           // Start a new setup with the previous settings, including sessionChange from previous game
           await setupGame(prevBet, prevDifficulty, gameInstance.sessionChange);
@@ -404,7 +587,7 @@ export default {
         }
       });
 
-      restartCollector.on("end", (collected, reason) => {
+      restartCollector.on("end", (_collected, reason) => {
         console.log(`[Tower] Restart collector ended. Reason: ${reason}`);
       });
 
@@ -413,34 +596,36 @@ export default {
 
     // Create and setup the collector for the setup phase
     const createSetupCollector = () => {
-      // Clean up any previous collectors that might exist
-      if (setupMessage.createMessageComponentCollector) {
-        const collectors = setupMessage.collectors || [];
-        collectors.forEach((collector) => {
-          try {
-            collector.stop("new_setup");
-          } catch (err) {
-            console.error("[Tower] Error stopping previous collector:", err);
-          }
-        });
+      if (!setupMessage) {
+        return null;
       }
-
-      const newSetupCollector = setupMessage.createMessageComponentCollector({
-        filter: setupCollectorFilter,
-        componentType: ComponentType.Button,
-        time: 60000 * 5, // 5 minutes for setup
+      const currentSetupMessage = setupMessage;
+      const collectors = currentSetupMessage.collectors || [];
+      collectors.forEach((collector) => {
+        try {
+          collector.stop("new_setup");
+        } catch (err) {
+          console.error("[Tower] Error stopping previous collector:", err);
+        }
       });
 
+      const newSetupCollector = currentSetupMessage.createMessageComponentCollector({
+        filter: (interaction: SetupInteractionLike | GameInteractionLike) =>
+          setupCollectorFilter(interaction as SetupInteractionLike),
+        componentType: ComponentType.Button,
+        time: 60000 * 5, // 5 minutes for setup
+      }) as CollectorLike;
+
       newSetupCollector.on("collect", handleSetupInteraction);
-      newSetupCollector.on("end", async (collected, reason) => {
+      newSetupCollector.on("end", async (_collected, reason) => {
         // Clean up setup message if game didn't start
         if (
           reason !== "user" &&
           reason !== "game_started" &&
           !activeGames.has(gameKey) &&
-          setupMessage.editable
+          currentSetupMessage.editable
         ) {
-          setupMessage
+          currentSetupMessage
             .edit({
               content: await getTranslation("games.tower.setupTimeout"),
               components: [],
@@ -457,7 +642,7 @@ export default {
     };
 
     // Handle all setup phase interactions
-    const handleSetupInteraction = async (i) => {
+    const handleSetupInteraction = async (i: SetupInteractionLike) => {
       try {
         // --- Set Bet Button ---
         if (i.customId === `tower_set_bet_pregame_${userId}`) {
@@ -472,11 +657,11 @@ export default {
             .setValue(pendingBet > 0 ? pendingBet.toString() : "") // Pre-fill with current bet if exists
             .setRequired(true);
           betModal.addComponents(
-            new ActionRowBuilder().addComponents(amountInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput),
           );
           await i.showModal(betModal);
 
-          const modalFilter = (modalInteraction) =>
+          const modalFilter = (modalInteraction: ModalSubmissionLike) =>
             modalInteraction.customId === `tower_bet_modal_${userId}` &&
             modalInteraction.user.id === userId;
 
@@ -497,8 +682,11 @@ export default {
           }
           // Check balance only when setting bet and only if in a guild
           if (guildId) {
-            const userData = await hubClient.getUser(guildId, userId);
-            const userBalance = parseFloat(userData?.economy?.balance || 0);
+            const userData = (await hubClient.getUser(
+              guildId,
+              userId,
+            )) as UserRecordLike | null;
+            const userBalance = parseBalance(userData?.economy?.balance);
             if (!userData || !userData.economy || userBalance < betAmount) {
               await modalSubmission.reply({
                 content: await getTranslation("games.tower.notEnoughMoney", {
@@ -524,9 +712,7 @@ export default {
                 guildId,
                 userId,
               );
-              updatedBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0,
-              );
+              updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
               if (currentBalanceData?.Level) {
                 const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -560,10 +746,10 @@ export default {
         }
         // --- Change Difficulty Button ---
         else if (i.customId === `tower_change_difficulty_pregame_${userId}`) {
-          const difficulties = ["easy", "medium", "hard"];
+          const difficulties: TowerDifficulty[] = ["easy", "medium", "hard"];
           const currentIndex = difficulties.indexOf(pendingDifficulty);
           pendingDifficulty =
-            difficulties[(currentIndex + 1) % difficulties.length];
+            difficulties[(currentIndex + 1) % difficulties.length] ?? "easy";
 
           // Fetch current balance and level progress for the updated image
           let currentBalance = 0;
@@ -576,9 +762,7 @@ export default {
                 guildId,
                 userId,
               );
-              currentBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0,
-              );
+              currentBalance = parseBalance(currentBalanceData?.economy?.balance);
 
               if (currentBalanceData?.Level) {
                 const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -623,9 +807,7 @@ export default {
           // Final balance check before starting
           if (guildId) {
             const userDataStart = await hubClient.getUser(guildId, userId);
-            const userBalanceStart = parseFloat(
-              userDataStart?.economy?.balance || 0,
-            );
+            const userBalanceStart = parseBalance(userDataStart?.economy?.balance);
             if (
               !userDataStart ||
               !userDataStart.economy ||
@@ -642,11 +824,16 @@ export default {
             }
           }
 
+          if (!setupMessage) {
+            return;
+          }
+          const currentSetupMessage = setupMessage;
+
           // Initialize actual Game State
           const gameInstance = new GameState(
             channelId,
             userId,
-            setupMessage.id,
+            currentSetupMessage.id,
             guildId,
           );
           gameInstance.betAmount = pendingBet;
@@ -656,14 +843,12 @@ export default {
           gameInstance.ensureBombPosition(0);
 
           // Initialize selectedTiles array to track selections
-          gameInstance.selectedTiles = [];
-
           // Store initial balance before deducting bet
           let initialBalance = 0;
           if (guildId) {
             try {
               const userDataStart = await hubClient.getUser(guildId, userId);
-              initialBalance = parseFloat(userDataStart?.economy?.balance || 0);
+              initialBalance = parseBalance(userDataStart?.economy?.balance);
             } catch (error) {
               console.error("Error fetching initial balance:", error);
             }
@@ -700,9 +885,7 @@ export default {
                 guildId,
                 userId,
               );
-              updatedBalance = parseFloat(
-                currentBalanceData?.economy?.balance || 0,
-              );
+              updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
               if (currentBalanceData?.Level) {
                 const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -730,7 +913,7 @@ export default {
           );
 
           // Start the active game
-          await startActiveGame(gameInstance, gameBuffer);
+          await startActiveGame(gameInstance, gameBuffer, currentSetupMessage);
         }
       } catch (error) {
         console.error("[Tower] Error during setup collector:", error);
@@ -753,7 +936,7 @@ export default {
     };
 
     // Function to create restart button for game over state
-    const createGameOverButtons = async (userId) => {
+    const createGameOverButtons = async (userId: string) => {
       const restartButton = new ButtonBuilder()
         .setCustomId(`tower_restart_game_${userId}`)
         .setLabel(await getTranslation("games.tower.restartButtonLabel"))
@@ -763,9 +946,13 @@ export default {
     };
 
     // Start an active game
-    const startActiveGame = async (gameInstance, initialBuffer) => {
+    const startActiveGame = async (
+      gameInstance: GameState,
+      initialBuffer: unknown,
+      currentSetupMessage: MessageLike
+    ) => {
       // --- Create Gameplay Buttons ---
-      const createGameButtons = async (floor) => {
+      const createGameButtons = async (floor: number) => {
         const tileButtons = Array.from(
           { length: gameInstance.tilesPerRow },
           (_, idx) =>
@@ -786,7 +973,7 @@ export default {
         ];
       };
 
-      await setupMessage.edit({
+      await currentSetupMessage.edit({
         content: await getTranslation("games.tower.gameStartedPrompt"),
         files: [{ attachment: initialBuffer, name: "tower_game.avif" }],
         components: await createGameButtons(gameInstance.currentFloor),
@@ -794,15 +981,15 @@ export default {
       });
 
       // --- Start Main Game Collector ---
-      const gameCollector = setupMessage.createMessageComponentCollector({
-        filter: (gameInteraction) =>
+      const gameCollector = currentSetupMessage.createMessageComponentCollector({
+        filter: (gameInteraction: SetupInteractionLike | GameInteractionLike) =>
           gameInteraction.user.id === userId &&
-          gameInteraction.message.id === setupMessage.id,
+          gameInteraction.message.id === currentSetupMessage.id,
         componentType: ComponentType.Button,
         time: 60000 * 5, // 5 minutes play time
-      });
+      }) as GameCollectorLike;
 
-      gameCollector.on("collect", async (gameInteraction) => {
+      gameCollector.on("collect", async (gameInteraction: GameInteractionLike) => {
         try {
           const gameInstance = activeGames.get(gameKey);
 
@@ -863,9 +1050,7 @@ export default {
                   guildId,
                   userId,
                 );
-                updatedBalance = parseFloat(
-                  currentBalanceData?.economy?.balance || 0,
-                );
+                updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
                 if (currentBalanceData?.Level) {
                   const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -893,7 +1078,7 @@ export default {
             );
 
             // Show game over message
-            await setupMessage.edit({
+            await currentSetupMessage.edit({
               content: await getTranslation("games.tower.prizeTakenMessage", {
                 prize: prizeTaken.toFixed(2),
                 floor: gameInstance.currentFloor,
@@ -912,14 +1097,18 @@ export default {
 
           // Handle Tile Selection
           if (gameInteraction.customId.startsWith("tower_tile_")) {
-            const tileIndex = parseInt(gameInteraction.customId.split("_")[2]);
+            const tilePart = gameInteraction.customId.split("_")[2];
+            const tileIndex = parseInt(tilePart ?? "", 10);
+            if (Number.isNaN(tileIndex)) {
+              return;
+            }
 
             // Store the selected tile
             gameInstance.selectedTiles[gameInstance.currentFloor] = tileIndex;
 
             // Check if bomb hit
             const bombPositions =
-              gameInstance.bombPositions[gameInstance.currentFloor];
+              gameInstance.bombPositions[gameInstance.currentFloor] ?? [];
             const hitBomb = bombPositions.includes(tileIndex);
 
             if (hitBomb) {
@@ -944,9 +1133,7 @@ export default {
                     guildId,
                     userId,
                   );
-                  updatedBalance = parseFloat(
-                    currentBalanceData?.economy?.balance || 0,
-                  );
+                  updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
                   if (currentBalanceData?.Level) {
                     const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -974,7 +1161,7 @@ export default {
               );
 
               // Show game over message
-              await setupMessage.edit({
+              await currentSetupMessage.edit({
                 content: await getTranslation("games.tower.bombHitMessage", {
                   floor: gameInstance.currentFloor + 1,
                   bet: gameInstance.betAmount,
@@ -1022,9 +1209,7 @@ export default {
                       guildId,
                       userId,
                     );
-                    updatedBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0,
-                    );
+                    updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
                     if (currentBalanceData?.Level) {
                       const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -1054,7 +1239,7 @@ export default {
                 );
 
                 // Show win message
-                await setupMessage.edit({
+                await currentSetupMessage.edit({
                   content: await getTranslation(
                     "games.tower.maxFloorReachedMessage",
                     {
@@ -1094,9 +1279,7 @@ export default {
                       guildId,
                       userId,
                     );
-                    updatedBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0,
-                    );
+                    updatedBalance = parseBalance(currentBalanceData?.economy?.balance);
 
                     if (currentBalanceData?.Level) {
                       const chatXP = Number(currentBalanceData.Level.xp || 0);
@@ -1125,7 +1308,7 @@ export default {
                   },
                 );
 
-                await setupMessage.edit({
+                await currentSetupMessage.edit({
                   content: await getTranslation(
                     "games.tower.nextFloorMessage",
                     {
@@ -1160,11 +1343,11 @@ export default {
       });
 
       // Timeout handler
-      gameCollector.on("end", async (collected, reason) => {
+      gameCollector.on("end", async (_collected, reason) => {
         const gameInstance = activeGames.get(gameKey);
         if (gameInstance && !gameInstance.gameOver) {
           // Game timed out, update UI
-          setupMessage
+          currentSetupMessage
             .edit({
               content: await getTranslation("games.tower.timesOut"),
               components: [],

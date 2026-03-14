@@ -1,12 +1,26 @@
 import { SlashCommandBuilder } from "discord.js";
+import filters from "./filters.ts";
 
-export default {
-  data: () => {
-    const command = new SlashCommandBuilder()
+type TranslatorLike = {
+  __: (key: string) => Promise<string>;
+};
+
+type MusicInteractionLike = {
+  member: {
+    voice: {
+      channel?: unknown;
+    };
+  };
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type AutocompleteInteractionLike = Parameters<typeof filters.autocomplete>[0];
+
+const command = {
+  data: (): SlashCommandBuilder => {
+    return new SlashCommandBuilder()
       .setName("music")
       .setDescription("Music control command");
-
-    return command;
   },
 
   localization_strings: {
@@ -93,19 +107,19 @@ export default {
       uk: "Додано попередню пісню в чергу: {{title}}",
     },
   },
-  async preExecute(interaction, i18n) {
-    /*return interaction.reply({
-      content: "Музыкальный плеер пока-что неисправен",
-      ephemeral: true,
-    });*/
+
+  async preExecute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     if (!interaction.member.voice.channel) {
-      return interaction.reply({
+      await interaction.reply({
         content: await i18n.__("commands.music.notInVoiceChannel"),
         ephemeral: true,
       });
     }
   },
-  async autocomplete(interaction) {
+
+  async autocomplete(interaction: AutocompleteInteractionLike): Promise<void> {
     await filters.autocomplete(interaction);
   },
 };
+
+export default command;

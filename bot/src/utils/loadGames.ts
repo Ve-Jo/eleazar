@@ -36,6 +36,26 @@ const gamesCache = new Map<string, LoadedGameData>();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const getPreferredGameFiles = (gamesDir: string): string[] => {
+  const gameFiles = fs
+    .readdirSync(gamesDir)
+    .filter((file) => file.endsWith(".ts") || file.endsWith(".js"));
+
+  const preferredFiles = new Map<string, string>();
+
+  for (const file of gameFiles) {
+    const extension = path.extname(file);
+    const baseName = path.basename(file, extension);
+    const existing = preferredFiles.get(baseName);
+
+    if (!existing || extension === ".ts") {
+      preferredFiles.set(baseName, file);
+    }
+  }
+
+  return Array.from(preferredFiles.values());
+};
+
 async function loadGames(): Promise<Map<string, LoadedGameData>> {
   if (gamesCache.size > 0) {
     console.log("[loadGames] Using cached games");
@@ -57,10 +77,10 @@ async function loadGames(): Promise<Map<string, LoadedGameData>> {
         continue;
       }
 
-      const gameFiles = fs.readdirSync(gamesDir).filter((file) => file.endsWith(".js"));
+      const gameFiles = getPreferredGameFiles(gamesDir);
 
       for (const file of gameFiles) {
-        const gameId = file.replace(".js", "");
+        const gameId = path.basename(file, path.extname(file));
         if (games.has(gameId)) {
           continue;
         }
@@ -93,13 +113,17 @@ async function loadGames(): Promise<Map<string, LoadedGameData>> {
                 gameId,
                 gameModule.default.localization_strings
               );
+              const localizedName = await hubClient.getTranslation(
+                `games.${gameId}.name`
+              );
+              const localizedDescription = await hubClient.getTranslation(
+                `games.${gameId}.description`
+              );
               gameData.title =
-                ((await hubClient.getTranslation(`games.${gameId}.name`)) as string | null) ||
+                localizedName.translation ||
                 gameData.title;
               gameData.description =
-                ((await hubClient.getTranslation(
-                  `games.${gameId}.description`
-                )) as string | null) || gameData.description;
+                localizedDescription.translation || gameData.description;
             } else if (gameModule.default.game_info) {
               gameData.title = gameModule.default.game_info.name || gameId;
               gameData.emoji = gameModule.default.game_info.emoji || "🎮";
@@ -126,8 +150,11 @@ async function loadGames(): Promise<Map<string, LoadedGameData>> {
 async function getGameModule(gameId: string): Promise<GameModuleDefault | null> {
   try {
     const possiblePaths = [
+      path.join(__dirname, "..", "games", `${gameId}.ts`),
       path.join(__dirname, "..", "games", `${gameId}.js`),
+      path.join(__dirname, "..", "games", "risky", `${gameId}.ts`),
       path.join(__dirname, "..", "games", "risky", `${gameId}.js`),
+      path.join(__dirname, "..", "games", "ported", `${gameId}.ts`),
       path.join(__dirname, "..", "games", "ported", `${gameId}.js`),
     ];
 

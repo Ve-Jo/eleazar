@@ -1,16 +1,45 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type TrackLike = {
+  info: {
+    title: string;
+  };
+};
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  playing?: boolean;
+  paused?: boolean;
+  play: () => Promise<void>;
+  queue: {
+    previous: TrackLike[];
+    add: (track: TrackLike, position?: number) => Promise<unknown>;
+  };
+};
+
+type MusicInteractionLike = {
+  client: {
+    lavalink: {
+      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("previous")
       .setDescription("Play the previous song");
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -46,33 +75,40 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.previous.noMusicPlaying"),
       });
+      return;
     }
 
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.previous.notInVoiceChannel"),
         ephemeral: true,
       });
+      return;
     }
 
     if (player.queue.previous.length === 0) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.previous.noPreviousSongs"),
       });
+      return;
     }
 
-    const previousTrack =
-      player.queue.previous[player.queue.previous.length - 1];
+    const previousTrack = player.queue.previous[player.queue.previous.length - 1];
+    if (!previousTrack) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.previous.noPreviousSongs"),
+      });
+      return;
+    }
+
     await player.queue.add(previousTrack, 0);
 
     await interaction.editReply({
@@ -86,3 +122,5 @@ export default {
     }
   },
 };
+
+export default command;

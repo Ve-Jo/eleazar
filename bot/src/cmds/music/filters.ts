@@ -1,9 +1,46 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type FilterValue = number | string | boolean | null | undefined;
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  filterManager: {
+    data: Record<string, Record<string, FilterValue>>;
+    applyPlayerFilters: () => Promise<void>;
+  };
+};
+
+type BaseInteractionLike = {
+  client: {
+    lavalink: {
+      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  options: {
+    getString: (name: string) => string | null;
+    getNumber: (name: string) => number | null;
+    getFocused: (required: true) => { name: string; value: string };
+  };
+};
+
+type CommandInteractionLike = BaseInteractionLike & {
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type AutocompleteInteractionLike = BaseInteractionLike & {
+  respond: (options: Array<{ name: string; value: string }>) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("filters")
       .setDescription("Set the music filters")
       .addStringOption((option) =>
@@ -26,11 +63,8 @@ export default {
           .setDescription("The value to set for the filter property")
           .setRequired(true),
       );
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -98,80 +132,72 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(interaction: CommandInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
     const filterName = interaction.options.getString("filter");
     const filterProperty = interaction.options.getString("property");
     const value = interaction.options.getNumber("value");
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      return interaction.editReply(
-        await i18n.__("commands.music.filters.noMusicPlaying"),
-      );
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: await i18n.__("commands.music.filters.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
+      await interaction.editReply(await i18n.__("commands.music.filters.noMusicPlaying"));
+      return;
     }
 
-    console.log("Filter Name:", filterName);
-    console.log("Filter Property:", filterProperty);
-    console.log(
-      "Filter Value:",
-      player.filterManager.data[filterName]?.[filterProperty],
-    );
+    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.filters.notInVoiceChannel"),
+        ephemeral: true,
+      });
+      return;
+    }
 
-    if (
-      player.filterManager.data[filterName] &&
-      player.filterManager.data[filterName].hasOwnProperty(filterProperty)
-    ) {
-      player.filterManager.data[filterName][filterProperty] = value;
+    if (!filterName || !filterProperty || value === null) {
+      await interaction.editReply(await i18n.__("commands.music.filters.invalidFilterProperty"));
+      return;
+    }
+
+    const filterData = player.filterManager.data[filterName];
+    if (filterData && Object.prototype.hasOwnProperty.call(filterData, filterProperty)) {
+      filterData[filterProperty] = value;
       await player.filterManager.applyPlayerFilters();
-
       await interaction.editReply(
         await i18n.__("commands.music.filters.filterApplied", {
           filter: `${filterName} ${filterProperty} ${value}`,
-        }),
+        })
       );
-    } else {
-      return interaction.editReply(
-        await i18n.__("commands.music.filters.invalidFilterProperty"),
-      );
+      return;
     }
+
+    await interaction.editReply(await i18n.__("commands.music.filters.invalidFilterProperty"));
   },
 
-  async autocomplete(interaction) {
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+  async autocomplete(
+    interaction: AutocompleteInteractionLike,
+    i18n?: TranslatorLike
+  ): Promise<void> {
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
       await interaction.respond([
         {
-          name: await i18n.__("commands.music.filters.noMusicPlaying"),
+          name: i18n
+            ? await i18n.__("commands.music.filters.noMusicPlaying")
+            : "No music playing",
           value: "no music playing",
         },
       ]);
       return;
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: await i18n.__("commands.music.filters.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
+    }
+
+    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+      await interaction.respond([]);
+      return;
     }
 
     const focusedOption = interaction.options.getFocused(true);
     const filterName = interaction.options.getString("filter");
-
-    let options = [];
+    let options: Array<{ name: string; value: string }> = [];
 
     if (focusedOption.name === "filter") {
       options = Object.keys(player.filterManager.data)
@@ -179,7 +205,7 @@ export default {
           (filter) =>
             filter !== "pluginFilters" &&
             filter !== "channelMix" &&
-            Object.keys(player.filterManager.data[filter]).length > 0,
+            Object.keys(player.filterManager.data[filter] || {}).length > 0,
         )
         .map((filter) => ({
           name: filter,
@@ -187,12 +213,14 @@ export default {
         }));
     } else if (focusedOption.name === "property" && filterName) {
       const filter = player.filterManager.data[filterName];
-      options = Object.keys(filter)
-        .filter((property) => typeof filter[property] === "number")
-        .map((property) => ({
-          name: property,
-          value: property,
-        }));
+      if (filter) {
+        options = Object.keys(filter)
+          .filter((property) => typeof filter[property] === "number")
+          .map((property) => ({
+            name: property,
+            value: property,
+          }));
+      }
     }
 
     const filteredOptions = options.filter((option) =>
@@ -202,3 +230,5 @@ export default {
     await interaction.respond(filteredOptions.slice(0, 25));
   },
 };
+
+export default command;

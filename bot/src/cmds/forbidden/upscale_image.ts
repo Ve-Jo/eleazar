@@ -1,11 +1,44 @@
-import { SlashCommandSubcommandBuilder, AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, SlashCommandSubcommandBuilder } from "discord.js";
 import fetch from "node-fetch";
-import sharp from "sharp";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type AttachmentOptionLike = {
+  contentType?: string | null;
+  size: number;
+  url: string;
+};
+
+type PredictionLike = {
+  id: string;
+  status: string;
+  output?: string[] | null;
+};
+
+type ForbiddenUpscaleInteractionLike = {
+  options: {
+    getAttachment: (name: string) => AttachmentOptionLike | null;
+  };
+  client: {
+    replicate: {
+      predictions: {
+        create: (payload: {
+          version: string;
+          input: { image: string };
+        }) => Promise<PredictionLike | null>;
+        get: (id: string) => Promise<PredictionLike>;
+      };
+    };
+  };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; files?: AttachmentBuilder[] }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("upscale_image")
       .setDescription("Upscale an image to improve its quality")
       .addAttachmentOption((option) =>
@@ -22,11 +55,8 @@ export default {
           .setMinValue(2)
           .setMaxValue(4),
       );
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -139,41 +169,42 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(
+    interaction: ForbiddenUpscaleInteractionLike,
+    i18n: TranslatorLike
+  ): Promise<void> {
     await interaction.deferReply();
 
     const attachment = interaction.options.getAttachment("image");
 
     if (!attachment) {
-      return interaction.editReply(await i18n.__("no_attachment"));
+      await interaction.editReply(await i18n.__("no_attachment"));
+      return;
     }
 
-    // Check if file is an image
     if (!attachment.contentType?.startsWith("image/")) {
-      return interaction.editReply(
+      await interaction.editReply(
         await i18n.__("not_an_image", {
           content_type: attachment.contentType || "unknown",
         }),
       );
+      return;
     }
 
-    // Check file size (10MB limit)
     if (attachment.size > 10 * 1024 * 1024) {
-      return interaction.editReply(await i18n.__("file_too_large"));
+      await interaction.editReply(await i18n.__("file_too_large"));
+      return;
     }
 
     try {
-      // Download the image
       const response = await fetch(attachment.url);
       if (!response.ok) {
         throw new Error(await i18n.__("download_failed"));
       }
 
       const imageBuffer = await response.arrayBuffer();
-
       await interaction.editReply(await i18n.__("processing"));
 
-      // Call the upscale API using Replicate
       const prediction = await interaction.client.replicate.predictions.create({
         version:
           "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b",
@@ -186,43 +217,33 @@ export default {
         throw new Error(await i18n.__("api_error"));
       }
 
-      // Wait for the prediction to complete
       let finalPrediction = prediction;
       while (
         finalPrediction.status !== "succeeded" &&
         finalPrediction.status !== "failed"
       ) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
-        finalPrediction = await interaction.client.replicate.predictions.get(
-          prediction.id,
-        );
+        finalPrediction = await interaction.client.replicate.predictions.get(prediction.id);
       }
 
       if (finalPrediction.status === "failed") {
         throw new Error(await i18n.__("processing_failed"));
       }
 
-      // Get the result image
       const output = finalPrediction.output;
-
       if (!output || !output[0]) {
         throw new Error(await i18n.__("no_output"));
       }
 
-      // Download the result image
-      const upscaledImageUrl = output[0];
-      const upscaledImageResponse = await fetch(upscaledImageUrl);
-
+      const upscaledImageResponse = await fetch(output[0]);
       if (!upscaledImageResponse.ok) {
         throw new Error(await i18n.__("result_download_failed"));
       }
 
       const upscaledImageBuffer = await upscaledImageResponse.arrayBuffer();
-
-      // Send the result
-      const resultAttachment = new AttachmentBuilder(
-        Buffer.from(upscaledImageBuffer),
-      ).setName("upscaled_image.avif");
+      const resultAttachment = new AttachmentBuilder(Buffer.from(upscaledImageBuffer)).setName(
+        "upscaled_image.avif",
+      );
 
       await interaction.editReply({
         content: await i18n.__("success"),
@@ -234,3 +255,5 @@ export default {
     }
   },
 };
+
+export default command;

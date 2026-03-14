@@ -1,18 +1,44 @@
 import {
-  EmbedBuilder,
   AttachmentBuilder,
+  EmbedBuilder,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import hubClient from "../../api/hubClient.ts";
 
-export default {
-  data: () => {
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+  getLocale?: () => string;
+};
+
+type AnalyticsRecordLike = {
+  data?: {
+    shards?: Record<string, { guildsOnShard?: number }>;
+    serversCount?: number;
+  };
+};
+
+type ClientUserLike = {
+  displayAvatarURL: (options?: { extension?: string; size?: number }) => string;
+};
+
+type ForbiddenStatsInteractionLike = {
+  locale: string;
+  client: {
+    user: ClientUserLike;
+  };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: {
+    embeds: EmbedBuilder[];
+    files: AttachmentBuilder[];
+  }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("stats")
       .setDescription("Get the bot statistics");
-
-    return builder;
   },
 
   localization_strings: {
@@ -38,38 +64,39 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(
+    interaction: ForbiddenStatsInteractionLike,
+    i18n: TranslatorLike
+  ): Promise<void> {
     await interaction.deferReply();
 
-    // Get historical analytics data
-    const pingStats = await hubClient.getAnalytics("ping", 10);
+    const pingStats = (await (hubClient as typeof hubClient & {
+      getAnalytics: (metric: string, limit: number) => Promise<AnalyticsRecordLike[]>;
+    }).getAnalytics("ping", 10)) as AnalyticsRecordLike[];
 
     const latestData = pingStats[0]?.data || {};
-    const { shards = {}, serversCount = 0 } = latestData;
+    const shards = latestData.shards || {};
+    const serversCount = latestData.serversCount || 0;
 
-    // Format shard stats from the data
     const shardStats = Object.entries(shards).map(([id, data]) => ({
       id: Number(id),
-      guilds: data.guildsOnShard,
-      ping: Array(6).fill(0), // Zeroed out ping history
+      guilds: data.guildsOnShard || 0,
+      ping: Array<number>(6).fill(0),
     }));
 
-    // If no shards data, use single shard mode with the total server count
     if (shardStats.length === 0 && serversCount > 0) {
       shardStats.push({
         id: 0,
         guilds: serversCount,
-        ping: Array(6).fill(0),
+        ping: Array<number>(6).fill(0),
       });
     }
 
-    // Extract server counts from ping history for graph
     const serverCountHistory = pingStats
       .map((record) => record.data?.serversCount || 0)
       .reverse();
 
-    // Generate the image using the Statistics component
-    let imageResponse = await generateImage(
+    const imageResponse = (await generateImage(
       "Statistics",
       {
         interaction: {
@@ -81,9 +108,9 @@ export default {
         database: {
           bot_stats: {
             guilds_stats: serverCountHistory,
-            database_pings: Array(10).fill(0),
-            render_pings: Array(10).fill(0),
-            music_pings: Array(10).fill(0),
+            database_pings: Array<number>(10).fill(0),
+            render_pings: Array<number>(10).fill(0),
+            music_pings: Array<number>(10).fill(0),
           },
           avatar_url: interaction.client.user.displayAvatarURL({
             extension: "png",
@@ -94,40 +121,33 @@ export default {
       },
       { image: 2, emoji: 1 },
       i18n,
-    );
+    )) as Buffer;
+
+    const extension =
+      imageResponse[0] === 0x47 &&
+      imageResponse[1] === 0x49 &&
+      imageResponse[2] === 0x46
+        ? "gif"
+        : "png";
 
     const attachment = new AttachmentBuilder(imageResponse, {
-      name: `stats.${
-        imageResponse[0] === 0x47 &&
-        imageResponse[1] === 0x49 &&
-        imageResponse[2] === 0x46
-          ? "gif"
-          : "png"
-      }`,
+      name: `stats.${extension}`,
     });
 
-    let stats_embed = new EmbedBuilder()
+    const statsEmbed = new EmbedBuilder()
       .setTimestamp()
-      .setColor(process.env.EMBED_COLOR)
-      .setImage(
-        `attachment://stats.${
-          imageResponse[0] === 0x47 &&
-          imageResponse[1] === 0x49 &&
-          imageResponse[2] === 0x46
-            ? "gif"
-            : "png"
-        }`,
-      )
+      .setColor(process.env.EMBED_COLOR ? Number(process.env.EMBED_COLOR) : 0x0099ff)
+      .setImage(`attachment://stats.${extension}`)
       .setAuthor({
         name: await i18n.__("help.stats.title"),
         iconURL: interaction.client.user.displayAvatarURL(),
       });
 
-    imageResponse = null;
-
     await interaction.editReply({
-      embeds: [stats_embed],
+      embeds: [statsEmbed],
       files: [attachment],
     });
   },
 };
+
+export default command;

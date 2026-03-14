@@ -3,12 +3,178 @@ import { generateImage } from "../utils/imageGenerator.ts";
 import hubClient from "../api/hubClient.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
 
-// Game state management for multi-user synchronization
-const activeGames = new Map();
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+  getLocale?: () => string;
+};
 
-// GameState manager for handling synchronized states
+type LevelDataLike = {
+  level: number;
+  currentXP: number;
+  requiredXP: number;
+  totalXP: number;
+};
+
+type UserDataLike = {
+  economy?: {
+    balance?: number | string;
+  };
+  Level?: {
+    xp?: number | string;
+    gameXp?: number | string;
+  };
+  upgrades?: Array<{ type?: string; level?: number }>;
+  levelProgress?: unknown;
+  [key: string]: unknown;
+};
+
+type Game2048State = {
+  grid: number[][];
+  score: number;
+  gameOver: boolean;
+  moves: number;
+  startTime: number;
+  earning: number;
+  userData: UserDataLike | null;
+  balance: number;
+  chatLevelData: LevelDataLike | null;
+  gameLevelData: LevelDataLike | null;
+  lastLevel: number;
+  earningGameXP: number;
+  baseGameXP?: number;
+  gamesEarningLevel?: number;
+  gameXP?: number;
+};
+
+type MessageLike = {
+  id: string;
+  edit: (payload: Record<string, unknown>) => Promise<unknown>;
+  createMessageComponentCollector: () => CollectorLike;
+};
+
+type CollectorInteractionLike = {
+  customId: string;
+  user: { id: string };
+  channel: {
+    messages: {
+      fetch: (messageId: string | null) => Promise<MessageLike>;
+    };
+  };
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  deferUpdate: () => Promise<unknown>;
+};
+
+type CollectorLike = {
+  on: ((
+    event: "collect",
+    handler: (interaction: CollectorInteractionLike) => unknown
+  ) => void) &
+    ((event: "end", handler: () => unknown) => void);
+  stop: () => void;
+};
+
+type RoleManagerLike = {
+  add: (roleId: string) => Promise<unknown>;
+  remove: (roleIds: string[]) => Promise<unknown>;
+};
+
+type ChannelLike = {
+  name: string;
+  type: number;
+  messages?: { cache: { size: number } };
+  send?: (payload: {
+    content?: string;
+    embeds?: unknown[];
+    files?: unknown[];
+  }) => Promise<unknown>;
+  permissionsFor?: (member: unknown) => { has: (permission: string) => boolean };
+};
+
+type MessageChannelLike = {
+  send: (payload: {
+    content?: string;
+    embeds?: unknown[];
+    files?: unknown[];
+  }) => Promise<unknown>;
+};
+
+type GuildLike = {
+  name: string;
+  preferredLocale?: string | null;
+  systemChannel?: ChannelLike | null;
+  members: {
+    fetch: (userId: string) => Promise<{
+      id: string;
+      displayName: string;
+      preferredLocale?: string | null;
+      user: { username: string };
+      roles: RoleManagerLike;
+      send: (payload: { embeds: unknown[]; files: unknown[] }) => Promise<unknown>;
+      displayAvatarURL: (options: { extension: string; size: number }) => string;
+    } | null>;
+    me?: unknown;
+  };
+  channels: {
+    cache: {
+      find: (predicate: (channel: ChannelLike) => boolean) => ChannelLike | undefined;
+    };
+  };
+  iconURL: (options: { extension: string; size: number }) => string | null;
+};
+
+type ClientLike = {
+  guilds: {
+    fetch: (guildId: string) => Promise<GuildLike | null>;
+  };
+};
+
+type GameInteractionLike = {
+  channelId: string;
+  guildId?: string | null;
+  guildLocale?: string;
+  locale: string;
+  deferred?: boolean;
+  replied?: boolean;
+  channel: MessageChannelLike | null;
+  guild: {
+    id: string;
+    name: string;
+    iconURL: (options?: { extension?: string; size?: number }) => string | null;
+  };
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    displayAvatarURL: (options?: { extension?: string; size?: number }) => string;
+  };
+  member: {
+    voice: {
+      channelId?: string | null;
+    };
+  };
+  client: ClientLike;
+  deferReply: () => Promise<unknown>;
+  followUp: (payload: Record<string, unknown>) => Promise<MessageLike>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const activeGames = new Map<string, GameState>();
+
 class GameState {
-  constructor(channelId, userId, messageId, guildId) {
+  channelId: string;
+  userId: string;
+  guildId?: string | null;
+  messageId: string | null;
+  lastUpdateTime: number;
+  lastImageGenTime: number;
+  state: Game2048State;
+
+  constructor(
+    channelId: string,
+    userId: string,
+    messageId: string | null,
+    guildId?: string | null
+  ) {
     this.channelId = channelId;
     this.userId = userId;
     this.guildId = guildId;
@@ -18,10 +184,10 @@ class GameState {
     this.state = this.createInitialState();
   }
 
-  createInitialState() {
-    const state = {
+  createInitialState(): Game2048State {
+    const state: Game2048State = {
       grid: Array(4)
-        .fill()
+        .fill(0)
         .map(() => Array(4).fill(0)),
       score: 0,
       gameOver: false,
@@ -52,7 +218,7 @@ class GameState {
   }
 
   // Simple XP calculation for display purposes only
-  updateEarningGameXP(scoreDifference) {
+  updateEarningGameXP(scoreDifference: number): number {
     // Calculate XP based on score difference to prevent duplication
     console.log(`[2048] UPDATE EARNING GAME XP`);
     const xpGained = scoreDifference * 5; // 5 XP per point gained
@@ -78,13 +244,12 @@ class GameState {
   }
 
   // Get current game level data based on total XP
-  getCurrentGameLevelData() {
+  getCurrentGameLevelData(): LevelDataLike | null {
     return this.state.gameLevelData;
   }
 }
 
-// Change game state management to use composite key
-function getGameKey(channelId, userId) {
+function getGameKey(channelId: string, userId: string): string {
   return `${channelId}-${userId}`;
 }
 
@@ -92,7 +257,7 @@ export default {
   id: "2048",
   title: "2048",
   emoji: "🎲",
-  async execute(interaction, i18n) {
+  async execute(interaction: GameInteractionLike, i18n: TranslatorLike) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const gameKey = getGameKey(channelId, userId);
@@ -128,7 +293,7 @@ export default {
     );
 
     // Calculate earning based on score and time (synchronous like in Snake)
-    const calculateEarning = (state) => {
+    const calculateEarning = (state: Game2048State): number => {
       // Use gamesEarningLevel from state (set during initialization)
       const gamesEarningLevel = state.gamesEarningLevel || 1;
       const earningMultiplier = 1 + (gamesEarningLevel - 1) * 0.1; // 10% increase per level
@@ -149,7 +314,11 @@ export default {
     };
 
     // Helper function to generate game board image - similar to Snake.js
-    const generateGameBoard = async (state, userLocale, userAvatarURL) => {
+    const generateGameBoard = async (
+      state: Game2048State,
+      userLocale: string,
+      userAvatarURL: string
+    ) => {
       // Prepare user data for rendering
       const userData = state.userData;
       const balance = state.balance || 0;
@@ -302,8 +471,9 @@ export default {
             }
 
             // Store games earning upgrade level for synchronous calculation
-            const gamesEarningUpgrade = userData?.upgrades?.find(
-              (u) => u.type === "games_earning",
+            const typedUserData = userData as UserDataLike;
+            const gamesEarningUpgrade = typedUserData.upgrades?.find(
+              (u: { type?: string; level?: number }) => u.type === "games_earning",
             );
             initialState.state.gamesEarningLevel =
               gamesEarningUpgrade?.level || 1;
@@ -313,11 +483,11 @@ export default {
               chatLevelData,
               gameLevelData,
               gamesEarningLevel: initialState.state.gamesEarningLevel,
-              levelProgress: userData.levelProgress,
+              levelProgress: typedUserData.levelProgress,
             });
 
             // Store user data in game state for future use
-            initialState.state.userData = userData;
+            initialState.state.userData = typedUserData;
             initialState.state.balance = balance;
             initialState.state.chatLevelData = chatLevelData;
             initialState.state.gameLevelData = gameLevelData;
@@ -381,13 +551,16 @@ export default {
 
       // Handle moves
       const collector = message.createMessageComponentCollector();
-      let inactivityTimeout;
+      let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
 
       const resetInactivityTimer = () => {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
         inactivityTimeout = setTimeout(async () => {
           const gameInstance = activeGames.get(gameKey);
-          if (!gameInstance?.state.gameOver) {
+          if (!gameInstance || gameInstance.state.gameOver) {
+            return;
+          }
+          {
             gameInstance.state.earning = calculateEarning(gameInstance.state);
             const finalBoard = await generateGameBoard(
               gameInstance.state,
@@ -396,7 +569,6 @@ export default {
                 extension: "png",
                 size: 1024,
               }),
-              gameInstance.state.earningGameXP, // Pass earnedGameXP as increaseAmount
             );
 
             // Use earningGameXP for timeout case
@@ -471,7 +643,7 @@ export default {
 
       resetInactivityTimer();
 
-      collector.on("collect", async (i) => {
+      collector.on("collect", async (i: CollectorInteractionLike) => {
         const gameInstance = activeGames.get(gameKey);
 
         // Validate game exists and user has permission
@@ -662,7 +834,6 @@ export default {
             state,
             interaction.locale,
             interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
-            gameInstance.state.earningGameXP, // Pass earnedGameXP as increaseAmount
           );
 
           // Update the message with new game state
@@ -771,7 +942,6 @@ export default {
                   extension: "png",
                   size: 1024,
                 }),
-                earningGameXP, // Pass earnedGameXP as increaseAmount
               );
 
               const gameOverText = await i18n.__(`games.2048.gameOver`, {
@@ -908,36 +1078,54 @@ export default {
 };
 
 // Game logic functions
-function addRandomTile(state) {
-  const emptyCells = [];
+function addRandomTile(state: Game2048State): void {
+  const emptyCells: Array<{ row: number; col: number }> = [];
   for (let row = 0; row < 4; row++) {
+    const gridRow = state.grid[row];
+    if (!gridRow) {
+      continue;
+    }
     for (let col = 0; col < 4; col++) {
-      if (state.grid[row][col] === 0) {
+      if (gridRow[col] === 0) {
         emptyCells.push({ row, col });
       }
     }
   }
 
   if (emptyCells.length > 0) {
-    const { row, col } =
-      emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    state.grid[row][col] = Math.random() < 0.9 ? 2 : 4;
+    const selectedCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    if (!selectedCell) {
+      return;
+    }
+    const { row, col } = selectedCell;
+    const gridRow = state.grid[row];
+    if (!gridRow) {
+      return;
+    }
+    gridRow[col] = Math.random() < 0.9 ? 2 : 4;
   }
 }
 
-function moveLeft(state) {
+function moveLeft(state: Game2048State): boolean {
   let moved = false;
   for (let row = 0; row < 4; row++) {
+    const gridRow = state.grid[row];
+    if (!gridRow) {
+      continue;
+    }
     // Remove zeros
-    let nums = state.grid[row].filter((x) => x !== 0);
+    let nums = gridRow.filter((x: number) => x !== 0);
 
     // Merge tiles
     for (let i = 0; i < nums.length - 1; i++) {
-      if (nums[i] === nums[i + 1]) {
-        nums[i] *= 2;
-        state.score += nums[i];
+      const currentValue = nums[i];
+      const nextValue = nums[i + 1];
+      if (currentValue !== undefined && currentValue === nextValue) {
+        const mergedValue = currentValue * 2;
+        nums[i] = mergedValue;
+        state.score += mergedValue;
         console.log(
-          `[2048] DEBUG: Merged tiles, added ${nums[i]} to score. Score now: ${state.score}`,
+          `[2048] DEBUG: Merged tiles, added ${mergedValue} to score. Score now: ${state.score}`,
         );
         nums[i + 1] = 0;
         moved = true;
@@ -945,13 +1133,13 @@ function moveLeft(state) {
     }
 
     // Remove zeros again
-    nums = nums.filter((x) => x !== 0);
+    nums = nums.filter((x: number) => x !== 0);
 
     // Pad with zeros
     while (nums.length < 4) nums.push(0);
 
     // Only update if the row changed
-    if (nums.some((val, idx) => val !== state.grid[row][idx])) {
+    if (nums.some((val: number, idx: number) => val !== gridRow[idx])) {
       state.grid[row] = nums;
       moved = true;
     }
@@ -959,52 +1147,68 @@ function moveLeft(state) {
   return moved;
 }
 
-function moveRight(state) {
-  state.grid.forEach((row) => row.reverse());
+function moveRight(state: Game2048State): boolean {
+  state.grid.forEach((row: number[]) => row.reverse());
   const moved = moveLeft(state);
-  state.grid.forEach((row) => row.reverse());
+  state.grid.forEach((row: number[]) => row.reverse());
   return moved;
 }
 
-function moveUp(state) {
+function moveUp(state: Game2048State): boolean {
   transpose(state.grid);
   const moved = moveLeft(state);
   transpose(state.grid);
   return moved;
 }
 
-function moveDown(state) {
+function moveDown(state: Game2048State): boolean {
   transpose(state.grid);
   const moved = moveRight(state);
   transpose(state.grid);
   return moved;
 }
 
-function transpose(matrix) {
+function transpose(matrix: number[][]): void {
   for (let row = 0; row < 4; row++) {
     for (let col = 0; col < row; col++) {
-      [matrix[row][col], matrix[col][row]] = [
-        matrix[col][row],
-        matrix[row][col],
-      ];
+      const rowData = matrix[row];
+      const colData = matrix[col];
+      if (!rowData || !colData) {
+        continue;
+      }
+      const rowValue = rowData[col];
+      const colValue = colData[row];
+      if (rowValue === undefined || colValue === undefined) {
+        continue;
+      }
+      [rowData[col], colData[row]] = [colValue, rowValue];
     }
   }
 }
 
-function checkGameOver(state) {
+function checkGameOver(state: Game2048State): boolean {
   // First check if there are any empty cells
   for (let row = 0; row < 4; row++) {
+    const gridRow = state.grid[row];
+    if (!gridRow) {
+      continue;
+    }
     for (let col = 0; col < 4; col++) {
-      if (state.grid[row][col] === 0) return false;
+      if (gridRow[col] === 0) return false;
     }
   }
 
   // Then check if any adjacent tiles can be merged
   for (let row = 0; row < 4; row++) {
+    const gridRow = state.grid[row];
+    if (!gridRow) {
+      continue;
+    }
     for (let col = 0; col < 4; col++) {
-      if (col < 3 && state.grid[row][col] === state.grid[row][col + 1])
+      if (col < 3 && gridRow[col] === gridRow[col + 1])
         return false;
-      if (row < 3 && state.grid[row][col] === state.grid[row + 1][col])
+      const nextRow = state.grid[row + 1];
+      if (row < 3 && gridRow[col] === nextRow?.[col])
         return false;
     }
   }

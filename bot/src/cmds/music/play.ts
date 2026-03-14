@@ -1,9 +1,73 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type LavalinkTrackLike = {
+  info: {
+    title: string;
+  };
+};
+
+type SearchResultLike = {
+  loadType: "error" | "empty" | "playlist" | "track" | string;
+  tracks: LavalinkTrackLike[];
+  playlist: {
+    name: string;
+  };
+  exception?: {
+    message?: string;
+  };
+};
+
+type SearchUserLike = {
+  locale?: string;
+};
+
+type LavalinkPlayerLike = {
+  playing?: boolean;
+  options: {
+    maxPlaylistSize?: number;
+  };
+  queue: {
+    add: (track: LavalinkTrackLike | LavalinkTrackLike[]) => void;
+  };
+  connect: () => Promise<void>;
+  search: (query: { query: string }, user: SearchUserLike) => Promise<SearchResultLike>;
+  play: () => Promise<void>;
+};
+
+type MusicPlayInteractionLike = {
+  locale: string;
+  channelId: string;
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  user: SearchUserLike;
+  options: {
+    getString: (name: string) => string | null;
+  };
+  client: {
+    lavalink?: {
+      nodeManager: {
+        nodes: {
+          size: number;
+        };
+      };
+      createPlayer: (options: {
+        guildId: string;
+        voiceChannelId?: string | null;
+        textChannelId: string;
+      }) => Promise<LavalinkPlayerLike>;
+    };
+  };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("play")
       .setDescription("Play a song")
       .addStringOption((option) =>
@@ -12,11 +76,8 @@ export default {
           .setDescription("The song to play (URL or search term)")
           .setRequired(true),
       );
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -89,65 +150,75 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(
+    interaction: MusicPlayInteractionLike,
+    i18n: TranslatorLike
+  ): Promise<void> {
     await interaction.deferReply();
-    let query = interaction.options.getString("song");
+    const query = interaction.options.getString("song");
+
+    if (!query) {
+      await interaction.editReply(await i18n.__("commands.music.play.noMatchesFound"));
+      return;
+    }
 
     if (
       !interaction.client.lavalink ||
       !interaction.client.lavalink.nodeManager.nodes.size
     ) {
-      return interaction.editReply(
-        await i18n.__("commands.music.play.noLavalinkNode"),
-      );
+      await interaction.editReply(await i18n.__("commands.music.play.noLavalinkNode"));
+      return;
     }
 
     try {
-      let player = await interaction.client.lavalink.createPlayer({
+      const player = await interaction.client.lavalink.createPlayer({
         guildId: interaction.guild.id,
         voiceChannelId: interaction.member.voice.channelId,
         textChannelId: interaction.channelId,
       });
 
       await player.connect();
-
       interaction.user.locale = interaction.locale;
 
-      let res = await Promise.race([
-        player.search({ query: query }, interaction.user),
-        new Promise((_, reject) =>
+      const result = (await Promise.race([
+        player.search({ query }, interaction.user),
+        new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("Search timeout")), 12000),
         ),
-      ]);
+      ])) as SearchResultLike;
 
-      if (res.loadType === "error") {
-        return interaction.editReply(
+      if (result.loadType === "error") {
+        await interaction.editReply(
           await i18n.__("commands.music.play.errorLoadingTrack", {
-            message: res.exception?.message,
+            message: result.exception?.message,
           }),
         );
+        return;
       }
 
-      if (res.loadType === "empty") {
-        return interaction.editReply(
-          await i18n.__("commands.music.play.noMatchesFound"),
-        );
+      if (result.loadType === "empty") {
+        await interaction.editReply(await i18n.__("commands.music.play.noMatchesFound"));
+        return;
       }
 
-      if (res.loadType === "playlist") {
+      if (result.loadType === "playlist") {
         const maxPlaylistSize = player.options.maxPlaylistSize || 1024;
-        const tracksToAdd = res.tracks.slice(0, maxPlaylistSize);
+        const tracksToAdd = result.tracks.slice(0, maxPlaylistSize);
         player.queue.add(tracksToAdd);
         await interaction.editReply({
           content: await i18n.__("commands.music.play.addedPlaylist", {
-            name: res.playlist.name,
+            name: result.playlist.name,
             count: tracksToAdd.length,
-            total: res.tracks.length,
+            total: result.tracks.length,
             max: maxPlaylistSize,
           }),
         });
       } else {
-        const track = res.tracks[0];
+        const track = result.tracks[0];
+        if (!track) {
+          await interaction.editReply(await i18n.__("commands.music.play.noMatchesFound"));
+          return;
+        }
         player.queue.add(track);
         await interaction.editReply({
           content: await i18n.__("commands.music.play.addedToQueue", {
@@ -156,49 +227,36 @@ export default {
         });
       }
 
-      /*if (player.nowPlayingMessage && player.queue.current) {
-        const { embed, attachment } = await createOrUpdateMusicPlayerEmbed(
-          player.queue.current,
-          player
-        );
-        const updatedButtons = createMusicButtons(player);
-
-        try {
-          await player.nowPlayingMessage.edit({
-            embeds: [embed],
-            files: [attachment],
-            components: [updatedButtons],
-          });
-        } catch (error) {
-          console.error("Error updating player message:", error);
-        }
-      }*/
-
-      if (!player.playing) await player.play();
+      if (!player.playing) {
+        await player.play();
+      }
     } catch (error) {
       console.error("Error in play command:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      const name = error instanceof Error ? error.name : "Error";
 
       if (
-        error.name === "TimeoutError" ||
-        error.message.includes("timed out") ||
-        error.message === "Search timeout"
+        name === "TimeoutError" ||
+        message.includes("timed out") ||
+        message === "Search timeout"
       ) {
-        return interaction.editReply(
-          await i18n.__("commands.music.play.connectionTimeout"),
-        );
-      } else if (error.message.includes("No available Node was found")) {
-        return interaction.editReply(
-          await i18n.__("commands.music.play.noAvailableNode"),
-        );
-      } else if (error.message === "No Lavalink Node was provided") {
-        return interaction.editReply(
-          await i18n.__("commands.music.play.noLavalinkNode"),
-        );
-      } else {
-        return interaction.editReply(
-          await i18n.__("errorOccurred", { error: error.message }),
-        );
+        await interaction.editReply(await i18n.__("commands.music.play.connectionTimeout"));
+        return;
       }
+
+      if (message.includes("No available Node was found")) {
+        await interaction.editReply(await i18n.__("commands.music.play.noAvailableNode"));
+        return;
+      }
+
+      if (message === "No Lavalink Node was provided") {
+        await interaction.editReply(await i18n.__("commands.music.play.noLavalinkNode"));
+        return;
+      }
+
+      await interaction.editReply(await i18n.__("errorOccurred", { error: message }));
     }
   },
 };
+
+export default command;

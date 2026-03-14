@@ -10,8 +10,104 @@ import {
 import { generateImage } from "../../utils/imageGenerator.ts";
 import hubClient from "../../api/hubClient.ts";
 
-// Game state management
-const activeGames = new Map();
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+  setLocale?: (locale: string) => string;
+  getLocale?: () => string;
+};
+
+type LevelDataLike = {
+  level: number;
+  currentXP: number;
+  requiredXP: number;
+  totalXP: number;
+};
+
+type LevelProgressLike = {
+  chat: LevelDataLike | null;
+  game: LevelDataLike | null;
+};
+
+type UserRecordLike = {
+  economy?: {
+    balance?: string | number | null;
+  } | null;
+  Level?: {
+    xp?: string | number | null;
+    gameXp?: string | number | null;
+  } | null;
+};
+
+type RecentGameLike = {
+  bet: number;
+  result: "win" | "lose" | "none";
+  change: number;
+  timestamp: number;
+};
+
+type MessageLike = {
+  id: string;
+  edit: (payload: Record<string, unknown>) => Promise<unknown>;
+  createMessageComponentCollector: (options: {
+    componentType: ComponentType;
+    filter: (interaction: CollectorInteractionLike) => boolean;
+    time: number;
+  }) => CollectorLike;
+};
+
+type ModalSubmitInteractionLike = {
+  customId: string;
+  user: { id: string };
+  fields: {
+    getTextInputValue: (name: string) => string;
+  };
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type CollectorInteractionLike = {
+  customId: string;
+  user: { id: string };
+  replied?: boolean;
+  deferred?: boolean;
+  showModal: (modal: ModalBuilder) => Promise<unknown>;
+  awaitModalSubmit: (options: {
+    filter: (interaction: ModalSubmitInteractionLike) => boolean;
+    time: number;
+  }) => Promise<ModalSubmitInteractionLike>;
+  deferUpdate: () => Promise<unknown>;
+  followUp: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+  update: (payload: Record<string, unknown>) => Promise<unknown>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type CollectorLike = {
+  on: ((
+    event: "collect",
+    handler: (interaction: CollectorInteractionLike) => Promise<void>
+  ) => void) &
+    ((event: "end", handler: (collected: unknown, reason: string) => Promise<void>) => void);
+  stop: () => void;
+};
+
+type InteractionLike = {
+  channelId: string;
+  guildId?: string | null;
+  guildLocale?: string;
+  locale?: string;
+  deferred?: boolean;
+  replied?: boolean;
+  user: {
+    id: string;
+    displayAvatarURL: (options?: { extension?: string; size?: number }) => string;
+  };
+  deferReply: () => Promise<unknown>;
+  followUp: (payload: Record<string, unknown>) => Promise<MessageLike>;
+  reply: (payload: { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+type CoinflipGameStateResult = "win" | "lose" | "none";
+
+const activeGames = new Map<string, GameState>();
 
 // --- Constants ---
 const WIN_PROFIT_MULTIPLIER = 0.95; // Payout is 1.95x bet (Profit = 0.95x bet)
@@ -20,7 +116,25 @@ const HOUSE_EDGE_PERCENTAGE = ((1 - HOUSE_EDGE_FACTOR) * 100).toFixed(1);
 const PROBABILITY_OPTIONS = [0.75, 0.5, 0.25]; // Available win probabilities (e.g., 75%, 50%, 25%)
 
 class GameState {
-  constructor(channelId, userId, messageId, guildId) {
+  channelId: string;
+  userId: string;
+  guildId?: string | null;
+  messageId: string | null;
+  betAmount: number;
+  winProbability: number;
+  lastResult: CoinflipGameStateResult;
+  recentGames: RecentGameLike[];
+  totalWon: number;
+  totalLost: number;
+  sessionChange: number;
+  lastUpdateTime: number;
+
+  constructor(
+    channelId: string,
+    userId: string,
+    messageId: string | null,
+    guildId?: string | null
+  ) {
     this.channelId = channelId;
     this.userId = userId;
     this.guildId = guildId;
@@ -35,7 +149,7 @@ class GameState {
     this.lastUpdateTime = Date.now();
   }
 
-  addGameResult(bet, result, change) {
+  addGameResult(bet: number, result: CoinflipGameStateResult, change: number): void {
     this.recentGames.unshift({ bet, result, change, timestamp: Date.now() });
     if (this.recentGames.length > 3) {
       this.recentGames.pop(); // Keep only the last 3
@@ -47,16 +161,16 @@ class GameState {
   }
 }
 
-function getGameKey(channelId, userId) {
+function getGameKey(channelId: string, userId: string): string {
   return `${channelId}-${userId}`;
 }
 
 async function generateCoinflipImage(
-  gameInstance,
-  interaction,
-  i18n,
-  balance,
-  levelProgress = { chat: null, game: null },
+  gameInstance: GameState,
+  interaction: InteractionLike,
+  i18n: TranslatorLike,
+  balance: number,
+  levelProgress: LevelProgressLike = { chat: null, game: null },
 ) {
   // Calculate potential profit multiplier for display
   let potentialProfitMultiplier = 0;
@@ -95,7 +209,7 @@ export default {
   id: "coinflip",
   title: "Coinflip",
   emoji: "🪙",
-  async execute(interaction, i18n) {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike) {
     const channelId = interaction.channelId;
     const userId = interaction.user.id;
     const guildId = interaction.guildId;
@@ -110,13 +224,16 @@ export default {
     }
 
     // Helper function to safely get translation with fallback
-    const getTranslation = async (key, variables = {}) => {
+    const getTranslation = async (
+      key: string,
+      variables: Record<string, unknown> = {}
+    ): Promise<string> => {
       try {
         const result = await i18n.__(key, variables);
-        return typeof result === "string" ? result : key.split(".").pop();
+        return typeof result === "string" ? result : (key.split(".").pop() ?? key);
       } catch (error) {
         console.warn(`Translation error for key: ${key}`, error);
-        return key.split(".").pop();
+        return key.split(".").pop() ?? key;
       }
     };
 
@@ -181,7 +298,7 @@ export default {
           // Ensure user exists in database
           await hubClient.ensureGuildUser(guildId, userId);
           const initialUserData = await hubClient.getUser(guildId, userId);
-          initialBalance = parseFloat(initialUserData?.economy?.balance || 0);
+          initialBalance = parseFloat(String(initialUserData?.economy?.balance ?? 0));
 
           if (initialUserData?.Level) {
             const chatXP = Number(initialUserData.Level.xp || 0);
@@ -271,7 +388,7 @@ export default {
               .setPlaceholder("100")
               .setRequired(true);
 
-            const firstActionRow = new ActionRowBuilder().addComponents(
+            const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
               amountInput,
             );
             modal.addComponents(firstActionRow);
@@ -279,7 +396,7 @@ export default {
             await i.showModal(modal);
 
             // Wait for modal submission
-            const filter = (modalInteraction) =>
+            const filter = (modalInteraction: ModalSubmitInteractionLike) =>
               modalInteraction.customId === `coinflip_bet_modal_${userId}` &&
               modalInteraction.user.id === userId;
 
@@ -302,7 +419,7 @@ export default {
                   // Check user balance
                   const userData = await hubClient.getUser(guildId, userId);
                   const userBalance = parseFloat(
-                    userData?.economy?.balance || 0,
+                    String(userData?.economy?.balance ?? 0),
                   );
 
                   if (
@@ -349,7 +466,7 @@ export default {
                       userId,
                     );
                     userBalance = parseFloat(
-                      currentBalanceData?.economy?.balance || 0,
+                      String(currentBalanceData?.economy?.balance ?? 0),
                     );
 
                     if (currentBalanceData?.Level) {
@@ -390,7 +507,7 @@ export default {
               gameInstance.winProbability,
             );
             const nextIndex = (currentIndex + 1) % PROBABILITY_OPTIONS.length;
-            gameInstance.winProbability = PROBABILITY_OPTIONS[nextIndex];
+            gameInstance.winProbability = PROBABILITY_OPTIONS[nextIndex] ?? 0.5;
 
             // Update the message with new chance and buttons
             await i.deferUpdate();
@@ -404,7 +521,7 @@ export default {
                   userId,
                 );
                 currentBalance = parseFloat(
-                  currentBalanceData?.economy?.balance || 0,
+                  String(currentBalanceData?.economy?.balance ?? 0),
                 );
 
                 if (currentBalanceData?.Level) {
@@ -449,7 +566,7 @@ export default {
             if (guildId) {
               const userDataFlip = await hubClient.getUser(guildId, userId);
               const userBalanceFlip = parseFloat(
-                userDataFlip?.economy?.balance || 0,
+                String(userDataFlip?.economy?.balance ?? 0),
               );
 
               if (
@@ -562,7 +679,7 @@ export default {
                   userId,
                 );
                 updatedBalance = parseFloat(
-                  updatedUserData?.economy?.balance || 0,
+                  String(updatedUserData?.economy?.balance ?? 0),
                 );
 
                 if (updatedUserData?.Level) {

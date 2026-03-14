@@ -1,9 +1,34 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type LoopMode = "track" | "queue" | "off";
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  setRepeatMode: (mode: LoopMode) => Promise<void>;
+};
+
+type MusicInteractionLike = {
+  client: {
+    lavalink: {
+      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  options: {
+    getString: (name: string) => string | null;
+  };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("loop")
       .setDescription("Loop the current song/queue")
       .addStringOption((option) =>
@@ -17,11 +42,8 @@ export default {
             { name: "Off", value: "off" },
           ),
       );
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -64,29 +86,33 @@ export default {
     },
   },
 
-  async execute(interaction) {
+  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      return interaction.editReply(
-        await i18n.__("commands.music.loop.noMusicPlaying"),
-      );
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: await i18n.__("commands.music.loop.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
+      await interaction.editReply(await i18n.__("commands.music.loop.noMusicPlaying"));
+      return;
+    }
+
+    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.loop.notInVoiceChannel"),
+        ephemeral: true,
+      });
+      return;
     }
 
     const loopType = interaction.options.getString("type");
-    await player.setRepeatMode(loopType);
+    if (!loopType || !["track", "queue", "off"].includes(loopType)) {
+      return;
+    }
+
+    await player.setRepeatMode(loopType as LoopMode);
     await interaction.editReply(
-      await i18n.__("commands.music.loop.loopApplied", { type: loopType }),
+      await i18n.__("commands.music.loop.loopApplied", { type: loopType })
     );
   },
 };
+
+export default command;

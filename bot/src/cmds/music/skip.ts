@@ -1,16 +1,44 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type TrackLike = {
+  info: {
+    duration: number;
+  };
+};
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  skip: () => Promise<void>;
+  seek: (position: number) => Promise<void>;
+  get: (key: string) => unknown;
+  queue: {
+    current?: TrackLike | null;
+  };
+};
+
+type MusicInteractionLike = {
+  client: {
+    lavalink: {
+      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("skip")
       .setDescription("Skip the current song");
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -46,45 +74,52 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      return interaction.editReply({
+      await interaction.editReply({
         content: await i18n.__("commands.music.skip.noMusicPlaying"),
         ephemeral: true,
       });
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: await i18n.__("commands.music.skip.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
+      return;
+    }
+
+    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.skip.notInVoiceChannel"),
+        ephemeral: true,
+      });
+      return;
     }
 
     try {
       await player.skip();
-    } catch (error) {
-      let autoplay = player.get("autoplay_enabled");
-      if (autoplay) {
-        await player.seek(player.queue.current.info.duration);
-        return interaction.editReply({
+    } catch {
+      const autoplay = Boolean(player.get("autoplay_enabled"));
+      const currentTrack = player.queue.current;
+      if (autoplay && currentTrack) {
+        await player.seek(currentTrack.info.duration);
+        await interaction.editReply({
           content: await i18n.__("commands.music.skip.skippedSong"),
           ephemeral: true,
         });
+        return;
       }
-      return interaction.editReply({
+
+      await interaction.editReply({
         content: await i18n.__("commands.music.skip.skippingSongError"),
         ephemeral: true,
       });
+      return;
     }
+
     await interaction.editReply({
       content: await i18n.__("commands.music.skip.skippedSong"),
       ephemeral: true,
     });
   },
 };
+
+export default command;

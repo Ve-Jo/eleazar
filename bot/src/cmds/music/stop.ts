@@ -1,16 +1,34 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 
-export default {
-  data: () => {
-    // Create a standard subcommand with Discord.js builders
-    const builder = new SlashCommandSubcommandBuilder()
+type TranslatorLike = {
+  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
+};
+
+type PlayerLike = {
+  voiceChannelId?: string | null;
+  destroy: (reason?: string) => Promise<void>;
+};
+
+type MusicInteractionLike = {
+  client: {
+    lavalink: {
+      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
+    };
+  };
+  guild: { id: string };
+  member: { voice: { channelId?: string | null } };
+  user: { username: string };
+  deferReply: () => Promise<unknown>;
+  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
+};
+
+const command = {
+  data: (): SlashCommandSubcommandBuilder => {
+    return new SlashCommandSubcommandBuilder()
       .setName("stop")
       .setDescription("Stop the music");
-
-    return builder;
   },
 
-  // Define localization strings directly in the command
   localization_strings: {
     command: {
       name: {
@@ -41,23 +59,21 @@ export default {
     },
   },
 
-  async execute(interaction, i18n) {
+  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(
-      interaction.guild.id,
-    );
+    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      return interaction.editReply(
-        await i18n.__("commands.music.stop.noMusicPlaying"),
-      );
-    } else {
-      if (interaction.member.voice.channelId !== player.voiceChannelId) {
-        return interaction.editReply({
-          content: await i18n.__("commands.music.stop.notInVoiceChannel"),
-          ephemeral: true,
-        });
-      }
+      await interaction.editReply(await i18n.__("commands.music.stop.noMusicPlaying"));
+      return;
+    }
+
+    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+      await interaction.editReply({
+        content: await i18n.__("commands.music.stop.notInVoiceChannel"),
+        ephemeral: true,
+      });
+      return;
     }
 
     await player.destroy(`${interaction.user.username} stopped the music`);
@@ -66,3 +82,5 @@ export default {
     });
   },
 };
+
+export default command;
