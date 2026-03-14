@@ -7,7 +7,7 @@
     "start": "bun src/server.ts",
     "dev": "bun --watch src/server.ts",
     "build": "echo \"Rendering service build complete\"",
-    "preview": "bun src/preview.js",
+    "preview": "bun src/preview.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -29,7 +29,9 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.3"
   },
   "private": true,
   "peerDependencies": {

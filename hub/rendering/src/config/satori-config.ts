@@ -1,4 +1,27 @@
-export async function createSatoriConfig(customConfig = {}, fonts) {
+type SatoriFont = {
+  name: string;
+  weight?: number;
+  style?: string;
+  data?: ArrayBuffer | Uint8Array;
+};
+
+type SatoriConfig = {
+  width: number;
+  height: number;
+  fonts: SatoriFont[];
+  loadAdditionalAsset?: (...args: unknown[]) => unknown;
+};
+
+type CustomSatoriConfig = {
+  width?: number;
+  height?: number;
+  loadAdditionalAsset?: (...args: unknown[]) => unknown;
+};
+
+export async function createSatoriConfig(
+  customConfig: CustomSatoriConfig = {},
+  fonts?: SatoriFont[]
+): Promise<SatoriConfig> {
   try {
     console.log("🎨 Creating Satori configuration");
 
@@ -6,29 +29,25 @@ export async function createSatoriConfig(customConfig = {}, fonts) {
       throw new Error("Fonts must be provided to Satori config");
     }
 
-    // Use provided fonts to create config
-    const config = {
+    const config: SatoriConfig = {
       width: customConfig.width || 1200,
       height: customConfig.height || 1200,
       fonts,
     };
 
-    // Add loadAdditionalAsset if provided
     if (customConfig.loadAdditionalAsset) {
       config.loadAdditionalAsset = customConfig.loadAdditionalAsset;
     }
 
-    // Validate config
     if (!config.fonts || config.fonts.length === 0) {
       throw new Error("No fonts configured for Satori");
     }
 
-    // Log final config for debugging
-    const fontSummary = config.fonts.map((f) => ({
-      name: f.name,
-      weight: f.weight,
-      style: f.style,
-      hasData: !!f.data,
+    const fontSummary = config.fonts.map((font) => ({
+      name: font.name,
+      weight: font.weight,
+      style: font.style,
+      hasData: Boolean(font.data),
     }));
     console.log("📝 Satori config created with fonts:");
     fontSummary.forEach((font) => console.log(JSON.stringify(font, null, 2)));

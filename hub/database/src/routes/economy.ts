@@ -1,6 +1,6 @@
 import express from "express";
 import { Prisma } from "@prisma/client";
-import Database from "../client.js";
+import Database from "../client.ts";
 import { serializeBigInt } from "../utils/serialization.ts";
 import type { RequestLike, ResponseLike } from "../types/http.ts";
 

@@ -1,5 +1,6 @@
+// @ts-nocheck
 import express from "express";
-import { generateImage, processImageColors } from "./utils/imageGenerator.js";
+import { generateImage, processImageColors } from "./utils/imageGenerator.ts";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";

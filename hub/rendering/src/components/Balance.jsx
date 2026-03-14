@@ -1,6 +1,6 @@
 import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
-import { getCountryFlag, countryFlags } from "../utils/countryFlagsRender.js";
+import { getCountryFlag, countryFlags } from "../utils/countryFlagsRender.ts";
 import Banknotes from "./unified/Banknotes.jsx";
 
 // Function to get gender emoji

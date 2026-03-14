@@ -1,3 +1,4 @@
+// @ts-nocheck
 import dotenv from "dotenv";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";

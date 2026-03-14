@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
-import Database from "./client.js";
+import Database from "./client.ts";
 import { DEFAULT_SERVICE_PORTS } from "../../shared/src/serviceConfig.ts";
 import { createHealthResponse } from "../../shared/src/utils.ts";
 import userRoutes from "./routes/users.ts";
@@ -23,12 +23,18 @@ import transactionRoutes from "./routes/transactions.ts";
 import crateRoutes from "./routes/crates.ts";
 import seasonRoutes from "./routes/seasons.ts";
 import guildVaultRoutes from "./routes/guildVault.ts";
-import type {
-  ErrorLike,
-  NextFunctionLike,
-  RequestLike,
-  ResponseLike,
-} from "./types/http.ts";
+
+type RequestLike = {
+  method: string;
+  path: string;
+};
+
+type ResponseLike = {
+  status: (code: number) => ResponseLike;
+  json: (body: unknown) => ResponseLike;
+};
+
+type NextFunctionLike = () => void;
 
 dotenv.config({ path: "../.env" });
 
@@ -79,7 +85,7 @@ app.use("*", (_req: RequestLike, res: ResponseLike) => {
 });
 
 // Error handling middleware
-app.use((error: ErrorLike, _req: RequestLike, res: ResponseLike, _next: NextFunctionLike) => {
+app.use((error: Error, _req: RequestLike, res: ResponseLike, _next: NextFunctionLike) => {
   console.error("Database service error:", error);
   res.status(500).json({
     error: "Internal server error",

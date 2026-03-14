@@ -39,7 +39,8 @@
     "coverage:rendering": "cd rendering && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
     "coverage:client": "cd client && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
     "coverage:localization": "cd localization && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "ts-debt": "bun ../scripts/check-ts-debt.mjs --target . --max-js-files 0 --max-any 373 --max-as-any 3 --max-colon-any 243"
   },
   "devDependencies": {
     "@types/bun": "latest",

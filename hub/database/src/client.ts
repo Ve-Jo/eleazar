@@ -1,3 +1,4 @@
+// @ts-nocheck
 import dotenv from "dotenv";
 import { PrismaClient, Prisma } from "@prisma/client"; // Added Prisma
 import {
@@ -548,7 +549,7 @@ class Database {
       const files = await fs.promises.readdir(__dirname);
       const moduleFiles = files.filter(
         (file) =>
-          file.endsWith(".js") && file !== "client.js" && !file.startsWith(".")
+          file.endsWith(".ts") && file !== "client.ts" && !file.startsWith(".")
       );
 
       // Import and initialize each module

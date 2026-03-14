@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import crypto from "crypto";
-import Database from "../client.js";
+import Database from "../client.ts";
 import MexcService from "./mexcService.ts";
 
 type DepositMemoData = {

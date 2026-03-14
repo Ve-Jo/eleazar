@@ -1,13 +1,44 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { generateImage, processImageColors } from "./utils/imageGenerator.js";
+import { generateImage, processImageColors } from "./utils/imageGenerator.ts";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import { DEFAULT_SERVICE_PORTS } from "../../shared/src/serviceConfig.ts";
 import { createHealthResponse } from "../../shared/src/utils.ts";
+
+type RequestLike = {
+  method: string;
+  path: string;
+  body?: Record<string, unknown>;
+};
+
+type GenerateImageBody = {
+  component?: string;
+  props?: Record<string, unknown>;
+  scaling?: {
+    image: number;
+    emoji: number;
+    debug: boolean;
+  };
+  locale?: string;
+  options?: Record<string, unknown>;
+};
+
+type ImageColorsBody = {
+  imageUrl?: string;
+};
+
+type ResponseLike = {
+  status: (code: number) => ResponseLike;
+  json: (body: unknown) => ResponseLike;
+  send: (body: unknown) => ResponseLike;
+  set: (header: string, value: string) => ResponseLike;
+};
+
+type NextFunctionLike = () => void;
 
 dotenv.config({ path: "../.env" });
 
@@ -26,20 +57,21 @@ app.use(express.json({ limit: "50mb" }));
 app.use("/public", express.static(path.join(__dirname, "..", "public")));
 
 // Request logging
-app.use((req: any, res: any, next: any) => {
+app.use((req: RequestLike, _res: ResponseLike, next: NextFunctionLike) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
 // Health check
-app.get("/health", (req: any, res: any) => {
+app.get("/health", (_req: RequestLike, res: ResponseLike) => {
   res.json(createHealthResponse("rendering", "1.0.0"));
 });
 
 // Image generation endpoint
-app.post("/generate", async (req: any, res: any) => {
+app.post("/generate", async (req: RequestLike, res: ResponseLike) => {
   try {
-    const { component, props, scaling, locale, options } = req.body;
+    const { component, props, scaling, locale, options } =
+      (req.body as GenerateImageBody | undefined) ?? {};
 
     if (!component) {
       return res.status(400).json({ error: "Component is required" });
@@ -48,7 +80,7 @@ app.post("/generate", async (req: any, res: any) => {
     // Create i18n mock object
     const i18n = {
       getLocale: () => locale || "en",
-      __: (key: string, ...args: any[]) => {
+      __: (key: string, ..._args: unknown[]) => {
         // Simple fallback - in production you might want to load actual translations
         return key;
       },
@@ -57,7 +89,7 @@ app.post("/generate", async (req: any, res: any) => {
     const result = await generateImage(
       component,
       props || {},
-      scaling || { image: 1, emoji: 1 },
+      scaling || { image: 1, emoji: 1, debug: false },
       i18n,
       options || {}
     );
@@ -75,22 +107,23 @@ app.post("/generate", async (req: any, res: any) => {
     } else {
       res.status(500).json({ error: "Invalid result format" });
     }
-  } catch (error: any) {
+  } catch (error) {
+    const typedError = error as Error;
     console.error("Error generating image:", error);
     res.status(500).json({
       error: "Failed to generate image",
       message:
         process.env.NODE_ENV === "development"
-          ? error.message
+          ? typedError.message
           : "Image generation failed",
     });
   }
 });
 
 // Color processing endpoint
-app.post("/colors", async (req: any, res: any) => {
+app.post("/colors", async (req: RequestLike, res: ResponseLike) => {
   try {
-    const { imageUrl } = req.body;
+    const { imageUrl } = (req.body as ImageColorsBody | undefined) ?? {};
 
     if (!imageUrl) {
       return res.status(400).json({ error: "imageUrl is required" });
@@ -98,20 +131,21 @@ app.post("/colors", async (req: any, res: any) => {
 
     const colors = await processImageColors(imageUrl);
     res.json(colors);
-  } catch (error: any) {
+  } catch (error) {
+    const typedError = error as Error;
     console.error("Error processing colors:", error);
     res.status(500).json({
       error: "Failed to process colors",
       message:
         process.env.NODE_ENV === "development"
-          ? error.message
+          ? typedError.message
           : "Color processing failed",
     });
   }
 });
 
 // List available components
-app.get("/components", async (req: any, res: any) => {
+app.get("/components", async (_req: RequestLike, res: ResponseLike) => {
   try {
     const componentsDir = path.join(__dirname, "components");
     const files = await fs.readdir(componentsDir);
@@ -120,19 +154,19 @@ app.get("/components", async (req: any, res: any) => {
       .map((file) => file.replace(".jsx", ""));
 
     res.json({ components });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error listing components:", error);
     res.status(500).json({ error: "Failed to list components" });
   }
 });
 
 // 404 handler
-app.use("*", (req: any, res: any) => {
+app.use("*", (_req: RequestLike, res: ResponseLike) => {
   res.status(404).json({ error: "Endpoint not found" });
 });
 
 // Error handling middleware
-app.use((error: any, req: any, res: any, next: any) => {
+app.use((error: Error, _req: RequestLike, res: ResponseLike, _next: NextFunctionLike) => {
   console.error("Rendering service error:", error);
   res.status(500).json({
     error: "Internal server error",
