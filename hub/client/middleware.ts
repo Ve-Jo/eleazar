@@ -2,7 +2,7 @@ const ACTIVITY_API_KEY =
   process.env.VITE_DISCORD_CLIENT_SECRET || "activity_secret_key";
 
 // Enhanced API Key Authentication Middleware
-export const authenticateApiKey = (req, res, next) => {
+export const authenticateApiKey = (req: any, res: any, next: any) => {
   // Skip authentication for token endpoint
   if (
     req.path === "/token" ||

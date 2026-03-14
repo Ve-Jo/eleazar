@@ -2,12 +2,13 @@
   "name": "@eleazar-hub/rendering",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/server.js",
+  "main": "src/server.ts",
   "scripts": {
-    "start": "bun src/server.js",
-    "dev": "bun --watch src/server.js",
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "build": "echo \"Rendering service build complete\"",
-    "preview": "bun src/preview.js"
+    "preview": "bun src/preview.js",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",

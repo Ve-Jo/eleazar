@@ -1,18 +1,28 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+type TranslationMap = Record<string, any>;
+type ReplacementMap = Record<string, unknown>;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class I18n {
+  private translations: Record<string, TranslationMap>;
+  private currentLocale: string;
+  private initialized: boolean;
+  private translationCache: Map<string, string>;
+  private supportedLocales: string[];
+  private localesDir: string;
+
   constructor() {
     this.translations = {};
-    this.currentLocale = 'en';
+    this.currentLocale = "en";
     this.initialized = false;
     this.translationCache = new Map();
-    this.supportedLocales = ['en', 'ru', 'uk'];
-    this.localesDir = path.join(__dirname, '../locales');
+    this.supportedLocales = ["en", "ru", "uk"];
+    this.localesDir = path.join(__dirname, "../locales");
   }
 
   initialize() {
@@ -29,12 +39,12 @@ class I18n {
     this.initialized = true;
   }
 
-  loadTranslations(locale) {
+  loadTranslations(locale: string) {
     const filePath = path.join(this.localesDir, `${locale}.json`);
 
     try {
       if (fs.existsSync(filePath)) {
-        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const fileContent = fs.readFileSync(filePath, "utf8");
         this.translations[locale] = JSON.parse(fileContent);
       } else {
         this.translations[locale] = {};
@@ -46,24 +56,28 @@ class I18n {
     }
   }
 
-  saveTranslations(locale) {
+  saveTranslations(locale: string) {
     const filePath = path.join(this.localesDir, `${locale}.json`);
 
     try {
-      fs.writeFileSync(filePath, JSON.stringify(this.translations[locale], null, 2), 'utf8');
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify(this.translations[locale], null, 2),
+        "utf8"
+      );
     } catch (error) {
       console.error(`Error saving translations for ${locale}:`, error);
     }
   }
 
-  setLocale(locale) {
+  setLocale(locale?: string) {
     if (!locale) return this.currentLocale;
 
-    const normalizedLocale = locale.split('-')[0].toLowerCase();
+    const normalizedLocale = (locale.split("-")[0] || locale).toLowerCase();
 
     if (!this.supportedLocales.includes(normalizedLocale)) {
       console.warn(`Locale ${normalizedLocale} not supported, falling back to en`);
-      this.currentLocale = 'en';
+      this.currentLocale = "en";
     } else {
       this.currentLocale = normalizedLocale;
     }
@@ -79,43 +93,49 @@ class I18n {
     return this.supportedLocales;
   }
 
-  __(key, varsOrLocale = {}, locale) {
+  __(key: string, varsOrLocale: ReplacementMap | string = {}, locale?: string) {
     if (!this.initialized) {
       this.initialize();
     }
 
-    let replacements = {};
+    let replacements: ReplacementMap = {};
     let effectiveLocale = this.currentLocale;
 
-    if (typeof varsOrLocale === 'string') {
-      effectiveLocale = varsOrLocale.split('-')[0].toLowerCase();
-    } else if (typeof varsOrLocale === 'object' && varsOrLocale !== null) {
+    if (typeof varsOrLocale === "string") {
+      effectiveLocale = (varsOrLocale.split("-")[0] || varsOrLocale).toLowerCase();
+    } else if (typeof varsOrLocale === "object" && varsOrLocale !== null) {
       replacements = varsOrLocale;
     }
 
     if (locale) {
-      effectiveLocale = locale.split('-')[0].toLowerCase();
+      effectiveLocale = (locale.split("-")[0] || locale).toLowerCase();
     }
 
     if (!this.supportedLocales.includes(effectiveLocale)) {
       console.warn(`Locale ${effectiveLocale} not supported, falling back to en`);
-      effectiveLocale = 'en';
+      effectiveLocale = "en";
     }
 
     const cacheKey = `${effectiveLocale}:${key}`;
     if (this.translationCache.has(cacheKey)) {
       const cachedTranslation = this.translationCache.get(cacheKey);
-      return this.replaceVariables(cachedTranslation, replacements);
+      return this.replaceVariables(String(cachedTranslation), replacements);
     }
 
-    const translation = this.getNestedValue(this.translations[effectiveLocale], key);
+    const localeTranslations = this.translations[effectiveLocale] ?? {};
+    const translation = this.getNestedValue(localeTranslations, key);
 
-    if (translation === undefined && effectiveLocale !== 'en') {
-      const fallbackTranslation = this.getNestedValue(this.translations.en, key);
+    if (translation === undefined && effectiveLocale !== "en") {
+      const fallbackTranslation = this.getNestedValue(
+        this.translations.en ?? {},
+        key
+      );
 
       if (fallbackTranslation !== undefined) {
-        console.log(`No ${effectiveLocale} translation for ${key}, using English fallback`);
-        return this.replaceVariables(fallbackTranslation, replacements);
+        console.log(
+          `No ${effectiveLocale} translation for ${key}, using English fallback`
+        );
+        return this.replaceVariables(String(fallbackTranslation), replacements);
       }
     }
 
@@ -124,29 +144,32 @@ class I18n {
       return key;
     }
 
-    this.translationCache.set(cacheKey, translation);
+    this.translationCache.set(cacheKey, String(translation));
 
-    return this.replaceVariables(translation, replacements);
+    return this.replaceVariables(String(translation), replacements);
   }
 
-  getTranslationGroup(groupKey, locale = null) {
+  getTranslationGroup(groupKey: string, locale: string | null = null) {
     const effectiveLocale = locale || this.currentLocale;
 
-    const group = this.getNestedValue(this.translations[effectiveLocale], groupKey);
+    const group = this.getNestedValue(
+      this.translations[effectiveLocale] ?? {},
+      groupKey
+    );
 
-    if (!group || typeof group !== 'object') {
+    if (!group || typeof group !== "object") {
       console.warn(`No translation group found for: ${groupKey}`);
       return {};
     }
 
-    return group;
+    return group as TranslationMap;
   }
 
-  getNestedValue(obj, path) {
-    if (!obj || !path) return undefined;
+  getNestedValue(obj: TranslationMap | undefined, pathValue: string) {
+    if (!obj || !pathValue) return undefined;
 
-    const parts = path.split('.');
-    let current = obj;
+    const parts = pathValue.split(".");
+    let current: any = obj;
 
     for (const part of parts) {
       if (current === undefined || current === null) return undefined;
@@ -156,8 +179,8 @@ class I18n {
     return current;
   }
 
-  replaceVariables(text, replacements) {
-    if (!replacements || typeof replacements !== 'object' || !text) {
+  replaceVariables(text: string, replacements: ReplacementMap) {
+    if (!replacements || typeof replacements !== "object" || !text) {
       return text;
     }
 
@@ -169,33 +192,41 @@ class I18n {
       const stringValue = String(value);
 
       const doublePattern = `{{${key}}}`;
-      result = result.replace(new RegExp(doublePattern, 'g'), stringValue);
+      result = result.replace(new RegExp(doublePattern, "g"), stringValue);
 
       const singlePattern = `{${key}}`;
-      result = result.replace(new RegExp(singlePattern, 'g'), stringValue);
+      result = result.replace(new RegExp(singlePattern, "g"), stringValue);
     }
 
     return result;
   }
 
-  addTranslation(locale, key, value, save = false) {
+  addTranslation(locale: string, key: string, value: unknown, save = false) {
     if (!this.supportedLocales.includes(locale)) {
       console.error(`Cannot add translation for unsupported locale: ${locale}`);
       return;
     }
 
-    const parts = key.split('.');
-    let current = this.translations[locale];
+    const parts = key.split(".");
+    let current: TranslationMap = this.translations[locale] ?? {};
+    this.translations[locale] = current;
 
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
-      if (!current[part]) {
+      if (!part) {
+        continue;
+      }
+      if (!current[part] || typeof current[part] !== "object") {
         current[part] = {};
       }
       current = current[part];
     }
 
-    current[parts[parts.length - 1]] = value;
+    const lastPart = parts[parts.length - 1];
+    if (!lastPart) {
+      return;
+    }
+    current[lastPart] = value;
 
     this.translationCache.delete(`${locale}:${key}`);
 
@@ -204,19 +235,27 @@ class I18n {
     }
   }
 
-  registerLocalizations(category, name, localizations, save = false) {
-    if (!localizations || typeof localizations !== 'object') {
+  registerLocalizations(
+    category: string,
+    name: string,
+    localizations: Record<string, any>,
+    save = false
+  ) {
+    if (!localizations || typeof localizations !== "object") {
       console.warn(`Invalid localizations for ${category}.${name}`);
       return;
     }
 
-    console.log(`Registering localizations for ${category}.${name}`, Object.keys(localizations));
+    console.log(
+      `Registering localizations for ${category}.${name}`,
+      Object.keys(localizations)
+    );
 
     for (const key in localizations) {
       const value = localizations[key];
 
-      if (typeof value === 'object' && value !== null) {
-        const isLocaleMap = this.supportedLocales.some(locale => locale in value);
+      if (typeof value === "object" && value !== null) {
+        const isLocaleMap = this.supportedLocales.some((locale) => locale in value);
 
         if (isLocaleMap) {
           for (const locale in value) {
@@ -226,7 +265,12 @@ class I18n {
             }
           }
         } else {
-          this.registerNestedLocalizations(category, `${name}.${key}`, value, save);
+          this.registerNestedLocalizations(
+            category,
+            `${name}.${key}`,
+            value,
+            save
+          );
         }
       }
     }
@@ -238,22 +282,29 @@ class I18n {
     }
   }
 
-  registerNestedLocalizations(category, path, obj, save) {
+  registerNestedLocalizations(
+    category: string,
+    pathValue: string,
+    obj: Record<string, any>,
+    save: boolean
+  ) {
     for (const key in obj) {
       const value = obj[key];
 
-      if (typeof value === 'object' && value !== null) {
-        const isLocaleMap = this.supportedLocales.some(locale => locale in value);
+      if (typeof value === "object" && value !== null) {
+        const isLocaleMap = this.supportedLocales.some((locale) => locale in value);
 
         if (isLocaleMap) {
           for (const locale in value) {
             if (this.supportedLocales.includes(locale)) {
-              const translationKey = path ? `${category}.${path}.${key}` : `${category}.${key}`;
+              const translationKey = pathValue
+                ? `${category}.${pathValue}.${key}`
+                : `${category}.${key}`;
               this.addTranslation(locale, translationKey, value[locale]);
             }
           }
         } else {
-          const nextPath = path ? `${path}.${key}` : key;
+          const nextPath = pathValue ? `${pathValue}.${key}` : key;
           this.registerNestedLocalizations(category, nextPath, value, save);
         }
       }
@@ -265,20 +316,22 @@ class I18n {
   }
 
   saveAllTranslations() {
-    console.log(`Attempting to save translations for locales: ${this.supportedLocales.join(', ')}`);
+    console.log(
+      `Attempting to save translations for locales: ${this.supportedLocales.join(", ")}`
+    );
     for (const locale of this.supportedLocales) {
       this.saveTranslations(locale);
     }
   }
 
-  debugTranslations(key) {
+  debugTranslations(key: string) {
     console.log(`\n=== DEBUG TRANSLATIONS FOR KEY: ${key} ===`);
 
     for (const locale of this.supportedLocales) {
       const translation = this.getNestedValue(this.translations[locale], key);
 
       if (translation !== undefined) {
-        if (typeof translation === 'object') {
+        if (typeof translation === "object") {
           console.log(`${locale} (object):`, JSON.stringify(translation, null, 2));
         } else {
           console.log(`${locale}: "${translation}"`);
@@ -293,7 +346,7 @@ class I18n {
       }
     }
 
-    console.log(`=== END DEBUG ===`);
+    console.log("=== END DEBUG ===");
     return this;
   }
 }

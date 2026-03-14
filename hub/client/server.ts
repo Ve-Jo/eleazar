@@ -1,10 +1,21 @@
 import express from "express";
-import clientApiRouter from "./router.js";
-import { authenticateApiKey } from "./middleware.js";
-import dotenv from 'dotenv';
-dotenv.config({ path: '../.env' });
+import clientApiRouter from "./router.ts";
+import { authenticateApiKey } from "./middleware.ts";
+import dotenv from "dotenv";
+import {
+  DEFAULT_SERVICE_PORTS,
+  DEFAULT_SERVICE_URLS,
+} from "../shared/src/serviceConfig.ts";
+import { createHealthResponse } from "../shared/src/utils.ts";
 
-const API_PORT = 3006;
+dotenv.config({ path: "../.env" });
+
+const API_PORT = Number(
+  process.env.CLIENT_SERVICE_PORT || DEFAULT_SERVICE_PORTS.client
+);
+const DATABASE_SERVICE_URL = (
+  process.env.DATABASE_SERVICE_URL || DEFAULT_SERVICE_URLS.database
+).replace(/\/$/, "");
 
 if (!process.env.VITE_DISCORD_CLIENT_SECRET) {
   // Check the correct env var name
@@ -16,7 +27,7 @@ if (!process.env.VITE_DISCORD_CLIENT_SECRET) {
 const app = express();
 
 // Enhanced proxy middleware for Discord's proxy
-app.use((req, res, next) => {
+app.use((req: any, res: any, next: any) => {
   console.log(`[Debug] Incoming request: ${req.method} ${req.url}`);
 
   // Handle various proxy path formats
@@ -65,13 +76,13 @@ app.use((req, res, next) => {
 app.use(express.json()); // Parse JSON request bodies
 
 // --- Health Check Route (before auth) ---
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
+app.get("/health", (req: any, res: any) => {
+  res.status(200).json(createHealthResponse("client", "1.0.0"));
 });
 
 // --- API Routes ---
 // Create a function to handle both direct and proxied routes
-function setupDualRoutes(app, clientApiRouter) {
+function setupDualRoutes(appInstance: any, router: any) {
   // List of API endpoints that need to be accessible both directly and through proxy
   const apiEndpoints = [
     { method: "post", path: "/games/updateRecord" },
@@ -88,21 +99,21 @@ function setupDualRoutes(app, clientApiRouter) {
     );
 
     // Handler function that forwards requests to the activities server
-    const routeHandler = async (req, res) => {
+    const routeHandler = async (req: any, res: any) => {
       console.log(
         `[API Server] Forwarding ${req.method} request at ${req.originalUrl} to activities server`
       );
 
       try {
         // Forward all headers to preserve authentication
-        const headers = {
+        const headers: Record<string, any> = {
           "Content-Type": "application/json",
         };
 
         for (const [key, value] of Object.entries(req.headers)) {
           // Skip host and content-length headers to avoid conflicts
-          if (!["host", "content-length"].includes(key.toLowerCase())) {
-            headers[key] = value;
+          if (![["host"], ["content-length"]].flat().includes(key.toLowerCase())) {
+            headers[key] = value as string;
           }
         }
 
@@ -112,7 +123,7 @@ function setupDualRoutes(app, clientApiRouter) {
           : req.originalUrl.replace("/api", "/.proxy/api");
 
         const forwardResponse = await fetch(
-          `http://localhost:3001${targetPath}`,
+          `${DATABASE_SERVICE_URL}${targetPath}`,
           {
             method: req.method,
             headers,
@@ -130,7 +141,7 @@ function setupDualRoutes(app, clientApiRouter) {
 
         // Return the same status and body from the activities server
         res.status(forwardResponse.status).send(responseData);
-      } catch (error) {
+      } catch (error: any) {
         console.error(`[API Server] Error forwarding request:`, error);
         res
           .status(500)
@@ -139,8 +150,8 @@ function setupDualRoutes(app, clientApiRouter) {
     };
 
     // Register both direct and proxy routes
-    app[endpoint.method](directPath, express.json(), routeHandler);
-    app[endpoint.method](proxyPath, express.json(), routeHandler);
+    appInstance[endpoint.method](directPath, express.json(), routeHandler);
+    appInstance[endpoint.method](proxyPath, express.json(), routeHandler);
   });
 }
 
@@ -148,7 +159,7 @@ function setupDualRoutes(app, clientApiRouter) {
 app.post(
   ["/api/token", "/.proxy/api/token"],
   express.json(),
-  async (req, res) => {
+  async (req: any, res: any) => {
     try {
       const { code } = req.body;
 
@@ -163,7 +174,7 @@ app.post(
       console.log("[API Server] Forwarding token request to activities server");
 
       // Forward to the activities server at port 3001
-      const forwardResponse = await fetch("http://localhost:3001/api/token", {
+      const forwardResponse = await fetch(`${DATABASE_SERVICE_URL}/api/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -178,7 +189,7 @@ app.post(
 
       // Return the same status and body from the activities server
       res.status(forwardResponse.status).send(responseData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("[API Server] Error forwarding token request:", error);
       return res
         .status(500)
@@ -188,11 +199,11 @@ app.post(
 );
 
 // Add config endpoint to provide client ID
-app.get(["/api/config", "/.proxy/api/config"], async (req, res) => {
+app.get(["/api/config", "/.proxy/api/config"], async (req: any, res: any) => {
   try {
     // Forward to the activities server at port 3001
     console.log("[API Server] Forwarding config request to activities server");
-    const forwardResponse = await fetch("http://localhost:3001/api/config");
+    const forwardResponse = await fetch(`${DATABASE_SERVICE_URL}/api/config`);
 
     const responseData = await forwardResponse.text();
     console.log(
@@ -201,7 +212,7 @@ app.get(["/api/config", "/.proxy/api/config"], async (req, res) => {
 
     // Return the same status and body from the activities server
     res.status(forwardResponse.status).send(responseData);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[API Server] Error forwarding config request:", error);
     return res
       .status(500)
@@ -212,7 +223,7 @@ app.get(["/api/config", "/.proxy/api/config"], async (req, res) => {
 // Add launcher-data endpoint to provide user data
 app.get(
   ["/api/launcher-data", "/.proxy/api/launcher-data"],
-  async (req, res) => {
+  async (req: any, res: any) => {
     try {
       // Forward to the activities server at port 3001
       console.log(
@@ -220,16 +231,16 @@ app.get(
       );
 
       // Forward all headers to preserve authentication
-      const headers = {};
+      const headers: Record<string, any> = {};
       for (const [key, value] of Object.entries(req.headers)) {
         // Skip host header to avoid conflicts
         if (key.toLowerCase() !== "host") {
-          headers[key] = value;
+          headers[key] = value as string;
         }
       }
 
       const forwardResponse = await fetch(
-        "http://localhost:3001/api/launcher-data",
+        `${DATABASE_SERVICE_URL}/api/launcher-data`,
         {
           headers,
         }
@@ -242,7 +253,7 @@ app.get(
 
       // Return the same status and body from the activities server
       res.status(forwardResponse.status).send(responseData);
-    } catch (error) {
+    } catch (error: any) {
       console.error(
         "[API Server] Error forwarding launcher-data request:",
         error
@@ -258,22 +269,22 @@ app.get(
 app.post(
   ["/api/games/records/update", "/.proxy/api/games/records/update"],
   express.json(),
-  async (req, res) => {
+  async (req: any, res: any) => {
     console.log(
       `[API Server] Forwarding ${req.method} request at ${req.originalUrl} to database service`
     );
 
     try {
-      const headers = { "Content-Type": "application/json" };
+      const headers: Record<string, any> = { "Content-Type": "application/json" };
 
       for (const [key, value] of Object.entries(req.headers)) {
         if (key.toLowerCase() !== "host" && key.toLowerCase() !== "content-length") {
-          headers[key] = value;
+          headers[key] = value as string;
         }
       }
 
       const forwardResponse = await fetch(
-        `http://localhost:3001/games/records/update`,
+        `${DATABASE_SERVICE_URL}/games/records/update`,
         {
           method: req.method,
           headers,
@@ -283,7 +294,7 @@ app.post(
 
       const responseData = await forwardResponse.text();
       res.status(forwardResponse.status).send(responseData);
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ error: "Internal server error", message: error.message });
     }
   }
@@ -293,7 +304,7 @@ app.post(
 app.post(
   ["/api/update-balance", "/.proxy/api/update-balance"],
   express.json(),
-  async (req, res) => {
+  async (req: any, res: any) => {
     try {
       console.log("[API Server] Processing update-balance request locally");
 
@@ -318,8 +329,8 @@ app.post(
           );
 
           if (userResponse.ok) {
-            const discordUser = await userResponse.json();
-            userId = discordUser.id;
+            const discordUser = (await userResponse.json()) as { id?: string };
+            userId = discordUser.id || userId;
             console.log(
               `[API Server] Extracted user ID from Discord token: ${userId}`
             );
@@ -360,23 +371,30 @@ app.post(
         });
       }
 
-      // Use our hub client to update the balance
-      const hubClient = await import("../hubClient.js");
-      const result = await hubClient.default.addBalance(
-        guildId,
-        userId,
-        amount
+      const forwardResponse = await fetch(
+        `${DATABASE_SERVICE_URL}/economy/balance/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ guildId, userId, amount }),
+        }
       );
+
+      const result = (await forwardResponse.json().catch(() => null)) as
+        | { balance?: { toString?: () => string } }
+        | null;
 
       const responseData = {
         success: true,
-        newBalance: result?.balance?.toString() ?? "N/A",
+        newBalance: result?.balance?.toString?.() ?? "N/A",
         message: "Balance updated successfully",
       };
 
       console.log(`[API Server] Balance update successful:`, responseData);
       res.json(responseData);
-    } catch (error) {
+    } catch (error: any) {
       console.error(
         "[API Server] Error processing update-balance request:",
         error
@@ -398,7 +416,7 @@ setupDualRoutes(app, clientApiRouter);
 // app.use('/internal', internalRouter);
 
 // Diagnostic catch-all route to log unhandled paths
-app.use("*", (req, res) => {
+app.use("*", (req: any, res: any) => {
   console.log(`[API Server] Unhandled route: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     error: "API route not found",
@@ -409,7 +427,7 @@ app.use("*", (req, res) => {
 });
 
 // --- Error Handling Middleware (Example) ---
-app.use((err, req, res, next) => {
+app.use((err: any, req: any, res: any, next: any) => {
   console.error("[API Server] Unhandled Error:", err.stack);
   res.status(500).json({ error: "Internal Server Error" });
 });

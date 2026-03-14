@@ -2,11 +2,12 @@
   "name": "@eleazar-hub/localization",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/server.js",
+  "main": "src/server.ts",
   "scripts": {
-    "start": "bun src/server.js",
-    "dev": "bun --watch src/server.js",
-    "build": "echo \"Localization service build complete\""
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
+    "build": "echo \"Localization service build complete\"",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "express": "^4.21.2",

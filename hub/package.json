@@ -38,7 +38,8 @@
     "coverage:database": "cd database && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
     "coverage:rendering": "cd rendering && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
     "coverage:client": "cd client && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
-    "coverage:localization": "cd localization && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start"
+    "coverage:localization": "cd localization && c8 --clean --reporter=lcov --reporter=text --reporter=html bun run start",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
     "@types/bun": "latest",

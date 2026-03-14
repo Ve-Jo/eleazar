@@ -6,15 +6,15 @@ export const HTTP_STATUS = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
-  INTERNAL_SERVER_ERROR: 500
-};
+  INTERNAL_SERVER_ERROR: 500,
+} as const;
 
 export const SERVICES = {
-  DATABASE: 'database',
-  RENDERING: 'rendering'
-};
+  DATABASE: "database",
+  RENDERING: "rendering",
+} as const;
 
 export const DEFAULT_PORTS = {
   DATABASE: 3001,
-  RENDERING: 3002
-};
+  RENDERING: 3002,
+} as const;
