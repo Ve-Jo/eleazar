@@ -3,21 +3,21 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger.ts";
 import {
   validateAIRequest,
   validateModelRequest,
-} from "../utils/validators.js";
+} from "../utils/validators.ts";
 
 // Request ID middleware
-function requestIdMiddleware(req, res, next) {
+function requestIdMiddleware(req: any, res: any, next: any) {
   req.id = req.get("X-Request-ID") || uuidv4();
   res.set("X-Request-ID", req.id);
   next();
 }
 
 // Request logging middleware
-function requestLoggingMiddleware(req, res, next) {
+function requestLoggingMiddleware(req: any, res: any, next: any) {
   const start = Date.now();
 
   // Log request
@@ -47,7 +47,7 @@ function requestLoggingMiddleware(req, res, next) {
 }
 
 // Security middleware
-function securityMiddleware(req, res, next) {
+function securityMiddleware(req: any, res: any, next: any) {
   // Remove sensitive headers
   res.removeHeader("X-Powered-By");
 
@@ -63,7 +63,7 @@ function securityMiddleware(req, res, next) {
 }
 
 // API key validation middleware
-function apiKeyMiddleware(req, res, next) {
+function apiKeyMiddleware(req: any, res: any, next: any) {
   if (process.env.API_KEY_REQUIRED === "true") {
     const apiKey = req.get("X-API-Key") || req.query.apiKey;
 
@@ -85,13 +85,13 @@ function apiKeyMiddleware(req, res, next) {
 }
 
 // Request size limit middleware
-function requestSizeLimitMiddleware(req, res, next) {
+function requestSizeLimitMiddleware(req: any, res: any, next: any) {
   const maxSize =
     parseInt(process.env.MAX_REQUEST_SIZE_MB || "10") * 1024 * 1024;
 
   let size = 0;
 
-  req.on("data", (chunk) => {
+  req.on("data", (chunk: Buffer) => {
     size += chunk.length;
     if (size > maxSize) {
       logger.warn("Request size limit exceeded", {
@@ -125,7 +125,7 @@ function createRateLimitMiddleware(windowMs = 60000, max = 10) {
     },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
+    handler: (req: any, res: any) => {
       logger.warn("Rate limit exceeded", {
         requestId: req.id,
         ip: req.ip,
@@ -144,11 +144,11 @@ function createRateLimitMiddleware(windowMs = 60000, max = 10) {
 }
 
 // Request validation middleware
-function validateAIRequestMiddleware(req, res, next) {
+function validateAIRequestMiddleware(req: any, res: any, next: any) {
   try {
     req.body = validateAIRequest(req.body);
     next();
-  } catch (error) {
+  } catch (error: any) {
     logger.warn("Invalid AI request", {
       requestId: req.id,
       error: error.message,
@@ -162,11 +162,11 @@ function validateAIRequestMiddleware(req, res, next) {
   }
 }
 
-function validateModelRequestMiddleware(req, res, next) {
+function validateModelRequestMiddleware(req: any, res: any, next: any) {
   try {
     req.query = validateModelRequest(req.query);
     next();
-  } catch (error) {
+  } catch (error: any) {
     logger.warn("Invalid model request", {
       requestId: req.id,
       error: error.message,
@@ -183,7 +183,7 @@ function validateModelRequestMiddleware(req, res, next) {
 // CORS configuration
 function setupCORS() {
   const corsOptions = {
-    origin: function (origin, callback) {
+    origin: function (origin: any, callback: any) {
       const allowedOrigins = process.env.CORS_ORIGINS?.split(",") || ["*"];
 
       if (allowedOrigins.includes("*")) {
@@ -202,107 +202,59 @@ function setupCORS() {
       }
     },
     credentials: true,
-    optionsSuccessStatus: 200,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-API-Key",
-      "X-Request-ID",
-    ],
   };
 
   return cors(corsOptions);
 }
 
-// Error handling middleware
-function errorHandler(err, req, res, next) {
-  logger.error("Request error", {
-    requestId: req.id,
-    error: err.message,
-    stack: err.stack,
-    category: "error",
-  });
-
-  const statusCode = err.statusCode || err.status || 500;
-  const message = err.message || "Internal Server Error";
-
-  res.status(statusCode).json({
-    error: "Internal Server Error",
-    message:
-      process.env.NODE_ENV === "production" ? "An error occurred" : message,
-    requestId: req.id,
-  });
-}
-
-// Not found middleware
-function notFoundHandler(req, res) {
-  logger.warn("Route not found", {
-    requestId: req.id,
-    method: req.method,
-    url: req.url,
-    category: "routing",
-  });
-
-  res.status(404).json({
-    error: "Not Found",
-    message: `Route ${req.method} ${req.url} not found`,
-  });
-}
-
-// Setup all middleware
-function setupMiddleware(app) {
-  // Security middleware
-  app.use(helmet());
-  app.use(securityMiddleware);
-
-  // CORS
+// Configure middleware
+function setupMiddleware(app: any) {
+  // Setup CORS
   app.use(setupCORS());
 
-  // Request processing
-  app.use(
-    express.json({ limit: `${process.env.MAX_REQUEST_SIZE_MB || 10}mb` })
-  );
-  app.use(
-    express.urlencoded({
-      extended: true,
-      limit: `${process.env.MAX_REQUEST_SIZE_MB || 10}mb`,
-    })
-  );
-  app.use(requestSizeLimitMiddleware);
-
-  // Request identification and logging
+  // Request ID middleware
   app.use(requestIdMiddleware);
+
+  // Request logging
   app.use(requestLoggingMiddleware);
 
-  // API key validation
+  // Security middleware
+  app.use(securityMiddleware);
+
+  // API key middleware
   app.use(apiKeyMiddleware);
 
-  // Rate limiting for general routes
+  // JSON parser with strict limit
   app.use(
-    "/api",
-    createRateLimitMiddleware(
-      parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000"),
-      parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "10")
-    )
+    express.json({
+      limit: `${process.env.MAX_REQUEST_SIZE_MB || "10"}mb`,
+      verify: (req: any, res: any, buf: Buffer) => {
+        // Store raw body for debugging/verification if needed
+        req.rawBody = buf;
+      },
+    })
   );
 
-  // Health check bypasses rate limiting
-  app.use("/health", (req, res, next) => next());
-  app.use("/metrics", (req, res, next) => next());
+  // Request size limit (additional safety)
+  app.use(requestSizeLimitMiddleware);
+
+  // Rate limiting (global)
+  app.use(
+    createRateLimitMiddleware(
+      parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000"),
+      parseInt(process.env.RATE_LIMIT_MAX || "100")
+    )
+  );
 }
 
 export {
   setupMiddleware,
+  createRateLimitMiddleware,
   requestIdMiddleware,
   requestLoggingMiddleware,
   securityMiddleware,
   apiKeyMiddleware,
   requestSizeLimitMiddleware,
-  createRateLimitMiddleware,
   validateAIRequestMiddleware,
   validateModelRequestMiddleware,
-  errorHandler,
-  notFoundHandler,
-  setupCORS,
 };

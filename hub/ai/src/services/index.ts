@@ -1,164 +1,179 @@
-import { logger } from "../utils/logger.js";
-import { initializeProviderClients } from "../utils/providers.js";
-import { EnhancedModelService } from "./modelService.js";
-import { AIProcessingService } from "./aiProcessingService.js";
-import { StreamingService } from "./streamingService.js";
-import { RateLimitService } from "./rateLimitService.js";
-import { CacheService } from "./cacheService.js";
-import { ResponseNormalizer } from "./responseNormalizer.js";
+import { logger } from "../utils/logger.ts";
+import { initializeProviderClients } from "../utils/providers.ts";
+import { EnhancedModelService } from "./modelService.ts";
+import { AIProcessingService } from "./aiProcessingService.ts";
+import { StreamingService } from "./streamingService.ts";
+import { RateLimitService } from "./rateLimitService.ts";
+import { CacheService } from "./cacheService.ts";
+import { ResponseNormalizer } from "./responseNormalizer.ts";
+import type { ProviderClient } from "./aiProcessingService.ts";
 
-// Global service instances
-let providerClients = {};
-let modelService = null;
-let aiProcessingService = null;
-let streamingService = null;
-let rateLimitService = null;
-let cacheService = null;
-let responseNormalizer = null;
+let providerClients: Record<string, ProviderClient> = {};
+let modelService: EnhancedModelService | null = null;
+let aiProcessingService: AIProcessingService | null = null;
+let streamingService: StreamingService | null = null;
+let rateLimitService: RateLimitService | null = null;
+let cacheService: CacheService | null = null;
+let responseNormalizer: ResponseNormalizer | null = null;
 
-// Initialize all services
+function requireService<T>(service: T | null, name: string): T {
+  if (!service) {
+    throw new Error(`${name} has not been initialized`);
+  }
+
+  return service;
+}
+
 async function initializeServices() {
   logger.info("Initializing services...");
 
   try {
-    // Initialize provider clients
     logger.info("Initializing provider clients...");
-    providerClients = initializeProviderClients();
+    providerClients = initializeProviderClients() as Record<string, ProviderClient>;
     logger.info(
       `Initialized ${Object.keys(providerClients).length} provider clients`
     );
 
-    // Initialize cache service
     logger.info("Initializing cache service...");
     cacheService = new CacheService();
     await cacheService.initialize();
     logger.info("Cache service initialized");
 
-    // Initialize enhanced model service
     logger.info("Initializing enhanced model service...");
     modelService = new EnhancedModelService(providerClients, cacheService);
     await modelService.initialize();
     logger.info("Enhanced model service initialized");
 
-    // Initialize rate limit service
     logger.info("Initializing rate limit service...");
     rateLimitService = new RateLimitService();
     await rateLimitService.initialize();
     logger.info("Rate limit service initialized");
 
-    // Initialize streaming service
     logger.info("Initializing streaming service...");
     streamingService = new StreamingService();
     await streamingService.initialize();
     logger.info("Streaming service initialized");
 
-    // Initialize response normalizer
     logger.info("Initializing response normalizer...");
     responseNormalizer = new ResponseNormalizer();
     await responseNormalizer.initialize();
     logger.info("Response normalizer initialized");
 
-    // Initialize AI processing service
     logger.info("Initializing AI processing service...");
+    const initializedModelService = requireService(
+      modelService,
+      "Enhanced model service"
+    );
+    const initializedRateLimitService = requireService(
+      rateLimitService,
+      "Rate limit service"
+    );
+    const initializedCacheService = requireService(cacheService, "Cache service");
+    const initializedStreamingService = requireService(
+      streamingService,
+      "Streaming service"
+    );
+    const initializedResponseNormalizer = requireService(
+      responseNormalizer,
+      "Response normalizer"
+    );
+
     aiProcessingService = new AIProcessingService(
       providerClients,
-      modelService,
-      rateLimitService,
-      cacheService,
-      streamingService,
-      responseNormalizer
+      initializedModelService,
+      initializedRateLimitService,
+      initializedCacheService,
+      initializedStreamingService,
+      initializedResponseNormalizer
     );
     await aiProcessingService.initialize();
     logger.info("AI processing service initialized");
 
-    // Wire StreamingService events to AIProcessingService
-    streamingService.on("ai_request", async (payload) => {
+    initializedStreamingService.on("ai_request", async (payload: any) => {
       const { sessionId, requestId } = payload;
       try {
-        await aiProcessingService.processRequest(payload);
-      } catch (error) {
+        await requireService(
+          aiProcessingService,
+          "AI processing service"
+        ).processRequest(payload);
+      } catch (error: any) {
         logger.error("Failed to process AI request from stream", {
           requestId,
           error: error.message,
         });
-        // Notify client of error
-        streamingService.sendError(sessionId, error, requestId);
+        initializedStreamingService.sendError(sessionId, error, requestId);
       }
     });
 
-    // Handle stream stop: cancel active streaming request
-    streamingService.on("stream_stop", ({ sessionId, requestId }) => {
+    initializedStreamingService.on("stream_stop", ({ sessionId, requestId }: any) => {
       logger.info("Stream stop requested", { sessionId, requestId });
       try {
-        const cancelled = aiProcessingService.cancelStreamingRequest(requestId);
+        const cancelled = requireService(
+          aiProcessingService,
+          "AI processing service"
+        ).cancelStreamingRequest(requestId);
         if (cancelled) {
           logger.info("Stream cancellation initiated", { requestId });
-          // processStreamingResponse will send stream_complete with 'cancelled'
         } else {
           logger.warn("No active stream to cancel", { requestId });
-          // Inform client that cancellation could not be performed
-          streamingService.sendError(
+          initializedStreamingService.sendError(
             sessionId,
             new Error("Cancellation requested but no active stream"),
             requestId
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         logger.error("Failed to cancel streaming request", {
           requestId,
           error: error.message,
         });
-        streamingService.sendError(sessionId, error, requestId);
+        initializedStreamingService.sendError(sessionId, error, requestId);
       }
     });
 
-    streamingService.on("stream_pause", ({ sessionId, requestId }) => {
+    initializedStreamingService.on("stream_pause", ({ sessionId, requestId }: any) => {
       logger.info("Stream pause requested", { sessionId, requestId });
-      // Future: implement pause
     });
 
-    streamingService.on("stream_resume", ({ sessionId, requestId }) => {
+    initializedStreamingService.on("stream_resume", ({ sessionId, requestId }: any) => {
       logger.info("Stream resume requested", { sessionId, requestId });
-      // Future: implement resume
     });
 
     logger.info("All services initialized successfully");
-  } catch (error) {
+  } catch (error: any) {
     logger.error("Failed to initialize services", { error: error.message });
     throw error;
   }
 }
 
-// Get service instances
 function getProviderClients() {
   return providerClients;
 }
 
 function getModelService() {
-  return modelService;
+  return requireService(modelService, "Enhanced model service");
 }
 
 function getAIProcessingService() {
-  return aiProcessingService;
+  return requireService(aiProcessingService, "AI processing service");
 }
 
 function getStreamingService() {
-  return streamingService;
+  return requireService(streamingService, "Streaming service");
 }
 
 function getRateLimitService() {
-  return rateLimitService;
+  return requireService(rateLimitService, "Rate limit service");
 }
 
 function getCacheService() {
-  return cacheService;
+  return requireService(cacheService, "Cache service");
 }
 
 function getResponseNormalizer() {
-  return responseNormalizer;
+  return requireService(responseNormalizer, "Response normalizer");
 }
 
-// Graceful shutdown
 async function shutdownServices() {
   logger.info("Shutting down services...");
 
@@ -184,7 +199,7 @@ async function shutdownServices() {
     }
 
     logger.info("All services shut down successfully");
-  } catch (error) {
+  } catch (error: any) {
     logger.error("Error during service shutdown", { error: error.message });
     throw error;
   }

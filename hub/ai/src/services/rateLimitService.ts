@@ -1,29 +1,39 @@
-import { logger } from "../utils/logger.js";
-import { recordRateLimitHit } from "../middleware/metrics.js";
+import { logger } from "../utils/logger.ts";
+import { recordRateLimitHit } from "../middleware/metrics.ts";
+
+type LimitConfig = {
+  windowMs: number;
+  maxRequests: number;
+  windowStart: number;
+  requests?: number;
+};
 
 class RateLimitService {
+  limits: Map<string, LimitConfig>;
+  requests: Map<string, number>;
+  windows: Map<string, any>;
+  cleanupInterval: ReturnType<typeof setInterval> | null;
+  defaultWindowMs: number;
+  defaultMaxRequests: number;
+  cleanupIntervalMs: number;
+
   constructor() {
-    this.limits = new Map(); // Store rate limits in memory for now
-    this.requests = new Map(); // Track requests per key
-    this.windows = new Map(); // Track time windows
+    this.limits = new Map();
+    this.requests = new Map();
+    this.windows = new Map();
     this.cleanupInterval = null;
-    this.defaultWindowMs = parseInt(
-      process.env.RATE_LIMIT_WINDOW_MS || "60000"
-    );
+    this.defaultWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000");
     this.defaultMaxRequests = parseInt(
       process.env.RATE_LIMIT_MAX_REQUESTS || "10"
     );
-    this.cleanupIntervalMs = 300000; // 5 minutes
+    this.cleanupIntervalMs = 300000;
   }
 
   async initialize() {
     logger.info("Initializing rate limit service...");
-
-    // Start cleanup interval
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, this.cleanupIntervalMs);
-
     logger.info("Rate limit service initialized");
   }
 
@@ -40,9 +50,8 @@ class RateLimitService {
     logger.info("Rate limit service shut down");
   }
 
-  // Set rate limit for a specific key
   setLimit(
-    key,
+    key: string,
     windowMs = this.defaultWindowMs,
     maxRequests = this.defaultMaxRequests
   ) {
@@ -55,13 +64,11 @@ class RateLimitService {
     logger.debug("Rate limit set", { key, windowMs, maxRequests });
   }
 
-  // Check if request is allowed
-  async checkLimit(key, route = "unknown") {
+  async checkLimit(key: string, route = "unknown") {
     const now = Date.now();
     const limit = this.limits.get(key);
 
     if (!limit) {
-      // No limit set, allow request
       return {
         allowed: true,
         remaining: this.defaultMaxRequests,
@@ -72,19 +79,15 @@ class RateLimitService {
     const { windowMs, maxRequests, windowStart } = limit;
     const windowEnd = windowStart + windowMs;
 
-    // Check if we're in a new window
     if (now >= windowEnd) {
-      // Reset window
       limit.windowStart = now;
       limit.requests = 0;
       this.requests.set(key, 0);
     }
 
-    // Get current request count
     const currentRequests = this.requests.get(key) || 0;
 
     if (currentRequests >= maxRequests) {
-      // Rate limit exceeded
       const resetTime = limit.windowStart + windowMs;
       const retryAfter = Math.ceil((resetTime - now) / 1000);
 
@@ -106,7 +109,6 @@ class RateLimitService {
       };
     }
 
-    // Allow request
     this.requests.set(key, currentRequests + 1);
 
     return {
@@ -116,15 +118,13 @@ class RateLimitService {
     };
   }
 
-  // Consume one request from the limit
-  async consume(key, route = "unknown") {
+  async consume(key: string, route = "unknown") {
     const result = await this.checkLimit(key, route);
 
     if (!result.allowed) {
       return result;
     }
 
-    // Increment counter
     const currentRequests = this.requests.get(key) || 0;
     this.requests.set(key, currentRequests + 1);
 
@@ -134,8 +134,7 @@ class RateLimitService {
     };
   }
 
-  // Get current usage for a key
-  async getUsage(key) {
+  async getUsage(key: string) {
     const limit = this.limits.get(key);
 
     if (!limit) {
@@ -151,7 +150,6 @@ class RateLimitService {
     const now = Date.now();
     const windowEnd = limit.windowStart + limit.windowMs;
 
-    // Check if window has expired
     if (now >= windowEnd) {
       return {
         current: 0,
@@ -169,8 +167,7 @@ class RateLimitService {
     };
   }
 
-  // Reset limit for a key
-  async resetLimit(key) {
+  async resetLimit(key: string) {
     this.requests.delete(key);
 
     const limit = this.limits.get(key);
@@ -181,8 +178,7 @@ class RateLimitService {
     logger.info("Rate limit reset", { key });
   }
 
-  // Remove limit for a key
-  removeLimit(key) {
+  removeLimit(key: string) {
     this.limits.delete(key);
     this.requests.delete(key);
     this.windows.delete(key);
@@ -190,9 +186,8 @@ class RateLimitService {
     logger.debug("Rate limit removed", { key });
   }
 
-  // Set provider-specific limits
   setProviderLimit(
-    provider,
+    provider: string,
     windowMs = this.defaultWindowMs,
     maxRequests = this.defaultMaxRequests
   ) {
@@ -200,9 +195,8 @@ class RateLimitService {
     this.setLimit(key, windowMs, maxRequests);
   }
 
-  // Set user-specific limits
   setUserLimit(
-    userId,
+    userId: string,
     windowMs = this.defaultWindowMs,
     maxRequests = this.defaultMaxRequests
   ) {
@@ -210,9 +204,8 @@ class RateLimitService {
     this.setLimit(key, windowMs, maxRequests);
   }
 
-  // Set model-specific limits
   setModelLimit(
-    model,
+    model: string,
     windowMs = this.defaultWindowMs,
     maxRequests = this.defaultMaxRequests
   ) {
@@ -220,48 +213,41 @@ class RateLimitService {
     this.setLimit(key, windowMs, maxRequests);
   }
 
-  // Check provider limit
-  async checkProviderLimit(provider, route = "unknown") {
+  async checkProviderLimit(provider: string, route = "unknown") {
     const key = `provider:${provider}`;
     return await this.checkLimit(key, route);
   }
 
-  // Check user limit
-  async checkUserLimit(userId, route = "unknown") {
+  async checkUserLimit(userId: string, route = "unknown") {
     const key = `user:${userId}`;
     return await this.checkLimit(key, route);
   }
 
-  // Check model limit
-  async checkModelLimit(model, route = "unknown") {
+  async checkModelLimit(model: string, route = "unknown") {
     const key = `model:${model}`;
     return await this.checkLimit(key, route);
   }
 
-  // Consume provider limit
-  async consumeProviderLimit(provider, route = "unknown") {
+  async consumeProviderLimit(provider: string, route = "unknown") {
     const key = `provider:${provider}`;
     return await this.consume(key, route);
   }
 
-  // Consume user limit
-  async consumeUserLimit(userId, route = "unknown") {
+  async consumeUserLimit(userId: string, route = "unknown") {
     const key = `user:${userId}`;
     return await this.consume(key, route);
   }
 
-  // Consume model limit
-  async consumeModelLimit(model, route = "unknown") {
+  async consumeModelLimit(model: string, route = "unknown") {
     const key = `model:${model}`;
     return await this.consume(key, route);
   }
 
-  // Get all limits
   getAllLimits() {
-    const limits = {};
+    const limits: Record<string, any> = {};
 
     for (const [key, config] of this.limits.entries()) {
-      const usage = this.getUsage(key);
+      const usage: any = this.getUsage(key);
       limits[key] = {
         ...config,
         current: usage.current,
@@ -272,15 +258,14 @@ class RateLimitService {
     return limits;
   }
 
-  // Get limits by type
-  getLimitsByType(type) {
-    const limits = {};
+  getLimitsByType(type: string) {
+    const limits: Record<string, any> = {};
     const prefix = `${type}:`;
 
     for (const [key, config] of this.limits.entries()) {
       if (key.startsWith(prefix)) {
         const id = key.substring(prefix.length);
-        const usage = this.getUsage(key);
+        const usage: any = this.getUsage(key);
         limits[id] = {
           ...config,
           current: usage.current,
@@ -292,30 +277,24 @@ class RateLimitService {
     return limits;
   }
 
-  // Get provider limits
   getProviderLimits() {
     return this.getLimitsByType("provider");
   }
 
-  // Get user limits
   getUserLimits() {
     return this.getLimitsByType("user");
   }
 
-  // Get model limits
   getModelLimits() {
     return this.getLimitsByType("model");
   }
 
-  // Cleanup old entries
   cleanup() {
     const now = Date.now();
     let cleaned = 0;
 
     for (const [key, limit] of this.limits.entries()) {
       const windowEnd = limit.windowStart + limit.windowMs;
-
-      // Remove expired windows
       if (now >= windowEnd + this.cleanupIntervalMs) {
         this.limits.delete(key);
         this.requests.delete(key);
@@ -328,7 +307,6 @@ class RateLimitService {
     }
   }
 
-  // Get service health
   getHealth() {
     const totalLimits = this.limits.size;
     const totalRequests = this.requests.size;
@@ -344,16 +322,14 @@ class RateLimitService {
     };
   }
 
-  // Advanced rate limiting with sliding window
   async checkSlidingWindow(
-    key,
+    key: string,
     windowMs = this.defaultWindowMs,
     maxRequests = this.defaultMaxRequests
   ) {
     const now = Date.now();
     const windowStart = now - windowMs;
 
-    // Get existing window data
     let windowData = this.windows.get(key);
 
     if (!windowData) {
@@ -364,12 +340,10 @@ class RateLimitService {
       this.windows.set(key, windowData);
     }
 
-    // Remove old requests outside the window
     windowData.requests = windowData.requests.filter(
-      (timestamp) => timestamp >= windowStart
+      (timestamp: number) => timestamp >= windowStart
     );
 
-    // Check if limit exceeded
     if (windowData.requests.length >= maxRequests) {
       const oldestRequest = Math.min(...windowData.requests);
       const retryAfter = Math.ceil((oldestRequest + windowMs - now) / 1000);
@@ -382,7 +356,6 @@ class RateLimitService {
       };
     }
 
-    // Add current request
     windowData.requests.push(now);
 
     return {
@@ -393,8 +366,12 @@ class RateLimitService {
     };
   }
 
-  // Token bucket algorithm
-  async checkTokenBucket(key, capacity, refillRate, refillPeriod = 1000) {
+  async checkTokenBucket(
+    key: string,
+    capacity: number,
+    refillRate: number,
+    refillPeriod = 1000
+  ) {
     const now = Date.now();
 
     let bucket = this.windows.get(key);
@@ -407,7 +384,6 @@ class RateLimitService {
       this.windows.set(key, bucket);
     }
 
-    // Calculate tokens to add
     const timePassed = now - bucket.lastRefill;
     const tokensToAdd = Math.floor((timePassed / refillPeriod) * refillRate);
 
@@ -416,7 +392,6 @@ class RateLimitService {
       bucket.lastRefill = now;
     }
 
-    // Check if we have tokens
     if (bucket.tokens >= 1) {
       bucket.tokens--;
       return {

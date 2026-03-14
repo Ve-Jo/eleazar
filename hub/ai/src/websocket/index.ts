@@ -1,34 +1,31 @@
-import { WebSocket } from "ws";
-import { logger } from "../utils/logger.js";
-// Use the shared StreamingService instance created in services/index.js
-import { getStreamingService as getSharedStreamingService } from "../services/index.js";
+import { logger } from "../utils/logger.ts";
+import { getStreamingService as getSharedStreamingService } from "../services/index.ts";
 import {
   updateWebSocketConnections,
   recordWebSocketMessage,
-} from "../middleware/metrics.js";
-import { validateWebSocketMessage } from "../utils/validators.js";
+} from "../middleware/metrics.ts";
+import { validateWebSocketMessage } from "../utils/validators.ts";
 
-let streamingService = null;
+let streamingService: any = null;
 
-// Initialize WebSocket service
-function initializeWebSocket(wss) {
-  // Obtain the shared streaming service instance
+function initializeWebSocket(wss: any) {
   streamingService = getSharedStreamingService();
 
   if (!streamingService) {
-    logger.error("Streaming service not initialized. Ensure initializeServices() was called before WebSocket setup.");
+    logger.error(
+      "Streaming service not initialized. Ensure initializeServices() was called before WebSocket setup."
+    );
     return;
   }
 
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", (ws: any, req: any) => {
     handleConnection(ws, req);
   });
 
   logger.info("WebSocket service initialized");
 }
 
-// Handle new WebSocket connection
-function handleConnection(ws, req) {
+function handleConnection(ws: any, req: any) {
   const clientIp = req.socket.remoteAddress;
   const userAgent = req.headers["user-agent"];
 
@@ -38,15 +35,12 @@ function handleConnection(ws, req) {
     url: req.url,
   });
 
-  // Check connection limit
   if (!streamingService.checkConnectionLimit()) {
     logger.warn("Connection limit reached", { clientIp });
-
     ws.close(1013, "Connection limit reached");
     return;
   }
 
-  // Create streaming session
   const sessionId = streamingService.createSession(ws, {
     clientIp,
     userAgent,
@@ -56,7 +50,6 @@ function handleConnection(ws, req) {
   updateWebSocketConnections(1);
   recordWebSocketMessage("connection", "success");
 
-  // Send welcome message
   streamingService.sendMessage(sessionId, {
     type: "connected",
     sessionId,
@@ -67,28 +60,22 @@ function handleConnection(ws, req) {
   logger.info("WebSocket session created", { sessionId, clientIp });
 }
 
-// Handle WebSocket message
-async function handleWebSocketMessage(sessionId, message) {
+async function handleWebSocketMessage(sessionId: string, message: Record<string, any>) {
   try {
-    // Validate message format
     validateWebSocketMessage(message);
-
-    // Process message through streaming service
     await streamingService.handleMessage(sessionId, message);
-  } catch (error) {
+  } catch (error: any) {
     logger.error("WebSocket message handling error", {
       sessionId,
       error: error.message,
       category: "websocket_error",
     });
 
-    // Send error back to client
     streamingService.sendError(sessionId, error.message);
   }
 }
 
-// Broadcast message to multiple sessions
-function broadcastToSessions(sessionIds, message) {
+function broadcastToSessions(sessionIds: string[], message: Record<string, any>) {
   let sent = 0;
   let failed = 0;
 
@@ -109,55 +96,51 @@ function broadcastToSessions(sessionIds, message) {
   return { sent, failed };
 }
 
-// Broadcast message to all active sessions
-function broadcastToAll(message) {
-  const sessionIds = Array.from(streamingService.sessions.keys());
+function broadcastToAll(message: Record<string, any>) {
+  const sessionIds = Array.from(streamingService.sessions.keys()) as string[];
   return broadcastToSessions(sessionIds, message);
 }
 
-// Note: streamingService is obtained from services/index.js and stored locally.
-// We do not re-export a local getter to avoid naming conflicts with the shared one.
-
-// Get session info
-function getSessionInfo(sessionId) {
+function getSessionInfo(sessionId: string) {
   return streamingService.getSession(sessionId);
 }
 
-// Get all active sessions
 function getActiveSessions() {
   return streamingService.getActiveSessions();
 }
 
-// Close specific session
-function closeSession(sessionId, reason = "Unknown") {
+function closeSession(sessionId: string, reason = "Unknown") {
   return streamingService.closeSession(sessionId, reason);
 }
 
-// Send message to specific session
-function sendToSession(sessionId, message) {
+function sendToSession(sessionId: string, message: Record<string, any>) {
   return streamingService.sendMessage(sessionId, message);
 }
 
-// Send streaming chunk to session
-function sendStreamChunk(sessionId, requestId, chunk) {
+function sendStreamChunk(
+  sessionId: string,
+  requestId: string,
+  chunk: Record<string, any>
+) {
   return streamingService.sendStreamChunk(sessionId, requestId, chunk);
 }
 
-// Send stream completion to session
-function sendStreamComplete(sessionId, requestId, finishReason = "stop") {
-  return streamingService.sendStreamComplete(
-    sessionId,
-    requestId,
-    finishReason
-  );
+function sendStreamComplete(
+  sessionId: string,
+  requestId: string,
+  finishReason = "stop"
+) {
+  return streamingService.sendStreamComplete(sessionId, requestId, finishReason);
 }
 
-// Send tool call to session
-function sendToolCall(sessionId, requestId, toolCall) {
+function sendToolCall(
+  sessionId: string,
+  requestId: string,
+  toolCall: Record<string, any>
+) {
   return streamingService.sendToolCall(sessionId, requestId, toolCall);
 }
 
-// Get WebSocket statistics
 function getWebSocketStats() {
   if (!streamingService) {
     return {
@@ -171,7 +154,6 @@ function getWebSocketStats() {
   return streamingService.getStats();
 }
 
-// Health check for WebSocket service
 function getWebSocketHealth() {
   if (!streamingService) {
     return {
@@ -183,15 +165,11 @@ function getWebSocketHealth() {
   return streamingService.getHealth();
 }
 
-// WebSocket message types and utilities
 const WebSocketMessageTypes = {
-  // Client to Server
   AI_REQUEST: "ai_request",
   STREAM_CONTROL: "stream_control",
   PING: "ping",
   PONG: "pong",
-
-  // Server to Client
   CONNECTED: "connected",
   REQUEST_ACKNOWLEDGED: "request_acknowledged",
   STREAM_CHUNK: "stream_chunk",
@@ -199,12 +177,9 @@ const WebSocketMessageTypes = {
   TOOL_CALL: "tool_call",
   ERROR: "error",
   SESSION_CLOSED: "session_closed",
-  PING: "ping",
-  PONG: "pong",
-};
+} as const;
 
-// Create WebSocket message
-function createMessage(type, data, requestId = null) {
+function createMessage(type: string, data: Record<string, any>, requestId: string | null = null) {
   return {
     type,
     requestId,
@@ -213,12 +188,11 @@ function createMessage(type, data, requestId = null) {
   };
 }
 
-// Create AI request message
 function createAIRequest(
-  requestId,
-  model,
-  messages,
-  parameters = {},
+  requestId: string,
+  model: string,
+  messages: any[],
+  parameters: Record<string, any> = {},
   stream = true
 ) {
   return createMessage(
@@ -234,8 +208,7 @@ function createAIRequest(
   );
 }
 
-// Create stream control message
-function createStreamControl(requestId, action) {
+function createStreamControl(requestId: string, action: string) {
   return createMessage(
     WebSocketMessageTypes.STREAM_CONTROL,
     {
@@ -246,23 +219,20 @@ function createStreamControl(requestId, action) {
   );
 }
 
-// Create ping message
 function createPing() {
   return createMessage(WebSocketMessageTypes.PING, {
     timestamp: Date.now(),
   });
 }
 
-// Create pong message
-function createPong(originalTimestamp) {
+function createPong(originalTimestamp: number) {
   return createMessage(WebSocketMessageTypes.PONG, {
     timestamp: Date.now(),
     originalTimestamp,
   });
 }
 
-// Create error message
-function createError(error, requestId = null) {
+function createError(error: any, requestId: string | null = null) {
   return createMessage(
     WebSocketMessageTypes.ERROR,
     {
@@ -273,8 +243,7 @@ function createError(error, requestId = null) {
   );
 }
 
-// Create stream chunk message
-function createStreamChunk(requestId, chunk) {
+function createStreamChunk(requestId: string, chunk: Record<string, any>) {
   return createMessage(
     WebSocketMessageTypes.STREAM_CHUNK,
     {
@@ -288,8 +257,7 @@ function createStreamChunk(requestId, chunk) {
   );
 }
 
-// Create stream complete message
-function createStreamComplete(requestId, finishReason = "stop") {
+function createStreamComplete(requestId: string, finishReason = "stop") {
   return createMessage(
     WebSocketMessageTypes.STREAM_COMPLETE,
     {
@@ -301,8 +269,7 @@ function createStreamComplete(requestId, finishReason = "stop") {
   );
 }
 
-// Create tool call message
-function createToolCall(requestId, toolCall) {
+function createToolCall(requestId: string, toolCall: Record<string, any>) {
   return createMessage(
     WebSocketMessageTypes.TOOL_CALL,
     {
@@ -314,18 +281,17 @@ function createToolCall(requestId, toolCall) {
   );
 }
 
-// WebSocket connection utilities
-function isWebSocketOpen(ws) {
+function isWebSocketOpen(ws: any) {
   return ws && ws.readyState === WebSocket.OPEN;
 }
 
-function safeSend(ws, data) {
+function safeSend(ws: any, data: unknown) {
   try {
     if (isWebSocketOpen(ws)) {
       ws.send(typeof data === "string" ? data : JSON.stringify(data));
       return true;
     }
-  } catch (error) {
+  } catch (error: any) {
     logger.error("WebSocket send error", {
       error: error.message,
       category: "websocket_error",
@@ -334,20 +300,16 @@ function safeSend(ws, data) {
   return false;
 }
 
-// WebSocket message validation
-function validateWebSocketData(data) {
+function validateWebSocketData(data: Record<string, any>) {
   if (!data || typeof data !== "object") {
     throw new Error("Invalid WebSocket data: must be an object");
   }
-
   if (!data.type || typeof data.type !== "string") {
     throw new Error("Invalid WebSocket data: missing or invalid type");
   }
-
   if (!data.requestId || typeof data.requestId !== "string") {
     throw new Error("Invalid WebSocket data: missing or invalid requestId");
   }
-
   return true;
 }
 
@@ -365,8 +327,6 @@ export {
   sendToolCall,
   getWebSocketStats,
   getWebSocketHealth,
-
-  // Message types and creators
   WebSocketMessageTypes,
   createMessage,
   createAIRequest,
@@ -377,8 +337,6 @@ export {
   createStreamChunk,
   createStreamComplete,
   createToolCall,
-
-  // Utilities
   isWebSocketOpen,
   safeSend,
   validateWebSocketData,

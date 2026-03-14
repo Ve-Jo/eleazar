@@ -1,23 +1,43 @@
-import { logger } from "../utils/logger.js";
 import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "../utils/logger.ts";
 import {
   updateStreamingConnections,
   recordWebSocketMessage,
-} from "../middleware/metrics.js";
+} from "../middleware/metrics.ts";
+
+type StreamSession = {
+  id: string;
+  ws: any;
+  metadata: Record<string, any>;
+  createdAt: number;
+  lastActivity: number;
+  isStreaming: boolean;
+  model: string | null;
+  provider: string | null;
+  requestId: string | null;
+};
 
 class StreamingService extends EventEmitter {
+  sessions: Map<string, StreamSession>;
+  clients: Map<string, any>;
+  heartbeats: Map<string, number>;
+  requestSessions: Map<string, string>;
+  cleanupInterval: ReturnType<typeof setInterval> | null;
+  heartbeatInterval: ReturnType<typeof setInterval> | null;
+  sessionTimeout: number;
+  heartbeatIntervalMs: number;
+  maxConnections: number;
+
   constructor() {
     super();
-    this.sessions = new Map(); // Active streaming sessions
-    this.clients = new Map(); // WebSocket clients by session ID
-    this.heartbeats = new Map(); // Heartbeat tracking
-    this.requestSessions = new Map(); // Map requestId -> sessionId
+    this.sessions = new Map();
+    this.clients = new Map();
+    this.heartbeats = new Map();
+    this.requestSessions = new Map();
     this.cleanupInterval = null;
     this.heartbeatInterval = null;
-    this.sessionTimeout = parseInt(
-      process.env.WS_CONNECTION_TIMEOUT || "120000"
-    );
+    this.sessionTimeout = parseInt(process.env.WS_CONNECTION_TIMEOUT || "120000");
     this.heartbeatIntervalMs = parseInt(
       process.env.WS_HEARTBEAT_INTERVAL || "30000"
     );
@@ -27,12 +47,10 @@ class StreamingService extends EventEmitter {
   async initialize() {
     logger.info("Initializing streaming service...");
 
-    // Start cleanup interval
     this.cleanupInterval = setInterval(() => {
       this.cleanupInactiveSessions();
-    }, 60000); // Every minute
+    }, 60000);
 
-    // Start heartbeat interval
     this.heartbeatInterval = setInterval(() => {
       this.sendHeartbeats();
     }, this.heartbeatIntervalMs);
@@ -55,21 +73,19 @@ class StreamingService extends EventEmitter {
       this.heartbeatInterval = null;
     }
 
-    // Close all active sessions
-    for (const [sessionId, session] of this.sessions.entries()) {
+    for (const [sessionId] of this.sessions.entries()) {
       await this.closeSession(sessionId, "Service shutdown");
     }
 
     logger.info("Streaming service shut down");
   }
 
-  // Create new streaming session
-  createSession(ws, metadata = {}) {
+  createSession(ws: any, metadata: Record<string, any> = {}) {
     const sessionId = uuidv4();
-    const session = {
+    const session: StreamSession = {
       id: sessionId,
-      ws: ws,
-      metadata: metadata,
+      ws,
+      metadata,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       isStreaming: false,
@@ -82,7 +98,6 @@ class StreamingService extends EventEmitter {
     this.clients.set(sessionId, ws);
     this.heartbeats.set(sessionId, Date.now());
 
-    // Set up WebSocket event handlers
     this.setupWebSocketHandlers(sessionId, ws);
 
     logger.info("Streaming session created", { sessionId, metadata });
@@ -91,13 +106,12 @@ class StreamingService extends EventEmitter {
     return sessionId;
   }
 
-  // Set up WebSocket event handlers
-  setupWebSocketHandlers(sessionId, ws) {
-    ws.on("message", async (data) => {
+  setupWebSocketHandlers(sessionId: string, ws: any) {
+    ws.on("message", async (data: any) => {
       try {
         const message = JSON.parse(data.toString());
         await this.handleMessage(sessionId, message);
-      } catch (error) {
+      } catch (error: any) {
         logger.error("WebSocket message error", {
           sessionId,
           error: error.message,
@@ -108,24 +122,24 @@ class StreamingService extends EventEmitter {
       }
     });
 
-    ws.on("close", (code, reason) => {
+    ws.on("close", (code: number, reason: any) => {
       logger.info("WebSocket connection closed", {
         sessionId,
         code,
         reason: reason.toString(),
       });
 
-      this.closeSession(sessionId, "WebSocket closed");
+      void this.closeSession(sessionId, "WebSocket closed");
     });
 
-    ws.on("error", (error) => {
+    ws.on("error", (error: any) => {
       logger.error("WebSocket error", {
         sessionId,
         error: error.message,
         category: "websocket_error",
       });
 
-      this.closeSession(sessionId, "WebSocket error");
+      void this.closeSession(sessionId, "WebSocket error");
     });
 
     ws.on("pong", () => {
@@ -134,15 +148,13 @@ class StreamingService extends EventEmitter {
     });
   }
 
-  // Handle incoming WebSocket messages
-  async handleMessage(sessionId, message) {
+  async handleMessage(sessionId: string, message: Record<string, any>) {
     const session = this.sessions.get(sessionId);
     if (!session) {
       logger.warn("Message received for unknown session", { sessionId });
       return;
     }
 
-    // Update activity
     session.lastActivity = Date.now();
 
     logger.debug("WebSocket message received", {
@@ -158,19 +170,15 @@ class StreamingService extends EventEmitter {
         case "ai_request":
           await this.handleAIRequest(sessionId, message);
           break;
-
         case "stream_control":
           await this.handleStreamControl(sessionId, message);
           break;
-
         case "ping":
           this.handlePing(sessionId, message);
           break;
-
         case "pong":
           this.handlePong(sessionId, message);
           break;
-
         default:
           logger.warn("Unknown message type", {
             sessionId,
@@ -178,7 +186,7 @@ class StreamingService extends EventEmitter {
           });
           this.sendError(sessionId, `Unknown message type: ${message.type}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Error handling WebSocket message", {
         sessionId,
         type: message.type,
@@ -190,8 +198,7 @@ class StreamingService extends EventEmitter {
     }
   }
 
-  // Handle AI request
-  async handleAIRequest(sessionId, message) {
+  async handleAIRequest(sessionId: string, message: Record<string, any>) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -202,7 +209,7 @@ class StreamingService extends EventEmitter {
       messages,
       parameters,
       stream = true,
-    } = message.data;
+    } = message.data || {};
 
     if (!requestId || !model || !messages) {
       this.sendError(
@@ -212,13 +219,11 @@ class StreamingService extends EventEmitter {
       return;
     }
 
-    // Update session info
     session.requestId = requestId;
     session.model = model;
     session.provider = provider;
     session.isStreaming = stream;
 
-    // Map this request to the current session for downstream processing
     this.requestSessions.set(requestId, sessionId);
 
     logger.info("AI request received via WebSocket", {
@@ -229,14 +234,12 @@ class StreamingService extends EventEmitter {
       stream,
     });
 
-    // Send acknowledgment
     this.sendMessage(sessionId, {
       type: "request_acknowledged",
       requestId,
       timestamp: Date.now(),
     });
 
-    // Process the request (handled by AIProcessingService via event wiring)
     this.emit("ai_request", {
       sessionId,
       requestId,
@@ -248,12 +251,11 @@ class StreamingService extends EventEmitter {
     });
   }
 
-  // Handle stream control
-  async handleStreamControl(sessionId, message) {
+  async handleStreamControl(sessionId: string, message: Record<string, any>) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    const { requestId, action } = message.data;
+    const { requestId, action } = message.data || {};
 
     if (!requestId || !action) {
       this.sendError(sessionId, "Missing required fields: requestId, action");
@@ -270,22 +272,18 @@ class StreamingService extends EventEmitter {
       case "stop":
         this.emit("stream_stop", { sessionId, requestId });
         break;
-
       case "pause":
         this.emit("stream_pause", { sessionId, requestId });
         break;
-
       case "resume":
         this.emit("stream_resume", { sessionId, requestId });
         break;
-
       default:
         this.sendError(sessionId, `Unknown stream action: ${action}`);
     }
   }
 
-  // Handle ping
-  handlePing(sessionId, message) {
+  handlePing(sessionId: string, message: Record<string, any>) {
     this.sendMessage(sessionId, {
       type: "pong",
       timestamp: Date.now(),
@@ -293,14 +291,12 @@ class StreamingService extends EventEmitter {
     });
   }
 
-  // Handle pong
-  handlePong(sessionId, message) {
+  handlePong(sessionId: string, message: Record<string, any>) {
     const latency = Date.now() - message.originalTimestamp;
     logger.debug("Pong received", { sessionId, latency });
   }
 
-  // Send message to client
-  sendMessage(sessionId, message) {
+  sendMessage(sessionId: string, message: Record<string, any>) {
     const session = this.sessions.get(sessionId);
     if (!session || !session.ws) {
       logger.warn("Cannot send message: session not found", { sessionId });
@@ -309,18 +305,17 @@ class StreamingService extends EventEmitter {
 
     try {
       if (session.ws.readyState === 1) {
-        // OPEN
         session.ws.send(JSON.stringify(message));
         recordWebSocketMessage(message.type || "unknown", "sent");
         return true;
-      } else {
-        logger.warn("WebSocket not open", {
-          sessionId,
-          readyState: session.ws.readyState,
-        });
-        return false;
       }
-    } catch (error) {
+
+      logger.warn("WebSocket not open", {
+        sessionId,
+        readyState: session.ws.readyState,
+      });
+      return false;
+    } catch (error: any) {
       logger.error("Error sending WebSocket message", {
         sessionId,
         error: error.message,
@@ -330,8 +325,7 @@ class StreamingService extends EventEmitter {
     }
   }
 
-  // Send error message
-  sendError(sessionId, error, requestId = null) {
+  sendError(sessionId: string, error: any, requestId: string | null = null) {
     this.sendMessage(sessionId, {
       type: "error",
       requestId,
@@ -342,61 +336,53 @@ class StreamingService extends EventEmitter {
     });
   }
 
-  // Send streaming chunk
-  sendStreamChunk(sessionId, requestId, chunk) {
-    const message = {
+  sendStreamChunk(sessionId: string, requestId: string, chunk: Record<string, any>) {
+    return this.sendMessage(sessionId, {
       type: "stream_chunk",
       requestId,
       chunk: {
         ...chunk,
         timestamp: Date.now(),
       },
-    };
-
-    return this.sendMessage(sessionId, message);
+    });
   }
 
-  // Send stream completion with unified format
-  sendStreamComplete(sessionId, requestId, completionData) {
-    const message = {
+  sendStreamComplete(
+    sessionId: string,
+    requestId: string,
+    completionData: Record<string, any>
+  ) {
+    return this.sendMessage(sessionId, {
       type: "stream_complete",
       requestId,
       completion: completionData,
       timestamp: Date.now(),
-    };
-
-    return this.sendMessage(sessionId, message);
+    });
   }
 
-  // Send tool call
-  sendToolCall(sessionId, requestId, toolCall) {
-    const message = {
+  sendToolCall(sessionId: string, requestId: string, toolCall: Record<string, any>) {
+    return this.sendMessage(sessionId, {
       type: "tool_call",
       requestId,
       toolCall,
       timestamp: Date.now(),
-    };
-
-    return this.sendMessage(sessionId, message);
+    });
   }
 
-  // Send heartbeat
-  sendHeartbeat(sessionId) {
+  sendHeartbeat(sessionId: string) {
     this.sendMessage(sessionId, {
       type: "ping",
       timestamp: Date.now(),
     });
   }
 
-  // Send heartbeats to all clients
   sendHeartbeats() {
     const now = Date.now();
 
     for (const [sessionId, lastHeartbeat] of this.heartbeats.entries()) {
       if (now - lastHeartbeat > this.heartbeatIntervalMs * 2) {
-        // Client hasn't responded to recent heartbeats, close connection
         logger.warn("Client not responding to heartbeats", { sessionId });
-        this.closeSession(sessionId, "Heartbeat timeout");
+        void this.closeSession(sessionId, "Heartbeat timeout");
         continue;
       }
 
@@ -404,8 +390,7 @@ class StreamingService extends EventEmitter {
     }
   }
 
-  // Close streaming session
-  async closeSession(sessionId, reason = "Unknown") {
+  async closeSession(sessionId: string, reason = "Unknown") {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return;
@@ -414,26 +399,22 @@ class StreamingService extends EventEmitter {
     logger.info("Closing streaming session", { sessionId, reason });
 
     try {
-      // Send close message
       this.sendMessage(sessionId, {
         type: "session_closed",
         reason,
         timestamp: Date.now(),
       });
 
-      // Close WebSocket connection
       if (session.ws && session.ws.readyState === 1) {
         session.ws.close(1000, reason);
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Error closing session", {
         sessionId,
         error: error.message,
         category: "websocket_error",
       });
     } finally {
-      // Clean up
-      // Remove request-to-session mapping if present
       if (session.requestId) {
         this.requestSessions.delete(session.requestId);
       }
@@ -441,7 +422,6 @@ class StreamingService extends EventEmitter {
       this.clients.delete(sessionId);
       this.heartbeats.delete(sessionId);
 
-      // Update metrics
       if (session.provider && session.model) {
         updateStreamingConnections(session.provider, session.model, -1);
       }
@@ -450,28 +430,24 @@ class StreamingService extends EventEmitter {
     }
   }
 
-  // Cleanup inactive sessions
   cleanupInactiveSessions() {
     const now = Date.now();
-    const sessionsToClose = [];
+    const sessionsToClose: string[] = [];
 
     for (const [sessionId, session] of this.sessions.entries()) {
-      // Check session timeout
       if (now - session.lastActivity > this.sessionTimeout) {
         sessionsToClose.push(sessionId);
         continue;
       }
 
-      // Check heartbeat timeout
       const lastHeartbeat = this.heartbeats.get(sessionId);
       if (lastHeartbeat && now - lastHeartbeat > this.heartbeatIntervalMs * 3) {
         sessionsToClose.push(sessionId);
       }
     }
 
-    // Close inactive sessions
     for (const sessionId of sessionsToClose) {
-      this.closeSession(sessionId, "Inactive session cleanup");
+      void this.closeSession(sessionId, "Inactive session cleanup");
     }
 
     if (sessionsToClose.length > 0) {
@@ -481,12 +457,10 @@ class StreamingService extends EventEmitter {
     }
   }
 
-  // Get session info
-  getSession(sessionId) {
+  getSession(sessionId: string) {
     return this.sessions.get(sessionId) || null;
   }
 
-  // Get all active sessions
   getActiveSessions() {
     return Array.from(this.sessions.values()).map((session) => ({
       id: session.id,
@@ -500,13 +474,11 @@ class StreamingService extends EventEmitter {
     }));
   }
 
-  // Get session statistics
   getStats() {
     const activeSessions = this.sessions.size;
     const totalConnections = this.clients.size;
-
-    const byProvider = {};
-    const byModel = {};
+    const byProvider: Record<string, number> = {};
+    const byModel: Record<string, number> = {};
 
     for (const session of this.sessions.values()) {
       if (session.provider) {
@@ -527,33 +499,27 @@ class StreamingService extends EventEmitter {
     };
   }
 
-  // Check if session exists
-  hasSession(sessionId) {
+  hasSession(sessionId: string) {
     return this.sessions.has(sessionId);
   }
 
-  // Get WebSocket client for session
-  getClient(sessionId) {
+  getClient(sessionId: string) {
     return this.clients.get(sessionId) || null;
   }
 
-  // Event emitter functionality
-  emit(event, data) {
+  emit(event: string | symbol, data?: any) {
     logger.debug("Event emitted", { event });
     return super.emit(event, data);
   }
 
-  // Resolve sessionId for a given requestId
-  getSessionIdForRequest(requestId) {
+  getSessionIdForRequest(requestId: string) {
     return this.requestSessions.get(requestId) || null;
   }
 
-  // Check connection limit
   checkConnectionLimit() {
     return this.sessions.size < this.maxConnections;
   }
 
-  // Get service health
   getHealth() {
     return {
       status: "healthy",

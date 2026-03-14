@@ -1,14 +1,35 @@
 import express from "express";
-import { logger } from "../utils/logger.js";
-import { asyncErrorHandler } from "../middleware/errorHandler.js";
-import { getStreamingService } from "../services/index.js";
+import { logger } from "../utils/logger.ts";
+import { asyncErrorHandler } from "../middleware/errorHandler.ts";
+import { getStreamingService } from "../services/index.ts";
 import { v4 as uuidv4 } from "uuid";
+import {
+  broadcastToAll,
+  broadcastToSessions,
+} from "../websocket/index.ts";
 
-function setupStreamingRoutes(router) {
+type StreamingRouteRequest = {
+  body: Record<string, unknown>;
+  params: Record<string, string>;
+  ip?: string;
+  get: (header: string) => string | undefined;
+};
+
+type StreamingRouteResponse = {
+  status: (code: number) => StreamingRouteResponse;
+  json: (body: unknown) => StreamingRouteResponse;
+};
+
+type BroadcastMessage = {
+  type?: string;
+  [key: string]: unknown;
+};
+
+function setupStreamingRoutes(router: any) {
   // POST /ai/stream/start - Start streaming session
   router.post(
     "/start",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       const { requestId, model, userId, guildId, metadata = {} } = req.body;
 
       if (!requestId || !model) {
@@ -53,8 +74,12 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/stop - Stop streaming session
   router.post(
     "/stop",
-    asyncErrorHandler(async (req, res) => {
-      const { sessionId, requestId, reason = "User requested" } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const sessionId = typeof req.body.sessionId === "string" ? req.body.sessionId : "";
+      const requestId =
+        typeof req.body.requestId === "string" ? req.body.requestId : undefined;
+      const reason =
+        typeof req.body.reason === "string" ? req.body.reason : "User requested";
 
       if (!sessionId) {
         return res.status(400).json({
@@ -94,7 +119,7 @@ function setupStreamingRoutes(router) {
   // GET /ai/stream/sessions - Get active streaming sessions
   router.get(
     "/sessions",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       logger.debug("Getting active streaming sessions");
 
       const streamingService = getStreamingService();
@@ -111,8 +136,15 @@ function setupStreamingRoutes(router) {
   // GET /ai/stream/sessions/:sessionId - Get specific session info
   router.get(
     "/sessions/:sessionId",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       const { sessionId } = req.params;
+
+      if (!sessionId) {
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          message: "sessionId is required",
+        });
+      }
 
       logger.debug("Getting streaming session info", { sessionId });
 
@@ -137,7 +169,7 @@ function setupStreamingRoutes(router) {
   // GET /ai/stream/stats - Get streaming statistics
   router.get(
     "/stats",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       logger.debug("Getting streaming statistics");
 
       const streamingService = getStreamingService();
@@ -153,7 +185,7 @@ function setupStreamingRoutes(router) {
   // GET /ai/stream/health - Get streaming service health
   router.get(
     "/health",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       logger.debug("Getting streaming service health");
 
       const streamingService = getStreamingService();
@@ -170,8 +202,10 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/control - Send stream control command
   router.post(
     "/control",
-    asyncErrorHandler(async (req, res) => {
-      const { sessionId, requestId, action } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const sessionId = typeof req.body.sessionId === "string" ? req.body.sessionId : "";
+      const requestId = typeof req.body.requestId === "string" ? req.body.requestId : "";
+      const action = typeof req.body.action === "string" ? req.body.action : "";
 
       if (!sessionId || !requestId || !action) {
         return res.status(400).json({
@@ -229,8 +263,12 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/broadcast - Broadcast message to multiple sessions
   router.post(
     "/broadcast",
-    asyncErrorHandler(async (req, res) => {
-      const { sessionIds, message } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const sessionIds = Array.isArray(req.body.sessionIds) ? req.body.sessionIds : [];
+      const message =
+        req.body.message && typeof req.body.message === "object"
+          ? (req.body.message as BroadcastMessage)
+          : null;
 
       if (!Array.isArray(sessionIds) || !message) {
         return res.status(400).json({
@@ -251,11 +289,7 @@ function setupStreamingRoutes(router) {
         messageType: message.type,
       });
 
-      const streamingService = getStreamingService();
-      const { sent, failed } = streamingService.broadcastToSessions(
-        sessionIds,
-        message
-      );
+      const { sent, failed } = broadcastToSessions(sessionIds as string[], message);
 
       res.json({
         success: true,
@@ -271,8 +305,11 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/broadcast/all - Broadcast to all active sessions
   router.post(
     "/broadcast/all",
-    asyncErrorHandler(async (req, res) => {
-      const { message } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const message =
+        req.body.message && typeof req.body.message === "object"
+          ? (req.body.message as BroadcastMessage)
+          : null;
 
       if (!message) {
         return res.status(400).json({
@@ -285,8 +322,7 @@ function setupStreamingRoutes(router) {
         messageType: message.type,
       });
 
-      const streamingService = getStreamingService();
-      const { sent, failed } = streamingService.broadcastToAll(message);
+      const { sent, failed } = broadcastToAll(message);
 
       res.json({
         success: true,
@@ -299,7 +335,7 @@ function setupStreamingRoutes(router) {
   );
 
   // WebSocket upgrade handler
-  router.get("/ws", (req, res) => {
+  router.get("/ws", (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
     logger.info("WebSocket upgrade requested", {
       clientIp: req.ip,
       userAgent: req.get("User-Agent"),
@@ -317,8 +353,8 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/ping - Send ping to specific session
   router.post(
     "/ping",
-    asyncErrorHandler(async (req, res) => {
-      const { sessionId } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const sessionId = typeof req.body.sessionId === "string" ? req.body.sessionId : "";
 
       if (!sessionId) {
         return res.status(400).json({
@@ -366,16 +402,15 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/ping/all - Send ping to all sessions
   router.post(
     "/ping/all",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       logger.info("Sending ping to all sessions");
 
-      const streamingService = getStreamingService();
       const pingMessage = {
         type: "ping",
         timestamp: Date.now(),
       };
 
-      const { sent, failed } = streamingService.broadcastToAll(pingMessage);
+      const { sent, failed } = broadcastToAll(pingMessage);
 
       res.json({
         success: true,
@@ -390,7 +425,7 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/cleanup - Cleanup inactive sessions
   router.post(
     "/cleanup",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       const { maxAge = 300000 } = req.body; // Default 5 minutes
 
       logger.info("Running streaming session cleanup", { maxAge });
@@ -423,7 +458,7 @@ function setupStreamingRoutes(router) {
   // GET /ai/stream/config - Get streaming configuration
   router.get(
     "/config",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: StreamingRouteRequest, res: StreamingRouteResponse) => {
       logger.debug("Getting streaming configuration");
 
       const config = {
@@ -452,8 +487,10 @@ function setupStreamingRoutes(router) {
   // POST /ai/stream/test - Test streaming endpoint
   router.post(
     "/test",
-    asyncErrorHandler(async (req, res) => {
-      const { sessionId, message = "Test message" } = req.body;
+    asyncErrorHandler(async (req: StreamingRouteRequest, res: StreamingRouteResponse) => {
+      const sessionId = typeof req.body.sessionId === "string" ? req.body.sessionId : "";
+      const message =
+        typeof req.body.message === "string" ? req.body.message : "Test message";
 
       if (!sessionId) {
         return res.status(400).json({

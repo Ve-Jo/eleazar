@@ -1,54 +1,118 @@
-import { logger } from "../utils/logger.js";
+type UnifiedUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  cost: number | null;
+  breakdown: Record<string, unknown> | null;
+};
 
-/**
- * Base Response Adapter
- * Abstract base class for provider-specific response adapters
- */
+type ReasoningToken = {
+  type: string;
+  content?: string;
+  text?: string;
+  summary?: string;
+  index?: number;
+  format?: string;
+  id?: string | null;
+  signature?: string | null;
+};
+
+type UnifiedResponse = {
+  content: {
+    text: string;
+    toolCalls: unknown[];
+    finishReason: string | null;
+  };
+  reasoning: {
+    enabled: boolean;
+    excluded: boolean;
+    totalTokens: number;
+    tokens: ReasoningToken[];
+    metadata: Record<string, unknown>;
+  };
+  usage: UnifiedUsage | null;
+  model: string;
+  metadata: Record<string, unknown>;
+};
+
+type UnifiedStreamChunk = {
+  content?: string;
+  toolCalls?: unknown[] | unknown | null;
+  finishReason?: string | null;
+  reasoning?: ReasoningToken | ReasoningToken[] | null;
+};
+
+type NormalizerOptions = Record<string, unknown>;
+
+type ProviderMessage = {
+  content?: string;
+  tool_calls?: unknown[];
+  reasoning?: string;
+  reasoning_details?: Array<Record<string, any>>;
+};
+
+type ProviderChoice = {
+  message: ProviderMessage;
+  delta?: ProviderMessage;
+  finish_reason?: string | null;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asChoices(value: unknown): ProviderChoice[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((choice) => {
+    const choiceRecord = asRecord(choice);
+    return {
+      message: asRecord(choiceRecord.message) as ProviderMessage,
+      delta: asRecord(choiceRecord.delta) as ProviderMessage,
+      finish_reason:
+        typeof choiceRecord.finish_reason === "string" || choiceRecord.finish_reason === null
+          ? (choiceRecord.finish_reason as string | null)
+          : null,
+    };
+  });
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 class BaseResponseAdapter {
-  /**
-   * Normalize a provider response to unified format
-   * @param {Object} response - Raw provider response
-   * @param {Object} options - Normalization options
-   * @returns {Object} Unified response format
-   */
-  normalize(response, options) {
+  normalize(_response: Record<string, unknown>, _options: NormalizerOptions): UnifiedResponse {
     throw new Error("normalize method must be implemented by subclass");
   }
 
-  /**
-   * Normalize a streaming chunk
-   * @param {Object} chunk - Streaming chunk
-   * @param {Object} options - Normalization options
-   * @returns {Object} Unified streaming chunk
-   */
-  normalizeChunk(chunk, options) {
+  normalizeChunk(
+    _chunk: Record<string, unknown>,
+    _options: NormalizerOptions
+  ): UnifiedStreamChunk {
     throw new Error("normalizeChunk method must be implemented by subclass");
   }
 
-  /**
-   * Extract usage information
-   * @param {Object} usage - Provider usage data
-   * @returns {Object} Unified usage format
-   */
-  extractUsage(usage) {
+  extractUsage(usage: Record<string, unknown> | null | undefined): UnifiedUsage | null {
     if (!usage) return null;
 
     return {
-      promptTokens: usage.prompt_tokens || 0,
-      completionTokens: usage.completion_tokens || 0,
-      reasoningTokens: usage.reasoning_tokens || 0,
-      totalTokens: usage.total_tokens || 0,
-      cost: usage.cost || null,
-      breakdown: usage.breakdown || null,
+      promptTokens: Number(usage.prompt_tokens || 0),
+      completionTokens: Number(usage.completion_tokens || 0),
+      reasoningTokens: Number(usage.reasoning_tokens || 0),
+      totalTokens: Number(usage.total_tokens || 0),
+      cost: typeof usage.cost === "number" ? usage.cost : null,
+      breakdown:
+        usage.breakdown && typeof usage.breakdown === "object"
+          ? (usage.breakdown as Record<string, unknown>)
+          : null,
     };
   }
 
-  /**
-   * Extract metadata
-   * @param {Object} response - Provider response
-   * @returns {Object} Unified metadata
-   */
-  extractMetadata(response) {
+  extractMetadata(response: Record<string, unknown>) {
     return {
       systemFingerprint: response.system_fingerprint || null,
       created: response.created || Date.now(),
@@ -58,39 +122,35 @@ class BaseResponseAdapter {
   }
 }
 
-/**
- * Groq Response Adapter
- * Adapts Groq API responses to unified format
- */
 class GroqResponseAdapter extends BaseResponseAdapter {
-  normalize(response, options) {
-    const choice = response.choices?.[0];
+  normalize(response: Record<string, unknown>, options: NormalizerOptions): UnifiedResponse {
+    const choice = asChoices(response.choices)[0];
     if (!choice) {
       throw new Error("No response choices available from Groq");
     }
 
     const message = choice.message;
-    const usage = this.extractUsage(response.usage);
+    const usage = this.extractUsage(asRecord(response.usage));
 
     return {
       content: {
-        text: message.content || "",
+        text: asString(message.content),
         toolCalls: message.tool_calls || [],
         finishReason: choice.finish_reason || null,
       },
       reasoning: this.extractReasoning(message, options),
       usage,
-      model: response.model,
+      model: asString(response.model),
       metadata: this.extractMetadata(response),
     };
   }
 
-  extractReasoning(message, options) {
+  extractReasoning(message: ProviderMessage, options: NormalizerOptions) {
     const reasoning = {
-      enabled: !!message.reasoning || options.includeReasoning,
+      enabled: !!message.reasoning || options.includeReasoning === true,
       excluded: options.excludeReasoning === true,
       totalTokens: 0,
-      tokens: [],
+      tokens: [] as ReasoningToken[],
       metadata: {
         effort: options.reasoningEffort || null,
         format: options.reasoningFormat || null,
@@ -98,7 +158,6 @@ class GroqResponseAdapter extends BaseResponseAdapter {
     };
 
     if (message.reasoning && !options.excludeReasoning) {
-      // Convert Groq's simple reasoning string to structured format
       reasoning.tokens.push({
         type: "text",
         content: message.reasoning,
@@ -111,19 +170,18 @@ class GroqResponseAdapter extends BaseResponseAdapter {
     return reasoning;
   }
 
-  normalizeChunk(chunk, options) {
+  normalizeChunk(chunk: Record<string, any>, options: Record<string, any>) {
     const choice = chunk.choices?.[0];
     if (!choice) return {};
 
     const delta = choice.delta;
-    const unifiedChunk = {
+    const unifiedChunk: Record<string, any> = {
       content: delta.content || "",
       toolCalls: delta.tool_calls || null,
       finishReason: choice.finish_reason || null,
       reasoning: null,
     };
 
-    // Handle reasoning in streaming chunks
     if (delta.reasoning && !options.excludeReasoning) {
       unifiedChunk.reasoning = {
         type: "text",
@@ -136,46 +194,41 @@ class GroqResponseAdapter extends BaseResponseAdapter {
     return unifiedChunk;
   }
 
-  estimateReasoningTokens(reasoningText) {
+  estimateReasoningTokens(reasoningText: string) {
     if (!reasoningText) return 0;
-    // Rough estimation: ~4 characters per token
     return Math.ceil(reasoningText.length / 4);
   }
 }
 
-/**
- * OpenRouter Response Adapter
- * Adapts OpenRouter API responses to unified format
- */
 class OpenRouterResponseAdapter extends BaseResponseAdapter {
-  normalize(response, options) {
-    const choice = response.choices?.[0];
+  normalize(response: Record<string, unknown>, options: NormalizerOptions): UnifiedResponse {
+    const choice = asChoices(response.choices)[0];
     if (!choice) {
       throw new Error("No response choices available from OpenRouter");
     }
 
     const message = choice.message;
-    const usage = this.extractUsage(response.usage);
+    const usage = this.extractUsage(asRecord(response.usage));
 
     return {
       content: {
-        text: message.content || "",
+        text: asString(message.content),
         toolCalls: message.tool_calls || [],
         finishReason: choice.finish_reason || null,
       },
       reasoning: this.extractReasoning(message, options),
       usage,
-      model: response.model,
+      model: asString(response.model),
       metadata: this.extractMetadata(response),
     };
   }
 
-  extractReasoning(message, options) {
+  extractReasoning(message: ProviderMessage, options: NormalizerOptions) {
     const reasoning = {
-      enabled: !!message.reasoning_details || options.includeReasoning,
+      enabled: !!message.reasoning_details || options.includeReasoning === true,
       excluded: options.excludeReasoning === true,
       totalTokens: 0,
-      tokens: [],
+      tokens: [] as ReasoningToken[],
       metadata: {
         effort: options.reasoningEffort || null,
         maxTokens: options.reasoningMaxTokens || null,
@@ -183,8 +236,7 @@ class OpenRouterResponseAdapter extends BaseResponseAdapter {
     };
 
     if (message.reasoning_details && !options.excludeReasoning) {
-      // Use OpenRouter's sophisticated reasoning_details format
-      reasoning.tokens = message.reasoning_details.map((detail) => ({
+      reasoning.tokens = message.reasoning_details.map((detail: any) => ({
         type: this.mapReasoningType(detail.type),
         content: this.extractReasoningContent(detail),
         index: detail.index,
@@ -198,8 +250,8 @@ class OpenRouterResponseAdapter extends BaseResponseAdapter {
     return reasoning;
   }
 
-  mapReasoningType(type) {
-    const typeMap = {
+  mapReasoningType(type: string) {
+    const typeMap: Record<string, string> = {
       "reasoning.summary": "summary",
       "reasoning.encrypted": "encrypted",
       "reasoning.text": "text",
@@ -207,28 +259,27 @@ class OpenRouterResponseAdapter extends BaseResponseAdapter {
     return typeMap[type] || "text";
   }
 
-  extractReasoningContent(detail) {
+  extractReasoningContent(detail: Record<string, any>) {
     if (detail.type === "reasoning.summary") return detail.summary || "";
     if (detail.type === "reasoning.encrypted") return detail.data || "";
     if (detail.type === "reasoning.text") return detail.text || "";
     return "";
   }
 
-  normalizeChunk(chunk, options) {
-    const choice = chunk.choices?.[0];
+  normalizeChunk(chunk: Record<string, unknown>, options: NormalizerOptions) {
+    const choice = asChoices(chunk.choices)[0];
     if (!choice) return {};
 
-    const delta = choice.delta;
-    const unifiedChunk = {
-      content: delta.content || "",
+    const delta = choice.delta || {};
+    const unifiedChunk: UnifiedStreamChunk = {
+      content: asString(delta.content),
       toolCalls: delta.tool_calls || null,
       finishReason: choice.finish_reason || null,
       reasoning: null,
     };
 
-    // Handle OpenRouter's sophisticated reasoning_details streaming
     if (delta.reasoning_details && !options.excludeReasoning) {
-      unifiedChunk.reasoning = delta.reasoning_details.map((detail) => ({
+      unifiedChunk.reasoning = delta.reasoning_details.map((detail: any) => ({
         type: this.mapReasoningType(detail.type),
         content: this.extractReasoningContent(detail),
         index: detail.index,
@@ -241,54 +292,48 @@ class OpenRouterResponseAdapter extends BaseResponseAdapter {
     return unifiedChunk;
   }
 
-  calculateReasoningTokens(tokens) {
+  calculateReasoningTokens(tokens: ReasoningToken[]) {
     return tokens.reduce((total, token) => {
       return total + Math.ceil((token.content?.length || 0) / 4);
     }, 0);
   }
 }
 
-/**
- * NanoGPT Response Adapter
- * Adapts NanoGPT API responses to unified format
- */
 class NanoGPTResponseAdapter extends BaseResponseAdapter {
-  normalize(response, options) {
-    const choice = response.choices?.[0];
+  normalize(response: Record<string, unknown>, options: NormalizerOptions): UnifiedResponse {
+    const choice = asChoices(response.choices)[0];
     if (!choice) {
       throw new Error("No response choices available from NanoGPT");
     }
 
     const message = choice.message;
-    const usage = this.extractUsage(response.usage);
+    const usage = this.extractUsage(asRecord(response.usage));
 
     return {
       content: {
-        text: message.content || "",
+        text: asString(message.content),
         toolCalls: message.tool_calls || [],
         finishReason: choice.finish_reason || null,
       },
       reasoning: this.extractReasoning(message, options),
       usage,
-      model: response.model,
+      model: asString(response.model),
       metadata: this.extractMetadata(response),
     };
   }
 
-  extractReasoning(message, options) {
+  extractReasoning(message: ProviderMessage, options: NormalizerOptions) {
     const reasoning = {
-      enabled: !!message.reasoning || options.includeReasoning,
+      enabled: !!message.reasoning || options.includeReasoning === true,
       excluded: options.excludeReasoning === true,
       totalTokens: 0,
-      tokens: [],
+      tokens: [] as ReasoningToken[],
       metadata: {
-        // NanoGPT uses model suffixes for configuration
         suffixConfig: options.modelSuffix || null,
       },
     };
 
     if (message.reasoning && !options.excludeReasoning) {
-      // Convert NanoGPT's reasoning to structured format
       reasoning.tokens.push({
         type: "text",
         content: message.reasoning,
@@ -301,19 +346,18 @@ class NanoGPTResponseAdapter extends BaseResponseAdapter {
     return reasoning;
   }
 
-  normalizeChunk(chunk, options) {
+  normalizeChunk(chunk: Record<string, any>, options: Record<string, any>) {
     const choice = chunk.choices?.[0];
     if (!choice) return {};
 
     const delta = choice.delta;
-    const unifiedChunk = {
+    const unifiedChunk: Record<string, any> = {
       content: delta.content || "",
       toolCalls: delta.tool_calls || null,
       finishReason: choice.finish_reason || null,
       reasoning: null,
     };
 
-    // Handle reasoning in streaming chunks
     if (delta.reasoning && !options.excludeReasoning) {
       unifiedChunk.reasoning = {
         type: "text",
@@ -326,7 +370,7 @@ class NanoGPTResponseAdapter extends BaseResponseAdapter {
     return unifiedChunk;
   }
 
-  estimateReasoningTokens(reasoningText) {
+  estimateReasoningTokens(reasoningText: string) {
     if (!reasoningText) return 0;
     return Math.ceil(reasoningText.length / 4);
   }
@@ -337,4 +381,11 @@ export {
   GroqResponseAdapter,
   OpenRouterResponseAdapter,
   NanoGPTResponseAdapter,
+};
+export type {
+  UnifiedUsage,
+  ReasoningToken,
+  UnifiedResponse,
+  UnifiedStreamChunk,
+  NormalizerOptions,
 };

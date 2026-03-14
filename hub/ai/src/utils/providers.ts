@@ -1,9 +1,7 @@
-// Provider configurations and utilities
 import OpenAI from "openai";
-import { logger } from "./logger.js";
-import { validateProviderConfig } from "./validators.js";
+import { logger } from "./logger.ts";
+import { validateProviderConfig } from "./validators.ts";
 
-// Provider configurations - dynamic to ensure env vars are loaded
 function getProviderConfigs() {
   return {
     groq: {
@@ -16,17 +14,17 @@ function getProviderConfigs() {
       retryDelay: 1000,
       rateLimit: {
         windowMs: 60000,
-        maxRequests: 30, // Groq has higher limits
+        maxRequests: 30,
       },
       dynamicFetching: {
-        enabled: false, // Groq doesn't have a public models API
+        enabled: false,
         apiEndpoint: null,
         requiresAuth: true,
       },
       models: {
-        text: [],
-        vision: [],
-        reasoning: [], // Groq doesn't have reasoning models yet
+        text: [] as string[],
+        vision: [] as string[],
+        reasoning: [] as string[],
       },
       capabilities: {
         streaming: true,
@@ -45,7 +43,6 @@ function getProviderConfigs() {
         max_tokens: { min: 1, max: 8192, default: 4096 },
       },
     },
-
     openrouter: {
       name: "openrouter",
       displayName: "OpenRouter",
@@ -57,7 +54,7 @@ function getProviderConfigs() {
       retryDelay: 2000,
       rateLimit: {
         windowMs: 60000,
-        maxRequests: 60, // OpenRouter has good limits
+        maxRequests: 60,
       },
       dynamicFetching: {
         enabled: true,
@@ -65,9 +62,9 @@ function getProviderConfigs() {
         requiresAuth: true,
       },
       models: {
-        text: [],
-        vision: [],
-        reasoning: [],
+        text: [] as string[],
+        vision: [] as string[],
+        reasoning: [] as string[],
       },
       capabilities: {
         streaming: true,
@@ -90,7 +87,6 @@ function getProviderConfigs() {
         max_tokens: { min: 1, max: 32768, default: 4096 },
       },
     },
-
     nanogpt: {
       name: "nanogpt",
       displayName: "NanoGPT",
@@ -101,7 +97,7 @@ function getProviderConfigs() {
       retryDelay: 1000,
       rateLimit: {
         windowMs: 60000,
-        maxRequests: 20, // Conservative limit for NanoGPT
+        maxRequests: 20,
       },
       dynamicFetching: {
         enabled: true,
@@ -109,9 +105,9 @@ function getProviderConfigs() {
         requiresAuth: true,
       },
       models: {
-        text: [],
-        vision: [],
-        reasoning: [],
+        text: [] as string[],
+        vision: [] as string[],
+        reasoning: [] as string[],
       },
       capabilities: {
         streaming: true,
@@ -133,9 +129,11 @@ function getProviderConfigs() {
   };
 }
 
-// Provider client creation
-function createProviderClient(providerName, config = {}) {
-  const configs = getProviderConfigs();
+function createProviderClient(
+  providerName: string,
+  config: Record<string, any> = {}
+) {
+  const configs = getProviderConfigs() as Record<string, any>;
   const providerConfig = configs[providerName];
 
   if (!providerConfig) {
@@ -165,11 +163,10 @@ function createProviderClient(providerName, config = {}) {
                 }
               : {},
         });
-
       default:
         throw new Error(`Unsupported provider: ${providerName}`);
     }
-  } catch (error) {
+  } catch (error: any) {
     logger.error(`Failed to create ${providerName} client`, {
       error: error.message,
     });
@@ -177,21 +174,18 @@ function createProviderClient(providerName, config = {}) {
   }
 }
 
-// Get provider configuration
-function getProviderConfig(providerName) {
-  const configs = getProviderConfigs();
+function getProviderConfig(providerName: string) {
+  const configs = getProviderConfigs() as Record<string, any>;
   return configs[providerName] || null;
 }
 
-// Get all available providers
 function getAvailableProviders() {
-  const configs = getProviderConfigs();
+  const configs = getProviderConfigs() as Record<string, any>;
   return Object.keys(configs).filter((provider) => configs[provider].apiKey);
 }
 
-// Get models for provider
-function getProviderModels(providerName, capability = null) {
-  const configs = getProviderConfigs();
+function getProviderModels(providerName: string, capability: string | null = null) {
+  const configs = getProviderConfigs() as Record<string, any>;
   const config = configs[providerName];
   if (!config) return [];
 
@@ -199,7 +193,6 @@ function getProviderModels(providerName, capability = null) {
     return config.models[capability] || [];
   }
 
-  // Return all models
   return [
     ...config.models.text,
     ...config.models.vision,
@@ -207,47 +200,42 @@ function getProviderModels(providerName, capability = null) {
   ];
 }
 
-// Check if provider supports capability
-function providerSupportsCapability(providerName, capability) {
-  const configs = getProviderConfigs();
+function providerSupportsCapability(providerName: string, capability: string) {
+  const configs = getProviderConfigs() as Record<string, any>;
   const config = configs[providerName];
   if (!config) return false;
 
   return config.capabilities[capability] || false;
 }
 
-// Get provider parameters
-function getProviderParameters(providerName) {
-  const configs = getProviderConfigs();
+function getProviderParameters(providerName: string) {
+  const configs = getProviderConfigs() as Record<string, any>;
   const config = configs[providerName];
   if (!config) return {};
 
   return config.parameters;
 }
 
-// Validate parameters for provider
-function validateProviderParameters(providerName, parameters) {
-  const providerParams = getProviderParameters(providerName);
-  const validated = {};
-  const errors = [];
+function validateProviderParameters(
+  providerName: string,
+  parameters: Record<string, any>
+) {
+  const providerParams = getProviderParameters(providerName) as Record<
+    string,
+    { min: number; max: number; default: number }
+  >;
+  const validated: Record<string, any> = {};
+  const errors: string[] = [];
 
   for (const [param, config] of Object.entries(providerParams)) {
     if (parameters[param] !== undefined) {
       const value = parameters[param];
-
-      if (
-        typeof value !== "number" ||
-        value < config.min ||
-        value > config.max
-      ) {
-        errors.push(
-          `${param}: must be between ${config.min} and ${config.max}`
-        );
+      if (typeof value !== "number" || value < config.min || value > config.max) {
+        errors.push(`${param}: must be between ${config.min} and ${config.max}`);
       } else {
         validated[param] = value;
       }
     } else {
-      // Use default if not provided
       validated[param] = config.default;
     }
   }
@@ -261,13 +249,11 @@ function validateProviderParameters(providerName, parameters) {
   return validated;
 }
 
-// Format model name with provider prefix
-function formatModelName(modelId, providerName) {
+function formatModelName(modelId: string, providerName: string) {
   return `${providerName}/${modelId}`;
 }
 
-// Parse model name to get provider and model ID
-function parseModelName(modelName) {
+function parseModelName(modelName: string) {
   const parts = modelName.split("/");
   if (parts.length >= 2) {
     return {
@@ -278,8 +264,17 @@ function parseModelName(modelName) {
   return null;
 }
 
-// Check if model supports capability
-function modelSupportsCapability(modelName, capability) {
+function getProviderFromModel(modelName: string) {
+  const parsed = parseModelName(modelName);
+  return parsed?.provider ?? null;
+}
+
+function getModelIdFromModel(modelName: string) {
+  const parsed = parseModelName(modelName);
+  return parsed?.modelId ?? modelName;
+}
+
+function modelSupportsCapability(modelName: string, capability: string) {
   const provider = getProviderFromModel(modelName);
   if (!provider) return false;
 
@@ -289,25 +284,22 @@ function modelSupportsCapability(modelName, capability) {
   return models.includes(modelId);
 }
 
-// Get rate limit configuration for provider
-function getProviderRateLimit(providerName) {
-  const configs = getProviderConfigs();
+function getProviderRateLimit(providerName: string) {
+  const configs = getProviderConfigs() as Record<string, any>;
   const config = configs[providerName];
   if (!config) return null;
-
   return config.rateLimit;
 }
 
-// Initialize provider clients
 function initializeProviderClients() {
-  const clients = {};
+  const clients: Record<string, any> = {};
   const availableProviders = getAvailableProviders();
 
   for (const provider of availableProviders) {
     try {
       clients[provider] = createProviderClient(provider);
       logger.info(`Initialized ${provider} client`);
-    } catch (error) {
+    } catch (error: any) {
       logger.error(`Failed to initialize ${provider} client`, {
         error: error.message,
       });
@@ -328,6 +320,8 @@ export {
   validateProviderParameters,
   formatModelName,
   parseModelName,
+  getProviderFromModel,
+  getModelIdFromModel,
   modelSupportsCapability,
   getProviderRateLimit,
   initializeProviderClients,

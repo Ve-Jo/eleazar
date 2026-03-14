@@ -1,26 +1,29 @@
 import fetch from "node-fetch";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger.ts";
 
-/**
- * Model Fetcher Service
- * Fetches models from external AI provider APIs with pricing and capability information
- */
+type CachedModels = {
+  models: any[];
+  timestamp: number;
+};
+
 class ModelFetcher {
+  cache: Map<string, CachedModels>;
+  cacheDuration: number;
+  timeout: number;
+  filteredModels: Set<string>;
+  featuredModels: Record<string, string[]>;
+
   constructor() {
     this.cache = new Map();
-    this.cacheDuration = 3600000; // 1 hour
-    this.timeout = 30000; // 30 seconds
-
-    // Models to filter out (auto-model variants)
+    this.cacheDuration = 3600000;
+    this.timeout = 30000;
     this.filteredModels = new Set([
       "auto-model",
       "auto-model-basic",
       "auto-model-standart",
       "auto-model-premium",
-      "auto-model-standard", // Also include common typo variant
+      "auto-model-standard",
     ]);
-
-    // Featured models per provider - these will be shown first
     this.featuredModels = {
       nanogpt: [
         "moonshotai/kimi-k2-thinking",
@@ -49,15 +52,8 @@ class ModelFetcher {
     };
   }
 
-  /**
-   * Fetch models from NanoGPT API
-   * @param {string} apiKey - NanoGPT API key
-   * @returns {Promise<Array>} Array of model objects
-   */
-  async fetchNanoGPTModels(apiKey) {
+  async fetchNanoGPTModels(apiKey: string) {
     const cacheKey = "nanogpt:models";
-
-    // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
       logger.debug("Using cached NanoGPT models");
@@ -66,7 +62,6 @@ class ModelFetcher {
 
     try {
       logger.info("Fetching models from NanoGPT detailed API");
-
       const response = await fetch(
         "https://nano-gpt.com/api/subscription/v1/models?detailed=true",
         {
@@ -75,8 +70,7 @@ class ModelFetcher {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          timeout: this.timeout,
-        }
+        } as any
       );
 
       if (!response.ok) {
@@ -87,16 +81,10 @@ class ModelFetcher {
 
       const data = await response.json();
       const models = this.processNanoGPTModels(data);
-
-      // Cache the results
-      this.cache.set(cacheKey, {
-        models,
-        timestamp: Date.now(),
-      });
-
+      this.cache.set(cacheKey, { models, timestamp: Date.now() });
       logger.info(`Fetched ${models.length} subscription models from NanoGPT`);
       return models;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Failed to fetch NanoGPT subscription models", {
         error: error.message,
       });
@@ -104,19 +92,13 @@ class ModelFetcher {
     }
   }
 
-  /**
-   * Process NanoGPT API response
-   * @param {Object} data - API response data
-   * @returns {Array} Processed model objects
-   */
-  processNanoGPTModels(data) {
+  processNanoGPTModels(data: any) {
     if (!data || !data.data || !Array.isArray(data.data)) {
       throw new Error("Invalid NanoGPT API response format");
     }
 
     const processedModels = data.data
-      .filter((model) => {
-        // Filter out auto-model variants
+      .filter((model: any) => {
         const modelId = model.id || model.name || "";
         const shouldFilter = this.filteredModels.has(modelId.toLowerCase());
         if (shouldFilter) {
@@ -124,13 +106,11 @@ class ModelFetcher {
         }
         return !shouldFilter;
       })
-      .map((model) => {
+      .map((model: any) => {
         const capabilities = this.detectCapabilities(model);
         const pricing = this.processPricing(model.pricing);
         const modelId = model.id || model.name || "";
         const isFeatured = this.isFeaturedModel("nanogpt", modelId);
-
-        // Use context_length from detailed API response
         const finalMaxContext = model.context_length || capabilities.maxContext;
 
         logger.debug(
@@ -150,14 +130,13 @@ class ModelFetcher {
           pricing,
           active: model.active !== false,
           isPreferred: this.isPreferredModel(modelId),
-          isFeatured: isFeatured,
+          isFeatured,
           costEstimate: this.estimateCost(pricing),
-          rawData: model, // Store raw data for debugging
+          rawData: model,
         };
       });
 
-    // Debug logging for processed models
-    const featuredCount = processedModels.filter((m) => m.isFeatured).length;
+    const featuredCount = processedModels.filter((m: any) => m.isFeatured).length;
     logger.info(
       `[processNanoGPTModels] Processed ${processedModels.length} models, ${featuredCount} are featured`
     );
@@ -165,15 +144,8 @@ class ModelFetcher {
     return processedModels;
   }
 
-  /**
-   * Fetch models from OpenRouter API
-   * @param {string} apiKey - OpenRouter API key
-   * @returns {Promise<Array>} Array of model objects
-   */
-  async fetchOpenRouterModels(apiKey) {
+  async fetchOpenRouterModels(apiKey: string) {
     const cacheKey = "openrouter:models";
-
-    // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
       logger.debug("Using cached OpenRouter models");
@@ -182,7 +154,6 @@ class ModelFetcher {
 
     try {
       logger.info("Fetching models from OpenRouter API");
-
       const response = await fetch("https://openrouter.ai/api/v1/models", {
         method: "GET",
         headers: {
@@ -191,8 +162,7 @@ class ModelFetcher {
           "HTTP-Referer": process.env.SITE_URL || "https://your-site.com",
           "X-Title": process.env.SITE_NAME || "AI Hub Service",
         },
-        timeout: this.timeout,
-      });
+      } as any);
 
       if (!response.ok) {
         throw new Error(
@@ -202,16 +172,10 @@ class ModelFetcher {
 
       const data = await response.json();
       const models = this.processOpenRouterModels(data);
-
-      // Cache the results
-      this.cache.set(cacheKey, {
-        models,
-        timestamp: Date.now(),
-      });
-
+      this.cache.set(cacheKey, { models, timestamp: Date.now() });
       logger.info(`Fetched ${models.length} models from OpenRouter`);
       return models;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Failed to fetch OpenRouter models", {
         error: error.message,
       });
@@ -219,15 +183,8 @@ class ModelFetcher {
     }
   }
 
-  /**
-   * Fetch models from Groq API
-   * @param {string} apiKey - Groq API key
-   * @returns {Promise<Array>} Array of model objects
-   */
-  async fetchGroqModels(apiKey) {
+  async fetchGroqModels(apiKey: string) {
     const cacheKey = "groq:models";
-
-    // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
       logger.debug("Using cached Groq models");
@@ -236,34 +193,24 @@ class ModelFetcher {
 
     try {
       logger.info("Fetching models from Groq API");
-
       const response = await fetch("https://api.groq.com/openai/v1/models", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        timeout: this.timeout,
-      });
+      } as any);
 
       if (!response.ok) {
-        throw new Error(
-          `Groq API error: ${response.status} ${response.statusText}`
-        );
+        throw new Error(`Groq API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       const models = this.processGroqModels(data);
-
-      // Cache the results
-      this.cache.set(cacheKey, {
-        models,
-        timestamp: Date.now(),
-      });
-
+      this.cache.set(cacheKey, { models, timestamp: Date.now() });
       logger.info(`Fetched ${models.length} models from Groq`);
       return models;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Failed to fetch Groq models", {
         error: error.message,
       });
@@ -271,30 +218,23 @@ class ModelFetcher {
     }
   }
 
-  /**
-   * Process Groq API response
-   * @param {Object} data - API response data
-   * @returns {Array} Processed model objects
-   */
-  processGroqModels(data) {
+  processGroqModels(data: any) {
     if (!data || !data.data || !Array.isArray(data.data)) {
       throw new Error("Invalid Groq API response format");
     }
 
-    const processedModels = data.data.map((model) => {
+    const processedModels = data.data.map((model: any) => {
       const capabilities = this.detectGroqCapabilities(model);
       const pricing = this.inferGroqPricing(model);
       const isFeatured = this.isFeaturedModel("groq", model.id);
 
-      logger.debug(
-        `Processing Groq model: ${model.id}, isFeatured: ${isFeatured}`
-      );
+      logger.debug(`Processing Groq model: ${model.id}, isFeatured: ${isFeatured}`);
 
       return {
         id: model.id,
         name: `groq/${model.id}`,
         provider: "groq",
-        displayName: model.id, // Groq uses ID as the display name
+        displayName: model.id,
         description: `${model.id} by ${model.owned_by || "Unknown"}`,
         capabilities: {
           ...capabilities,
@@ -303,14 +243,13 @@ class ModelFetcher {
         pricing,
         active: model.active !== false,
         isPreferred: this.isPreferredModel(model.id),
-        isFeatured: isFeatured,
+        isFeatured,
         costEstimate: this.estimateCost(pricing),
-        rawData: model, // Store raw data for debugging
+        rawData: model,
       };
     });
 
-    // Debug logging for processed models
-    const featuredCount = processedModels.filter((m) => m.isFeatured).length;
+    const featuredCount = processedModels.filter((m: any) => m.isFeatured).length;
     logger.info(
       `[processGroqModels] Processed ${processedModels.length} models, ${featuredCount} are featured`
     );
@@ -318,24 +257,11 @@ class ModelFetcher {
     return processedModels;
   }
 
-  /**
-   * Detect Groq model capabilities
-   * @param {Object} model - Raw model data from Groq
-   * @returns {Object} Capabilities object
-   */
-  detectGroqCapabilities(model) {
+  detectGroqCapabilities(model: any) {
     const modelId = (model.id || "").toLowerCase();
-
-    // Vision capability detection for Groq models
     const vision = this.hasVisionCapability(modelId, "", "", model);
-
-    // Reasoning capability detection for Groq models
     const reasoning = this.hasReasoningCapability(modelId, "", "", model);
-
-    // Tools capability (most Groq models support tools)
     const tools = true;
-
-    // Max context length from Groq's context_window field
     const maxContext = model.context_window || this.extractContextLength(model);
 
     return {
@@ -346,17 +272,10 @@ class ModelFetcher {
     };
   }
 
-  /**
-   * Infer Groq model pricing (Groq doesn't provide pricing in their API)
-   * @param {Object} model - Raw model data from Groq
-   * @returns {Object} Inferred pricing object
-   */
-  inferGroqPricing(model) {
+  inferGroqPricing(model: any) {
     const modelId = (model.id || "").toLowerCase();
-
-    // Groq pricing inference based on model families
-    let promptPrice = 0.01; // Default
-    let completionPrice = 0.03; // Default
+    let promptPrice = 0.01;
+    let completionPrice = 0.03;
 
     if (modelId.includes("llama-3.1")) {
       if (modelId.includes("70b")) {
@@ -381,7 +300,6 @@ class ModelFetcher {
       promptPrice = 0.00007;
       completionPrice = 0.00007;
     } else if (modelId.includes("whisper")) {
-      // Whisper models are audio-based, different pricing structure
       promptPrice = 0.00006;
       completionPrice = 0.00006;
     } else if (modelId.includes("llama-guard")) {
@@ -400,17 +318,12 @@ class ModelFetcher {
     };
   }
 
-  /**
-   * Process OpenRouter API response
-   * @param {Object} data - API response data
-   * @returns {Array} Processed model objects
-   */
-  processOpenRouterModels(data) {
+  processOpenRouterModels(data: any) {
     if (!data || !data.data || !Array.isArray(data.data)) {
       throw new Error("Invalid OpenRouter API response format");
     }
 
-    const processedModels = data.data.map((model) => {
+    const processedModels = data.data.map((model: any) => {
       const capabilities = this.detectCapabilities(model);
       const pricing = this.processPricing(model.pricing);
       const isFeatured = this.isFeaturedModel("openrouter", model.id);
@@ -432,14 +345,13 @@ class ModelFetcher {
         pricing,
         active: model.active !== false,
         isPreferred: this.isPreferredModel(model.id),
-        isFeatured: isFeatured,
+        isFeatured,
         costEstimate: this.estimateCost(pricing),
-        rawData: model, // Store raw data for debugging
+        rawData: model,
       };
     });
 
-    // Debug logging for processed models
-    const featuredCount = processedModels.filter((m) => m.isFeatured).length;
+    const featuredCount = processedModels.filter((m: any) => m.isFeatured).length;
     logger.info(
       `[processOpenRouterModels] Processed ${processedModels.length} models, ${featuredCount} are featured`
     );
@@ -447,31 +359,13 @@ class ModelFetcher {
     return processedModels;
   }
 
-  /**
-   * Detect model capabilities
-   * @param {Object} model - Raw model data
-   * @returns {Object} Capabilities object
-   */
-  detectCapabilities(model) {
+  detectCapabilities(model: any) {
     const modelId = (model.id || "").toLowerCase();
     const name = (model.name || "").toLowerCase();
     const description = (model.description || "").toLowerCase();
-
-    // Vision capability detection
     const vision = this.hasVisionCapability(modelId, name, description, model);
-
-    // Reasoning capability detection
-    const reasoning = this.hasReasoningCapability(
-      modelId,
-      name,
-      description,
-      model
-    );
-
-    // Tools capability detection
+    const reasoning = this.hasReasoningCapability(modelId, name, description, model);
     const tools = this.hasToolsCapability(model, modelId);
-
-    // Max context length
     const maxContext = this.extractContextLength(model);
 
     logger.debug(
@@ -486,23 +380,13 @@ class ModelFetcher {
     };
   }
 
-  /**
-   * Check if model has vision capability
-   */
-  hasVisionCapability(modelId, name, description, model) {
-    // Check explicit capabilities object
-    if (model.capabilities) {
-      if (typeof model.capabilities.vision === "boolean") {
-        return model.capabilities.vision;
-      }
+  hasVisionCapability(modelId: string, name: string, description: string, model: any) {
+    if (model.capabilities && typeof model.capabilities.vision === "boolean") {
+      return model.capabilities.vision;
     }
-
-    // Check architecture input modalities
     if (model.architecture?.input_modalities) {
       return model.architecture.input_modalities.includes("image");
     }
-
-    // Pattern matching
     const visionPatterns = [
       "vision",
       "vl-",
@@ -514,23 +398,19 @@ class ModelFetcher {
       "image",
       "multimodal",
     ];
-
     const text = `${modelId} ${name} ${description}`;
     return visionPatterns.some((pattern) => text.includes(pattern));
   }
 
-  /**
-   * Check if model has reasoning capability
-   */
-  hasReasoningCapability(modelId, name, description, model) {
-    // Check explicit capabilities object
-    if (model.capabilities) {
-      if (typeof model.capabilities.reasoning === "boolean") {
-        return model.capabilities.reasoning;
-      }
+  hasReasoningCapability(
+    modelId: string,
+    name: string,
+    description: string,
+    model: any
+  ) {
+    if (model.capabilities && typeof model.capabilities.reasoning === "boolean") {
+      return model.capabilities.reasoning;
     }
-
-    // Pattern matching
     const reasoningPatterns = [
       "reason",
       "thinking",
@@ -542,38 +422,22 @@ class ModelFetcher {
       "programming",
       "analysis",
     ];
-
     const text = `${modelId} ${name} ${description}`;
     return reasoningPatterns.some((pattern) => text.includes(pattern));
   }
 
-  /**
-   * Check if model has tools capability
-   */
-  hasToolsCapability(model, modelId) {
-    // Check supported parameters
+  hasToolsCapability(model: any, modelId: string) {
     if (model.supported_parameters) {
       return model.supported_parameters.includes("tools");
     }
-
-    // Check explicit capabilities
-    if (model.capabilities) {
-      if (typeof model.capabilities.tools === "boolean") {
-        return model.capabilities.tools;
-      }
+    if (model.capabilities && typeof model.capabilities.tools === "boolean") {
+      return model.capabilities.tools;
     }
-
-    // Default to true for most modern models
     return true;
   }
 
-  /**
-   * Extract context length from model data
-   */
-  extractContextLength(model) {
+  extractContextLength(model: any) {
     const modelId = model.id || "unknown";
-
-    // Direct context length fields
     if (model.context_length) {
       logger.debug(
         `[extractContextLength] Found context_length: ${model.context_length} for ${modelId}`
@@ -592,44 +456,29 @@ class ModelFetcher {
       );
       return model.max_context;
     }
-
-    // Check top provider context
     if (model.top_provider?.context_length) {
       logger.debug(
         `[extractContextLength] Found top_provider.context_length: ${model.top_provider.context_length} for ${modelId}`
       );
       return model.top_provider.context_length;
     }
-
-    // Architecture context length
     if (model.architecture?.context_length) {
       logger.debug(
         `[extractContextLength] Found architecture.context_length: ${model.architecture.context_length} for ${modelId}`
       );
       return model.architecture.context_length;
     }
-
-    // Default based on model patterns
     const modelIdLower = (model.id || "").toLowerCase();
-
     if (modelIdLower.includes("gpt-4")) return 128000;
     if (modelIdLower.includes("gpt-3.5")) return 16385;
     if (modelIdLower.includes("claude-3")) return 200000;
     if (modelIdLower.includes("llama-3.1")) return 128000;
-
-    logger.debug(
-      `[extractContextLength] Using default fallback 8192 for ${modelId}`
-    );
-    return 8192; // Default fallback
+    logger.debug(`[extractContextLength] Using default fallback 8192 for ${modelId}`);
+    return 8192;
   }
 
-  /**
-   * Process pricing information
-   */
-  processPricing(pricing) {
+  processPricing(pricing: any) {
     if (!pricing) return null;
-
-    // Handle different pricing formats
     const prompt = this.parsePrice(pricing.prompt || pricing.input);
     const completion = this.parsePrice(pricing.completion || pricing.output);
     const request = this.parsePrice(pricing.request);
@@ -649,10 +498,7 @@ class ModelFetcher {
     };
   }
 
-  /**
-   * Parse price value (handles string and number formats)
-   */
-  parsePrice(price) {
+  parsePrice(price: any) {
     if (price === null || price === undefined) return null;
     if (typeof price === "number") return price;
     if (typeof price === "string") {
@@ -662,42 +508,29 @@ class ModelFetcher {
     return null;
   }
 
-  /**
-   * Estimate cost category
-   */
-  estimateCost(pricing) {
+  estimateCost(pricing: any) {
     if (!pricing || !pricing.prompt || !pricing.completion) {
       return { category: "unknown", cheap: false, expensive: false };
     }
-
     const totalPerMillion = pricing.prompt + pricing.completion;
-
     if (totalPerMillion <= 0.5) {
       return { category: "cheap", cheap: true, expensive: false };
     } else if (totalPerMillion <= 2.0) {
       return { category: "moderate", cheap: false, expensive: false };
-    } else {
-      return { category: "expensive", cheap: false, expensive: true };
     }
+    return { category: "expensive", cheap: false, expensive: true };
   }
 
-  /**
-   * Check if model is featured for a specific provider
-   */
-  isFeaturedModel(provider, modelId) {
+  isFeaturedModel(provider: string, modelId: string) {
     const featured = this.featuredModels[provider];
     if (!featured || !Array.isArray(featured)) return false;
-
     const normalizedId = modelId.toLowerCase();
     return featured.some((featuredModel) =>
       normalizedId.includes(featuredModel.toLowerCase())
     );
   }
 
-  /**
-   * Check if model is preferred
-   */
-  isPreferredModel(modelId) {
+  isPreferredModel(modelId: string) {
     const preferredModels = [
       "gpt-4o",
       "gpt-4o-mini",
@@ -708,15 +541,11 @@ class ModelFetcher {
       "gemini-pro",
       "mixtral-8x7b",
     ];
-
     const normalizedId = modelId.toLowerCase();
     return preferredModels.some((pref) => normalizedId.includes(pref));
   }
 
-  /**
-   * Clear cache for specific provider or all
-   */
-  clearCache(provider = null) {
+  clearCache(provider: string | null = null) {
     if (provider) {
       const cacheKey = `${provider}:models`;
       this.cache.delete(cacheKey);
@@ -727,9 +556,6 @@ class ModelFetcher {
     }
   }
 
-  /**
-   * Get cache statistics
-   */
   getCacheStats() {
     return {
       size: this.cache.size,

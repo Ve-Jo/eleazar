@@ -1,15 +1,20 @@
 import { createClient } from "redis";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger.ts";
 import {
   recordModelCacheHit,
   recordModelCacheMiss,
-} from "../middleware/metrics.js";
+} from "../middleware/metrics.ts";
 
 class CacheService {
+  client: any;
+  isConnected: boolean;
+  defaultTTL: number;
+  maxSize: number;
+
   constructor() {
     this.client = null;
     this.isConnected = false;
-    this.defaultTTL = parseInt(process.env.MODEL_CACHE_TTL || "600000"); // 10 minutes
+    this.defaultTTL = parseInt(process.env.MODEL_CACHE_TTL || "600000");
     this.maxSize = parseInt(process.env.MAX_MODEL_CACHE_SIZE || "1000");
   }
 
@@ -22,7 +27,7 @@ class CacheService {
         password: process.env.REDIS_PASSWORD || undefined,
         database: parseInt(process.env.REDIS_DB || "0"),
         socket: {
-          reconnectStrategy: (retries) => {
+          reconnectStrategy: (retries: number) => {
             if (retries > 10) {
               logger.error("Redis connection failed after 10 retries");
               return new Error("Too many retries");
@@ -32,8 +37,7 @@ class CacheService {
         },
       });
 
-      // Handle Redis events
-      this.client.on("error", (err) => {
+      this.client.on("error", (err: any) => {
         logger.error("Redis client error", { error: err.message });
         this.isConnected = false;
       });
@@ -54,7 +58,7 @@ class CacheService {
 
       await this.client.connect();
       logger.info("Cache service initialized successfully");
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Failed to initialize cache service", {
         error: error.message,
       });
@@ -68,7 +72,7 @@ class CacheService {
         await this.client.disconnect();
         logger.info("Cache service shut down successfully");
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Error during cache service shutdown", {
         error: error.message,
       });
@@ -76,8 +80,7 @@ class CacheService {
     }
   }
 
-  // Basic cache operations
-  async get(key) {
+  async get(key: string) {
     try {
       if (!this.isConnected) {
         logger.warn("Cache get attempted while disconnected", { key });
@@ -95,13 +98,13 @@ class CacheService {
       }
 
       return value ? JSON.parse(value) : null;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache get error", { key, error: error.message });
       return null;
     }
   }
 
-  async set(key, value, ttl = this.defaultTTL) {
+  async set(key: string, value: unknown, ttl = this.defaultTTL) {
     try {
       if (!this.isConnected) {
         logger.warn("Cache set attempted while disconnected", { key });
@@ -117,13 +120,13 @@ class CacheService {
 
       logger.debug("Cache set", { key, ttl });
       return result === "OK";
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache set error", { key, error: error.message });
       return false;
     }
   }
 
-  async del(key) {
+  async del(key: string) {
     try {
       if (!this.isConnected) {
         logger.warn("Cache delete attempted while disconnected", { key });
@@ -133,13 +136,13 @@ class CacheService {
       const result = await this.client.del(key);
       logger.debug("Cache delete", { key, deleted: result > 0 });
       return result > 0;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache delete error", { key, error: error.message });
       return false;
     }
   }
 
-  async exists(key) {
+  async exists(key: string) {
     try {
       if (!this.isConnected) {
         return false;
@@ -147,28 +150,26 @@ class CacheService {
 
       const result = await this.client.exists(key);
       return result === 1;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache exists error", { key, error: error.message });
       return false;
     }
   }
 
-  async ttl(key) {
+  async ttl(key: string) {
     try {
       if (!this.isConnected) {
         return -2;
       }
 
-      const result = await this.client.ttl(key);
-      return result;
-    } catch (error) {
+      return await this.client.ttl(key);
+    } catch (error: any) {
       logger.error("Cache TTL error", { key, error: error.message });
       return -2;
     }
   }
 
-  // Hash operations
-  async hget(key, field) {
+  async hget(key: string, field: string) {
     try {
       if (!this.isConnected) {
         return null;
@@ -176,13 +177,13 @@ class CacheService {
 
       const value = await this.client.hGet(key, field);
       return value ? JSON.parse(value) : null;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache hget error", { key, field, error: error.message });
       return null;
     }
   }
 
-  async hset(key, field, value, ttl = this.defaultTTL) {
+  async hset(key: string, field: string, value: unknown, ttl = this.defaultTTL) {
     try {
       if (!this.isConnected) {
         return false;
@@ -191,43 +192,42 @@ class CacheService {
       const serializedValue = JSON.stringify(value);
       const result = await this.client.hSet(key, field, serializedValue);
 
-      // Set TTL on the hash if it's a new field
       if (result === 1 && ttl > 0) {
         await this.client.expire(key, Math.ceil(ttl / 1000));
       }
 
       return result > 0;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache hset error", { key, field, error: error.message });
       return false;
     }
   }
 
-  async hgetall(key) {
+  async hgetall(key: string) {
     try {
       if (!this.isConnected) {
         return {};
       }
 
       const hash = await this.client.hGetAll(key);
-      const result = {};
+      const result: Record<string, any> = {};
 
       for (const [field, value] of Object.entries(hash)) {
         try {
-          result[field] = JSON.parse(value);
-        } catch (e) {
+          result[field] = JSON.parse(value as string);
+        } catch {
           result[field] = value;
         }
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache hgetall error", { key, error: error.message });
       return {};
     }
   }
 
-  async hdel(key, field) {
+  async hdel(key: string, field: string) {
     try {
       if (!this.isConnected) {
         return false;
@@ -235,14 +235,13 @@ class CacheService {
 
       const result = await this.client.hDel(key, field);
       return result > 0;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache hdel error", { key, field, error: error.message });
       return false;
     }
   }
 
-  // List operations
-  async lpush(key, value, ttl = this.defaultTTL) {
+  async lpush(key: string, value: unknown, ttl = this.defaultTTL) {
     try {
       if (!this.isConnected) {
         return 0;
@@ -256,13 +255,13 @@ class CacheService {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache lpush error", { key, error: error.message });
       return 0;
     }
   }
 
-  async rpush(key, value, ttl = this.defaultTTL) {
+  async rpush(key: string, value: unknown, ttl = this.defaultTTL) {
     try {
       if (!this.isConnected) {
         return 0;
@@ -276,47 +275,46 @@ class CacheService {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache rpush error", { key, error: error.message });
       return 0;
     }
   }
 
-  async lrange(key, start, stop) {
+  async lrange(key: string, start: number, stop: number) {
     try {
       if (!this.isConnected) {
         return [];
       }
 
       const values = await this.client.lRange(key, start, stop);
-      return values.map((value) => {
+      return values.map((value: string) => {
         try {
           return JSON.parse(value);
-        } catch (e) {
+        } catch {
           return value;
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache lrange error", { key, error: error.message });
       return [];
     }
   }
 
-  async llen(key) {
+  async llen(key: string) {
     try {
       if (!this.isConnected) {
         return 0;
       }
 
       return await this.client.lLen(key);
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache llen error", { key, error: error.message });
       return 0;
     }
   }
 
-  // Set operations
-  async sadd(key, member, ttl = this.defaultTTL) {
+  async sadd(key: string, member: unknown, ttl = this.defaultTTL) {
     try {
       if (!this.isConnected) {
         return 0;
@@ -330,33 +328,33 @@ class CacheService {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache sadd error", { key, error: error.message });
       return 0;
     }
   }
 
-  async smembers(key) {
+  async smembers(key: string) {
     try {
       if (!this.isConnected) {
         return [];
       }
 
       const members = await this.client.sMembers(key);
-      return members.map((member) => {
+      return members.map((member: string) => {
         try {
           return JSON.parse(member);
-        } catch (e) {
+        } catch {
           return member;
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache smembers error", { key, error: error.message });
       return [];
     }
   }
 
-  async sismember(key, member) {
+  async sismember(key: string, member: unknown) {
     try {
       if (!this.isConnected) {
         return false;
@@ -364,13 +362,12 @@ class CacheService {
 
       const serializedMember = JSON.stringify(member);
       return await this.client.sIsMember(key, serializedMember);
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache sismember error", { key, error: error.message });
       return false;
     }
   }
 
-  // Cache management
   async flushall() {
     try {
       if (!this.isConnected) {
@@ -380,7 +377,7 @@ class CacheService {
       await this.client.flushAll();
       logger.info("Cache flushed");
       return true;
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache flushall error", { error: error.message });
       return false;
     }
@@ -393,7 +390,7 @@ class CacheService {
       }
 
       return await this.client.keys(pattern);
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache keys error", { pattern, error: error.message });
       return [];
     }
@@ -407,20 +404,19 @@ class CacheService {
 
       const info = await this.client.info();
       return this.parseRedisInfo(info);
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache info error", { error: error.message });
       return null;
     }
   }
 
-  // Parse Redis INFO output
-  parseRedisInfo(info) {
-    const result = {};
+  parseRedisInfo(info: string) {
+    const result: Record<string, Record<string, string | number>> = {};
     const sections = info.split("\r\n\r\n");
 
     for (const section of sections) {
       const lines = section.split("\r\n");
-      let currentSection = null;
+      let currentSection: string | null = null;
 
       for (const line of lines) {
         if (line.startsWith("# ")) {
@@ -428,7 +424,12 @@ class CacheService {
           result[currentSection] = {};
         } else if (line.includes(":") && currentSection) {
           const [key, value] = line.split(":");
-          result[currentSection][key] = isNaN(value) ? value : Number(value);
+          const currentSectionKey = currentSection;
+          if (key && currentSectionKey) {
+            result[currentSectionKey] = result[currentSectionKey] || {};
+            result[currentSectionKey]![key] =
+              value && isNaN(Number(value)) ? value : Number(value);
+          }
         }
       }
     }
@@ -436,7 +437,6 @@ class CacheService {
     return result;
   }
 
-  // Health check
   async health() {
     try {
       if (!this.isConnected) {
@@ -449,7 +449,7 @@ class CacheService {
       }
 
       const ping = await this.client.ping();
-      const info = await this.info();
+      const info: any = await this.info();
 
       return {
         status: ping === "PONG" ? "healthy" : "unhealthy",
@@ -461,7 +461,7 @@ class CacheService {
         },
         connections: info?.clients?.connected_clients || 0,
       };
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Cache health check error", { error: error.message });
       return {
         status: "error",
@@ -471,7 +471,6 @@ class CacheService {
     }
   }
 
-  // Get connection status
   isHealthy() {
     return this.isConnected;
   }

@@ -1,14 +1,37 @@
 import express from "express";
-import { logger } from "../utils/logger.js";
-import { asyncErrorHandler } from "../middleware/errorHandler.js";
-import { getModelService, getCacheService } from "../services/index.js";
+import { logger } from "../utils/logger.ts";
+import { asyncErrorHandler } from "../middleware/errorHandler.ts";
+import { getModelService, getCacheService } from "../services/index.ts";
 
-function setupModelRoutes(router) {
+type ModelSummary = {
+  provider?: string;
+  name?: string;
+  pricing?: {
+    prompt?: number;
+    completion?: number;
+  };
+  capabilities?: Record<string, boolean>;
+};
+
+type ModelRouteQuery = Record<string, string | undefined>;
+
+type ModelRouteRequest = {
+  body: Record<string, unknown>;
+  params: Record<string, string>;
+  query: ModelRouteQuery;
+};
+
+type ModelRouteResponse = {
+  status: (code: number) => ModelRouteResponse;
+  json: (body: unknown) => ModelRouteResponse;
+};
+
+function setupModelRoutes(router: any) {
   // Specific endpoints that should take precedence over generic provider route
   // GET /ai/models/search - Search models
   router.get(
     "/search",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { q: query, provider, capability, active, preferred } = req.query;
 
       if (!query) {
@@ -27,7 +50,7 @@ function setupModelRoutes(router) {
       });
 
       const modelService = getModelService();
-      const filters = {};
+      const filters: Record<string, any> = {};
 
       if (provider) filters.provider = provider;
       if (capability) filters.capability = capability;
@@ -49,8 +72,8 @@ function setupModelRoutes(router) {
   // GET /ai/models/by-price - Get models by price range
   router.get(
     "/by-price",
-    asyncErrorHandler(async (req, res) => {
-      const { min = 0, max, capability, provider, limit = 50 } = req.query;
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
+      const { min, max, capability, provider, limit } = req.query;
 
       logger.info("Getting models by price range", {
         min,
@@ -62,16 +85,19 @@ function setupModelRoutes(router) {
 
       const modelService = getModelService();
 
-      const minPrice = parseFloat(min) || 0;
+      const minPrice = parseFloat(min ?? "0") || 0;
       const maxPrice = max ? parseFloat(max) : Infinity;
-      const modelLimit = parseInt(limit) || 50;
+      const modelLimit = parseInt(limit ?? "50") || 50;
 
-      let models = modelService.getModelsByPriceRange(minPrice, maxPrice);
+      let models = modelService.getModelsByPriceRange(
+        minPrice,
+        maxPrice
+      ) as ModelSummary[];
 
       // Apply additional filters
       if (capability) {
         models = models.filter(
-          (model) => model.capabilities[capability] === true
+          (model) => model.capabilities?.[capability] === true
         );
       }
 
@@ -95,8 +121,8 @@ function setupModelRoutes(router) {
   // GET /ai/models/cheapest - Get cheapest models
   router.get(
     "/cheapest",
-    asyncErrorHandler(async (req, res) => {
-      const { limit = 10, capability } = req.query;
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
+      const { limit, capability } = req.query;
 
       logger.info("Getting cheapest models", {
         limit,
@@ -104,7 +130,7 @@ function setupModelRoutes(router) {
       });
 
       const modelService = getModelService();
-      const modelLimit = parseInt(limit) || 10;
+      const modelLimit = parseInt(limit ?? "10") || 10;
 
       const models = modelService.getCheapestModels(modelLimit, capability);
 
@@ -120,8 +146,8 @@ function setupModelRoutes(router) {
   // GET /ai/models/most-expensive - Get most expensive models
   router.get(
     "/most-expensive",
-    asyncErrorHandler(async (req, res) => {
-      const { limit = 10, capability } = req.query;
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
+      const { limit, capability } = req.query;
 
       logger.info("Getting most expensive models", {
         limit,
@@ -129,7 +155,7 @@ function setupModelRoutes(router) {
       });
 
       const modelService = getModelService();
-      const modelLimit = parseInt(limit) || 10;
+      const modelLimit = parseInt(limit ?? "10") || 10;
 
       const models = modelService.getMostExpensiveModels(
         modelLimit,
@@ -148,7 +174,7 @@ function setupModelRoutes(router) {
   // GET /ai/models/pricing-summary - Get pricing summary
   router.get(
     "/pricing-summary",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: ModelRouteRequest, res: ModelRouteResponse) => {
       logger.info("Getting pricing summary");
 
       const modelService = getModelService();
@@ -156,7 +182,10 @@ function setupModelRoutes(router) {
 
       // Calculate pricing statistics
       const allModels = await modelService.getAvailableModels();
-      const models = allModels.filter((model) => model.pricing);
+      const models = (allModels as ModelSummary[]).filter(
+        (model): model is ModelSummary & { pricing: NonNullable<ModelSummary["pricing"]> } =>
+          !!model.pricing
+      );
 
       const prices = models.map((model) => {
         const prompt = model.pricing.prompt || 0;
@@ -168,7 +197,7 @@ function setupModelRoutes(router) {
         totalModelsWithPricing: models.length,
         averagePrice:
           prices.length > 0
-            ? prices.reduce((a, b) => a + b, 0) / prices.length
+            ? prices.reduce((a: number, b: number) => a + b, 0) / prices.length
             : 0,
         minPrice: prices.length > 0 ? Math.min(...prices) : 0,
         maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
@@ -187,7 +216,7 @@ function setupModelRoutes(router) {
   // GET /ai/models - Get all available models
   router.get(
     "/",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const {
         capability,
         provider,
@@ -213,7 +242,7 @@ function setupModelRoutes(router) {
       const modelService = getModelService();
 
       // Build filters object
-      const filters = {};
+      const filters: Record<string, any> = {};
       if (maxPricePerMillion !== undefined) {
         filters.maxPricePerMillion = parseFloat(maxPricePerMillion);
       }
@@ -247,7 +276,7 @@ function setupModelRoutes(router) {
   // GET /ai/models/:provider - Get models by provider
   router.get(
     "/:provider",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { provider } = req.params;
       const { capability, refresh = false } = req.query;
 
@@ -286,12 +315,19 @@ function setupModelRoutes(router) {
   // GET /ai/models/details/:modelId - Get model details
   router.get(
     "/details/:modelId",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { modelId } = req.params;
 
       logger.info("Getting model details", { modelId });
 
       const modelService = getModelService();
+      if (!modelId) {
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          message: "Model ID is required",
+        });
+      }
+
       const model = modelService.getModelDetails(modelId);
 
       if (!model) {
@@ -312,10 +348,17 @@ function setupModelRoutes(router) {
   // GET /ai/models/capabilities/:modelId - Get model capabilities
   router.get(
     "/capabilities/:modelId",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { modelId } = req.params;
 
       logger.info("Getting model capabilities", { modelId });
+
+      if (!modelId) {
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          message: "Model ID is required",
+        });
+      }
 
       const modelService = getModelService();
       const capabilities = modelService.getModelCapabilities(modelId);
@@ -331,14 +374,14 @@ function setupModelRoutes(router) {
   // POST /ai/models/refresh - Refresh model cache
   router.post(
     "/refresh",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { provider } = req.body;
 
       logger.info("Refreshing model cache", { provider });
 
       const modelService = getModelService();
 
-      if (provider) {
+      if (typeof provider === "string" && provider.length > 0) {
         // Refresh specific provider
         await modelService.refreshProviderModels(provider);
       } else {
@@ -359,7 +402,7 @@ function setupModelRoutes(router) {
   // GET /ai/models/stats - Get model statistics
   router.get(
     "/stats",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: ModelRouteRequest, res: ModelRouteResponse) => {
       logger.info("Getting model statistics");
 
       const modelService = getModelService();
@@ -375,7 +418,7 @@ function setupModelRoutes(router) {
   // GET /ai/models/health - Get model service health
   router.get(
     "/health",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: ModelRouteRequest, res: ModelRouteResponse) => {
       logger.debug("Getting model service health");
 
       const modelService = getModelService();
@@ -392,7 +435,7 @@ function setupModelRoutes(router) {
   // GET /ai/models/cache/:provider - Get cached models for provider
   router.get(
     "/cache/:provider",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { provider } = req.params;
 
       logger.debug("Getting cached models for provider", { provider });
@@ -422,7 +465,7 @@ function setupModelRoutes(router) {
   // DELETE /ai/models/cache/:provider - Clear cached models for provider
   router.delete(
     "/cache/:provider",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { provider } = req.params;
 
       logger.info("Clearing cached models for provider", { provider });
@@ -443,8 +486,10 @@ function setupModelRoutes(router) {
   // POST /ai/models/validate - Validate model configuration
   router.post(
     "/validate",
-    asyncErrorHandler(async (req, res) => {
-      const { model, capability } = req.body;
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
+      const model = typeof req.body.model === "string" ? req.body.model : "";
+      const capability =
+        typeof req.body.capability === "string" ? req.body.capability : undefined;
 
       if (!model) {
         return res.status(400).json({
@@ -467,7 +512,7 @@ function setupModelRoutes(router) {
         });
       }
 
-      const validation = {
+      const validation: Record<string, unknown> = {
         model,
         exists: true,
         valid: true,
@@ -493,10 +538,10 @@ function setupModelRoutes(router) {
   // GET /ai/models/providers - Get available providers
   router.get(
     "/providers",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: ModelRouteRequest, res: ModelRouteResponse) => {
       logger.info("Getting available providers");
 
-      const { getAvailableProviders } = await import("../utils/providers.js");
+      const { getAvailableProviders } = await import("../utils/providers.ts");
       const providers = getAvailableProviders();
 
       res.json({
@@ -510,12 +555,19 @@ function setupModelRoutes(router) {
   // GET /ai/models/providers/:provider - Get provider details
   router.get(
     "/providers/:provider",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: ModelRouteRequest, res: ModelRouteResponse) => {
       const { provider } = req.params;
 
       logger.info("Getting provider details", { provider });
 
-      const { getProviderConfig } = await import("../utils/providers.js");
+      const { getProviderConfig } = await import("../utils/providers.ts");
+      if (!provider) {
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          message: "Provider is required",
+        });
+      }
+
       const config = getProviderConfig(provider);
 
       if (!config) {
@@ -545,12 +597,15 @@ function setupModelRoutes(router) {
 }
 
 // Helper function to calculate median
-function calculateMedian(arr) {
+function calculateMedian(arr: number[]) {
+  if (arr.length === 0) {
+    return 0;
+  }
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
+  const midValue = sorted[mid] ?? 0;
+  const lowerValue = sorted[mid - 1] ?? midValue;
+  return sorted.length % 2 !== 0 ? midValue : (lowerValue + midValue) / 2;
 }
 
 export { setupModelRoutes };

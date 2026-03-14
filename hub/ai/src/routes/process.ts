@@ -1,16 +1,16 @@
 import express from "express";
-import { logger } from "../utils/logger.js";
-import { asyncErrorHandler } from "../middleware/errorHandler.js";
-import { getAIProcessingService } from "../services/index.js";
-import { recordAIRequest } from "../middleware/metrics.js";
-import { processReasoningConfig } from "../utils/reasoningConfig.js";
-import { getProviderFromModel } from "../utils/validators.js";
+import { logger } from "../utils/logger.ts";
+import { asyncErrorHandler } from "../middleware/errorHandler.ts";
+import { getAIProcessingService } from "../services/index.ts";
+import { recordAIRequest } from "../middleware/metrics.ts";
+import { processReasoningConfig } from "../utils/reasoningConfig.ts";
+import { getProviderFromModel } from "../utils/validators.ts";
 
-function setupProcessRoutes(router) {
+function setupProcessRoutes(router: any) {
   // POST /ai/process - Process AI request (non-streaming)
   router.post(
     "/",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const startTime = Date.now();
       const requestData = req.body;
 
@@ -26,13 +26,17 @@ function setupProcessRoutes(router) {
         const aiService = getAIProcessingService();
 
         // Process reasoning configuration if provided
-        let reasoningOptions = {};
+        let reasoningOptions: Record<string, any> = {};
         if (requestData.reasoning) {
-          const provider = getProviderFromModel(requestData.model);
+          const provider = getProviderFromModel(requestData.model) as string;
           const reasoningResult = processReasoningConfig(
             provider,
             requestData.reasoning
-          );
+          ) as {
+            responseOptions: Record<string, any>;
+            requestParams?: Record<string, any>;
+            modelSuffix?: string;
+          };
           reasoningOptions = reasoningResult.responseOptions;
 
           // Apply provider-specific request parameters
@@ -56,6 +60,14 @@ function setupProcessRoutes(router) {
 
         const duration = (Date.now() - startTime) / 1000;
 
+        // Record metrics
+        recordAIRequest(
+          getProviderFromModel(requestData.model) as string,
+          requestData.model,
+          "success",
+          duration
+        );
+
         // Check if legacy format is requested
         const useLegacyFormat = requestData.legacyFormat || false;
 
@@ -67,7 +79,7 @@ function setupProcessRoutes(router) {
           timestamp: new Date().toISOString(),
           format: useLegacyFormat ? "legacy" : "unified",
         });
-      } catch (error) {
+      } catch (error: any) {
         const duration = (Date.now() - startTime) / 1000;
 
         logger.error("AI request processing failed", {
@@ -75,6 +87,14 @@ function setupProcessRoutes(router) {
           error: error.message,
           duration: `${duration}s`,
         });
+
+        recordAIRequest(
+          getProviderFromModel(requestData.model) as string,
+          requestData.model,
+          "error",
+          duration,
+          error?.errorCode || "PROCESSING_ERROR"
+        );
 
         throw error;
       }
@@ -84,7 +104,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/stream - Process AI request with streaming
   router.post(
     "/stream",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const requestData = req.body;
 
       logger.info("Processing streaming AI request", {
@@ -97,7 +117,7 @@ function setupProcessRoutes(router) {
       // For streaming requests, we need to establish WebSocket connection
       // This endpoint will return connection info and session details
 
-      const { getStreamingService } = await import("../services/index.js");
+      const { getStreamingService } = await import("../services/index.ts");
       const streamingService = getStreamingService();
 
       if (!streamingService) {
@@ -130,7 +150,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/batch - Process multiple AI requests
   router.post(
     "/batch",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { requests } = req.body;
 
       if (!Array.isArray(requests) || requests.length === 0) {
@@ -152,11 +172,11 @@ function setupProcessRoutes(router) {
       });
 
       const aiService = getAIProcessingService();
-      const results = [];
-      const errors = [];
+      const results: any[] = [];
+      const errors: any[] = [];
 
       // Process requests in parallel with limited concurrency
-      const promises = requests.map(async (requestData, index) => {
+      const promises = requests.map(async (requestData: any, index: number) => {
         try {
           const result = await aiService.processRequest(requestData);
           results.push({
@@ -165,7 +185,7 @@ function setupProcessRoutes(router) {
             success: true,
             data: result,
           });
-        } catch (error) {
+        } catch (error: any) {
           errors.push({
             index,
             requestId: requestData.requestId,
@@ -195,14 +215,14 @@ function setupProcessRoutes(router) {
   // GET /ai/process/status/:requestId - Get request status
   router.get(
     "/status/:requestId",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { requestId } = req.params;
 
       logger.debug("Getting request status", { requestId });
 
       const aiService = getAIProcessingService();
       const activeRequests = aiService.getActiveRequests();
-      const request = activeRequests.find((req) => req.requestId === requestId);
+      const request = activeRequests.find((req: any) => req.requestId === requestId);
 
       if (!request) {
         return res.status(404).json({
@@ -228,7 +248,7 @@ function setupProcessRoutes(router) {
   // GET /ai/process/active - Get all active requests
   router.get(
     "/active",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       logger.debug("Getting active requests");
 
       const aiService = getAIProcessingService();
@@ -245,7 +265,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/cancel/:requestId - Cancel active request
   router.post(
     "/cancel/:requestId",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { requestId } = req.params;
       const { reason = "User cancelled" } = req.body;
 
@@ -253,7 +273,7 @@ function setupProcessRoutes(router) {
 
       const aiService = getAIProcessingService();
       const activeRequests = aiService.getActiveRequests();
-      const request = activeRequests.find((req) => req.requestId === requestId);
+      const request = activeRequests.find((req: any) => req.requestId === requestId);
 
       if (!request) {
         return res.status(404).json({
@@ -280,7 +300,7 @@ function setupProcessRoutes(router) {
   // GET /ai/process/health - Get processing service health
   router.get(
     "/health",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       logger.debug("Getting processing service health");
 
       const aiService = getAIProcessingService();
@@ -297,7 +317,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/validate - Validate request before processing
   router.post(
     "/validate",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const requestData = req.body;
 
       logger.info("Validating AI request", {
@@ -322,7 +342,7 @@ function setupProcessRoutes(router) {
 
         // Validate capabilities
         const capabilities = requestData.capabilities || {};
-        const validation = {
+        const validation: Record<string, any> = {
           model: requestData.model,
           exists: true,
           valid: true,
@@ -346,14 +366,25 @@ function setupProcessRoutes(router) {
         if (capabilities.reasoning && !modelDetails.capabilities.reasoning) {
           validation.valid = false;
           validation.errors = validation.errors || [];
-          validation.errors.push(
-            "Model does not support reasoning capabilities"
-          );
+          validation.errors.push("Model does not support reasoning capabilities");
         }
 
         // Check rate limits
         const provider = modelService.getModelProvider(requestData.model);
         const rateLimitService = aiService.rateLimitService;
+
+        if (!provider) {
+          validation.valid = false;
+          validation.errors = validation.errors || [];
+          validation.errors.push(
+            `Unable to determine provider for model: ${requestData.model}`
+          );
+
+          return res.json({
+            validation,
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         const providerLimit = await rateLimitService.checkProviderLimit(
           provider
@@ -383,7 +414,7 @@ function setupProcessRoutes(router) {
           validation,
           timestamp: new Date().toISOString(),
         });
-      } catch (error) {
+      } catch (error: any) {
         logger.error("Request validation failed", {
           requestId: requestData.requestId,
           error: error.message,
@@ -397,10 +428,10 @@ function setupProcessRoutes(router) {
   // GET /ai/process/providers - Get supported providers
   router.get(
     "/providers",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       logger.info("Getting supported providers");
 
-      const { getAvailableProviders } = await import("../utils/providers.js");
+      const { getAvailableProviders } = await import("../utils/providers.ts");
       const providers = getAvailableProviders();
 
       res.json({
@@ -414,13 +445,13 @@ function setupProcessRoutes(router) {
   // GET /ai/process/providers/:provider/models - Get models for provider
   router.get(
     "/providers/:provider/models",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { provider } = req.params;
       const { capability } = req.query;
 
       logger.info("Getting models for provider", { provider, capability });
 
-      const { getProviderModels } = await import("../utils/providers.js");
+      const { getProviderModels } = await import("../utils/providers.ts");
       const models = getProviderModels(provider, capability);
 
       res.json({
@@ -436,12 +467,12 @@ function setupProcessRoutes(router) {
   // GET /ai/process/providers/:provider/capabilities - Get provider capabilities
   router.get(
     "/providers/:provider/capabilities",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { provider } = req.params;
 
       logger.info("Getting provider capabilities", { provider });
 
-      const { getProviderConfig } = await import("../utils/providers.js");
+      const { getProviderConfig } = await import("../utils/providers.ts");
       const config = getProviderConfig(provider);
 
       if (!config) {
@@ -463,7 +494,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/generate-image - Generate images
   router.post(
     "/generate-image",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const {
         prompt,
         model,
@@ -518,7 +549,7 @@ function setupProcessRoutes(router) {
           requestId,
           timestamp: new Date().toISOString(),
         });
-      } catch (error) {
+      } catch (error: any) {
         logger.error("Image generation failed", {
           requestId,
           error: error.message,
@@ -532,7 +563,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/transcribe - Transcribe audio to text
   router.post(
     "/transcribe",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const {
         audio,
         model,
@@ -586,7 +617,7 @@ function setupProcessRoutes(router) {
           requestId,
           timestamp: new Date().toISOString(),
         });
-      } catch (error) {
+      } catch (error: any) {
         logger.error("Speech transcription failed", {
           requestId,
           error: error.message,
@@ -600,7 +631,7 @@ function setupProcessRoutes(router) {
   // POST /ai/process/test - Test endpoint for development
   router.post(
     "/test",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (req: any, res: any) => {
       const { echo = false, delay = 0, error = false } = req.body;
 
       logger.info("Processing test request", { echo, delay, error });

@@ -1,5 +1,5 @@
 import promClient from "prom-client";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger.ts";
 
 // Create a Registry to register the metrics
 const register = new promClient.Registry();
@@ -116,7 +116,7 @@ register.registerMetric(memoryUsage);
 register.registerMetric(cpuUsage);
 
 // Middleware to track HTTP request metrics
-function metricsMiddleware(req, res, next) {
+function metricsMiddleware(req: any, res: any, next: any) {
   const start = Date.now();
 
   res.on("finish", () => {
@@ -135,14 +135,25 @@ function metricsMiddleware(req, res, next) {
 }
 
 // Function to record AI request metrics
-function recordAIRequest(provider, model, status, duration, errorType = null) {
+function recordAIRequest(
+  provider: string,
+  model: string,
+  status: string,
+  duration: number,
+  errorType: string | null = null
+) {
   aiRequestsTotal.labels(provider, model, status, errorType || "none").inc();
 
   aiRequestDuration.labels(provider, model, status).observe(duration);
 }
 
 // Function to record token usage
-function recordTokenUsage(provider, model, promptTokens, completionTokens) {
+function recordTokenUsage(
+  provider: string,
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+) {
   const totalTokens = promptTokens + completionTokens;
 
   aiTokensTotal.labels(provider, model, "prompt").inc(promptTokens);
@@ -153,35 +164,35 @@ function recordTokenUsage(provider, model, promptTokens, completionTokens) {
 }
 
 // Function to update streaming connections
-function updateStreamingConnections(provider, model, delta) {
+function updateStreamingConnections(provider: string, model: string, delta: number) {
   aiStreamingConnections.labels(provider, model).inc(delta);
 }
 
 // Function to record model cache metrics
-function recordModelCacheHit(provider) {
+function recordModelCacheHit(provider: string) {
   aiModelCacheHits.labels(provider).inc();
 }
 
-function recordModelCacheMiss(provider) {
+function recordModelCacheMiss(provider: string) {
   aiModelCacheMisses.labels(provider).inc();
 }
 
 // Function to update WebSocket metrics
-function updateWebSocketConnections(delta) {
+function updateWebSocketConnections(delta: number) {
   websocketConnections.inc(delta);
 }
 
-function recordWebSocketMessage(type, status = "success") {
+function recordWebSocketMessage(type: string, status = "success") {
   websocketMessagesTotal.labels(type, status).inc();
 }
 
 // Function to record rate limit hits
-function recordRateLimitHit(route, clientIp) {
+function recordRateLimitHit(route: string, clientIp: string) {
   rateLimitHits.labels(route, clientIp).inc();
 }
 
 // Function to record provider errors
-function recordProviderError(provider, errorType, statusCode) {
+function recordProviderError(provider: string, errorType: string, statusCode: number) {
   providerErrors.labels(provider, errorType, statusCode).inc();
 }
 
@@ -198,50 +209,42 @@ function updateSystemMetrics() {
   memoryUsage.labels("external").set(memUsage.external);
 }
 
-// Function to update CPU metrics (requires additional setup)
-function updateCPUMetrics() {
-  // This would require additional CPU monitoring setup
-  // For now, we'll just log that it's called
-  logger.debug("CPU metrics update called");
+// Function to update CPU usage
+function updateCpuUsage() {
+  const startUsage = process.cpuUsage();
+
+  setTimeout(() => {
+    const endUsage = process.cpuUsage(startUsage);
+    const userUsage = endUsage.user / 1000000; // Convert to seconds
+    const systemUsage = endUsage.system / 1000000;
+
+    cpuUsage.labels("user").set(userUsage);
+    cpuUsage.labels("system").set(systemUsage);
+  }, 1000);
 }
 
-// Setup metrics endpoint
-function setupMetrics(app) {
-  app.get("/metrics", async (req, res) => {
+// Setup metrics collection
+function setupMetrics(app: any) {
+  app.use(metricsMiddleware);
+
+  // Metrics endpoint
+  app.get("/metrics", async (req: any, res: any) => {
     try {
+      updateSystemMetrics();
+      updateCpuUsage();
+
       res.set("Content-Type", register.contentType);
       res.end(await register.metrics());
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Error generating metrics", { error: error.message });
       res.status(500).end();
     }
   });
-
-  // Apply metrics middleware to all routes
-  app.use(metricsMiddleware);
-
-  // Start system metrics update interval
-  setInterval(updateSystemMetrics, 30000); // Update every 30 seconds
-
-  logger.info("Metrics endpoint setup complete");
-}
-
-// Get metrics register (for custom metrics)
-function getMetricsRegister() {
-  return register;
-}
-
-// Create custom metric
-function createCustomMetric(config) {
-  const metric = new promClient[config.type](config);
-  register.registerMetric(metric);
-  return metric;
 }
 
 export {
   setupMetrics,
-  getMetricsRegister,
-  createCustomMetric,
+  metricsMiddleware,
   recordAIRequest,
   recordTokenUsage,
   updateStreamingConnections,
@@ -251,22 +254,4 @@ export {
   recordWebSocketMessage,
   recordRateLimitHit,
   recordProviderError,
-  updateSystemMetrics,
-  updateCPUMetrics,
-
-  // Export metric instances for direct access
-  httpRequestDuration,
-  httpRequestTotal,
-  aiRequestsTotal,
-  aiRequestDuration,
-  aiTokensTotal,
-  aiStreamingConnections,
-  aiModelCacheHits,
-  aiModelCacheMisses,
-  websocketConnections,
-  websocketMessagesTotal,
-  rateLimitHits,
-  providerErrors,
-  memoryUsage,
-  cpuUsage,
 };

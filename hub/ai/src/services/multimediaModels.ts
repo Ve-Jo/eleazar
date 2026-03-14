@@ -1,10 +1,33 @@
-/**
- * Hardcoded models for image generation and speech recognition
- * Since providers don't expose these through their model listing APIs
- */
+type ModelCapabilities = {
+  vision: boolean;
+  tools: boolean;
+  reasoning: boolean;
+  image_generation: boolean;
+  speech_recognition: boolean;
+  maxContext: number;
+};
 
-// Image generation models for NanoGPT (based on actual available models)
-const IMAGE_GENERATION_MODELS = [
+type ModelPricing = {
+  prompt: number;
+  completion: number;
+};
+
+type MultimediaModel = {
+  id: string;
+  name: string;
+  provider: string;
+  capabilities: ModelCapabilities;
+  pricing: ModelPricing;
+  active: boolean;
+  isPreferred: boolean;
+  description?: string;
+  supportedSizes?: string[];
+  pricingBySize?: Record<string, number>;
+  maxSteps?: number;
+  pricingUnit?: string;
+};
+
+const IMAGE_GENERATION_MODELS: MultimediaModel[] = [
   {
     id: "hidream",
     name: "HiDream",
@@ -18,7 +41,7 @@ const IMAGE_GENERATION_MODELS = [
       maxContext: 4096,
     },
     pricing: {
-      prompt: 0.015, // $0.015 per image (based on your pricing)
+      prompt: 0.015,
       completion: 0.015,
     },
     active: true,
@@ -49,7 +72,7 @@ const IMAGE_GENERATION_MODELS = [
       maxContext: 4096,
     },
     pricing: {
-      prompt: 0.009, // $0.009 per image
+      prompt: 0.009,
       completion: 0.009,
     },
     active: true,
@@ -78,7 +101,7 @@ const IMAGE_GENERATION_MODELS = [
       maxContext: 4096,
     },
     pricing: {
-      prompt: 0.009, // $0.009 per image
+      prompt: 0.009,
       completion: 0.009,
     },
     active: true,
@@ -109,7 +132,7 @@ const IMAGE_GENERATION_MODELS = [
       maxContext: 4096,
     },
     pricing: {
-      prompt: 0.005, // $0.005 per image for most sizes
+      prompt: 0.005,
       completion: 0.005,
     },
     active: true,
@@ -135,8 +158,7 @@ const IMAGE_GENERATION_MODELS = [
   },
 ];
 
-// Speech recognition models for Groq (based on actual available models)
-const SPEECH_RECOGNITION_MODELS = [
+const SPEECH_RECOGNITION_MODELS: MultimediaModel[] = [
   {
     id: "whisper-large-v3-turbo",
     name: "Whisper Large V3 Turbo",
@@ -147,10 +169,10 @@ const SPEECH_RECOGNITION_MODELS = [
       reasoning: false,
       image_generation: false,
       speech_recognition: true,
-      maxContext: 1500000, // ~25 minutes of audio
+      maxContext: 1500000,
     },
     pricing: {
-      prompt: 0.04, // $0.04 per hour of audio
+      prompt: 0.04,
       completion: 0.04,
     },
     active: true,
@@ -169,10 +191,10 @@ const SPEECH_RECOGNITION_MODELS = [
       reasoning: false,
       image_generation: false,
       speech_recognition: true,
-      maxContext: 1500000, // ~25 minutes of audio
+      maxContext: 1500000,
     },
     pricing: {
-      prompt: 0.111, // $0.111 per hour of audio
+      prompt: 0.111,
       completion: 0.111,
     },
     active: true,
@@ -183,11 +205,10 @@ const SPEECH_RECOGNITION_MODELS = [
   },
 ];
 
-/**
- * Multimedia Models Service
- * Manages hardcoded models for image generation and speech recognition
- */
 class MultimediaModelsService {
+  imageModels: Map<string, MultimediaModel>;
+  speechModels: Map<string, MultimediaModel>;
+
   constructor() {
     this.imageModels = new Map();
     this.speechModels = new Map();
@@ -195,62 +216,39 @@ class MultimediaModelsService {
   }
 
   initializeModels() {
-    // Initialize image generation models
     for (const model of IMAGE_GENERATION_MODELS) {
       this.imageModels.set(model.id, model);
     }
 
-    // Initialize speech recognition models
     for (const model of SPEECH_RECOGNITION_MODELS) {
       this.speechModels.set(model.id, model);
     }
   }
 
-  /**
-   * Get all image generation models
-   */
   getImageGenerationModels() {
     return Array.from(this.imageModels.values());
   }
 
-  /**
-   * Get all speech recognition models
-   */
   getSpeechRecognitionModels() {
     return Array.from(this.speechModels.values());
   }
 
-  /**
-   * Get a specific image generation model
-   */
-  getImageGenerationModel(modelId) {
+  getImageGenerationModel(modelId: string) {
     return this.imageModels.get(modelId) || null;
   }
 
-  /**
-   * Get a specific speech recognition model
-   */
-  getSpeechRecognitionModel(modelId) {
+  getSpeechRecognitionModel(modelId: string) {
     return this.speechModels.get(modelId) || null;
   }
 
-  /**
-   * Check if a model is an image generation model
-   */
-  isImageGenerationModel(modelId) {
+  isImageGenerationModel(modelId: string) {
     return this.imageModels.has(modelId);
   }
 
-  /**
-   * Check if a model is a speech recognition model
-   */
-  isSpeechRecognitionModel(modelId) {
+  isSpeechRecognitionModel(modelId: string) {
     return this.speechModels.has(modelId);
   }
 
-  /**
-   * Get all multimedia models (image + speech)
-   */
   getAllMultimediaModels() {
     return [
       ...this.getImageGenerationModels(),
@@ -258,10 +256,7 @@ class MultimediaModelsService {
     ];
   }
 
-  /**
-   * Search multimedia models
-   */
-  searchMultimediaModels(query) {
+  searchMultimediaModels(query: string) {
     const lowercaseQuery = query.toLowerCase();
     const allModels = this.getAllMultimediaModels();
 
@@ -274,17 +269,11 @@ class MultimediaModelsService {
     );
   }
 
-  /**
-   * Filter multimedia models by provider
-   */
-  getMultimediaModelsByProvider(provider) {
+  getMultimediaModelsByProvider(provider: string) {
     const allModels = this.getAllMultimediaModels();
     return allModels.filter((model) => model.provider === provider);
   }
 
-  /**
-   * Get multimedia model statistics
-   */
   getMultimediaStats() {
     return {
       imageGeneration: {
@@ -299,16 +288,13 @@ class MultimediaModelsService {
     };
   }
 
-  /**
-   * Helper method to get models grouped by provider
-   */
-  getModelsByProvider(modelsMap) {
-    const stats = {};
+  getModelsByProvider(modelsMap: Map<string, MultimediaModel>) {
+    const stats: Record<string, number> = {};
     for (const model of modelsMap.values()) {
       if (!stats[model.provider]) {
         stats[model.provider] = 0;
       }
-      stats[model.provider]++;
+      stats[model.provider] = (stats[model.provider] || 0) + 1;
     }
     return stats;
   }

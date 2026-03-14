@@ -10,14 +10,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Import custom modules
-import { setupRoutes } from "./routes/index.js";
-import { initializeWebSocket } from "./websocket/index.js";
-import { setupMiddleware } from "./middleware/index.js";
-import { setupMetrics } from "./middleware/metrics.js";
-import { setupErrorHandling } from "./middleware/errorHandler.js";
-import { logger } from "./utils/logger.js";
-import { validateEnvironment } from "./utils/validators.js";
-import { initializeServices } from "./services/index.js";
+import { setupRoutes } from "./routes/index.ts";
+import { initializeWebSocket } from "./websocket/index.ts";
+import { setupMiddleware } from "./middleware/index.ts";
+import { setupMetrics } from "./middleware/metrics.ts";
+import { setupErrorHandling } from "./middleware/errorHandler.ts";
+import { logger } from "./utils/logger.ts";
+import { validateEnvironment } from "./utils/validators.ts";
+import { initializeServices } from "./services/index.ts";
 
 // Load environment variables
 dotenv.config();
@@ -37,7 +37,7 @@ const wss = new WebSocketServer({
 });
 
 // Configuration
-const PORT = process.env.AI_SERVICE_PORT || 8080;
+const PORT = Number(process.env.AI_SERVICE_PORT || 8080);
 const HOST = process.env.AI_SERVICE_HOST || "0.0.0.0";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
@@ -60,7 +60,7 @@ initializeWebSocket(wss);
 setupErrorHandling(app);
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (req: any, res: any) => {
   res.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -71,7 +71,7 @@ app.get("/health", (req, res) => {
 });
 
 // Root endpoint
-app.get("/", (req, res) => {
+app.get("/", (req: any, res: any) => {
   res.json({
     service: "AI Hub Service",
     version: "1.0.0",

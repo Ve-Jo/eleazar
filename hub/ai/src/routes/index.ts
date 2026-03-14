@@ -1,15 +1,32 @@
 import express from "express";
-import { setupModelRoutes } from "./models.js";
-import { setupProcessRoutes } from "./process.js";
-import { setupStreamingRoutes } from "./streaming.js";
+import { setupModelRoutes } from "./models.ts";
+import { setupProcessRoutes } from "./process.ts";
+import { setupStreamingRoutes } from "./streaming.ts";
 import {
   validateAIRequestMiddleware,
   validateModelRequestMiddleware,
-} from "../middleware/index.js";
-import { asyncErrorHandler } from "../middleware/errorHandler.js";
-import { logger } from "../utils/logger.js";
+} from "../middleware/index.ts";
+import { asyncErrorHandler } from "../middleware/errorHandler.ts";
+import { logger } from "../utils/logger.ts";
 
-function setupRoutes(app) {
+type RouteRequestLike = {
+  get: (header: string) => string | undefined;
+};
+
+type RouteResponseLike = {
+  json: (body: unknown) => RouteResponseLike;
+};
+
+type AppLike = {
+  use: (...args: unknown[]) => void;
+  get: (...args: unknown[]) => void;
+};
+
+type ServiceHealth = {
+  status?: string;
+};
+
+function setupRoutes(app: AppLike) {
   logger.info("Setting up routes...");
 
   // API routes
@@ -33,7 +50,7 @@ function setupRoutes(app) {
   // Health and status routes
   apiRouter.get(
     "/health",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
       const health = await getHealthStatus();
       res.json(health);
     })
@@ -41,7 +58,7 @@ function setupRoutes(app) {
 
   apiRouter.get(
     "/status",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
       const status = await getServiceStatus();
       res.json(status);
     })
@@ -49,7 +66,7 @@ function setupRoutes(app) {
 
   apiRouter.get(
     "/stats",
-    asyncErrorHandler(async (req, res) => {
+    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
       const stats = await getServiceStats();
       res.json(stats);
     })
@@ -59,7 +76,7 @@ function setupRoutes(app) {
   app.use("/ai", apiRouter);
 
   // Root API info
-  app.get("/api", (req, res) => {
+  app.get("/api", (req: RouteRequestLike, res: RouteResponseLike) => {
     res.json({
       service: "AI Hub Service API",
       version: "1.0.0",
@@ -85,7 +102,7 @@ async function getHealthStatus() {
     getCacheService,
     getRateLimitService,
     getStreamingService,
-  } = await import("../services/index.js");
+  } = await import("../services/index.ts");
 
   const modelService = getModelService();
   const cacheService = getCacheService();
@@ -110,7 +127,9 @@ async function getHealthStatus() {
   };
 
   // Determine overall health
-  const serviceStatuses = Object.values(health.services).map((s) => s.status);
+  const serviceStatuses = Object.values(health.services).map(
+    (service) => (service as ServiceHealth).status
+  );
   if (serviceStatuses.includes("unhealthy")) {
     health.status = "degraded";
   } else if (serviceStatuses.includes("unavailable")) {
@@ -123,7 +142,7 @@ async function getHealthStatus() {
 // Get service status
 async function getServiceStatus() {
   const { getModelService, getRateLimitService, getStreamingService } =
-    await import("../services/index.js");
+    await import("../services/index.ts");
 
   const modelService = getModelService();
   const rateLimitService = getRateLimitService();
@@ -150,13 +169,13 @@ async function getServiceStatus() {
 // Get service statistics
 async function getServiceStats() {
   const { getModelService, getRateLimitService, getStreamingService } =
-    await import("../services/index.js");
+    await import("../services/index.ts");
 
   const modelService = getModelService();
   const rateLimitService = getRateLimitService();
   const streamingService = getStreamingService();
 
-  const stats = {
+  const stats: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     period: {
       start: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 24 hours ago
