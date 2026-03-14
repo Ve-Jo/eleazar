@@ -1,5 +1,5 @@
 {
-  "include": ["bot.js", "src/**/*.js"],
+  "include": ["bot.ts", "src/**/*.js", "src/**/*.ts"],
   "exclude": [
     "node_modules/**",
     "coverage/**",
@@ -24,7 +24,7 @@
   "skip-full": false,
   "check-coverage": false,
   "include-node-modules": false,
-  "extension": [".js"],
+  "extension": [".js", ".ts"],
   "cache": false,
   "produce-source-map": true,
   "source-map": true,

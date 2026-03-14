@@ -3,8 +3,8 @@ import {
   AttachmentBuilder,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { generateImage } from "../../utils/imageGenerator.js";
-import hubClient from "../../api/hubClient.js";
+import { generateImage } from "../../utils/imageGenerator.ts";
+import hubClient from "../../api/hubClient.ts";
 
 export default {
   data: () => {

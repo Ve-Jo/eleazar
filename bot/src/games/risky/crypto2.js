@@ -12,15 +12,15 @@ import {
   MessageFlags,
 } from "discord.js";
 import { Prisma } from "@prisma/client"; // Import Prisma Decimal helper
-import hubClient from "../../api/hubClient.js"; // Use hub client instead
-import { generateImage } from "../../utils/imageGenerator.js";
+import hubClient from "../../api/hubClient.ts"; // Use hub client instead
+import { generateImage } from "../../utils/imageGenerator.ts";
 import {
   getTickers,
   getValidCmcSymbols,
   getCategories,
   getCategoryCoins,
-} from "../../utils/cryptoApi.js"; // Import API utilities
-import { ComponentBuilder } from "../../utils/componentConverter.js"; // Import ComponentBuilder
+} from "../../utils/cryptoApi.ts"; // Import API utilities
+import { ComponentBuilder } from "../../utils/componentConverter.ts"; // Import ComponentBuilder
 import axios from "axios"; // Add axios import
 
 // --- Game Metadata ---

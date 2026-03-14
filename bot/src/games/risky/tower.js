@@ -9,9 +9,9 @@ import {
   StringSelectMenuBuilder,
   EmbedBuilder,
 } from "discord.js";
-import { generateImage } from "../../utils/imageGenerator.js";
+import { generateImage } from "../../utils/imageGenerator.ts";
 
-import hubClient from "../../api/hubClient.js";
+import hubClient from "../../api/hubClient.ts";
 
 // --- Game Constants ---
 const MAX_FLOORS = 10;

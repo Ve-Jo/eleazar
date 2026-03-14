@@ -1,7 +1,7 @@
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
-import { generateImage } from "../utils/imageGenerator.js";
-import hubClient from "../api/hubClient.js";
-import { handleLevelUp } from "../utils/levelUpHandler.js";
+import { generateImage } from "../utils/imageGenerator.ts";
+import hubClient from "../api/hubClient.ts";
+import { handleLevelUp } from "../utils/levelUpHandler.ts";
 
 // Game state management for multi-user synchronization
 const activeGames = new Map();
