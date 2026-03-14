@@ -1,19 +1,6 @@
+import type { Express, NextFunction, Request, Response } from "express";
 import { logger } from "../utils/logger.ts";
 import { recordProviderError } from "./metrics.ts";
-
-type RequestLike = {
-  id?: string;
-  method: string;
-  url: string;
-};
-
-type ResponseLike = {
-  status: (code: number) => ResponseLike;
-  json: (body: unknown) => ResponseLike;
-  set: (header: string, value: string) => void;
-};
-
-type NextFunctionLike = (error?: unknown) => void;
 
 type ErrorWithContext = Error & {
   statusCode?: number;
@@ -127,9 +114,9 @@ class TimeoutError extends AIHubError {
 // Error handler middleware
 function errorHandler(
   err: ErrorWithContext,
-  req: RequestLike,
-  res: ResponseLike,
-  _next: NextFunctionLike
+  req: Request & { id?: string },
+  res: Response,
+  _next: NextFunction
 ) {
   // Log the error
   logger.error("Request error", {
@@ -233,18 +220,18 @@ function errorHandler(
 
 // Async error wrapper
 function asyncErrorHandler<
-  Req = RequestLike,
-  Res = ResponseLike,
->(fn: (req: Req, res: Res, next: NextFunctionLike) => unknown | Promise<unknown>) {
-  return (req: Req, res: Res, next: NextFunctionLike) => {
+  Req extends Request = Request,
+  Res extends Response = Response,
+>(fn: (req: Req, res: Res, next: NextFunction) => unknown | Promise<unknown>) {
+  return (req: Req, res: Res, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
 
 // Setup error handling for the app
-function setupErrorHandling(app: { use: (...args: unknown[]) => void }) {
+function setupErrorHandling(app: Express) {
   // 404 handler
-  app.use((req: RequestLike, res: ResponseLike) => {
+  app.use((req: Request & { id?: string }, res: Response) => {
     logger.warn("Route not found", {
       requestId: req.id,
       method: req.method,

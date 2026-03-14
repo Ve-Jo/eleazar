@@ -2,7 +2,15 @@
   "name": "@eleazar-hub/shared",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./domain": "./src/domain.ts",
+    "./serviceConfig": "./src/serviceConfig.ts",
+    "./utils": "./src/utils.ts"
+  },
   "scripts": {
     "build": "echo \"Shared utilities build complete\"",
     "typecheck": "tsc -p tsconfig.json"

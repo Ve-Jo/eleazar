@@ -1,4 +1,5 @@
 import express from "express";
+import type { Request, Response, Router } from "express";
 import { logger } from "../utils/logger.ts";
 import { asyncErrorHandler } from "../middleware/errorHandler.ts";
 import { getModelService, getCacheService } from "../services/index.ts";
@@ -15,18 +16,16 @@ type ModelSummary = {
 
 type ModelRouteQuery = Record<string, string | undefined>;
 
-type ModelRouteRequest = {
-  body: Record<string, unknown>;
-  params: Record<string, string>;
-  query: ModelRouteQuery;
-};
+type ModelRouteRequest = Request<
+  Record<string, string>,
+  unknown,
+  Record<string, unknown>,
+  ModelRouteQuery
+>;
 
-type ModelRouteResponse = {
-  status: (code: number) => ModelRouteResponse;
-  json: (body: unknown) => ModelRouteResponse;
-};
+type ModelRouteResponse = Response;
 
-function setupModelRoutes(router: any) {
+function setupModelRoutes(router: Router) {
   // Specific endpoints that should take precedence over generic provider route
   // GET /ai/models/search - Search models
   router.get(

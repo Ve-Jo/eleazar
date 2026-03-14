@@ -1,4 +1,5 @@
 import express from "express";
+import type { Request, Response, Router } from "express";
 import { logger } from "../utils/logger.ts";
 import { asyncErrorHandler } from "../middleware/errorHandler.ts";
 import { getStreamingService } from "../services/index.ts";
@@ -8,24 +9,20 @@ import {
   broadcastToSessions,
 } from "../websocket/index.ts";
 
-type StreamingRouteRequest = {
-  body: Record<string, unknown>;
-  params: Record<string, string>;
-  ip?: string;
-  get: (header: string) => string | undefined;
-};
+type StreamingRouteRequest = Request<
+  Record<string, string>,
+  unknown,
+  Record<string, unknown>
+>;
 
-type StreamingRouteResponse = {
-  status: (code: number) => StreamingRouteResponse;
-  json: (body: unknown) => StreamingRouteResponse;
-};
+type StreamingRouteResponse = Response;
 
 type BroadcastMessage = {
   type?: string;
   [key: string]: unknown;
 };
 
-function setupStreamingRoutes(router: any) {
+function setupStreamingRoutes(router: Router) {
   // POST /ai/stream/start - Start streaming session
   router.post(
     "/start",

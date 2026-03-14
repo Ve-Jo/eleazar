@@ -8,6 +8,32 @@ import { CacheService } from "./cacheService.ts";
 import { ResponseNormalizer } from "./responseNormalizer.ts";
 import type { ProviderClient } from "./aiProcessingService.ts";
 
+type StreamingRequestPayload = {
+  sessionId?: string;
+  requestId?: string;
+  model?: unknown;
+  messages?: unknown;
+  [key: string]: unknown;
+};
+
+type ProcessableStreamingRequest = StreamingRequestPayload & {
+  model: string;
+  messages: unknown[];
+};
+
+function isProcessableStreamingRequest(
+  payload: StreamingRequestPayload
+): payload is ProcessableStreamingRequest {
+  return typeof payload.model === "string" && Array.isArray(payload.messages);
+}
+
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
 let providerClients: Record<string, ProviderClient> = {};
 let modelService: EnhancedModelService | null = null;
 let aiProcessingService: AIProcessingService | null = null;
@@ -15,6 +41,7 @@ let streamingService: StreamingService | null = null;
 let rateLimitService: RateLimitService | null = null;
 let cacheService: CacheService | null = null;
 let responseNormalizer: ResponseNormalizer | null = null;
+type ProcessRequestPayload = Parameters<AIProcessingService["processRequest"]>[0];
 
 function requireService<T>(service: T | null, name: string): T {
   if (!service) {
@@ -89,59 +116,78 @@ async function initializeServices() {
     await aiProcessingService.initialize();
     logger.info("AI processing service initialized");
 
-    initializedStreamingService.on("ai_request", async (payload: any) => {
+    initializedStreamingService.on("ai_request", async (payload: StreamingRequestPayload) => {
       const { sessionId, requestId } = payload;
       try {
+        if (!isProcessableStreamingRequest(payload)) {
+          throw new Error("Invalid AI request payload: model and messages are required");
+        }
+        const normalizedPayload: ProcessRequestPayload = {
+          ...(payload as Record<string, unknown>),
+          requestId: requestId ?? `stream-${Date.now()}`,
+          model: payload.model,
+          messages: payload.messages as ProcessRequestPayload["messages"],
+        };
         await requireService(
           aiProcessingService,
           "AI processing service"
-        ).processRequest(payload);
-      } catch (error: any) {
+        ).processRequest(normalizedPayload);
+      } catch (error: unknown) {
         logger.error("Failed to process AI request from stream", {
           requestId,
-          error: error.message,
+          error: asErrorMessage(error),
         });
-        initializedStreamingService.sendError(sessionId, error, requestId);
+        initializedStreamingService.sendError(
+          sessionId ?? "unknown-session",
+          error instanceof Error ? error : new Error(asErrorMessage(error)),
+          requestId ?? "unknown-request"
+        );
       }
     });
 
-    initializedStreamingService.on("stream_stop", ({ sessionId, requestId }: any) => {
+    initializedStreamingService.on("stream_stop", ({ sessionId, requestId }: StreamingRequestPayload) => {
       logger.info("Stream stop requested", { sessionId, requestId });
       try {
         const cancelled = requireService(
           aiProcessingService,
           "AI processing service"
-        ).cancelStreamingRequest(requestId);
+        ).cancelStreamingRequest(requestId ?? "");
         if (cancelled) {
           logger.info("Stream cancellation initiated", { requestId });
         } else {
           logger.warn("No active stream to cancel", { requestId });
           initializedStreamingService.sendError(
-            sessionId,
+            sessionId ?? "unknown-session",
             new Error("Cancellation requested but no active stream"),
-            requestId
+            requestId ?? "unknown-request"
           );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error("Failed to cancel streaming request", {
           requestId,
-          error: error.message,
+          error: asErrorMessage(error),
         });
-        initializedStreamingService.sendError(sessionId, error, requestId);
+        initializedStreamingService.sendError(
+          sessionId ?? "unknown-session",
+          error instanceof Error ? error : new Error(asErrorMessage(error)),
+          requestId ?? "unknown-request"
+        );
       }
     });
 
-    initializedStreamingService.on("stream_pause", ({ sessionId, requestId }: any) => {
+    initializedStreamingService.on("stream_pause", ({ sessionId, requestId }: StreamingRequestPayload) => {
       logger.info("Stream pause requested", { sessionId, requestId });
     });
 
-    initializedStreamingService.on("stream_resume", ({ sessionId, requestId }: any) => {
+    initializedStreamingService.on("stream_resume", ({ sessionId, requestId }: StreamingRequestPayload) => {
       logger.info("Stream resume requested", { sessionId, requestId });
     });
 
     logger.info("All services initialized successfully");
-  } catch (error: any) {
-    logger.error("Failed to initialize services", { error: error.message });
+  } catch (error: unknown) {
+    logger.error("Failed to initialize services", {
+      error: asErrorMessage(error),
+    });
     throw error;
   }
 }
@@ -199,8 +245,10 @@ async function shutdownServices() {
     }
 
     logger.info("All services shut down successfully");
-  } catch (error: any) {
-    logger.error("Error during service shutdown", { error: error.message });
+  } catch (error: unknown) {
+    logger.error("Error during service shutdown", {
+      error: asErrorMessage(error),
+    });
     throw error;
   }
 }

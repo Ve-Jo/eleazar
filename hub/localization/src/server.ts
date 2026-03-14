@@ -18,10 +18,6 @@ type ResponseLike = {
 
 type NextFunctionLike = () => void;
 
-type ErrorLike = {
-  message?: string;
-};
-
 dotenv.config({ path: "../.env" });
 
 const app = express();
@@ -54,7 +50,7 @@ app.use("*", (_req: RequestLike, res: ResponseLike) => {
 });
 
 // Error handling middleware
-app.use((error: ErrorLike, _req: RequestLike, res: ResponseLike, _next: NextFunctionLike) => {
+app.use((error: Error, _req: RequestLike, res: ResponseLike, _next: NextFunctionLike) => {
   console.error("Localization service error:", error);
   res.status(500).json({
     error: "Internal server error",

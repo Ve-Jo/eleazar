@@ -1,4 +1,5 @@
 import express from "express";
+import type { Express, Request, Response } from "express";
 import { setupModelRoutes } from "./models.ts";
 import { setupProcessRoutes } from "./process.ts";
 import { setupStreamingRoutes } from "./streaming.ts";
@@ -9,24 +10,11 @@ import {
 import { asyncErrorHandler } from "../middleware/errorHandler.ts";
 import { logger } from "../utils/logger.ts";
 
-type RouteRequestLike = {
-  get: (header: string) => string | undefined;
-};
-
-type RouteResponseLike = {
-  json: (body: unknown) => RouteResponseLike;
-};
-
-type AppLike = {
-  use: (...args: unknown[]) => void;
-  get: (...args: unknown[]) => void;
-};
-
 type ServiceHealth = {
   status?: string;
 };
 
-function setupRoutes(app: AppLike) {
+function setupRoutes(app: Express) {
   logger.info("Setting up routes...");
 
   // API routes
@@ -50,7 +38,7 @@ function setupRoutes(app: AppLike) {
   // Health and status routes
   apiRouter.get(
     "/health",
-    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
+    asyncErrorHandler(async (_req: Request, res: Response) => {
       const health = await getHealthStatus();
       res.json(health);
     })
@@ -58,7 +46,7 @@ function setupRoutes(app: AppLike) {
 
   apiRouter.get(
     "/status",
-    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
+    asyncErrorHandler(async (_req: Request, res: Response) => {
       const status = await getServiceStatus();
       res.json(status);
     })
@@ -66,7 +54,7 @@ function setupRoutes(app: AppLike) {
 
   apiRouter.get(
     "/stats",
-    asyncErrorHandler(async (_req: RouteRequestLike, res: RouteResponseLike) => {
+    asyncErrorHandler(async (_req: Request, res: Response) => {
       const stats = await getServiceStats();
       res.json(stats);
     })
@@ -76,7 +64,7 @@ function setupRoutes(app: AppLike) {
   app.use("/ai", apiRouter);
 
   // Root API info
-  app.get("/api", (req: RouteRequestLike, res: RouteResponseLike) => {
+  app.get("/api", (req: Request, res: Response) => {
     res.json({
       service: "AI Hub Service API",
       version: "1.0.0",

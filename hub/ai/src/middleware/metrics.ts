@@ -193,7 +193,7 @@ function recordRateLimitHit(route: string, clientIp: string) {
 
 // Function to record provider errors
 function recordProviderError(provider: string, errorType: string, statusCode: number) {
-  providerErrors.labels(provider, errorType, statusCode).inc();
+  providerErrors.labels(provider, errorType, String(statusCode)).inc();
 }
 
 // Function to update system metrics
