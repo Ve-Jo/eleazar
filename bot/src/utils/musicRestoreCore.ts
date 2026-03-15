@@ -269,9 +269,13 @@ async function restoreSingleMusicPlayer(
       player.repeatMode = data.repeatMode;
       player.set("autoplay_enabled", data.autoplay);
       if (data.filters && Object.keys(data.filters).length > 0) {
-        await player.setFilters(data.filters).catch((error) => {
-          console.error(`Failed to set filters for guild ${data.id}:`, error);
-        });
+        if (typeof (player as any).setFilters === "function") {
+          await (player as any).setFilters(data.filters).catch((error: Error) => {
+            console.error(`Failed to set filters for guild ${data.id}:`, error);
+          });
+        } else {
+          console.warn(`Player does not support setFilters; skipping filters for guild ${data.id}`);
+        }
       }
 
       const restoredTracks = await restoreQueueTracks(node, player, data, 50);
