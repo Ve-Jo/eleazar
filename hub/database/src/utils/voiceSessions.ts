@@ -35,15 +35,35 @@ type VoiceSessionRecord = {
   joinedAt: number | bigint | string;
 };
 
+const normalizeJoinedAt = (joinedAt: number | bigint | string | undefined): bigint => {
+  if (typeof joinedAt === "bigint") {
+    return joinedAt;
+  }
+
+  if (typeof joinedAt === "number" && Number.isFinite(joinedAt)) {
+    return BigInt(Math.trunc(joinedAt));
+  }
+
+  if (typeof joinedAt === "string") {
+    const parsed = Number(joinedAt);
+    if (Number.isFinite(parsed)) {
+      return BigInt(Math.trunc(parsed));
+    }
+  }
+
+  return BigInt(Date.now());
+};
+
 async function createVoiceSession(
   client: VoiceSessionClient,
   ensureGuildUser: EnsureGuildUserFn,
   guildId: string,
   userId: string,
   channelId: string,
-  joinedAt: number | bigint | string
+  joinedAt: number | bigint | string | undefined
 ): Promise<unknown> {
   await ensureGuildUser(guildId, userId);
+  const normalizedJoinedAt = normalizeJoinedAt(joinedAt);
 
   return client.voiceSession.upsert({
     where: {
@@ -51,7 +71,7 @@ async function createVoiceSession(
     },
     create: {
       channelId,
-      joinedAt: BigInt(joinedAt),
+      joinedAt: normalizedJoinedAt,
       user: {
         connect: {
           guildId_id: { guildId, id: userId },
@@ -60,7 +80,7 @@ async function createVoiceSession(
     },
     update: {
       channelId,
-      joinedAt: BigInt(joinedAt),
+      joinedAt: normalizedJoinedAt,
     },
   });
 }
