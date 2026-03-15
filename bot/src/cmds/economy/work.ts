@@ -73,6 +73,14 @@ type InteractionLike = {
   reply: (payload: unknown) => Promise<unknown>;
 };
 
+const normalizeLocale = (locale: unknown, fallback = "en"): string => {
+  if (typeof locale !== "string") {
+    return fallback;
+  }
+
+  return (locale.split("-")[0] || fallback).toLowerCase();
+};
+
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
     return new SlashCommandSubcommandBuilder()
@@ -188,7 +196,7 @@ const command = {
 
     try {
       const locale = interaction.locale || interaction.guildLocale || "en";
-      const normalizedLocale = (locale.split("-")[0] || "en").toLowerCase();
+      const normalizedLocale = normalizeLocale(locale);
 
       const gamesMap = await loadGames();
       const gamesArray = Array.from(gamesMap.values()) as GameInfo[];
@@ -406,8 +414,12 @@ const command = {
       });
 
       collector.on("collect", async (componentInteraction: any) => {
-        const interactionLocale = componentInteraction.locale || componentInteraction.guildLocale || normalizedLocale;
-        const normalizedInteractionLocale = interactionLocale.split("-").toLowerCase()[0];
+        const interactionLocale =
+          componentInteraction.locale || componentInteraction.guildLocale || normalizedLocale;
+        const normalizedInteractionLocale = normalizeLocale(
+          interactionLocale,
+          normalizedLocale
+        );
         void normalizedInteractionLocale;
 
         const categoryNames = Object.keys(games);

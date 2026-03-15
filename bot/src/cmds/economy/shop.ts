@@ -76,6 +76,14 @@ type InteractionLike = {
   reply: (payload: unknown) => Promise<unknown>;
 };
 
+const normalizeLocale = (locale: unknown, fallback = "en"): string => {
+  if (typeof locale !== "string") {
+    return fallback;
+  }
+
+  return (locale.split("-")[0] || fallback).toLowerCase();
+};
+
 const upgradesConfig = UPGRADES as Record<string, UpgradeConfig>;
 
 function getUpgradeLevel(userData: UserDataLike, key: string): number {
@@ -251,7 +259,10 @@ const command = {
       let currentUpgrade = 0;
       let upgradeInfo: Record<string, UpgradeInfoEntry> = {};
       const builderMode = "v2" as const;
-      const userLocale = i18n.getUserLocale?.() || (interaction.locale.split("-")[0] || "en").toLowerCase();
+      const userLocale = normalizeLocale(
+        i18n.getUserLocale?.() ?? interaction.locale,
+        "en"
+      );
 
       const getUpgradeTranslation = (path: string, defaultValue: string): string => {
         const pathParts = path.split(".");
