@@ -65,7 +65,7 @@ const event = {
 
         if (nonBotMembers.size >= 1) {
           console.log(`[Voice XP] Starting voice session for ${member.user.tag}`);
-          await hubClient.createVoiceSession(userId, guildId, newState.channelId);
+          await hubClient.createVoiceSession(guildId, userId, newState.channelId);
         } else {
           console.log("[Voice XP] Not enough users in channel for XP tracking");
         }
