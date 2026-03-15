@@ -87,6 +87,7 @@ async function loadCommands(
     "marriage",
     "settings",
     "personalization",
+    "voice-rooms",
   ]
 ): Promise<void> {
   console.log(

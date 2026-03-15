@@ -1224,6 +1224,39 @@
         "recentDeposits": "Недавні депозити",
         "errorOccurred": "❌ Відбулась помилка: {{error}}"
       }
+    },
+    "voice-rooms": {
+      "name": "голосові-кімнати",
+      "description": "Керування тимчасовими голосовими кімнатами",
+      "no_perms": "У вас немає прав для керування голосовими кімнатами",
+      "setup": {
+        "command": {
+          "name": "налаштувати",
+          "description": "Налаштувати голосові кімнати"
+        },
+        "options": {
+          "join_channel": {
+            "name": "канал_входу",
+            "description": "Канал для створення кімнат"
+          },
+          "panel_channel": {
+            "name": "канал_панелі",
+            "description": "Текстовий канал для панелі керування"
+          },
+          "category": {
+            "name": "категорія",
+            "description": "Категорія для нових кімнат"
+          },
+          "waiting_rooms": {
+            "name": "кімнати_очікування",
+            "description": "Створювати окремі кімнати очікування"
+          },
+          "waiting_category": {
+            "name": "категорія_очікування",
+            "description": "Категорія для кімнат очікування"
+          }
+        }
+      }
     }
   },
   "levelUp": {
@@ -1697,6 +1730,83 @@
       "buttonBackToCategories": "⬅️ Назад до Категорій",
       "selectMenuOptionCatPrev": "⬅️ Попер. Категорії",
       "selectMenuOptionCatNext": "Наст. Категорії ➡️"
+    }
+  },
+  "voiceRooms": {
+    "general": {
+      "roomName": "Кімната {username}",
+      "joinToCreateName": "➕ Увійти щоб створити",
+      "setupSuccess": "Голосові кімнати готові. Канал створення: {channel}.",
+      "updated": "Голосова кімната оновлена.",
+      "setupError": "Не вдалося налаштувати голосові кімнати.",
+      "waitingRoomName": "🕒 Очікування — {name}",
+      "waitingRequest": "{user} хоче приєднатися до {room}.",
+      "waitingAccepted": "Запит прийнято.",
+      "waitingDeclined": "Запит відхилено.",
+      "roomMissing": "Кімната більше не існує.",
+      "waitingRequiresLock": "Спочатку закрийте кімнату перед очікуванням."
+    },
+    "panel": {
+      "title": "Голосова кімната",
+      "owner": "Власник",
+      "members": "Учасники",
+      "limit": "Ліміт",
+      "limitNone": "Без ліміту",
+      "memberList": "У каналі",
+      "bitrate": "Бітрейт",
+      "region": "Регіон",
+      "regionAuto": "Авто"
+    },
+    "status": {
+      "locked": "Закрита",
+      "unlocked": "Відкрита",
+      "hidden": "Прихована",
+      "visible": "Видима"
+    },
+    "buttons": {
+      "lock": "Закрити",
+      "unlock": "Відкрити",
+      "hide": "Сховати",
+      "show": "Показати",
+      "limit": "Ліміт",
+      "claim": "Забрати кімнату",
+      "waitingOn": "Очікування",
+      "waitingOff": "Без очікування",
+      "waitingAccept": "Прийняти",
+      "waitingDecline": "Відхилити",
+      "waitingEnable": "Увімкнути очікування",
+      "waitingDisable": "Вимкнути очікування",
+      "rename": "Перейменувати",
+      "kick": "Кік",
+      "ban": "Бан",
+      "bitrate": "Бітрейт"
+    },
+    "modal": {
+      "limitTitle": "Встановити ліміт",
+      "limitLabel": "Кількість користувачів (0 - без ліміту)",
+      "renameTitle": "Перейменувати кімнату",
+      "renameLabel": "Нова назва"
+    },
+    "errors": {
+      "notOwner": "Тільки власник може керувати кімнатою.",
+      "roomMissing": "Цю голосову кімнату не знайдено.",
+      "invalidLimit": "Ліміт має бути від 0 до 99.",
+      "claimUnavailable": "Не можна забрати кімнату поки власник у кімнаті.",
+      "waitingRequiresLock": "Спочатку сховайте кімнату, щоб увімкнути очікування.",
+      "waitingNotAvailable": "Кімнати очікування не увімкнені на цьому сервері.",
+      "waitingRequestExpired": "Запит застарів або користувач вже не в очікуванні.",
+      "waitingOnlyOwner": "Лише власник кімнати може відповідати на запити очікування.",
+      "cannotTargetOwner": "Не можна вибрати власника кімнати."
+    },
+    "waiting": {
+      "request": "{owner}, користувач {member} очікує входу до вашої кімнати.",
+      "accepted": "{member} переміщено до вашої кімнати.",
+      "declined": "Запит відхилено."
+    },
+    "bitrate": {
+      "low": "Низький (64 кбіт/с)",
+      "medium": "Середній (96 кбіт/с)",
+      "high": "Високий (128 кбіт/с)"
     }
   }
 }

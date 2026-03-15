@@ -844,6 +844,15 @@
         "recentDeposits": "Recent Deposits",
         "errorOccurred": "❌ An error occurred: {{error}}"
       }
+    },
+    "voice-rooms": {
+      "no_perms": "You don't have permissions to manage voice rooms",
+      "setup": {
+        "command": {
+          "name": "setup",
+          "description": "Setup join-to-create voice rooms"
+        }
+      }
     }
   },
   "levelUp": {
@@ -1319,6 +1328,83 @@
       "buttonBackToCategories": "⬅️ Back to Categories",
       "selectMenuOptionCatPrev": "⬅️ Previous Categories",
       "selectMenuOptionCatNext": "Next Categories ➡️"
+    }
+  },
+  "voiceRooms": {
+    "general": {
+      "roomName": "{username}'s room",
+      "joinToCreateName": "➕ Join to Create",
+      "setupSuccess": "Voice rooms are ready. Join-to-create channel: {channel}.",
+      "updated": "Voice room updated.",
+      "setupError": "Unable to configure voice rooms.",
+      "waitingRoomName": "🕒 Waiting — {name}",
+      "waitingRequest": "{user} wants to join {room}.",
+      "waitingAccepted": "Request accepted.",
+      "waitingDeclined": "Request declined.",
+      "roomMissing": "Room no longer exists.",
+      "waitingRequiresLock": "Enable room lock before using waiting room."
+    },
+    "panel": {
+      "title": "Voice Room",
+      "owner": "Owner",
+      "members": "Members",
+      "limit": "User limit",
+      "limitNone": "Unlimited",
+      "memberList": "In Channel",
+      "bitrate": "Bitrate",
+      "region": "Region",
+      "regionAuto": "Auto"
+    },
+    "status": {
+      "locked": "Locked",
+      "unlocked": "Open",
+      "hidden": "Hidden",
+      "visible": "Visible"
+    },
+    "buttons": {
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "hide": "Hide",
+      "show": "Show",
+      "limit": "Limit",
+      "claim": "Claim ownership",
+      "waitingOn": "Waiting On",
+      "waitingOff": "Waiting Off",
+      "waitingAccept": "Accept",
+      "waitingDecline": "Decline",
+      "waitingEnable": "Enable waiting",
+      "waitingDisable": "Disable waiting",
+      "rename": "Rename",
+      "kick": "Kick",
+      "ban": "Ban",
+      "bitrate": "Bitrate"
+    },
+    "modal": {
+      "limitTitle": "Set user limit",
+      "limitLabel": "Number of users (0 for unlimited)",
+      "renameTitle": "Rename room",
+      "renameLabel": "New room name"
+    },
+    "errors": {
+      "notOwner": "Only the room owner can manage this room.",
+      "roomMissing": "This voice room could not be found.",
+      "invalidLimit": "User limit must be between 0 and 99.",
+      "claimUnavailable": "Ownership can only be claimed when the owner is not in the room.",
+      "waitingRequiresLock": "Hide the room before turning on waiting room.",
+      "waitingNotAvailable": "Waiting rooms are not enabled on this server.",
+      "waitingRequestExpired": "Request expired or member is no longer waiting.",
+      "waitingOnlyOwner": "Only the room owner can respond to waiting requests.",
+      "cannotTargetOwner": "You cannot target the room owner."
+    },
+    "waiting": {
+      "request": "{owner}, {member} is waiting to join your room.",
+      "accepted": "{member} was moved to your room.",
+      "declined": "Request declined."
+    },
+    "bitrate": {
+      "low": "Low (64 kbps)",
+      "medium": "Medium (96 kbps)",
+      "high": "High (128 kbps)"
     }
   }
 }
