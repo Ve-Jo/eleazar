@@ -389,7 +389,7 @@ const command = {
       const { disableInteractions = false } = options;
       const [attachment, dominantColor] = await generateCommandImage();
 
-      const componentBuilder = new ComponentBuilder({
+      const commandComponent = new ComponentBuilder({
         mode: "v2",
       })
         .addText(String(await getTranslation("commands.help.commands.title")), "header3")
