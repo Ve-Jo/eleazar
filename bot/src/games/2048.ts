@@ -159,6 +159,7 @@ type GameInteractionLike = {
 };
 
 const activeGames = new Map<string, GameState>();
+const MAX_2048_SESSION_EARNING = 2500;
 
 class GameState {
   channelId: string;
@@ -310,7 +311,7 @@ export default {
       // Apply the games earning multiplier
       const earning = baseEarning * earningMultiplier;
 
-      return earning;
+      return Math.max(0, Math.min(MAX_2048_SESSION_EARNING, earning));
     };
 
     // Helper function to generate game board image - similar to Snake.js
@@ -374,8 +375,77 @@ export default {
         },
         { image: 1, emoji: 1 },
         i18n,
-        { disableThrottle: true },
+        { renderMode: "game", doublePass: true, renderBackend: "takumi" },
       );
+    };
+
+    const prewarmStaticBoard = async (
+      state: Game2048State,
+      userLocale: string,
+      userAvatarURL: string
+    ) => {
+      const userData = state.userData;
+      const balance = state.balance || 0;
+      const chatLevelData = state.chatLevelData;
+      const gameLevelData = state.gameLevelData;
+
+      try {
+        await generateImage(
+          "2048",
+          {
+            grid: state.grid,
+            score: state.score,
+            earning: state.earning,
+            locale: userLocale,
+            interaction: {
+              user: {
+                id: interaction.user.id,
+                username: interaction.user.username,
+                displayName: interaction.user.displayName,
+                avatarURL: userAvatarURL,
+              },
+              guild: interaction.guildId
+                ? {
+                    id: interaction.guild.id,
+                    name: interaction.guild.name,
+                    iconURL: interaction.guild.iconURL({
+                      extension: "png",
+                      size: 1024,
+                    }),
+                  }
+                : null,
+            },
+            database: {
+              ...userData,
+              economy: {
+                ...userData?.economy,
+                balance,
+              },
+              levelProgress: {
+                chat: chatLevelData,
+                game: {
+                  level: gameLevelData?.level || 1,
+                  currentXP: gameLevelData?.currentXP || 0,
+                  requiredXP: gameLevelData?.requiredXP || 100,
+                  totalXP: gameLevelData?.totalXP || 0,
+                },
+              },
+              earnedGameXP: 0,
+            },
+          },
+          { image: 1, emoji: 1 },
+          i18n,
+          {
+            renderMode: "game",
+            renderBackend: "takumi",
+            disableThrottle: true,
+            prewarmStaticLayer: true,
+            prewarmStaticOnly: true,
+          },
+        );
+      } catch (error) {
+        console.warn("[2048] Static layer prewarm failed:", error);
+      }
     };
 
     // Create game controls
@@ -512,10 +582,26 @@ export default {
       }
 
       // Prepare data for image generation
+      const userAvatarURL = interaction.user.displayAvatarURL({
+        extension: "png",
+        size: 1024,
+      });
+
+      const PREWARM_TIMEOUT_MS = 250;
+      const prewarmPromise = prewarmStaticBoard(
+        initialState.state,
+        interaction.locale,
+        userAvatarURL,
+      );
+      await Promise.race([
+        prewarmPromise,
+        new Promise((resolve) => setTimeout(resolve, PREWARM_TIMEOUT_MS)),
+      ]);
+
       const buffer = await generateGameBoard(
         initialState.state,
         interaction.locale,
-        interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
+        userAvatarURL,
       );
 
       // Send initial game board
@@ -534,7 +620,7 @@ export default {
 
       const message = await interaction.followUp({
         content: content,
-        files: [{ attachment: buffer, name: "2048.avif" }],
+        files: [{ attachment: buffer, name: "2048.webp" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -632,7 +718,7 @@ export default {
 
             await message.edit({
               content: content,
-              files: [{ attachment: finalBoard, name: "2048.avif" }],
+              files: [{ attachment: finalBoard, name: "2048.webp" }],
               components: [],
             });
             cleanup();
@@ -770,7 +856,7 @@ export default {
 
           await message.edit({
             content: stoppedContent,
-            files: [{ attachment: stopBoard, name: "2048.avif" }],
+            files: [{ attachment: stopBoard, name: "2048.webp" }],
             components: [],
           });
 
@@ -845,7 +931,7 @@ export default {
               typeof scoreText === "string"
                 ? scoreText
                 : `Your Score: ${state.score}`,
-            files: [{ attachment: buffer, name: "2048.avif" }],
+            files: [{ attachment: buffer, name: "2048.webp" }],
             components: [row1, row2],
           });
 
@@ -970,7 +1056,7 @@ export default {
 
               await message.edit({
                 content: gameOverContent,
-                files: [{ attachment: finalBoard, name: "2048.avif" }],
+                files: [{ attachment: finalBoard, name: "2048.webp" }],
                 components: [],
               });
 

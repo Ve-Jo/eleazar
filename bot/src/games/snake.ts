@@ -165,6 +165,7 @@ type GameInteractionLike = {
 };
 
 const activeGames = new Map<string, GameState>();
+const MAX_SNAKE_SESSION_EARNING = 2500;
 
 class GameState {
   channelId: string;
@@ -293,11 +294,11 @@ export default {
 
       const earning =
         state.score *
-        0.03 * // Base earning
+        0.015 * // Base earning
         (1 + moveEfficiency / 10) * // Move efficiency multiplier
         (1 + Math.min(timeInMinutes, 5) / 5); // Time multiplier that caps at 2x for 5+ minutes
 
-      return earning;
+      return Math.max(0, Math.min(MAX_SNAKE_SESSION_EARNING, earning));
     };
 
     // Helper function to wrap coordinates around grid edges
@@ -369,7 +370,7 @@ export default {
         },
         { image: 1, emoji: 1 },
         i18n,
-        { disableThrottle: true },
+        { renderMode: "game" },
       );
     };
 
@@ -516,7 +517,7 @@ export default {
 
       const message = await interaction.followUp({
         content: `${startMessage}\n${highScoreText}`,
-        files: [{ attachment: buffer, name: "snake.avif" }],
+        files: [{ attachment: buffer, name: "snake.webp" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -630,7 +631,7 @@ export default {
 
               await message.edit({
                 content: content,
-                files: [{ attachment: finalBoard, name: "snake.avif" }],
+                files: [{ attachment: finalBoard, name: "snake.webp" }],
                 components: [],
               });
             } catch (error) {
@@ -863,7 +864,7 @@ export default {
 
             await message.edit({
               content: content,
-              files: [{ attachment: stopBoard, name: "snake.avif" }],
+              files: [{ attachment: stopBoard, name: "snake.webp" }],
               components: [],
             });
 
@@ -911,7 +912,7 @@ export default {
             }),
           );
           gameInstance.updateImageTimestamp();
-          messageFiles = [{ attachment: newBoard, name: "snake.avif" }];
+          messageFiles = [{ attachment: newBoard, name: "snake.webp" }];
         }
 
         // Fetch and edit the message

@@ -893,8 +893,9 @@ async function generateMainMenu(
     componentData,
     { image: 1, emoji: 1 },
     i18n, // Pass the main i18n object here for generateImage's internal use if needed
+    { renderMode: "game" },
   );
-  const attachmentName = `crypto_portfolio_${userId}.avif`; // Use .avif
+  const attachmentName = `crypto_portfolio_${userId}.webp`; // Use .webp
 
   // --- Build Components using ComponentBuilder with MODE ---
   const builder = new ComponentBuilder({

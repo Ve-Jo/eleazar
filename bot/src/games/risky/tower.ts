@@ -161,6 +161,7 @@ type TowerGameState = {
   sessionChange: number;
   initialBalance: number;
   selectedTiles: number[];
+  vaultInsuranceReduction: number;
 };
 
 function parseBalance(value: string | number | null | undefined): number {
@@ -195,6 +196,9 @@ const BASE_MULTIPLIERS: Record<TowerDifficulty, number[]> = {
   ],
 };
 
+const MAX_TOWER_PAYOUT_ABSOLUTE = 50000;
+const MAX_TOWER_PAYOUT_MULTIPLIER = 50;
+
 // --- Game State Management ---
 const activeGames = new Map<string, GameState>();
 
@@ -215,6 +219,7 @@ class GameState {
   sessionChange: number;
   initialBalance: number;
   selectedTiles: number[];
+  vaultInsuranceReduction: number;
 
   constructor(
     channelId: string,
@@ -239,6 +244,7 @@ class GameState {
     this.sessionChange = 0; // Track money won/lost during session
     this.initialBalance = 0; // Store initial balance before game starts
     this.selectedTiles = [];
+    this.vaultInsuranceReduction = 0;
   }
 
   // Generate bomb position for the next floor if it doesn't exist
@@ -272,7 +278,13 @@ class GameState {
     const multipliers = BASE_MULTIPLIERS[this.difficulty];
     const multiplier =
       multipliers[floor] ?? multipliers[multipliers.length - 1] ?? 0;
-    return parseFloat((this.betAmount * multiplier).toFixed(2));
+    const rawPrize = this.betAmount * multiplier;
+    const cappedPrize = Math.min(
+      rawPrize,
+      this.betAmount * MAX_TOWER_PAYOUT_MULTIPLIER,
+      MAX_TOWER_PAYOUT_ABSOLUTE
+    );
+    return parseFloat(cappedPrize.toFixed(2));
   }
 
   updateTimestamp() {
@@ -327,7 +339,9 @@ async function generateTowerImage(
   };
 
   // Use the actual component name
-  return generateImage("Tower", props, { image: 1.5, emoji: 1 }, i18n);
+  return generateImage("Tower", props, { image: 1.5, emoji: 1 }, i18n, {
+    renderMode: "game",
+  });
 }
 
 // Function to generate image for active game state
@@ -377,7 +391,9 @@ async function generateActiveTowerImage(
     // Pass session change data (calculated as balance difference)
     sessionChange: sessionChange || 0,
   };
-  return generateImage("Tower", props, { image: 1.5, emoji: 1 }, i18n);
+  return generateImage("Tower", props, { image: 1.5, emoji: 1 }, i18n, {
+    renderMode: "game",
+  });
 }
 
 // --- Command Export ---
@@ -482,13 +498,13 @@ export default {
       if (setupMessage) {
         await setupMessage.edit({
           content: await getTranslation("games.tower.setupPrompt"),
-          files: [{ attachment: initialBuffer, name: "tower_setup.avif" }],
+          files: [{ attachment: initialBuffer, name: "tower_setup.webp" }],
           components: [await createSetupComponents()],
         });
       } else {
         setupMessage = await interaction.followUp({
           content: await getTranslation("games.tower.setupPrompt"),
-          files: [{ attachment: initialBuffer, name: "tower_setup.avif" }],
+          files: [{ attachment: initialBuffer, name: "tower_setup.webp" }],
           components: [await createSetupComponents()],
           fetchReply: true,
         });
@@ -740,7 +756,7 @@ export default {
             sessionChange: 0, // Reset to 0 when setting new bet
           });
           await modalSubmission.update({
-            files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
+            files: [{ attachment: updatedBuffer, name: "tower_setup.webp" }],
             components: [await createSetupComponents()], // Update buttons (Start might enable)
           });
         }
@@ -790,7 +806,7 @@ export default {
             sessionChange: 0, // Reset to 0 when changing difficulty
           });
           await i.update({
-            files: [{ attachment: updatedBuffer, name: "tower_setup.avif" }],
+            files: [{ attachment: updatedBuffer, name: "tower_setup.webp" }],
             components: [await createSetupComponents()], // Update button label
           });
         }
@@ -849,6 +865,18 @@ export default {
             try {
               const userDataStart = await hubClient.getUser(guildId, userId);
               initialBalance = parseBalance(userDataStart?.economy?.balance);
+              const userUpgrades = Array.isArray(userDataStart?.upgrades)
+                ? userDataStart.upgrades
+                : [];
+              const vaultInsuranceLevel =
+                userUpgrades.find(
+                  (upgrade: { type?: string; level?: number }) =>
+                    upgrade.type === "vault_insurance"
+                )?.level || 1;
+              gameInstance.vaultInsuranceReduction = Math.min(
+                0.4,
+                (vaultInsuranceLevel - 1) * 0.08
+              );
             } catch (error) {
               console.error("Error fetching initial balance:", error);
             }
@@ -975,7 +1003,7 @@ export default {
 
       await currentSetupMessage.edit({
         content: await getTranslation("games.tower.gameStartedPrompt"),
-        files: [{ attachment: initialBuffer, name: "tower_game.avif" }],
+        files: [{ attachment: initialBuffer, name: "tower_game.webp" }],
         components: await createGameButtons(gameInstance.currentFloor),
         embeds: [], // Remove setup embed
       });
@@ -1083,7 +1111,7 @@ export default {
                 prize: prizeTaken.toFixed(2),
                 floor: gameInstance.currentFloor,
               }),
-              files: [{ attachment: finalBuffer, name: "tower_end.avif" }],
+              files: [{ attachment: finalBuffer, name: "tower_end.webp" }],
               components: await createGameOverButtons(userId),
             });
 
@@ -1115,6 +1143,15 @@ export default {
               // Hit a bomb - game over
               gameInstance.gameOver = true;
               gameInstance.lastAction = "bomb";
+
+              if (guildId && gameInstance.vaultInsuranceReduction > 0) {
+                const refundAmount = parseFloat(
+                  (gameInstance.betAmount * gameInstance.vaultInsuranceReduction).toFixed(2)
+                );
+                if (refundAmount > 0) {
+                  await hubClient.addBalance(guildId, userId, refundAmount);
+                }
+              }
 
               // Session change is now calculated automatically based on balance difference
               // No need to manually set it
@@ -1166,7 +1203,7 @@ export default {
                   floor: gameInstance.currentFloor + 1,
                   bet: gameInstance.betAmount,
                 }),
-                files: [{ attachment: finalBuffer, name: "tower_end.avif" }],
+                files: [{ attachment: finalBuffer, name: "tower_end.webp" }],
                 components: await createGameOverButtons(userId),
               });
 
@@ -1247,7 +1284,7 @@ export default {
                       prize: maxPrize.toFixed(2),
                     },
                   ),
-                  files: [{ attachment: finalBuffer, name: "tower_win.avif" }],
+                  files: [{ attachment: finalBuffer, name: "tower_win.webp" }],
                   components: await createGameOverButtons(userId),
                 });
 
@@ -1318,7 +1355,7 @@ export default {
                         .toFixed(2),
                     },
                   ),
-                  files: [{ attachment: nextBuffer, name: "tower_next.avif" }],
+                  files: [{ attachment: nextBuffer, name: "tower_next.webp" }],
                   components: await createGameButtons(
                     gameInstance.currentFloor,
                   ),

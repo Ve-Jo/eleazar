@@ -115,6 +115,20 @@ const HOUSE_EDGE_FACTOR = 0.95; // Renamed for clarity with variable probability
 const HOUSE_EDGE_PERCENTAGE = ((1 - HOUSE_EDGE_FACTOR) * 100).toFixed(1);
 const PROBABILITY_OPTIONS = [0.75, 0.5, 0.25]; // Available win probabilities (e.g., 75%, 50%, 25%)
 
+function getVaultInsuranceReduction(userData: UserRecordLike | null | undefined): number {
+  const userUpgrades = Array.isArray((userData as any)?.upgrades) ? (userData as any).upgrades : [];
+  const vaultInsuranceLevel =
+    userUpgrades.find((upgrade: { type?: string; level?: number }) => upgrade.type === "vault_insurance")
+      ?.level || 1;
+  return Math.min(0.4, (vaultInsuranceLevel - 1) * 0.08);
+}
+
+function getMaxBetForUser(balance: number, gameLevel: number): number {
+  const walletCap = balance * Math.min(0.75, 0.25 + Math.max(0, gameLevel - 1) * 0.01);
+  const levelCap = Math.min(50000, 500 + Math.max(0, gameLevel - 1) * 200);
+  return Math.max(1, Math.floor(Math.min(walletCap, levelCap)));
+}
+
 class GameState {
   channelId: string;
   userId: string;
@@ -202,7 +216,9 @@ async function generateCoinflipImage(
     dominantColor: "user", // Use user avatar color
   };
 
-  return generateImage("Coinflip", props, { image: 2, emoji: 3 }, i18n);
+  return generateImage("Coinflip", props, { image: 2, emoji: 3 }, i18n, {
+    renderMode: "game",
+  });
 }
 
 export default {
@@ -325,7 +341,7 @@ export default {
 
       const message = await interaction.followUp({
         content: await getTranslation("games.coinflip.startMessage"),
-        files: [{ attachment: initialBuffer, name: "coinflip.avif" }],
+        files: [{ attachment: initialBuffer, name: "coinflip.webp" }],
         components: [await createComponents(false)],
         fetchReply: true,
       });
@@ -421,6 +437,10 @@ export default {
                   const userBalance = parseFloat(
                     String(userData?.economy?.balance ?? 0),
                   );
+                  const gameLevel = hubClient.calculateLevel(
+                    Number(userData?.Level?.gameXp || 0)
+                  ).level;
+                  const maxAllowedBet = getMaxBetForUser(userBalance, gameLevel);
 
                   if (
                     !userData ||
@@ -435,6 +455,16 @@ export default {
                           bet: betAmount,
                         },
                       ),
+                      ephemeral: true,
+                    });
+                    return;
+                  }
+
+                  if (betAmount > maxAllowedBet) {
+                    await modalInteraction.reply({
+                      content: `Max allowed bet for your current progression is ${maxAllowedBet.toFixed(
+                        0,
+                      )} 💵.`,
                       ephemeral: true,
                     });
                     return;
@@ -496,7 +526,7 @@ export default {
                   },
                 );
                 await message.edit({
-                  files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
+                  files: [{ attachment: updatedBuffer, name: "coinflip.webp" }],
                   components: [await createComponents(true)], // Enable flip button
                 });
               })
@@ -548,7 +578,7 @@ export default {
               },
             );
             await message.edit({
-              files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
+              files: [{ attachment: updatedBuffer, name: "coinflip.webp" }],
               components: [await createComponents(gameInstance.betAmount > 0)],
             });
           } else if (i.customId === "coinflip_flip") {
@@ -618,7 +648,10 @@ export default {
                 );
               } else {
                 gameInstance.lastResult = "lose";
-                changeAmount = -gameInstance.betAmount;
+                const userDataLoss = await hubClient.getUser(guildId, userId);
+                const insuranceReduction = getVaultInsuranceReduction(userDataLoss);
+                const adjustedLoss = gameInstance.betAmount * (1 - insuranceReduction);
+                changeAmount = -parseFloat(adjustedLoss.toFixed(2));
                 gameInstance.totalLost += Math.abs(changeAmount);
                 gameInstance.sessionChange += changeAmount; // Update session change
                 await hubClient.addBalance(guildId, userId, changeAmount);
@@ -705,7 +738,7 @@ export default {
             );
             await message.edit({
               content: messageContent,
-              files: [{ attachment: updatedBuffer, name: "coinflip.avif" }],
+              files: [{ attachment: updatedBuffer, name: "coinflip.webp" }],
               components: [await createComponents(true)], // Keep flip button enabled
             });
           } else if (i.customId === "coinflip_end") {
