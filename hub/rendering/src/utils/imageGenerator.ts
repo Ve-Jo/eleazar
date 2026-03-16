@@ -1,17 +1,17 @@
 // @ts-nocheck
 import dotenv from "dotenv";
-import satori from "satori";
-import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
-import React from "react";
-import { Renderer } from "@takumi-rs/core";
-import { fromJsx } from "@takumi-rs/helpers/jsx";
 import twemoji from "@twemoji/api";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
+import {
+  rasterizeSvgToWebp,
+  renderWithSatori,
+  renderWithTakumi,
+} from "./renderBackends.js";
 
 // Load environment variables
 dotenv.config({ path: "../../.env" });
@@ -32,20 +32,37 @@ const BANNER_TIMEOUT = 5000; // 5 seconds
 // Enhanced cache instances with TTL and metrics
 const emojiCache = new Map();
 const colorCache = new Map(); // Cache for processImageColors results
+const imageAssetCache = new Map();
 
 // Cache configuration
 const COLOR_CACHE_MAX_SIZE = 50; // Increased cache size slightly
 const COLOR_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours TTL (increased from 30 minutes)
 const CACHE_COMPRESSION_ENABLED = true;
 const DEBUG_CACHE = true; // Enable cache debugging
+const IMAGE_ASSET_CACHE_TTL_MS =
+  parseInt(process.env.IMAGE_ASSET_CACHE_TTL_MS, 10) || 10 * 60 * 1000;
+const DEFAULT_RENDER_ASSET_BASE_URL =
+  process.env.RENDER_ASSET_BASE_URL ||
+  process.env.BASE_URL ||
+  "http://localhost:2333";
 
 // AVIF and sharp tuning (configurable via env)
 const DEFAULT_AVIF_QUALITY = parseInt(process.env.AVIF_QUALITY) || 80;
 const DEFAULT_AVIF_EFFORT = parseInt(process.env.AVIF_EFFORT) || 1;
 const DEFAULT_AVIF_SUBSAMPLE = process.env.AVIF_SUBSAMPLING || "4:2:0";
 const SHARP_CONCURRENCY = parseInt(process.env.SHARP_CONCURRENCY) || 2;
-const USE_RESVG_RASTER = parseInt(process.env.USE_RESVG_RASTER) || true;
+function parseBooleanEnv(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+const USE_RESVG_RASTER = parseBooleanEnv(process.env.USE_RESVG_RASTER, true);
 const RENDER_BACKEND = (process.env.RENDER_BACKEND || "satori").toLowerCase();
+const PERF_LOGGING = parseBooleanEnv(process.env.RENDER_PERF_LOGGING, false);
 
 // Per-user gradient cache and in-flight deduplication
 const userGradientCache = new Map();
@@ -97,8 +114,20 @@ class CacheEntry {
   }
 }
 
+function bufferToArrayBuffer(buffer) {
+  if (buffer instanceof ArrayBuffer) return buffer;
+  if (Buffer.isBuffer(buffer)) {
+    return buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    );
+  }
+  return new ArrayBuffer(0);
+}
+
 // Fonts configuration
 let fonts = null;
+const componentModuleCache = new Map();
 
 // Initialize sharp (needed for color processing and potentially output)
 sharp.cache(false);
@@ -165,6 +194,7 @@ export async function cleanup(forceGC = true) {
     // Full cleanup only when forced: clear caches and reset metrics
     emojiCache.clear();
     colorCache.clear();
+    imageAssetCache.clear();
     userGradientCache.clear();
     inflightColorRequests.clear();
 
@@ -964,14 +994,19 @@ export async function processImageColors(imageUrl) {
   // Try to get from enhanced cache first
   const cachedColor = getCachedColor(imageUrl);
   if (cachedColor) {
-    console.timeEnd(`[imageGenerator] color-processing-${imageUrl.slice(-10)}`);
+    endPerf(`[imageGenerator] color-return`);
+    console.timeEnd(
+      `[imageGenerator] color-processing-${imageUrl.slice(-10)}`
+    );
     return cachedColor;
   }
 
   const inflightKey = normalizeUrl(imageUrl);
   if (inflightColorRequests.has(inflightKey)) {
     const joined = await inflightColorRequests.get(inflightKey);
-    console.timeEnd(`[imageGenerator] color-processing-${imageUrl.slice(-10)}`);
+    console.timeEnd(
+      `[imageGenerator] color-processing-${imageUrl.slice(-10)}`
+    );
     return joined;
   }
 
@@ -1010,7 +1045,7 @@ export async function processImageColors(imageUrl) {
       );
 
       // Get dominant color from the blurred image
-      console.time(`[imageGenerator] color-extraction-${imageUrl.slice(-10)}`);
+      startPerf(`[imageGenerator] color-return`);
       const dominantColorRgb = await getColorFromURL(blurredBuffer.buffer);
       console.timeEnd(
         `[imageGenerator] color-extraction-${imageUrl.slice(-10)}`
@@ -1089,12 +1124,18 @@ function getDefaultColors() {
 // Helper function to load image assets (Moved from generateImage)
 async function loadImageAsset(url) {
   try {
-    const cached = getCachedImageAsset(url);
+    const resolvedUrl = resolveAssetUrl(url);
+    if (!resolvedUrl) return null;
+    if (resolvedUrl.startsWith("data:")) {
+      return resolvedUrl;
+    }
+
+    const cached = getCachedImageAsset(resolvedUrl);
     if (cached) return cached;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), BANNER_TIMEOUT);
-    const response = await fetch(url, {
+    const response = await fetch(resolvedUrl, {
       headers: { Accept: "image/*" },
       redirect: "follow",
       signal: controller.signal,
@@ -1104,26 +1145,35 @@ async function loadImageAsset(url) {
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type");
-    if (
-      !contentType ||
-      ![
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "image/svg+xml",
-      ].includes(contentType.toLowerCase())
-    ) {
+    const normalizedType = contentType?.split(";")[0]?.toLowerCase();
+    if (normalizedType && !normalizedType.startsWith("image/")) {
       return null;
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const dataUri = `data:${contentType};base64,${Buffer.from(
+    const safeContentType = normalizedType || "image/png";
+    const dataUri = `data:${safeContentType};base64,${Buffer.from(
       arrayBuffer
     ).toString("base64")}`;
-    setCachedImageAsset(url, dataUri);
+    setCachedImageAsset(resolvedUrl, dataUri);
     return dataUri;
   } catch (error) {
+    return null;
+  }
+}
+
+function dataUriToBuffer(dataUri) {
+  if (typeof dataUri !== "string") return null;
+  const match = dataUri.match(/^data:([^;,]+)?(;base64)?,(.*)$/i);
+  if (!match) return null;
+  const isBase64 = !!match[2];
+  const payload = match[3] || "";
+  try {
+    if (isBase64) {
+      return Buffer.from(payload, "base64");
+    }
+    return Buffer.from(decodeURIComponent(payload), "utf-8");
+  } catch {
     return null;
   }
 }
@@ -1161,9 +1211,40 @@ async function cleanupTempFiles() {
   }
 }
 
+function startPerf(label) {
+  if (PERF_LOGGING) {
+    console.time(label);
+  }
+}
+
+function endPerf(label) {
+  if (PERF_LOGGING) {
+    console.timeEnd(label);
+  }
+}
+
+function resolveThrottleMode(options = {}) {
+  const mode = String(options.renderMode || options.mode || "command").toLowerCase();
+  if (mode === "game") return "game";
+  return "command";
+}
+
+function resolveRenderBackend(options = {}) {
+  const requestedRenderBackend = String(
+    options.renderBackend || RENDER_BACKEND
+  ).toLowerCase();
+  return requestedRenderBackend === "takumi" ? "takumi" : "satori";
+}
+
+const DEFAULT_GAME_THROTTLE_MS =
+  parseInt(process.env.GAME_THROTTLE_INTERVAL_MS) || 450;
+const DEFAULT_COMMAND_THROTTLE_MS =
+  parseInt(process.env.COMMAND_THROTTLE_INTERVAL_MS) || 0;
+const MIN_GAME_THROTTLE_MS = parseInt(process.env.GAME_THROTTLE_MIN_MS) || 250;
+const MAX_GAME_THROTTLE_MS = parseInt(process.env.GAME_THROTTLE_MAX_MS) || 1200;
+
 // --- Throttling State Map ---
 const throttledRequests = new Map();
-const THROTTLE_INTERVAL = parseInt(process.env.THROTTLE_INTERVAL) || 2500; // Throttle interval in milliseconds
 // --- End Throttling State Map ---
 
 // Generates a unique key based on component and user
@@ -1172,8 +1253,30 @@ function generateRequestKey(componentName, props) {
   return `${componentName}-${userId}`;
 }
 
+async function loadComponentByName(componentName) {
+  if (componentModuleCache.has(componentName)) {
+    return componentModuleCache.get(componentName);
+  }
+
+  const componentPath = join(__dirname, "..", "components", `${componentName}.jsx`);
+  const module = await import(`file://${componentPath}`);
+  const loadedComponent = module.default;
+  if (!loadedComponent) {
+    throw new Error(`Default export not found in ${componentName}.jsx`);
+  }
+
+  componentModuleCache.set(componentName, loadedComponent);
+  return loadedComponent;
+}
+
 // --- Core Image Generation Logic (extracted) ---
-async function performActualGenerationLogic(component, props, scaling, i18n) {
+async function performActualGenerationLogic(
+  component,
+  props,
+  scaling,
+  i18n,
+  options = {}
+) {
   // This function contains the original core logic of generateImage
   let pngBuffer = null;
   let svg = null;
@@ -1192,26 +1295,16 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
           : 1,
       debug: !!scaling.debug,
     };
+    const outputFormat = "webp";
+    const renderBackend = resolveRenderBackend(options);
 
     // --- Component Loading Logic ---
     let Component;
     if (typeof component === "string") {
-      const componentPath = join(
-        __dirname,
-        "..",
-        "components",
-        `${component}.jsx`
-      );
       try {
-        const module = await import(`file://${componentPath}`);
-        Component = module.default;
-        if (!Component)
-          throw new Error(`Default export not found in ${component}.jsx`);
+        Component = await loadComponentByName(component);
       } catch (error) {
-        console.error(
-          `Failed to import component ${component} from ${componentPath}:`,
-          error
-        );
+        console.error(`Failed to import component ${component}:`, error);
         throw new Error(`Component ${component} could not be loaded.`);
       }
     } else {
@@ -1226,7 +1319,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
     }
 
     // --- Props/Color Preparation ---
-    console.time(`[imageGenerator] color-preparation`);
+    startPerf(`[imageGenerator] color-preparation`);
     let colorProps;
     const defaultImageUrl = props.interaction?.user?.avatarURL
       ? props.interaction.user.avatarURL
@@ -1260,7 +1353,7 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
       );
       colorProps = getDefaultColors(); // Fallback to default if dominantColor is invalid format
     }
-    console.timeEnd(`[imageGenerator] color-preparation`);
+    endPerf(`[imageGenerator] color-preparation`);
 
     // Create props object with coloring added - used for dimension funcs
     const propsWithColoring = { ...props, coloring: { ...colorProps } };
@@ -1290,20 +1383,27 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
           ? calculatedHeight
           : 400,
     };
+    const targetWidth = Math.round(dimensions.width * scaling.image);
+    const targetHeight = Math.round(dimensions.height * scaling.image);
     // --- End Dimension Calculation ---
 
     // --- Props Formatting/Sanitization (for Satori rendering) ---
-    console.time(`[imageGenerator] props-sanitization`);
+    startPerf(`[imageGenerator] props-sanitization`);
     // Now sanitize and format the props for the actual rendering
-    const sanitizedProps = JSON.parse(
-      // Use propsWithColoring here so coloring info is included if needed by component
-      JSON.stringify(propsWithColoring, (_, value) =>
-        typeof value === "bigint" ? Number(value) : value
-      )
-    );
+    let sanitizedProps;
+    try {
+      sanitizedProps = structuredClone(propsWithColoring);
+    } catch {
+      sanitizedProps = JSON.parse(
+        JSON.stringify(propsWithColoring, (_, value) =>
+          typeof value === "bigint" ? Number(value) : value
+        )
+      );
+    }
     formattedProps = {
       ...formatValue(sanitizedProps),
       style: { display: "flex" },
+      renderBackend,
     };
     if (scaling.debug) {
       formattedProps.debug = scaling.debug;
@@ -1327,142 +1427,61 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
         "Locale provided but i18n instance is missing. Skipping localization."
       );
     }
-    console.timeEnd(`[imageGenerator] props-sanitization`);
+    endPerf(`[imageGenerator] props-sanitization`);
     // --- End Props Formatting/Sanitization ---
 
     // --- SVG Generation (uses dimensions and formattedProps) ---
-    console.time(`[imageGenerator] svg-generation`);
-    try {
-      // Attempt Takumi rendering when enabled
-      if (RENDER_BACKEND === "takumi") {
-        console.time(`[imageGenerator] takumi-generation`);
-        try {
-          const renderer = new Renderer();
-          await renderer.loadFonts(fonts);
-
-          const tree = await fromJsx(React.createElement(Component, formattedProps));
-          
-          // Validate that the tree has the required structure
-          if (!tree || typeof tree.type !== 'string') {
-            throw new Error(`Invalid tree structure: expected object with 'type' field, got ${typeof tree}`);
-          }
-          
-          const result = await renderer.render(tree, {
-            width: dimensions.width,
-            height: dimensions.height,
-            format: "avif",
-            quality: DEFAULT_AVIF_QUALITY,
-            drawDebugBorder: scaling.debug,
-          });
-          pngBuffer = Buffer.isBuffer(result) ? result : Buffer.from(result);
-          console.timeEnd(`[imageGenerator] takumi-generation`);
-        } catch (takumiError) {
-          console.error(
-            "Takumi render failed, falling back to Satori:",
-            takumiError
-          );
-        }
-      }
-
-      // If Takumi produced output, skip Satori path
-      if (!pngBuffer) {
-        svg = await satori(React.createElement(Component, formattedProps), {
-          width: dimensions.width,
-          height: dimensions.height,
-          fonts,
-          debug: scaling.debug,
-          loadAdditionalAsset: async (code, segment) => {
-            if (code === "emoji") {
-              return await fetchEmojiSvg(segment, scaling.emoji);
-            }
-            if (code === "image") {
-              return await loadImageAsset(segment);
-            }
-            return null;
-          },
-        });
-      }
-      console.timeEnd(`[imageGenerator] svg-generation`);
-    } catch (satoriError) {
-      console.error("Satori SVG generation failed:", satoriError);
-      if (satoriError.message?.includes("Image size cannot be determined")) {
-        console.warn("Image size error, attempting fallback dimensions");
-        try {
-          svg = await satori(React.createElement(Component, formattedProps), {
-            width: 800,
-            height: 400,
-            fonts,
-            debug: scaling.debug,
-            loadAdditionalAsset: async (code, segment) => {
-              if (code === "emoji")
-                return await fetchEmojiSvg(segment, scaling.emoji);
-              if (code === "image") return await loadImageAsset(segment);
-              return null;
-            },
-          });
-          console.timeEnd(`[imageGenerator] svg-generation`);
-        } catch (fallbackError) {
-          console.error("Satori fallback render also failed:", fallbackError);
-          console.timeEnd(`[imageGenerator] svg-generation`);
-          throw fallbackError;
-        }
-      } else {
-        console.timeEnd(`[imageGenerator] svg-generation`);
-        throw satoriError;
-      }
+    if (renderBackend === "takumi") {
+      pngBuffer = await renderWithTakumi({
+        Component,
+        formattedProps,
+        dimensions,
+        scaling,
+        fonts,
+        quality: DEFAULT_AVIF_QUALITY,
+        loadImageAsset,
+        dataUriToBuffer,
+        bufferToArrayBuffer,
+        startPerf,
+        endPerf,
+      });
     }
 
-    // Only convert SVG to AVIF if Takumi didn't already produce the final buffer
+    if (!pngBuffer) {
+      svg = await renderWithSatori({
+        Component,
+        formattedProps,
+        dimensions,
+        scaling,
+        fonts,
+        componentName: component,
+        fetchEmojiSvg,
+        loadImageAsset,
+        startPerf,
+        endPerf,
+      });
+    }
+
     if (!pngBuffer) {
       try {
-        if (!svg || typeof svg !== "string") {
-          throw new Error("Invalid SVG generated by satori");
-        }
-        const targetWidth = Math.round(dimensions.width * scaling.image);
-        const targetHeight = Math.round(dimensions.height * scaling.image);
-        if (USE_RESVG_RASTER) {
-          console.time(`[imageGenerator] reSVG-rasterization`);
-          const resvgInst = new Resvg(svg, {
-            fitTo: {
-              mode: "width",
-              value: targetWidth,
-            },
-            background: "transparent",
-            shapeRendering: 2,
-            imageRendering: 1,
-          });
-          const raster = resvgInst.render();
-          const pngData = raster.asPng();
-          console.timeEnd(`[imageGenerator] reSVG-rasterization`);
-          console.time(`[imageGenerator] sharp-avif-encode`);
-          pngBuffer = await sharp(pngData)
-            .avif({
-              quality: DEFAULT_AVIF_QUALITY,
-              effort: DEFAULT_AVIF_EFFORT,
-              chromaSubsampling: DEFAULT_AVIF_SUBSAMPLE,
-            })
-            .toBuffer();
-          console.timeEnd(`[imageGenerator] sharp-avif-encode`);
-        } else {
-          console.time(`[imageGenerator] sharp-conversion`);
-          pngBuffer = await sharp(Buffer.from(svg), {
-            density: Math.max(
-              72,
-              Math.min(300, targetWidth / (dimensions.width / 72))
-            ),
-          })
-            .resize(targetWidth, targetHeight)
-            .avif({
-              quality: DEFAULT_AVIF_QUALITY,
-              effort: DEFAULT_AVIF_EFFORT,
-              chromaSubsampling: DEFAULT_AVIF_SUBSAMPLE,
-            })
-            .toBuffer();
-          console.timeEnd(`[imageGenerator] sharp-conversion`);
-        }
-        console.log("AVIF Buffer created:", pngBuffer?.length ?? 0, "bytes");
+        pngBuffer = await rasterizeSvgToWebp({
+          svg,
+          targetWidth,
+          targetHeight,
+          dimensions,
+          useResvg: USE_RESVG_RASTER,
+          quality: DEFAULT_AVIF_QUALITY,
+          effort: DEFAULT_AVIF_EFFORT,
+          startPerf,
+          endPerf,
+        });
+        console.log(
+          `${outputFormat.toUpperCase()} Buffer created:`,
+          pngBuffer?.length ?? 0,
+          "bytes"
+        );
       } catch (sharpError) {
-        console.error("AVIF conversion failed:", sharpError);
+        console.error("Image conversion failed:", sharpError);
         throw sharpError;
       }
     } else {
@@ -1478,13 +1497,13 @@ async function performActualGenerationLogic(component, props, scaling, i18n) {
 
     // Return final result
     const finalBuffer = pngBuffer;
-    console.timeEnd(`[imageGenerator] core-generation`);
+    endPerf(`[imageGenerator] core-generation`);
     return props.returnDominant
       ? [finalBuffer, propsWithColoring.coloring]
       : finalBuffer;
   } catch (error) {
     console.error("Core image generation logic failed:", error);
-    console.timeEnd(`[imageGenerator] core-generation`);
+    endPerf(`[imageGenerator] core-generation`);
     // Clean up potentially large objects from memory in case of error
     pngBuffer = null;
     svg = null;
@@ -1531,7 +1550,8 @@ async function executeThrottled(key) {
     return;
   }
 
-  const { component, props, scaling, i18n } = latestArgs;
+  const { component, props, scaling, i18n, options } = latestArgs;
+  const startedAt = Date.now();
 
   try {
     console.log(`Executing throttled image generation for key: ${key}`);
@@ -1539,9 +1559,24 @@ async function executeThrottled(key) {
       component,
       props,
       scaling,
-      i18n
+      i18n,
+      options
     );
     state.lastExecuted = Date.now(); // Update last execution time on success
+    const renderDurationMs = Date.now() - startedAt;
+    state.averageRenderMs =
+      state.averageRenderMs <= 0
+        ? renderDurationMs
+        : Math.round(state.averageRenderMs * 0.7 + renderDurationMs * 0.3);
+    if (state.mode === "game") {
+      const adaptiveInterval = Math.round(state.averageRenderMs * 1.1);
+      state.currentThrottleMs = Math.max(
+        MIN_GAME_THROTTLE_MS,
+        Math.min(MAX_GAME_THROTTLE_MS, adaptiveInterval)
+      );
+    } else {
+      state.currentThrottleMs = DEFAULT_COMMAND_THROTTLE_MS;
+    }
     if (resolve) resolve(result);
   } catch (error) {
     // Error is already logged in performActualGenerationLogic
@@ -1562,9 +1597,12 @@ export async function generateImage(
   i18n,
   options = {} // Add options object
 ) {
-  console.time(`[imageGenerator] total-generation`);
+  startPerf(`[imageGenerator] total-generation`);
 
-  const { disableThrottle = false } = options; // Extract disableThrottle flag
+  const { disableThrottle = false } = options;
+  const mode = resolveThrottleMode(options);
+  const requestedThrottleMs =
+    mode === "game" ? DEFAULT_GAME_THROTTLE_MS : DEFAULT_COMMAND_THROTTLE_MS;
 
   // --- Direct execution if throttling is disabled ---
   if (disableThrottle) {
@@ -1575,15 +1613,16 @@ export async function generateImage(
         component,
         props,
         scaling,
-        i18n
+        i18n,
+        options
       );
       await cleanup(false);
-      console.timeEnd(`[imageGenerator] total-generation`);
+      endPerf(`[imageGenerator] total-generation`);
       return result;
     } catch (error) {
       console.error("Direct image generation failed:", error);
       await cleanup(true);
-      console.timeEnd(`[imageGenerator] total-generation`);
+      endPerf(`[imageGenerator] total-generation`);
       throw error; // Now includes formattedProps if available
     }
   }
@@ -1594,7 +1633,7 @@ export async function generateImage(
     typeof component === "string"
       ? component
       : component.name || "inline-component";
-  const key = generateRequestKey(componentName, props);
+  const key = `${generateRequestKey(componentName, props)}-${mode}`;
 
   // Get or initialize throttle state
   if (!throttledRequests.has(key)) {
@@ -1605,18 +1644,27 @@ export async function generateImage(
       promise: null,
       resolve: null,
       reject: null,
+      mode,
+      averageRenderMs: 0,
+      currentThrottleMs: requestedThrottleMs,
     });
   }
   const state = throttledRequests.get(key);
+  state.mode = mode;
+  if (mode === "command") {
+    state.currentThrottleMs = DEFAULT_COMMAND_THROTTLE_MS;
+  } else if (state.currentThrottleMs <= 0) {
+    state.currentThrottleMs = requestedThrottleMs;
+  }
 
   const now = Date.now();
   const elapsed = now - state.lastExecuted;
 
   // Store the latest arguments regardless
-  state.latestArgs = { component, props, scaling, i18n };
+  state.latestArgs = { component, props, scaling, i18n, options };
 
   // --- Can Execute Immediately? (Based on THROTTLE_INTERVAL) ---
-  if (elapsed >= THROTTLE_INTERVAL && !state.isQueued) {
+  if (elapsed >= state.currentThrottleMs && !state.isQueued) {
     console.log(
       `Executing image generation immediately (throttle window passed) for key: ${key}`
     );
@@ -1628,12 +1676,13 @@ export async function generateImage(
         state.latestArgs.component,
         state.latestArgs.props,
         state.latestArgs.scaling,
-        state.latestArgs.i18n
+        state.latestArgs.i18n,
+        state.latestArgs.options
       );
       state.lastExecuted = Date.now();
       state.latestArgs = null;
       await cleanup(false);
-      console.timeEnd(`[imageGenerator] total-generation`);
+      endPerf(`[imageGenerator] total-generation`);
       return result;
     } catch (error) {
       console.error(
@@ -1641,7 +1690,7 @@ export async function generateImage(
         error
       );
       await cleanup(true);
-      console.timeEnd(`[imageGenerator] total-generation`);
+      endPerf(`[imageGenerator] total-generation`);
       throw error; // Now includes formattedProps if available
     }
   }
@@ -1655,7 +1704,7 @@ export async function generateImage(
       state.reject = reject;
     });
     state.promise = promise;
-    const delay = THROTTLE_INTERVAL - elapsed;
+    const delay = Math.max(0, state.currentThrottleMs - elapsed);
     setTimeout(() => executeThrottled(key), delay);
   } else {
     console.log(
