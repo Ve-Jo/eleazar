@@ -6,6 +6,7 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
+import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import ms from "ms";
@@ -176,7 +177,7 @@ const command = {
         const dominantColor = generated?.[1];
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "crime_cooldown.avif",
+          name: "crime_cooldown.webp",
         });
 
         const cooldownComponent = new ComponentBuilder({
@@ -185,7 +186,7 @@ const command = {
         })
           .addText(String(await i18n.__("commands.economy.crime.title")), "header3")
           .addText(String(await i18n.__("commands.economy.crime.cooldown")))
-          .addImage("attachment://crime_cooldown.avif");
+          .addImage("attachment://crime_cooldown.webp");
 
         await interaction.editReply({
           ...cooldownComponent.toReplyOptions({ files: [attachment] }),
@@ -261,19 +262,45 @@ const command = {
 
         const crimeUpgrade = freshUserData.upgrades?.find((upgrade) => upgrade.type === "crime");
         const crimeLevel = crimeUpgrade?.level || 1;
-        const successChance = 0.3 + (crimeLevel - 1) * 0.05;
+        const successChance = Math.min(0.55, 0.3 + (crimeLevel - 1) * 0.04);
         const success = Math.random() < successChance;
 
-        const maxStealPercent = 0.2 + (crimeLevel - 1) * 0.02;
+        const targetShieldUpgrade = targetData.upgrades?.find(
+          (upgrade) => upgrade.type === "wallet_shield"
+        );
+        const targetShieldLevel = targetShieldUpgrade?.level || 1;
+        const targetShieldReduction = Math.min(
+          0.35,
+          (targetShieldLevel - 1) * (UPGRADES.wallet_shield.effectMultiplier || 0)
+        );
+
+        const baseMaxStealPercent = Math.min(0.15, 0.08 + (crimeLevel - 1) * 0.01);
+        const maxStealPercent = Math.max(0.02, baseMaxStealPercent * (1 - targetShieldReduction));
+
+        const fraudProtectionUpgrade = freshUserData.upgrades?.find(
+          (upgrade) => upgrade.type === "fraud_protection"
+        );
+        const fraudProtectionLevel = fraudProtectionUpgrade?.level || 1;
+        const fraudReduction = Math.min(
+          0.3,
+          (fraudProtectionLevel - 1) * (UPGRADES.fraud_protection.effectMultiplier || 0)
+        );
+
         let amount = 0;
         if (success) {
-          const minStealAmount = Math.floor(Number(targetData.economy?.balance || 0) * 0.01);
-          const maxStealAmount = Math.floor(Number(targetData.economy?.balance || 0) * maxStealPercent);
-          amount = Math.floor(minStealAmount + Math.random() * (maxStealAmount - minStealAmount));
-          amount = Math.max(10, amount);
+          const targetBalance = Number(targetData.economy?.balance || 0);
+          const minStealAmount = Math.floor(targetBalance * 0.01);
+          const maxStealAmount = Math.floor(targetBalance * maxStealPercent);
+          const rolledAmount = Math.floor(
+            minStealAmount + Math.random() * Math.max(1, maxStealAmount - minStealAmount + 1)
+          );
+          amount = Math.min(targetBalance, Math.max(1, rolledAmount));
         } else {
-          const maxFine = Math.floor(Number(freshUserData.economy?.balance || 0) * 0.1);
-          amount = Math.max(10, Math.floor(Math.random() * maxFine));
+          const robberBalance = Number(freshUserData.economy?.balance || 0);
+          const minFine = Math.floor(robberBalance * (0.02 * (1 - fraudReduction)));
+          const maxFine = Math.floor(robberBalance * (0.06 * (1 - fraudReduction)));
+          const rolledFine = Math.floor(minFine + Math.random() * Math.max(1, maxFine - minFine + 1));
+          amount = Math.min(robberBalance, Math.max(1, rolledFine));
         }
 
         if (amount > 0) {
@@ -352,7 +379,7 @@ const command = {
         const dominantColor = generated?.[1];
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "crime_result.avif",
+          name: "crime_result.webp",
         });
 
         const resultComponent = new ComponentBuilder({
@@ -370,7 +397,7 @@ const command = {
                 )
               : String(await i18n.__("commands.economy.crime.failTarget", { amount }))
           )
-          .addImage("attachment://crime_result.avif");
+          .addImage("attachment://crime_result.webp");
 
         const resultOptions = resultComponent.toReplyOptions({
           files: [attachment],

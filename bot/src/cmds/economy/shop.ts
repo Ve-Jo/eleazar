@@ -35,7 +35,7 @@ type UserUpgradeEntry = {
 };
 
 type UserDataLike = {
-  economy?: { balance?: number };
+  economy?: { balance?: number; upgradeDiscount?: number };
   bank?: { balance?: number; rate?: number };
   stats?: { totalEarned?: number };
   upgrades?: UserUpgradeEntry[] | Record<string, { level?: number }>;
@@ -51,8 +51,24 @@ type UpgradeConfig = {
 };
 
 type UpgradeInfoEntry = {
+  key: string;
+  name: string;
+  description: string;
+  impactArea: string;
+  category: string;
+  emoji?: string;
+  currentLevel: number;
+  nextLevel: number;
+  effectPerLevel: number;
+  effectUnit: "%" | "m";
+  currentEffect: number;
+  nextEffect: number;
+  deltaEffect: number;
+  basePrice: number;
   price: number;
-  effect: number;
+  isAffordable: boolean;
+  coinsNeeded: number;
+  progress: number;
   originalPrice?: number;
   discountPercent?: number;
 };
@@ -85,6 +101,15 @@ const normalizeLocale = (locale: unknown, fallback = "en"): string => {
 };
 
 const upgradesConfig = UPGRADES as Record<string, UpgradeConfig>;
+const MINUTE_MS = 60 * 1000;
+
+function formatEffectNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
 
 function getUpgradeLevel(userData: UserDataLike, key: string): number {
   if (Array.isArray(userData.upgrades)) {
@@ -104,6 +129,33 @@ function getUpgradeConfig(key: string): UpgradeConfig {
     emoji: config?.emoji,
     category: config?.category,
   };
+}
+
+function calculateUpgradePrice(config: UpgradeConfig, currentLevel: number): number {
+  return Math.max(
+    1,
+    Math.floor(config.basePrice * Math.pow(config.priceMultiplier, Math.max(0, currentLevel - 1)))
+  );
+}
+
+function getUpgradeEffectDetails(
+  key: string,
+  config: UpgradeConfig,
+  currentLevel: number
+): Pick<UpgradeInfoEntry, "effectPerLevel" | "effectUnit" | "currentEffect" | "nextEffect" | "deltaEffect"> {
+  const nextLevel = currentLevel + 1;
+  const minuteKeys = new Set(["daily_cooldown", "crime", "cooldown_mastery"]);
+  const usesMinutes = minuteKeys.has(key);
+  const effectUnit: "%" | "m" = usesMinutes ? "m" : "%";
+  const baseEffect = usesMinutes
+    ? Number(config.effectValue || 0) / MINUTE_MS
+    : Number((config.effectMultiplier ?? config.effectValue ?? 0) * 100);
+  const effectPerLevel = Math.max(0, usesMinutes ? Math.floor(baseEffect) : Math.round(baseEffect));
+  const currentEffect = effectPerLevel * currentLevel;
+  const nextEffect = effectPerLevel * nextLevel;
+  const deltaEffect = Math.max(0, nextEffect - currentEffect);
+
+  return { effectPerLevel, effectUnit, currentEffect, nextEffect, deltaEffect };
 }
 
 const command = {
@@ -206,6 +258,111 @@ const command = {
       ru: "Просмотреть и купить улучшения",
       uk: "Переглянути та купити покращення",
     },
+    selectedLine: {
+      en: "Selected: {{emoji}} {{name}} (L{{current}} → L{{next}})",
+      ru: "Выбрано: {{emoji}} {{name}} (Ур.{{current}} → Ур.{{next}})",
+      uk: "Вибрано: {{emoji}} {{name}} (Рів.{{current}} → Рів.{{next}})",
+    },
+    noSelectedLine: {
+      en: "Selected: -",
+      ru: "Выбрано: -",
+      uk: "Вибрано: -",
+    },
+    statsLine: {
+      en: "Now: {{now}} | Next: {{next}} | Gain: {{gain}}",
+      ru: "Сейчас: {{now}} | След.: {{next}} | Прирост: {{gain}}",
+      uk: "Зараз: {{now}} | Далі: {{next}} | Приріст: {{gain}}",
+    },
+    panelHintLine: {
+      en: "Full upgrade details are shown in the image panel.",
+      ru: "Полные детали улучшения показаны на изображении ниже.",
+      uk: "Повні деталі покращення показані на зображенні нижче.",
+    },
+    affordable: {
+      en: "Affordable",
+      ru: "Доступно",
+      uk: "Доступно",
+    },
+    needMore: {
+      en: "Need {{coins}} more",
+      ru: "Нужно ещё {{coins}}",
+      uk: "Потрібно ще {{coins}}",
+    },
+    costLine: {
+      en: "Cost: {{price}} | {{status}} | Affects: {{impact}}",
+      ru: "Цена: {{price}} | {{status}} | Влияет: {{impact}}",
+      uk: "Ціна: {{price}} | {{status}} | Впливає: {{impact}}",
+    },
+    noCostLine: {
+      en: "Cost: -",
+      ru: "Цена: -",
+      uk: "Ціна: -",
+    },
+    discountedPrice: {
+      en: "{{price}} (from {{original}}, -{{discount}}%)",
+      ru: "{{price}} (с {{original}}, -{{discount}}%)",
+      uk: "{{price}} (з {{original}}, -{{discount}}%)",
+    },
+    menuStatsLine: {
+      en: "Now {{now}} • Next {{next}} • +{{gain}}",
+      ru: "Сейчас {{now}} • След. {{next}} • +{{gain}}",
+      uk: "Зараз {{now}} • Далі {{next}} • +{{gain}}",
+    },
+    menuImpactCostLine: {
+      en: "{{impact}} • Cost {{price}}",
+      ru: "{{impact}} • Цена {{price}}",
+      uk: "{{impact}} • Ціна {{price}}",
+    },
+    impact_daily_rewards: {
+      en: "Daily rewards",
+      ru: "Ежедневные награды",
+      uk: "Щоденні нагороди",
+    },
+    impact_daily_cooldown: {
+      en: "Daily cooldown",
+      ru: "Перезарядка daily",
+      uk: "Перезарядка daily",
+    },
+    impact_crime_cooldown: {
+      en: "Crime cooldown",
+      ru: "Перезарядка crime",
+      uk: "Перезарядка crime",
+    },
+    impact_bank_growth: {
+      en: "Bank growth",
+      ru: "Рост банка",
+      uk: "Зростання банку",
+    },
+    impact_game_payouts: {
+      en: "Game payouts",
+      ru: "Выплаты игр",
+      uk: "Виплати ігор",
+    },
+    impact_crime_fines: {
+      en: "Crime fines",
+      ru: "Штрафы crime",
+      uk: "Штрафи crime",
+    },
+    impact_theft_defense: {
+      en: "Theft defense",
+      ru: "Защита от кражи",
+      uk: "Захист від крадіжки",
+    },
+    impact_risk_game_losses: {
+      en: "Risk game losses",
+      ru: "Потери в риск-играх",
+      uk: "Втрати в ризик-іграх",
+    },
+    impact_core_cooldowns: {
+      en: "Core cooldowns",
+      ru: "Базовые перезарядки",
+      uk: "Базові перезарядки",
+    },
+    impact_bank_operation_fees: {
+      en: "Bank operation fees",
+      ru: "Банковские комиссии",
+      uk: "Банківські комісії",
+    },
     upgrades: {
       daily_bonus: {
         name: { en: "Daily Bonus", ru: "Ежедн. Бонус", uk: "Щоденний Бонус" },
@@ -247,6 +404,46 @@ const command = {
           uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
         },
       },
+      fraud_protection: {
+        name: { en: "Fraud Protection", ru: "Защита от Штрафов", uk: "Захист від Штрафів" },
+        description: {
+          en: "Reduce failed-crime fines by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Снижает штрафы за неудачные преступления на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Знижує штрафи за невдалі злочини на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      wallet_shield: {
+        name: { en: "Wallet Shield", ru: "Щит Кошелька", uk: "Щит Гаманця" },
+        description: {
+          en: "Reduce max stolen amount by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Снижает максимум украденных средств на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Знижує максимум вкрадених коштів на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
+      vault_insurance: {
+        name: { en: "Vault Insurance", ru: "Страховка Хранилища", uk: "Страхування Сховища" },
+        description: {
+          en: "Recover {{effect}}% on risky losses (+{{increasePerLevel}}%)",
+          ru: "Возвращает {{effect}}% при рискованных потерях (+{{increasePerLevel}}%)",
+          uk: "Повертає {{effect}}% при ризикованих втратах (+{{increasePerLevel}}%)",
+        },
+      },
+      cooldown_mastery: {
+        name: { en: "Cooldown Mastery", ru: "Мастер Перезарядки", uk: "Майстер Перезарядки" },
+        description: {
+          en: "Reduce cooldowns by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
+          ru: "Снижает перезарядки на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
+          uk: "Знижує перезарядки на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
+        },
+      },
+      tax_optimization: {
+        name: { en: "Tax Optimization", ru: "Оптимизация Комиссий", uk: "Оптимізація Комісій" },
+        description: {
+          en: "Reduce operation fees by {{effect}}% (+{{increasePerLevel}}%)",
+          ru: "Снижает комиссии операций на {{effect}}% (+{{increasePerLevel}}%)",
+          uk: "Знижує комісії операцій на {{effect}}% (+{{increasePerLevel}}%)",
+        },
+      },
     },
   },
 
@@ -283,63 +480,76 @@ const command = {
 
         await (hubClient as any).ensureGuildUser(guild.id, user.id);
         const userData = (await (hubClient as any).getUser(guild.id, user.id)) as UserDataLike;
-        const upgradeDiscount = 0;
-        const dailyBonusConfig = getUpgradeConfig("daily_bonus");
-        const dailyCooldownConfig = getUpgradeConfig("daily_cooldown");
-        const crimeConfig = getUpgradeConfig("crime");
-        const bankRateConfig = getUpgradeConfig("bank_rate");
-        const gamesEarningConfig = getUpgradeConfig("games_earning");
-
-        upgradeInfo = {
-          daily_bonus: {
-            price: Math.floor(
-              dailyBonusConfig.basePrice *
-                Math.pow(dailyBonusConfig.priceMultiplier, getUpgradeLevel(userData, "daily_bonus") - 1)
-            ),
-            effect: (dailyBonusConfig.effectMultiplier || 0) * getUpgradeLevel(userData, "daily_bonus"),
-          },
-          daily_cooldown: {
-            price: Math.floor(
-              dailyCooldownConfig.basePrice *
-                Math.pow(dailyCooldownConfig.priceMultiplier, getUpgradeLevel(userData, "daily_cooldown") - 1)
-            ),
-            effect: (dailyCooldownConfig.effectValue || 0) * getUpgradeLevel(userData, "daily_cooldown"),
-          },
-          crime: {
-            price: Math.floor(
-              crimeConfig.basePrice *
-                Math.pow(crimeConfig.priceMultiplier, getUpgradeLevel(userData, "crime") - 1)
-            ),
-            effect: (crimeConfig.effectValue || 0) * getUpgradeLevel(userData, "crime"),
-          },
-          bank_rate: {
-            price: Math.floor(
-              bankRateConfig.basePrice *
-                Math.pow(bankRateConfig.priceMultiplier, getUpgradeLevel(userData, "bank_rate") - 1)
-            ),
-            effect: (bankRateConfig.effectValue || 0) * getUpgradeLevel(userData, "bank_rate"),
-          },
-          games_earning: {
-            price: Math.floor(
-              gamesEarningConfig.basePrice *
-                Math.pow(gamesEarningConfig.priceMultiplier, getUpgradeLevel(userData, "games_earning") - 1)
-            ),
-            effect: (gamesEarningConfig.effectMultiplier || 0) * getUpgradeLevel(userData, "games_earning"),
-          },
+        const upgradeDiscount = Math.max(
+          0,
+          Math.min(30, Math.round(Number(userData.economy?.upgradeDiscount || 0)))
+        );
+        const userBalance = Math.round(Number(userData.economy?.balance || 0));
+        const impactKeys: Record<string, string> = {
+          daily_bonus: "daily_rewards",
+          daily_cooldown: "daily_cooldown",
+          crime: "crime_cooldown",
+          bank_rate: "bank_growth",
+          games_earning: "game_payouts",
+          fraud_protection: "crime_fines",
+          wallet_shield: "theft_defense",
+          vault_insurance: "risk_game_losses",
+          cooldown_mastery: "core_cooldowns",
+          tax_optimization: "bank_operation_fees",
         };
 
-        if (upgradeDiscount > 0) {
-          Object.keys(upgradeInfo).forEach((key) => {
-            const entry = upgradeInfo[key];
-            if (!entry) {
-              return;
-            }
-            const discountAmount = (entry.price * upgradeDiscount) / 100;
-            entry.originalPrice = entry.price;
-            entry.price = Math.max(1, Math.floor(entry.price - discountAmount));
+        const upgradeEntries = Object.keys(upgradesConfig).map((key) => {
+          const config = getUpgradeConfig(key);
+          const currentLevel = getUpgradeLevel(userData, key);
+          const basePrice = calculateUpgradePrice(config, currentLevel);
+          const discountedPrice =
+            upgradeDiscount > 0
+              ? Math.max(1, Math.floor(basePrice - (basePrice * upgradeDiscount) / 100))
+              : basePrice;
+          const effectDetails = getUpgradeEffectDetails(key, config, currentLevel);
+          const upgradeName = getUpgradeTranslation(`upgrades.${key}.name`, key);
+          const upgradeDescription = getUpgradeTranslation(`upgrades.${key}.description`, "");
+          const formattedDescription = upgradeDescription
+            .replace(/\{\{effect\}\}/g, formatEffectNumber(effectDetails.currentEffect))
+            .replace(/\{\{increasePerLevel\}\}/g, formatEffectNumber(effectDetails.effectPerLevel))
+            .replace(
+              /\{\{increasePerLevelMinutes\}\}/g,
+              formatEffectNumber(effectDetails.effectPerLevel)
+            )
+            .replace(/\{\{price\}\}/g, String(Math.round(discountedPrice)));
+          const coinsNeeded = Math.max(0, discountedPrice - userBalance);
+          const progress = discountedPrice > 0 ? Math.min(Math.round((userBalance / discountedPrice) * 100), 100) : 100;
+
+          const entry: UpgradeInfoEntry = {
+            key,
+            name: upgradeName,
+            description: formattedDescription,
+            impactArea: getUpgradeTranslation(`impact_${impactKeys[key]}`, "Economy"),
+            category: config.category || "economy",
+            emoji: config.emoji,
+            currentLevel,
+            nextLevel: currentLevel + 1,
+            effectPerLevel: effectDetails.effectPerLevel,
+            effectUnit: effectDetails.effectUnit,
+            currentEffect: effectDetails.currentEffect,
+            nextEffect: effectDetails.nextEffect,
+            deltaEffect: effectDetails.deltaEffect,
+            basePrice,
+            price: discountedPrice,
+            isAffordable: coinsNeeded === 0,
+            coinsNeeded,
+            progress,
+          };
+
+          if (upgradeDiscount > 0) {
+            entry.originalPrice = basePrice;
             entry.discountPercent = Math.round(upgradeDiscount);
-          });
-        }
+          }
+
+          return entry;
+        });
+
+        upgradeInfo = Object.fromEntries(upgradeEntries.map((entry) => [entry.key, entry]));
 
         const generated = (await generateImage(
           "UpgradesDisplay",
@@ -365,53 +575,26 @@ const command = {
               upgradeDiscount,
             },
             locale: interaction.locale,
-            upgrades: Object.entries(upgradeInfo).map(([key, upgrade], index) => {
-              const config = getUpgradeConfig(key);
-              const currentLevel = getUpgradeLevel(userData, key);
-              let effectPerLevel = 0;
-              let effectUnit = "%";
-              let effectValue = 0;
-
-              if (key === "daily_bonus") {
-                effectPerLevel = Math.round((config.effectMultiplier || 0) * 100);
-                effectUnit = "%";
-                effectValue = upgrade.effect * 100;
-              } else if (key === "daily_cooldown" || key === "crime") {
-                effectPerLevel = Math.floor((config.effectValue || 0) / (60 * 1000));
-                effectUnit = "m";
-                effectValue = Math.floor(upgrade.effect / (60 * 1000));
-              } else if (key === "bank_rate") {
-                effectPerLevel = Math.round((config.effectValue || 0) * 100);
-                effectUnit = "%";
-                effectValue = upgrade.effect * 100;
-              } else if (key === "games_earning") {
-                effectPerLevel = Math.round((config.effectMultiplier || 0) * 100);
-                effectUnit = "%";
-                effectValue = upgrade.effect * 100;
-              }
-
-              const userBalance = Math.round(Number(userData.economy?.balance || 0));
-              const progressPercentage = Math.min(Math.round((userBalance / upgrade.price) * 100), 100);
-              const upgradeName = getUpgradeTranslation(`upgrades.${key}.name`, key);
-              const upgradeDescription = getUpgradeTranslation(`upgrades.${key}.description`, "");
-              const formattedDescription = upgradeDescription
-                .replace(/\{\{effect\}\}/g, String(Math.round(effectValue)))
-                .replace(/\{\{increasePerLevel\}\}/g, String(Math.round(effectPerLevel)))
-                .replace(/\{\{increasePerLevelMinutes\}\}/g, String(Math.round(effectPerLevel)))
-                .replace(/\{\{price\}\}/g, String(Math.round(upgrade.price)));
-
+            upgrades: upgradeEntries.map((upgrade, index) => {
               const upgradeObj: Record<string, unknown> = {
-                emoji: config.emoji,
-                title: upgradeName,
-                description: formattedDescription,
-                currentLevel,
-                nextLevel: currentLevel + 1,
+                emoji: upgrade.emoji,
+                title: upgrade.name,
+                description: upgrade.description,
+                impactArea: upgrade.impactArea,
+                currentLevel: upgrade.currentLevel,
+                nextLevel: upgrade.nextLevel,
+                currentEffect: upgrade.currentEffect,
+                nextEffect: upgrade.nextEffect,
+                deltaEffect: upgrade.deltaEffect,
                 price: Math.round(upgrade.price),
-                progress: progressPercentage,
+                basePrice: Math.round(upgrade.basePrice),
+                isAffordable: upgrade.isAffordable,
+                coinsNeeded: upgrade.coinsNeeded,
+                progress: upgrade.progress,
                 id: index,
-                category: config.category,
-                effectPerLevel,
-                effectUnit,
+                category: upgrade.category,
+                effectPerLevel: upgrade.effectPerLevel,
+                effectUnit: upgrade.effectUnit,
               };
 
               if (upgrade.discountPercent) {
@@ -432,57 +615,30 @@ const command = {
 
         const pngBuffer = generated?.[0];
         const dominantColor = generated?.[1];
-        const attachment = new AttachmentBuilder(pngBuffer, { name: "shop_upgrades.avif" });
+        const attachment = new AttachmentBuilder(pngBuffer, { name: "shop_upgrades.webp" });
 
         const shopComponent = new ComponentBuilder({
           dominantColor: dominantColor as any,
           mode: builderMode,
         })
           .addText(String(await i18n.__("commands.economy.shop.title")), "header3")
-          .addText(
-            String(
-              await i18n.__("commands.economy.shop.description", {
-                balance: Math.round(Number(userData.economy?.balance || 0)),
-              })
-            )
-          )
-          .addImage("attachment://shop_upgrades.avif");
+          .addImage("attachment://shop_upgrades.webp");
 
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
           .setPlaceholder(String(await i18n.__("commands.economy.shop.selectUpgrade")))
           .addOptions(
-            Object.entries(upgradeInfo).map(([key, upgrade], index) => {
-              const config = getUpgradeConfig(key);
-              let effectPerLevel = 0;
-              let effectValue = 0;
-              if (key === "daily_bonus") {
-                effectPerLevel = Math.round((config.effectMultiplier || 0) * 100);
-                effectValue = upgrade.effect * 100;
-              } else if (key === "daily_cooldown" || key === "crime") {
-                effectPerLevel = Math.floor((config.effectValue || 0) / (60 * 1000));
-                effectValue = Math.floor(upgrade.effect / (60 * 1000));
-              } else if (key === "bank_rate") {
-                effectPerLevel = Math.round((config.effectValue || 0) * 100);
-                effectValue = upgrade.effect * 100;
-              } else if (key === "games_earning") {
-                effectPerLevel = Math.round((config.effectMultiplier || 0) * 100);
-                effectValue = upgrade.effect * 100;
-              }
-
-              const upgradeName = getUpgradeTranslation(`upgrades.${key}.name`, key);
-              const upgradeDescription = getUpgradeTranslation(`upgrades.${key}.description`, "");
-              const formattedDescription = upgradeDescription
-                .replace(/\{\{effect\}\}/g, String(Math.round(effectValue)))
-                .replace(/\{\{increasePerLevel\}\}/g, String(Math.round(effectPerLevel)))
-                .replace(/\{\{increasePerLevelMinutes\}\}/g, String(Math.round(effectPerLevel)))
+            upgradeEntries.map((upgrade, index) => {
+              const categoryTag = upgrade.category === "cooldowns" ? "CD" : "ECO";
+              const description = getUpgradeTranslation("menuImpactCostLine", "{{impact}} • Cost {{price}}")
+                .replace(/\{\{impact\}\}/g, upgrade.impactArea)
                 .replace(/\{\{price\}\}/g, String(Math.round(upgrade.price)));
 
               const option: Record<string, unknown> = {
-                label: upgradeName,
-                description: formattedDescription,
+                label: `[${categoryTag}] ${upgrade.name} L${upgrade.currentLevel}→L${upgrade.nextLevel}`,
+                description,
                 value: index.toString(),
-                emoji: config.emoji,
+                emoji: upgrade.emoji,
                 default: currentUpgrade === index,
               };
 
@@ -507,21 +663,16 @@ const command = {
 
         const revertButton = new ButtonBuilder().setCustomId("revert").setStyle(ButtonStyle.Danger);
         const currentUpgradeType = Object.keys(upgradeInfo)[currentUpgrade];
-        const currentLevel = currentUpgradeType ? getUpgradeLevel(userData, currentUpgradeType) : 1;
+        const currentUpgradeEntry = currentUpgradeType ? upgradeInfo[currentUpgradeType] : undefined;
+        const currentLevel = currentUpgradeEntry?.currentLevel || 1;
 
         if (currentLevel <= 1 || !currentUpgradeType) {
           revertButton
             .setLabel(String(await i18n.__("commands.economy.shop.revertButton")))
             .setDisabled(true);
         } else {
-          const currentConfig = getUpgradeConfig(currentUpgradeType);
-          const currentUpgradeInfo = {
-            price: Math.floor(
-              currentConfig.basePrice *
-                Math.pow(currentConfig.priceMultiplier, currentLevel - 1)
-            ),
-          };
-          const refundAmount = Math.floor(currentUpgradeInfo.price * 0.85);
+          const currentPurchasePrice = currentUpgradeEntry?.basePrice || 0;
+          const refundAmount = Math.floor(currentPurchasePrice * 0.85);
           revertButton
             .setLabel(
               String(
@@ -589,9 +740,17 @@ const command = {
         if (componentInteraction.customId === "revert") {
           const upgradeTypes = Object.keys(upgradeInfo);
           const type = upgradeTypes[currentUpgrade];
+          if (!type) {
+            await componentInteraction.reply({
+              content: await i18n.__("commands.economy.shop.noSelection"),
+              ephemeral: true,
+            });
+            return;
+          }
 
           try {
-            throw new Error("Revert upgrade not yet implemented in hub services");
+            await hubClient.revertUpgrade(guild.id, user.id, type);
+            await componentInteraction.update(await generateShopMessage());
           } catch (error: any) {
             if (error?.message?.startsWith("Cooldown active:")) {
               const cooldownTime = parseInt(String(error.message).split(":")[1]?.trim() || "0", 10);
@@ -607,15 +766,11 @@ const command = {
                 content: await i18n.__("commands.economy.shop.cannotRevert"),
                 ephemeral: true,
               });
-            } else if (error?.message === "Revert upgrade not yet implemented in hub services") {
-              await componentInteraction.reply({
-                content: await i18n.__("commands.economy.shop.error"),
-                ephemeral: true,
-              });
             } else {
               throw error;
             }
           }
+          return;
         }
       });
 

@@ -141,8 +141,49 @@
           "games_earning": {
             "name": "Games Earnings",
             "description": "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "fraud_protection": {
+            "name": "Fraud Protection",
+            "description": "Reduce failed-crime fines by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "wallet_shield": {
+            "name": "Wallet Shield",
+            "description": "Reduce max stolen amount by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "vault_insurance": {
+            "name": "Vault Insurance",
+            "description": "Recover {{effect}}% on risky losses (+{{increasePerLevel}}%)"
+          },
+          "cooldown_mastery": {
+            "name": "Cooldown Mastery",
+            "description": "Reduce cooldowns by {{effect}} minutes (-{{increasePerLevelMinutes}}m)"
+          },
+          "tax_optimization": {
+            "name": "Tax Optimization",
+            "description": "Reduce operation fees by {{effect}}% (+{{increasePerLevel}}%)"
           }
-        }
+        },
+        "selectedLine": "Selected: {{emoji}} {{name}} (L{{current}} → L{{next}})",
+        "noSelectedLine": "Selected: -",
+        "statsLine": "Now: {{now}} | Next: {{next}} | Gain: {{gain}}",
+        "affordable": "Affordable",
+        "needMore": "Need {{coins}} more",
+        "costLine": "Cost: {{price}} | {{status}} | Affects: {{impact}}",
+        "noCostLine": "Cost: -",
+        "discountedPrice": "{{price}} (from {{original}}, -{{discount}}%)",
+        "menuStatsLine": "Now {{now}} • Next {{next}} • +{{gain}}",
+        "impact_daily_rewards": "Daily rewards",
+        "impact_daily_cooldown": "Daily cooldown",
+        "impact_crime_cooldown": "Crime cooldown",
+        "impact_bank_growth": "Bank growth",
+        "impact_game_payouts": "Game payouts",
+        "impact_crime_fines": "Crime fines",
+        "impact_theft_defense": "Theft defense",
+        "impact_risk_game_losses": "Risk game losses",
+        "impact_core_cooldowns": "Core cooldowns",
+        "impact_bank_operation_fees": "Bank operation fees",
+        "panelHintLine": "Full upgrade details are shown in the image panel.",
+        "menuImpactCostLine": "{{impact}} • Cost {{price}}"
       },
       "withdraw": {
         "insufficientFunds": "Insufficient funds",

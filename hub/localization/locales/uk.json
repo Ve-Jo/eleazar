@@ -183,8 +183,49 @@
           "games_earning": {
             "name": "Дохід від Ігор",
             "description": "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "fraud_protection": {
+            "name": "Захист від Штрафів",
+            "description": "Знижує штрафи за невдалі злочини на {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "wallet_shield": {
+            "name": "Щит Гаманця",
+            "description": "Знижує максимум вкрадених коштів на {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "vault_insurance": {
+            "name": "Страхування Сховища",
+            "description": "Повертає {{effect}}% при ризикованих втратах (+{{increasePerLevel}}%)"
+          },
+          "cooldown_mastery": {
+            "name": "Майстер Перезарядки",
+            "description": "Знижує перезарядки на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)"
+          },
+          "tax_optimization": {
+            "name": "Оптимізація Комісій",
+            "description": "Знижує комісії операцій на {{effect}}% (+{{increasePerLevel}}%)"
           }
-        }
+        },
+        "selectedLine": "Вибрано: {{emoji}} {{name}} (Рів.{{current}} → Рів.{{next}})",
+        "noSelectedLine": "Вибрано: -",
+        "statsLine": "Зараз: {{now}} | Далі: {{next}} | Приріст: {{gain}}",
+        "affordable": "Доступно",
+        "needMore": "Потрібно ще {{coins}}",
+        "costLine": "Ціна: {{price}} | {{status}} | Впливає: {{impact}}",
+        "noCostLine": "Ціна: -",
+        "discountedPrice": "{{price}} (з {{original}}, -{{discount}}%)",
+        "menuStatsLine": "Зараз {{now}} • Далі {{next}} • +{{gain}}",
+        "impact_daily_rewards": "Щоденні нагороди",
+        "impact_daily_cooldown": "Перезарядка daily",
+        "impact_crime_cooldown": "Перезарядка crime",
+        "impact_bank_growth": "Зростання банку",
+        "impact_game_payouts": "Виплати ігор",
+        "impact_crime_fines": "Штрафи crime",
+        "impact_theft_defense": "Захист від крадіжки",
+        "impact_risk_game_losses": "Втрати в ризик-іграх",
+        "impact_core_cooldowns": "Базові перезарядки",
+        "impact_bank_operation_fees": "Банківські комісії",
+        "panelHintLine": "Повні деталі покращення показані на зображенні нижче.",
+        "menuImpactCostLine": "{{impact}} • Ціна {{price}}"
       },
       "withdraw": {
         "command": {
