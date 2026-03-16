@@ -170,12 +170,17 @@ async function generateImage(
       emoji: scaling.emoji ?? 1,
     };
 
+    const renderOptions = {
+      renderMode: "command",
+      ...options,
+    };
+
     return await hubClient.generateImage(
       component,
       props,
       effectiveScaling,
       i18n?.getLocale?.() || "en",
-      options
+      renderOptions
     );
   } catch (error) {
     console.error("Hub image generation failed:", error);

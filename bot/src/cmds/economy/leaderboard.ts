@@ -315,7 +315,7 @@ const command = {
 
         const pngBuffer = generated?.[0];
         const dominantColor = generated?.[1];
-        const attachment = new AttachmentBuilder(pngBuffer, { name: "leaderboard.avif" });
+        const attachment = new AttachmentBuilder(pngBuffer, { name: "leaderboard.webp" });
 
         const leaderboardComponent = new ComponentBuilder({
           dominantColor: dominantColor as any,
@@ -324,7 +324,7 @@ const command = {
 
         leaderboardComponent
           .addText(String(await i18n.__("commands.economy.leaderboard.title")), "header3")
-          .addImage("attachment://leaderboard.avif");
+          .addImage("attachment://leaderboard.webp");
 
         leaderboardComponent.addButtons(prevButton, nextButton);
 

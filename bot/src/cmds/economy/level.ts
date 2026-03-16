@@ -217,7 +217,7 @@ const command = {
       }
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: "level.avif",
+        name: "level.webp",
       });
 
       const levelComponent = new ComponentBuilder({
@@ -225,7 +225,7 @@ const command = {
         mode: builderMode,
       })
         .addText(String(await i18n.__("commands.economy.level.title")), "header3")
-        .addImage("attachment://level.avif")
+        .addImage("attachment://level.webp")
         .addTimestamp(interaction.locale);
 
       const replyOptions = levelComponent.toReplyOptions({

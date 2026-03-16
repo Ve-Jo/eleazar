@@ -144,12 +144,12 @@ async function buildVoiceRoomPanelPayload(context: PanelContext) {
   )) as Buffer;
 
   const attachment = new AttachmentBuilder(imageBuffer, {
-    name: "voice_room_panel.avif",
+    name: "voice_room_panel.webp",
   });
 
   const componentBuilder = new ComponentBuilder({ mode: "v2" })
     .addText(labels.title, "header3")
-    .addImage("attachment://voice_room_panel.avif");
+    .addImage("attachment://voice_room_panel.webp");
 
   const buttons = buildVoiceRoomButtons({
     channelId: context.channelId,

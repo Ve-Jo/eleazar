@@ -377,7 +377,7 @@ const command = {
       )) as [Buffer, string];
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "commands.avif",
+        name: "commands.webp",
       });
 
       return [attachment, dominantColor];
@@ -389,12 +389,11 @@ const command = {
       const { disableInteractions = false } = options;
       const [attachment, dominantColor] = await generateCommandImage();
 
-      const commandComponent = new ComponentBuilder({
-        color: dominantColor,
+      const componentBuilder = new ComponentBuilder({
         mode: "v2",
       })
         .addText(String(await getTranslation("commands.help.commands.title")), "header3")
-        .addImage("attachment://commands.avif");
+        .addImage("attachment://commands.webp");
 
       if (!disableInteractions) {
         const categoryMenu = new StringSelectMenuBuilder()

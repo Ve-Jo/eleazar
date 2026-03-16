@@ -342,7 +342,7 @@ const command = {
         const dominantColor = generated?.[1];
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "work_games.avif",
+          name: "work_games.webp",
         });
 
         const gameLauncherComponent = new ComponentBuilder({
@@ -351,7 +351,7 @@ const command = {
         })
           .setColor(dominantColor?.embedColor)
           .addText(String(await i18n.__("commands.economy.work.title")), "header3")
-          .addImage("attachment://work_games.avif");
+          .addImage("attachment://work_games.webp");
 
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("select_category")
