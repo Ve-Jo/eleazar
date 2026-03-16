@@ -275,7 +275,7 @@ const command = {
     }
 
     const attachment = new AttachmentBuilder(buffer, {
-      name: "balance.webp",
+      name: "balance.png",
     });
 
     const balanceComponent = new ComponentBuilder({
@@ -283,7 +283,7 @@ const command = {
       mode: builderMode,
     })
       .addText(String(await i18n.__("commands.economy.balance.title")), "header3")
-      .addImage("attachment://balance.webp")
+      .addImage("attachment://balance.png")
       .addTimestamp(interaction.locale);
 
     const replyOptions = balanceComponent.toReplyOptions({

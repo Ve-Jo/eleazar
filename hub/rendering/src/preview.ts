@@ -2069,7 +2069,7 @@ app.get("/:componentName/image", async (req, res) => {
     // Send response
     const isGif =
       buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
-    res.setHeader("Content-Type", isGif ? "image/gif" : "image/webp");
+    res.setHeader("Content-Type", isGif ? "image/gif" : "image/png");
     res.send(buffer);
   } catch (error) {
     console.error("Error in /image route:", error);

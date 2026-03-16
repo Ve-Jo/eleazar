@@ -291,7 +291,7 @@ export default {
 
       // Create attachment and send result
       const attachment = new AttachmentBuilder(imageBuffer).setName(
-        "generated_image.webp"
+        "generated_image.png"
       );
 
       const responseContent = await i18n.__(

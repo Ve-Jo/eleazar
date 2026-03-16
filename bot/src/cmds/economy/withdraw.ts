@@ -312,7 +312,7 @@ const command = {
       const dominantColor = generated?.[1];
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: "withdraw_receipt.webp",
+        name: "withdraw_receipt.png",
       });
 
       const receiptComponent = new ComponentBuilder({
@@ -320,7 +320,7 @@ const command = {
         mode: builderMode,
       })
         .addText(String(await i18n.__("commands.economy.withdraw.title")), "header3")
-        .addImage("attachment://withdraw_receipt.webp")
+        .addImage("attachment://withdraw_receipt.png")
         .addTimestamp(interaction.locale);
 
       const replyOptions = receiptComponent.toReplyOptions({

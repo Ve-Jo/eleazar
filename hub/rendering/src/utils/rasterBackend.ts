@@ -2,7 +2,7 @@
 import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 
-export async function rasterizeSvgToWebp({
+export async function rasterizeSvgToPng({
   svg,
   targetWidth,
   targetHeight,
@@ -31,14 +31,14 @@ export async function rasterizeSvgToWebp({
     const raster = resvgInst.render();
     const pngData = raster.asPng();
     endPerf?.(`[imageGenerator] reSVG-rasterization`);
-    startPerf?.(`[imageGenerator] sharp-webp-encode`);
+    startPerf?.(`[imageGenerator] sharp-png-encode`);
     const buffer = await sharp(pngData)
-      .webp({
+      .png({
         quality,
-        effort,
+        compressionLevel: 9,
       })
       .toBuffer();
-    endPerf?.(`[imageGenerator] sharp-webp-encode`);
+    endPerf?.(`[imageGenerator] sharp-png-encode`);
     return buffer;
   }
 
@@ -47,9 +47,9 @@ export async function rasterizeSvgToWebp({
     density: Math.max(72, Math.min(300, targetWidth / (dimensions.width / 72))),
   }).resize(targetWidth, targetHeight);
   const buffer = await baseSharpPipeline
-    .webp({
+    .png({
       quality,
-      effort,
+      compressionLevel: 9,
     })
     .toBuffer();
   endPerf?.(`[imageGenerator] sharp-conversion`);

@@ -895,7 +895,7 @@ async function generateMainMenu(
     i18n, // Pass the main i18n object here for generateImage's internal use if needed
     { renderMode: "game" },
   );
-  const attachmentName = `crypto_portfolio_${userId}.webp`; // Use .webp
+  const attachmentName = `crypto_portfolio_${userId}.png`; // Use .png
 
   // --- Build Components using ComponentBuilder with MODE ---
   const builder = new ComponentBuilder({

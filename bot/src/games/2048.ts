@@ -620,7 +620,7 @@ export default {
 
       const message = await interaction.followUp({
         content: content,
-        files: [{ attachment: buffer, name: "2048.webp" }],
+        files: [{ attachment: buffer, name: "2048.png" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -718,7 +718,7 @@ export default {
 
             await message.edit({
               content: content,
-              files: [{ attachment: finalBoard, name: "2048.webp" }],
+              files: [{ attachment: finalBoard, name: "2048.png" }],
               components: [],
             });
             cleanup();
@@ -856,7 +856,7 @@ export default {
 
           await message.edit({
             content: stoppedContent,
-            files: [{ attachment: stopBoard, name: "2048.webp" }],
+            files: [{ attachment: stopBoard, name: "2048.png" }],
             components: [],
           });
 
@@ -931,7 +931,7 @@ export default {
               typeof scoreText === "string"
                 ? scoreText
                 : `Your Score: ${state.score}`,
-            files: [{ attachment: buffer, name: "2048.webp" }],
+            files: [{ attachment: buffer, name: "2048.png" }],
             components: [row1, row2],
           });
 
@@ -1056,7 +1056,7 @@ export default {
 
               await message.edit({
                 content: gameOverContent,
-                files: [{ attachment: finalBoard, name: "2048.webp" }],
+                files: [{ attachment: finalBoard, name: "2048.png" }],
                 components: [],
               });
 

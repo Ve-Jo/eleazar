@@ -172,7 +172,7 @@ export async function renderWithTakumi({
       {
         width: dimensions.width * scaling.image,
         height: dimensions.height * scaling.image,
-        format: "webp",
+        format: "png",
         quality,
         emoji: "twemoji",
         devicePixelRatio: scaling.image,
