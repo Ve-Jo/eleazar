@@ -37,6 +37,68 @@ type ColorProcessingResult =
 
 const colorCache = new Map<string, ColorProcessingResult>();
 const COLOR_CACHE_MAX_SIZE = 50;
+const BOT_RENDER_LOGGING = parseBooleanEnv(process.env.BOT_RENDER_LOGGING, false);
+const DEFAULT_DISCORD_ASSET_MAX_SIZE = parseInt(
+  process.env.BOT_RENDER_ASSET_MAX_SIZE || "",
+  10
+) || 512;
+const GAME_DISCORD_ASSET_MAX_SIZE = parseInt(
+  process.env.BOT_RENDER_GAME_ASSET_MAX_SIZE || "",
+  10
+) || 256;
+const ASSET_URL_PROP_KEYS = new Set(["avatarURL", "iconURL", "bannerURL"]);
+const GAME_COMPONENTS = new Set(["2048", "Snake", "Tower", "Coinflip", "GameLauncher"]);
+
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value === null || value === "") return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function clampDiscordAssetSize(urlValue: string, maxSize: number): string {
+  if (!urlValue || !urlValue.startsWith("http")) return urlValue;
+  try {
+    const parsed = new URL(urlValue);
+    const host = parsed.hostname.toLowerCase();
+    const isDiscordCdn =
+      host.includes("cdn.discordapp.com") || host.includes("media.discordapp.net");
+    if (!isDiscordCdn) return urlValue;
+
+    const currentSize = parseInt(parsed.searchParams.get("size") || "", 10);
+    if (!Number.isNaN(currentSize) && currentSize > maxSize) {
+      parsed.searchParams.set("size", String(maxSize));
+      return parsed.toString();
+    }
+    return urlValue;
+  } catch {
+    return urlValue;
+  }
+}
+
+function sanitizeRenderProps(value: unknown, maxAssetSize: number): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeRenderProps(entry, maxAssetSize));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "_debug") continue;
+
+    if (typeof entry === "string" && ASSET_URL_PROP_KEYS.has(key)) {
+      sanitized[key] = clampDiscordAssetSize(entry, maxAssetSize);
+      continue;
+    }
+
+    sanitized[key] = sanitizeRenderProps(entry, maxAssetSize);
+  }
+  return sanitized;
+}
 
 function manageColorCache(): void {
   while (colorCache.size > COLOR_CACHE_MAX_SIZE) {
@@ -164,7 +226,13 @@ async function generateImage(
   options: Record<string, unknown> = {}
 ): Promise<unknown> {
   try {
-    console.log("Generating image via hub rendering service");
+    if (BOT_RENDER_LOGGING) {
+      console.log("Generating image via hub rendering service");
+    }
+    const maxAssetSize = GAME_COMPONENTS.has(component)
+      ? GAME_DISCORD_ASSET_MAX_SIZE
+      : DEFAULT_DISCORD_ASSET_MAX_SIZE;
+    const optimizedProps = sanitizeRenderProps(props, maxAssetSize) as GeneratedImageProps;
     const effectiveScaling = {
       image: scaling.image ?? 1,
       emoji: scaling.emoji ?? 1,
@@ -177,7 +245,7 @@ async function generateImage(
 
     return await hubClient.generateImage(
       component,
-      props,
+      optimizedProps,
       effectiveScaling,
       i18n?.getLocale?.() || "en",
       renderOptions

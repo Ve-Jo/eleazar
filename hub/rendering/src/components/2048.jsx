@@ -43,6 +43,7 @@ const Game2048 = (props) => {
     position: "relative",
     overflow: "hidden",
     display: "flex",
+    boxSizing: "border-box",
   };
 
   const gameScreenStyle = {
@@ -57,6 +58,7 @@ const Game2048 = (props) => {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
+    boxSizing: "border-box",
   };
 
   const tileStyle = (value, transparentZero = false) => ({

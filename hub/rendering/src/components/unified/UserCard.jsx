@@ -341,7 +341,6 @@ const UserCard = (props) => {
     borderRadius: `${scaleValue(25)}px`,
     overflow: "hidden",
     display: "flex",
-    zIndex: 10,
   };
 
   const userBackgroundStyle = {
@@ -353,7 +352,6 @@ const UserCard = (props) => {
     backgroundImage: coloring.backgroundGradient || backgroundGradient,
     borderRadius: `${scaleValue(25)}px`,
     display: "flex",
-    zIndex: 1,
   };
 
   const moneyContainerStyle = {
@@ -363,7 +361,6 @@ const UserCard = (props) => {
     width: `${scaled.money.width}px`,
     height: `${scaled.money.height}px`,
     display: "flex",
-    zIndex: 2,
   };
 
   const dollarBanknoteStyle = {
@@ -373,7 +370,6 @@ const UserCard = (props) => {
     width: `${scaled.money.width}px`, // Match balance container width
     height: "16px",
     display: "flex",
-    zIndex: 1,
     overflow: "hidden",
   };
 
@@ -459,7 +455,6 @@ const UserCard = (props) => {
     top: `${scaled.gamingLevel.top}px`,
     width: `${scaled.gamingLevel.width}px`, // Use full width since we already reduced it in positioning
     height: `${scaled.gamingLevel.height}px`,
-    zIndex: 2,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -516,7 +511,6 @@ const UserCard = (props) => {
         top: `${scaled.score.top}px`,
         width: `${scaled.score.width}px`,
         height: `${scaled.score.height}px`,
-        zIndex: 2,
         display: "flex",
       }
     : { display: "none" };
@@ -548,7 +542,6 @@ const UserCard = (props) => {
     top: toUnit(scaled.avatar.top),
     width: toUnit(scaled.avatar.width),
     height: toUnit(scaled.avatar.height),
-    zIndex: 2,
     display: "flex",
     borderRadius: toUnit(scaleValue(20)),
   };

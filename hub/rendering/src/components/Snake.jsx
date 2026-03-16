@@ -63,6 +63,7 @@ const Snake = (props) => {
     position: "relative",
     overflow: "hidden",
     display: "flex",
+    boxSizing: "border-box",
   };
 
   const gameScreenStyle = {
@@ -77,6 +78,7 @@ const Snake = (props) => {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
+    boxSizing: "border-box",
   };
 
   const tileStyle = (value, row, col) => ({

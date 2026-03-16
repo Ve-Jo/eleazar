@@ -139,7 +139,8 @@ const Balance = (props) => {
           borderRadius: database?.bannerUrl ? "0px" : "20px",
           padding: "20px",
           color: textColor,
-          fontFamily: "Inter600, sans-serif",
+          fontFamily: "Inter600",
+          fontWeight: 200,
           position: "relative",
           overflow: "hidden",
           background: mainBackground,
@@ -900,7 +901,7 @@ const Balance = (props) => {
                 justifyContent: "center",
                 alignItems: "center",
                 minHeight: "21px",
-                fontFamily: "Inter600, sans-serif",
+                fontFamily: "Inter600",
                 lineHeight: "1.2",
                 zIndex: 2,
               }}

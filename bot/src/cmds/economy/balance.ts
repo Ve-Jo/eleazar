@@ -250,7 +250,7 @@ const command = {
             chat: chatLevelData,
             game: gameLevelData,
           },
-        },
+        }
       },
       { image: 2, emoji: 2 },
       i18n as any

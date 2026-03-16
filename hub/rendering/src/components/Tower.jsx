@@ -165,6 +165,7 @@ const Tower = (props) => {
     position: "relative",
     color: textColor,
     overflow: "hidden", // For Satori compatibility
+    boxSizing: "border-box",
   };
 
   const headerStyle = {

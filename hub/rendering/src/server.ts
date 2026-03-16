@@ -47,6 +47,8 @@ const app = express();
 const PORT = Number(
   process.env.RENDERING_SERVICE_PORT || DEFAULT_SERVICE_PORTS.rendering
 );
+const RENDER_REQUEST_LOGGING =
+  String(process.env.RENDER_REQUEST_LOGGING || "false").toLowerCase() === "true";
 
 // Middleware
 app.use(helmet());
@@ -58,7 +60,9 @@ app.use("/public", express.static(path.join(__dirname, "..", "public")));
 
 // Request logging
 app.use((req: RequestLike, _res: ResponseLike, next: NextFunctionLike) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (RENDER_REQUEST_LOGGING) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
   next();
 });
 

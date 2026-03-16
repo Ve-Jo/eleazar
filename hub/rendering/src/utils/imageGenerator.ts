@@ -38,7 +38,7 @@ const imageAssetCache = new Map();
 const COLOR_CACHE_MAX_SIZE = 50; // Increased cache size slightly
 const COLOR_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours TTL (increased from 30 minutes)
 const CACHE_COMPRESSION_ENABLED = true;
-const DEBUG_CACHE = true; // Enable cache debugging
+const DEBUG_CACHE = parseBooleanEnv(process.env.RENDER_DEBUG_CACHE, false);
 const IMAGE_ASSET_CACHE_TTL_MS =
   parseInt(process.env.IMAGE_ASSET_CACHE_TTL_MS, 10) || 10 * 60 * 1000;
 const DEFAULT_RENDER_ASSET_BASE_URL =
@@ -47,7 +47,7 @@ const DEFAULT_RENDER_ASSET_BASE_URL =
   "http://localhost:2333";
 
 // AVIF and sharp tuning (configurable via env)
-const DEFAULT_AVIF_QUALITY = parseInt(process.env.AVIF_QUALITY) || 80;
+const DEFAULT_AVIF_QUALITY = parseInt(process.env.AVIF_QUALITY) || 100;
 const DEFAULT_AVIF_EFFORT = parseInt(process.env.AVIF_EFFORT) || 1;
 const DEFAULT_AVIF_SUBSAMPLE = process.env.AVIF_SUBSAMPLING || "4:2:0";
 const SHARP_CONCURRENCY = parseInt(process.env.SHARP_CONCURRENCY) || 2;
@@ -61,7 +61,7 @@ function parseBooleanEnv(value, fallback) {
   return fallback;
 }
 const USE_RESVG_RASTER = parseBooleanEnv(process.env.USE_RESVG_RASTER, true);
-const RENDER_BACKEND = (process.env.RENDER_BACKEND || "satori").toLowerCase();
+const RENDER_BACKEND = (process.env.RENDER_BACKEND || "takumi").toLowerCase();
 const PERF_LOGGING = parseBooleanEnv(process.env.RENDER_PERF_LOGGING, false);
 
 // Per-user gradient cache and in-flight deduplication
@@ -1230,10 +1230,12 @@ function resolveThrottleMode(options = {}) {
 }
 
 function resolveRenderBackend(options = {}) {
-  const requestedRenderBackend = String(
+  let requestedRenderBackend = String(
     options.renderBackend || RENDER_BACKEND
   ).toLowerCase();
-  return requestedRenderBackend === "takumi" ? "takumi" : "satori";
+  requestedRenderBackend = requestedRenderBackend === "satori" ? "satori" : "takumi";
+  console.log('Render backend:', requestedRenderBackend)
+  return requestedRenderBackend;
 }
 
 const DEFAULT_GAME_THROTTLE_MS =
@@ -1387,56 +1389,49 @@ async function performActualGenerationLogic(
     const targetHeight = Math.round(dimensions.height * scaling.image);
     // --- End Dimension Calculation ---
 
-    // --- Props Formatting/Sanitization (for Satori rendering) ---
-    startPerf(`[imageGenerator] props-sanitization`);
-    // Now sanitize and format the props for the actual rendering
-    let sanitizedProps;
-    try {
-      sanitizedProps = structuredClone(propsWithColoring);
-    } catch {
-      sanitizedProps = JSON.parse(
-        JSON.stringify(propsWithColoring, (_, value) =>
-          typeof value === "bigint" ? Number(value) : value
-        )
-      );
-    }
-    formattedProps = {
-      ...formatValue(sanitizedProps),
+    const attachI18nProps = (targetProps) => {
+      if (targetProps.locale && i18n) {
+        if (typeof i18n.setLocale === "function") {
+          i18n.setLocale(targetProps.locale);
+        }
+        targetProps.i18n = i18n;
+        targetProps.t = async (key) => {
+          if (typeof i18n.__ === "function") {
+            return await i18n.__(`components.${component}.${key}`);
+          }
+          return key;
+        };
+        if (PERF_LOGGING) {
+          console.log(
+            `Using i18n with locale ${targetProps.locale} for component ${component}`
+          );
+        }
+      } else if (targetProps.locale) {
+        console.warn(
+          "Locale provided but i18n instance is missing. Skipping localization."
+        );
+      }
+    };
+
+    const takumiProps = {
+      ...propsWithColoring,
       style: { display: "flex" },
       renderBackend,
     };
     if (scaling.debug) {
-      formattedProps.debug = scaling.debug;
+      takumiProps.debug = scaling.debug;
     }
-    if (formattedProps.locale && i18n) {
-      if (typeof i18n.setLocale === "function") {
-        i18n.setLocale(formattedProps.locale);
-      }
-      formattedProps.i18n = i18n;
-      formattedProps.t = async (key) => {
-        if (typeof i18n.__ === "function") {
-          return await i18n.__(`components.${component}.${key}`);
-        }
-        return key; // fallback to key if translation function not available
-      };
-      console.log(
-        `Using i18n with locale ${formattedProps.locale} for component ${component}`
-      );
-    } else if (formattedProps.locale) {
-      console.warn(
-        "Locale provided but i18n instance is missing. Skipping localization."
-      );
-    }
-    endPerf(`[imageGenerator] props-sanitization`);
-    // --- End Props Formatting/Sanitization ---
+    attachI18nProps(takumiProps);
 
     // --- SVG Generation (uses dimensions and formattedProps) ---
     if (renderBackend === "takumi") {
       pngBuffer = await renderWithTakumi({
         Component,
-        formattedProps,
+        formattedProps: takumiProps,
         dimensions,
         scaling,
+        targetWidth,
+        targetHeight,
         fonts,
         quality: DEFAULT_AVIF_QUALITY,
         loadImageAsset,
@@ -1448,6 +1443,28 @@ async function performActualGenerationLogic(
     }
 
     if (!pngBuffer) {
+      startPerf(`[imageGenerator] props-sanitization`);
+      let sanitizedProps;
+      try {
+        sanitizedProps = structuredClone(propsWithColoring);
+      } catch {
+        sanitizedProps = JSON.parse(
+          JSON.stringify(propsWithColoring, (_, value) =>
+            typeof value === "bigint" ? Number(value) : value
+          )
+        );
+      }
+      formattedProps = {
+        ...formatValue(sanitizedProps),
+        style: { display: "flex" },
+        renderBackend: "satori",
+      };
+      if (scaling.debug) {
+        formattedProps.debug = scaling.debug;
+      }
+      attachI18nProps(formattedProps);
+      endPerf(`[imageGenerator] props-sanitization`);
+
       svg = await renderWithSatori({
         Component,
         formattedProps,
@@ -1475,21 +1492,25 @@ async function performActualGenerationLogic(
           startPerf,
           endPerf,
         });
-        console.log(
-          `${outputFormat.toUpperCase()} Buffer created:`,
-          pngBuffer?.length ?? 0,
-          "bytes"
-        );
+        if (PERF_LOGGING) {
+          console.log(
+            `${outputFormat.toUpperCase()} Buffer created:`,
+            pngBuffer?.length ?? 0,
+            "bytes"
+          );
+        }
       } catch (sharpError) {
         console.error("Image conversion failed:", sharpError);
         throw sharpError;
       }
     } else {
-      console.log(
-        "Using Takumi-generated buffer:",
-        pngBuffer?.length ?? 0,
-        "bytes"
-      );
+      if (PERF_LOGGING) {
+        console.log(
+          "Using Takumi-generated buffer:",
+          pngBuffer?.length ?? 0,
+          "bytes"
+        );
+      }
     }
 
     // Release SVG memory
@@ -1554,7 +1575,9 @@ async function executeThrottled(key) {
   const startedAt = Date.now();
 
   try {
-    console.log(`Executing throttled image generation for key: ${key}`);
+    if (PERF_LOGGING) {
+      console.log(`Executing throttled image generation for key: ${key}`);
+    }
     const result = await performActualGenerationLogic(
       component,
       props,
@@ -1606,7 +1629,9 @@ export async function generateImage(
 
   // --- Direct execution if throttling is disabled ---
   if (disableThrottle) {
-    console.log("Executing image generation directly (throttling disabled)");
+    if (PERF_LOGGING) {
+      console.log("Executing image generation directly (throttling disabled)");
+    }
     try {
       // Call the core logic directly, without using the throttle map
       const result = await performActualGenerationLogic(
@@ -1665,9 +1690,11 @@ export async function generateImage(
 
   // --- Can Execute Immediately? (Based on THROTTLE_INTERVAL) ---
   if (elapsed >= state.currentThrottleMs && !state.isQueued) {
-    console.log(
-      `Executing image generation immediately (throttle window passed) for key: ${key}`
-    );
+    if (PERF_LOGGING) {
+      console.log(
+        `Executing image generation immediately (throttle window passed) for key: ${key}`
+      );
+    }
     state.promise = null;
     state.resolve = null;
     state.reject = null;
@@ -1697,7 +1724,9 @@ export async function generateImage(
 
   // --- Need to Throttle / Queue ---
   if (!state.isQueued) {
-    console.log(`Throttling image generation - scheduling for key: ${key}`);
+    if (PERF_LOGGING) {
+      console.log(`Throttling image generation - scheduling for key: ${key}`);
+    }
     state.isQueued = true;
     const promise = new Promise((resolve, reject) => {
       state.resolve = resolve;
@@ -1707,9 +1736,11 @@ export async function generateImage(
     const delay = Math.max(0, state.currentThrottleMs - elapsed);
     setTimeout(() => executeThrottled(key), delay);
   } else {
-    console.log(
-      `Throttling image generation - already queued for key: ${key}. Latest args updated.`
-    );
+    if (PERF_LOGGING) {
+      console.log(
+        `Throttling image generation - already queued for key: ${key}. Latest args updated.`
+      );
+    }
   }
 
   return state.promise;

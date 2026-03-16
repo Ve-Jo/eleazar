@@ -404,7 +404,7 @@ const command: CasesCommandShape = {
           dominantColor: "user",
           returnDominant: true,
         },
-        { image: 2, emoji: 2 },
+        { image: 1, emoji: 1 },
         i18n as any
       )) as [Buffer, unknown];
 
@@ -724,7 +724,7 @@ const command: CasesCommandShape = {
         dominantColor: "user",
         returnDominant: true,
       },
-      { image: 2, emoji: 2 },
+      { image: 1, emoji: 1 },
       i18n as any
     )) as [Buffer, unknown];
 

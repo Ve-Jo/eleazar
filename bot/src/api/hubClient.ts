@@ -2,6 +2,8 @@ import fetch from "node-fetch";
 import type { RequestInit as NodeFetchRequestInit } from "node-fetch";
 import WebSocket from "ws";
 import dotenv from "dotenv";
+import http from "node:http";
+import https from "node:https";
 import {
   DEFAULT_SERVICE_PORTS,
   DEFAULT_SERVICE_URLS,
@@ -345,7 +347,32 @@ type ApiRequestOptions<TBody extends NodeFetchRequestInit["body"] = NodeFetchReq
   method?: string;
   headers?: Record<string, string>;
   body?: TBody;
+  agent?: NodeFetchRequestInit["agent"];
 };
+
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+const USE_KEEP_ALIVE = parseBooleanEnv(process.env.HUB_CLIENT_KEEP_ALIVE, true);
+const HTTP_KEEP_ALIVE_AGENT = new http.Agent({
+  keepAlive: USE_KEEP_ALIVE,
+  maxSockets: 100,
+});
+const HTTPS_KEEP_ALIVE_AGENT = new https.Agent({
+  keepAlive: USE_KEEP_ALIVE,
+  maxSockets: 100,
+});
+
+function resolveFetchAgent(url: string): NodeFetchRequestInit["agent"] {
+  return url.startsWith("https:") ? HTTPS_KEEP_ALIVE_AGENT : HTTP_KEEP_ALIVE_AGENT;
+}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -383,6 +410,7 @@ async function apiRequest<
         "Content-Type": "application/json",
         ...options.headers,
       },
+      agent: options.agent ?? resolveFetchAgent(url),
       ...options,
     });
 
@@ -1406,11 +1434,13 @@ class HubClient {
     locale: string = "en",
     options: Record<string, unknown> = {}
   ): Promise<RenderingGenerateImageResponse | Buffer | [Buffer, unknown]> {
-    const response = await fetch(`${this.renderingUrl}/generate`, {
+    const requestUrl = `${this.renderingUrl}/generate`;
+    const response = await fetch(requestUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      agent: resolveFetchAgent(requestUrl),
       body: JSON.stringify({
         component,
         props,
