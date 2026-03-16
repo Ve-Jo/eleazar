@@ -9,7 +9,6 @@ import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
 import {
   rasterizeSvgToWebp,
-  renderWithSatori,
   renderWithTakumi,
 } from "./renderBackends.js";
 
@@ -61,13 +60,20 @@ function parseBooleanEnv(value, fallback) {
   return fallback;
 }
 const USE_RESVG_RASTER = parseBooleanEnv(process.env.USE_RESVG_RASTER, true);
-const RENDER_BACKEND = (process.env.RENDER_BACKEND || "takumi").toLowerCase();
 const PERF_LOGGING = parseBooleanEnv(process.env.RENDER_PERF_LOGGING, false);
 
 // Per-user gradient cache and in-flight deduplication
 const userGradientCache = new Map();
 const USER_GRADIENT_TTL_MS = 60 * 1000; // 1 minute TTL for per-user gradient processing
 const inflightColorRequests = new Map();
+
+// Texture pattern cache for performance
+const textureCache = new Map();
+const TEXTURE_CACHE_MAX_SIZE = 20;
+
+// Color conversion cache for performance
+const hslCache = new Map();
+const HSL_CACHE_MAX_SIZE = 100;
 
 // Cache metrics
 const cacheMetrics = {
@@ -135,14 +141,7 @@ sharp.concurrency(SHARP_CONCURRENCY);
 
 // Initialize fonts
 const defaultFontConfig = [
-  { name: "Inter400", file: "Inter_28pt-Regular.ttf", weight: 400 },
-  { name: "Inter500", file: "Inter_28pt-Medium.ttf", weight: 500 },
-  { name: "Inter600", file: "Inter_28pt-SemiBold.ttf", weight: 600 },
-  { name: "Inter700", file: "Inter_28pt-Bold.ttf", weight: 700 },
-  { name: "Inter800", file: "Inter_28pt-ExtraBold.ttf", weight: 800 },
-  { name: "Inter300", file: "Inter_28pt-Light.ttf", weight: 300 },
-  { name: "Inter200", file: "Inter_28pt-ExtraLight.ttf", weight: 200 },
-  { name: "Inter100", file: "Inter_28pt-Thin.ttf", weight: 100 },
+  { name: "Inter", file: "Inter-VariableFont_opsz,wght.ttf", weight: 400 },
   { name: "Roboto", file: "Roboto-Medium.ttf", weight: 500 },
 ].map((config) => ({
   ...config,
@@ -197,6 +196,8 @@ export async function cleanup(forceGC = true) {
     imageAssetCache.clear();
     userGradientCache.clear();
     inflightColorRequests.clear();
+    textureCache.clear(); // Clear texture cache
+    hslCache.clear(); // Clear HSL cache
 
     cacheMetrics.hits = 0;
     cacheMetrics.misses = 0;
@@ -358,7 +359,7 @@ function setCachedUserGradient(userId, data) {
   return data;
 }
 
-async function getOrProcessImageColorsDedup(url) {
+async function getOrProcessImageColorsDedup(url, options = {}) {
   // Prefer URL-based color cache first
   const cached = getCachedColor(url);
   if (cached) return cached;
@@ -370,7 +371,7 @@ async function getOrProcessImageColorsDedup(url) {
 
   const promise = (async () => {
     try {
-      const res = await processImageColors(url);
+      const res = await processImageColors(url, options);
       return res;
     } finally {
       inflightColorRequests.delete(key);
@@ -381,13 +382,13 @@ async function getOrProcessImageColorsDedup(url) {
   return promise;
 }
 
-async function getOrProcessUserGradient(userId, imageUrl) {
+async function getOrProcessUserGradient(userId, imageUrl, options = {}) {
   const cachedUser = getCachedUserGradient(userId);
   if (cachedUser) {
     return cachedUser;
   }
 
-  const result = await getOrProcessImageColorsDedup(imageUrl);
+  const result = await getOrProcessImageColorsDedup(imageUrl, options);
   setCachedUserGradient(userId, result);
   return result;
 }
@@ -521,7 +522,7 @@ class BatchProcessor {
     try {
       const promises = urls.map(async (url) => {
         try {
-          const result = await processImageColors(url);
+          const result = await processImageColors(url, {}); // Use default options for batch
           batch.results.set(url, result);
         } catch (error) {
           batch.errors.set(url, error);
@@ -674,7 +675,7 @@ export async function processBatchImageColors(urls) {
     const fallbackResults = await Promise.allSettled(
       urls.map(async (url) => ({
         url,
-        colors: await processImageColors(url),
+        colors: await processImageColors(url, {}), // Use default options for fallback
       }))
     );
 
@@ -803,78 +804,159 @@ function labToRgb(l, a, b) {
   return xyzToRgb(x, y, z);
 }
 
-// Ultra-strict color enhancement algorithm - preserves pure whites and blacks
-function enhanceColorSaturation(r, g, b) {
-  // Ultra-strict handling for pure white - return exact white
-  if (r >= 252 && g >= 252 && b >= 252) {
-    return { r: 255, g: 255, b: 255 };
+// RGB to HSL conversion for better color control (cached)
+function rgbToHsl(r, g, b) {
+  // Check cache first
+  const key = `${r},${g},${b}`;
+  if (hslCache.has(key)) {
+    return hslCache.get(key);
+  }
+  
+  // Manage cache size
+  if (hslCache.size >= HSL_CACHE_MAX_SIZE) {
+    const firstKey = hslCache.keys().next().value;
+    hslCache.delete(firstKey);
   }
 
-  // Ultra-strict handling for pure black - return exact black
-  if (r <= 8 && g <= 8 && b <= 8) {
-    return { r: 0, g: 0, b: 0 };
-  }
+  r /= 255;
+  g /= 255;
+  b /= 255;
 
-  // Strict handling for near-white colors - minimal processing
-  const isNearWhite = r > 245 && g > 245 && b > 245;
-  if (isNearWhite) {
-    // Use average to maintain neutral white, minimal adjustment
-    const avg = Math.round((r + g + b) / 3);
-    return {
-      r: Math.min(255, avg + 1),
-      g: Math.min(255, avg + 1),
-      b: Math.min(255, avg + 1),
-    };
-  }
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
 
-  // Strict handling for near-black colors - minimal processing
-  const isNearBlack = r < 20 && g < 20 && b < 20;
-  if (isNearBlack) {
-    // Use average to maintain neutral black, minimal adjustment
-    const avg = Math.round((r + g + b) / 3);
-    return {
-      r: Math.max(0, avg - 1),
-      g: Math.max(0, avg - 1),
-      b: Math.max(0, avg - 1),
-    };
-  }
-
-  // For all other colors, use minimal LAB processing
-  const [l, a, b_lab] = rgbToLab(r, g, b);
-
-  // Ultra-subtle lightness adjustment
-  let enhancedL = l;
-  let enhancedA = a;
-  let enhancedB_lab = b_lab;
-
-  if (l > 50) {
-    enhancedL = Math.min(98, l + 2); // Very slight lightening
+  if (max === min) {
+    h = s = 0;
   } else {
-    enhancedL = Math.max(2, l - 2); // Very slight darkening
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
   }
 
-  // Only for clearly colored content
-  const chromaBoost = 1.5;
-  enhancedA = a * chromaBoost;
-  enhancedB_lab = b_lab * chromaBoost;
+  const result = [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+  
+  // Cache the result
+  hslCache.set(key, result);
+  
+  return result;
+}
 
-  // Strict limits to prevent color casts
-  const maxChroma = 50; // Very conservative
-  const currentChroma = Math.sqrt(
-    enhancedA * enhancedA + enhancedB_lab * enhancedB_lab
-  );
-  if (currentChroma > maxChroma) {
-    const scale = maxChroma / currentChroma;
-    enhancedA *= scale;
-    enhancedB_lab *= scale;
+// HSL to RGB conversion
+function hslToRgb(h, s, l) {
+  h /= 360;
+  s /= 100;
+  l /= 100;
+
+  let r, g, b;
+
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
   }
 
-  const [enhancedR, enhancedG, enhancedB] = labToRgb(
-    enhancedL,
-    enhancedA,
-    enhancedB_lab
-  );
-  return { r: enhancedR, g: enhancedG, b: enhancedB };
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+// Create vibrant color from RGB input (optimized)
+function createVibrantColor(r, g, b, intensity = 1.0) {
+  // Convert to HSL for better control
+  const [h, s, l] = rgbToHsl(r, g, b);
+  
+  // Apply vibrant boost with intensity control
+  const boostedSaturation = Math.min(100, s * (1.4 * intensity)); // Boost saturation
+  const boostedLightness = Math.min(85, Math.max(15, l + (5 * intensity))); // Slightly increase lightness
+  
+  // Warm up the color - shift hue toward warmer tones (optimized)
+  let warmHue = h;
+  if (h >= 180 && h <= 300) {
+    // Cool colors (cyan to magenta) - warm them up
+    warmHue = (h + 15) % 360;
+  } else if (h >= 300 || h <= 60) {
+    // Already warm colors - enhance warmth slightly
+    warmHue = Math.min(360, h + 5);
+  }
+  
+  // Remove expensive micro-variation for performance
+  // Previously: const microVariation = Math.sin(Date.now() * 0.001) * 2;
+  const finalHue = warmHue % 360;
+  
+  // Convert back to RGB
+  const [vibrantR, vibrantG, vibrantB] = hslToRgb(finalHue, boostedSaturation, boostedLightness);
+  
+  return { r: vibrantR, g: vibrantG, b: vibrantB };
+}
+
+// Generate subtle texture pattern for depth (cached)
+function generateTexture(seed = Math.random()) {
+  // Check cache first
+  const seedKey = typeof seed === 'number' ? seed : seed.toString();
+  if (textureCache.has(seedKey)) {
+    return textureCache.get(seedKey);
+  }
+  
+  // Manage cache size
+  if (textureCache.size >= TEXTURE_CACHE_MAX_SIZE) {
+    const firstKey = textureCache.keys().next().value;
+    textureCache.delete(firstKey);
+  }
+
+  // Create SVG noise pattern
+  const noiseId = `texture-${seedKey.toString(36).substr(2, 9)}`;
+  const svgPattern = `
+    <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="${noiseId}">
+          <feTurbulence baseFrequency="0.9" numOctaves="4" seed="${seedKey}" />
+          <feColorMatrix type="saturate" values="0"/>
+          <feComponentTransfer>
+            <feFuncA type="discrete" tableValues="0 0.03 0.03 0.06 0.06 0.1 0.1 0.15 0.15 0.2 0.2 0.3"/>
+          </feComponentTransfer>
+          <feComposite operator="over" in2="SourceGraphic"/>
+        </filter>
+      </defs>
+      <rect width="100" height="100" filter="url(#${noiseId})" opacity="0.4"/>
+    </svg>
+  `;
+  
+  const texturePattern = `data:image/svg+xml;base64,${Buffer.from(svgPattern).toString('base64')}`;
+  
+  // Cache the result
+  textureCache.set(seedKey, texturePattern);
+  
+  return texturePattern;
+}
+
+// Generate harmonious accent color
+function generateAccentColor(r, g, b) {
+  const [h, s, l] = rgbToHsl(r, g, b);
+  
+  // Split-complementary for harmonious but distinct accent
+  const accentHue = (h + 150) % 360;
+  const accentSaturation = Math.min(100, s * 0.8); // Slightly less saturated
+  const accentLightness = Math.min(80, Math.max(20, l - 10)); // Slightly darker/lighter for contrast
+  
+  const [accentR, accentG, accentB] = hslToRgb(accentHue, accentSaturation, accentLightness);
+  
+  return { r: accentR, g: accentG, b: accentB };
 }
 
 function getLuminance(r, g, b) {
@@ -885,9 +967,9 @@ function getLuminance(r, g, b) {
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
 }
 
-// Softer processColors - reduced intensity for more pleasant color schemes
+// Process vibrant colors from RGB input (primary color processing function)
 function processColors(dominantColorRgbArray, options = {}) {
-  const { gradientAngle = Math.floor(Math.random() * 360) } = options;
+  const { juicyIntensity = 1.0, enableTexture = true } = options;
 
   if (
     !Array.isArray(dominantColorRgbArray) ||
@@ -903,52 +985,24 @@ function processColors(dominantColorRgbArray, options = {}) {
 
   const [r, g, b] = dominantColorRgbArray;
 
-  // Enhance saturation and contrast of the dominant color (now softer)
-  const enhancedRgb = enhanceColorSaturation(r, g, b);
-  const enhancedColor = `rgb(${enhancedRgb.r}, ${enhancedRgb.g}, ${enhancedRgb.b})`;
+  // Create primary vibrant color
+  const vibrantColor = createVibrantColor(r, g, b, juicyIntensity);
+  const vibrantColorString = `rgb(${vibrantColor.r}, ${vibrantColor.g}, ${vibrantColor.b})`;
+  // Takumi-compatible gradient format
+  const vibrantGradient = `linear-gradient(135deg, ${vibrantColorString}, ${vibrantColorString})`;
 
-  const luminance = getLuminance(enhancedRgb.r, enhancedRgb.g, enhancedRgb.b);
+  // Generate harmonious accent color
+  const accentColor = generateAccentColor(vibrantColor.r, vibrantColor.g, vibrantColor.b);
+  const accentColorString = `rgb(${accentColor.r}, ${accentColor.g}, ${accentColor.b})`;
+  // Takumi-compatible gradient format
+  const accentGradient = `linear-gradient(135deg, ${accentColorString}, ${accentColorString})`;
+
+  // Calculate luminance for text contrast
+  const luminance = getLuminance(vibrantColor.r, vibrantColor.g, vibrantColor.b);
   const isDarkText = luminance > 0.5;
 
-  // Generate secondary color using LAB color space for harmonious variations
-  const [primaryL, primaryA, primaryB] = rgbToLab(
-    enhancedRgb.r,
-    enhancedRgb.g,
-    enhancedRgb.b
-  );
-
-  // Create harmonious variations in LAB space
-  let secondaryL = primaryL;
-  let secondaryA = primaryA;
-  let secondaryB_lab = primaryB;
-
-  // Subtle lightness variation (complementary lightness)
-  if (primaryL > 50) {
-    secondaryL = Math.max(20, primaryL - 15); // Make secondary slightly darker
-  } else {
-    secondaryL = Math.min(80, primaryL + 15); // Make secondary slightly lighter
-  }
-
-  // Gentle chroma variation - create subtle color harmony
-  const primaryChroma = Math.sqrt(primaryA * primaryA + primaryB * primaryB);
-  if (primaryChroma > 5) {
-    // Only if there's noticeable color
-    // Rotate the color slightly in LAB space for harmony
-    const angle = Math.atan2(primaryB, primaryA);
-    const newAngle = angle + Math.PI / 6; // 30 degree rotation for harmony
-    const newChroma = primaryChroma * 0.9; // Slightly reduce chroma for softness
-
-    secondaryA = Math.cos(newAngle) * newChroma;
-    secondaryB_lab = Math.sin(newAngle) * newChroma;
-  }
-
-  // Convert secondary LAB back to RGB
-  const [secondaryR, secondaryG, secondaryB] = labToRgb(
-    secondaryL,
-    secondaryA,
-    secondaryB_lab
-  );
-  const secondaryColor = `rgb(${secondaryR}, ${secondaryG}, ${secondaryB})`;
+  // Generate texture pattern for depth
+  const texturePattern = enableTexture ? generateTexture() : null;
 
   return {
     textColor: isDarkText ? "#000000" : "#FFFFFF",
@@ -959,19 +1013,23 @@ function processColors(dominantColorRgbArray, options = {}) {
       ? "rgba(0, 0, 0, 0.4)"
       : "rgba(255, 255, 255, 0.4)",
     isDarkText,
-    // Use enhanced colors for gradient
-    backgroundGradient: `linear-gradient(${gradientAngle}deg, ${enhancedColor}, ${secondaryColor})`,
-    dominantColor: enhancedColor,
-    secondaryColor: secondaryColor,
+    // Takumi-compatible gradient backgrounds
+    backgroundGradient: vibrantGradient,
+    dominantColor: vibrantColorString,
+    secondaryColor: accentGradient,
+    accentColor: accentColorString,
+    // Texture and intensity options
+    texturePattern,
+    juicyIntensity,
     overlayBackground: isDarkText
       ? "rgba(0, 0, 0, 0.1)"
       : "rgba(255, 255, 255, 0.2)",
-    embedColor: rgbToDiscordColor(enhancedRgb.r, enhancedRgb.g, enhancedRgb.b), // Embed color based on enhanced dominant
+    embedColor: rgbToDiscordColor(vibrantColor.r, vibrantColor.g, vibrantColor.b),
   };
 }
 
 // Enhanced processImageColors with advanced caching
-export async function processImageColors(imageUrl) {
+export async function processImageColors(imageUrl, options = {}) {
   console.time(
     `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
   );
@@ -1066,11 +1124,16 @@ export async function processImageColors(imageUrl) {
         return getDefaultColors();
       }
 
-      // Use the updated processColors function
+      // Use juicy color processing (now the only system)
       console.time(
         `[imageGenerator] color-processing-algorithm-${imageUrl.slice(-10)}`
       );
-      const processedResult = processColors(dominantColorRgb);
+      
+      const processedResult = processColors(dominantColorRgb, {
+        juicyIntensity: options.juicyIntensity || 1.0,
+        enableTexture: options.enableTexture !== false
+      });
+      
       console.timeEnd(
         `[imageGenerator] color-processing-algorithm-${imageUrl.slice(-10)}`
       );
@@ -1098,25 +1161,32 @@ export async function processImageColors(imageUrl) {
   return inflightPromise;
 }
 
-// Helper function to provide default colors when color extraction fails
+// Helper function to provide default vibrant colors when color extraction fails
 function getDefaultColors() {
-  // Default to a pleasant blue color scheme
-  const defaultColor = { r: 33, g: 150, b: 243 }; // Material Blue
+  // Default to a vibrant orange color scheme (feels more "juicy")
+  const defaultVibrantColor = { r: 255, g: 140, b: 0 }; // Vibrant orange
+  const defaultAccentColor = { r: 255, g: 195, b: 0 }; // Golden accent
+  
+  const vibrantColorString = `rgb(${defaultVibrantColor.r}, ${defaultVibrantColor.g}, ${defaultVibrantColor.b})`;
+  const accentColorString = `rgb(${defaultAccentColor.r}, ${defaultAccentColor.g}, ${defaultAccentColor.b})`;
+  
   return {
     textColor: "#FFFFFF",
     secondaryTextColor: "rgba(255, 255, 255, 0.8)",
     tertiaryTextColor: "rgba(255, 255, 255, 0.4)",
     isDarkText: false,
-    backgroundGradient: `linear-gradient(145deg, rgb(${defaultColor.r}, ${
-      defaultColor.g
-    }, ${defaultColor.b}), rgb(${defaultColor.r * 0.8}, ${
-      defaultColor.g * 0.8
-    }, ${defaultColor.b}))`,
+    // Takumi-compatible gradient backgrounds
+    backgroundGradient: `linear-gradient(135deg, ${vibrantColorString}, ${vibrantColorString})`,
+    dominantColor: vibrantColorString,
+    secondaryColor: `linear-gradient(135deg, ${accentColorString}, ${accentColorString})`,
+    accentColor: accentColorString,
+    texturePattern: generateTexture(42), // Consistent default texture
+    juicyIntensity: 1.0,
     overlayBackground: "rgba(255, 255, 255, 0.2)",
     embedColor: rgbToDiscordColor(
-      defaultColor.r,
-      defaultColor.g,
-      defaultColor.b
+      defaultVibrantColor.r,
+      defaultVibrantColor.g,
+      defaultVibrantColor.b
     ),
   };
 }
@@ -1229,15 +1299,6 @@ function resolveThrottleMode(options = {}) {
   return "command";
 }
 
-function resolveRenderBackend(options = {}) {
-  let requestedRenderBackend = String(
-    options.renderBackend || RENDER_BACKEND
-  ).toLowerCase();
-  requestedRenderBackend = requestedRenderBackend === "satori" ? "satori" : "takumi";
-  console.log('Render backend:', requestedRenderBackend)
-  return requestedRenderBackend;
-}
-
 const DEFAULT_GAME_THROTTLE_MS =
   parseInt(process.env.GAME_THROTTLE_INTERVAL_MS) || 450;
 const DEFAULT_COMMAND_THROTTLE_MS =
@@ -1281,7 +1342,6 @@ async function performActualGenerationLogic(
 ) {
   // This function contains the original core logic of generateImage
   let pngBuffer = null;
-  let svg = null;
   let formattedProps = null; // Store formattedProps for error reporting
 
   try {
@@ -1298,7 +1358,6 @@ async function performActualGenerationLogic(
       debug: !!scaling.debug,
     };
     const outputFormat = "webp";
-    const renderBackend = resolveRenderBackend(options);
 
     // --- Component Loading Logic ---
     let Component;
@@ -1332,7 +1391,7 @@ async function performActualGenerationLogic(
       const imageUrl = bannerUrl || defaultImageUrl;
       if (imageUrl) {
         const userId = props?.interaction?.user?.id || "guest";
-        colorProps = await getOrProcessUserGradient(userId, imageUrl);
+        colorProps = await getOrProcessUserGradient(userId, imageUrl, options);
       } else {
         console.warn(
           "No image URL found for 'user' dominant color. Using defaults."
@@ -1344,16 +1403,17 @@ async function performActualGenerationLogic(
       Array.isArray(props.dominantColor) &&
       props.dominantColor.length === 3
     ) {
-      // Allow passing direct RGB array
+      // Direct RGB array processing
       colorProps = processColors(props.dominantColor, {
-        gradientAngle: props.gradientAngle,
+        juicyIntensity: options.juicyIntensity || 1.0,
+        enableTexture: options.enableTexture !== false
       });
     } else {
       console.warn(
         "Invalid dominantColor prop, using defaults:",
         props.dominantColor
       );
-      colorProps = getDefaultColors(); // Fallback to default if dominantColor is invalid format
+      colorProps = getDefaultColors();
     }
     endPerf(`[imageGenerator] color-preparation`);
 
@@ -1416,105 +1476,40 @@ async function performActualGenerationLogic(
     const takumiProps = {
       ...propsWithColoring,
       style: { display: "flex" },
-      renderBackend,
     };
     if (scaling.debug) {
       takumiProps.debug = scaling.debug;
     }
     attachI18nProps(takumiProps);
 
-    // --- SVG Generation (uses dimensions and formattedProps) ---
-    if (renderBackend === "takumi") {
-      pngBuffer = await renderWithTakumi({
-        Component,
-        formattedProps: takumiProps,
-        dimensions,
-        scaling,
-        targetWidth,
-        targetHeight,
-        fonts,
-        quality: DEFAULT_AVIF_QUALITY,
-        loadImageAsset,
-        dataUriToBuffer,
-        bufferToArrayBuffer,
-        startPerf,
-        endPerf,
-      });
-    }
+    // --- Image Generation (uses dimensions and formattedProps) ---
+    pngBuffer = await renderWithTakumi({
+      Component,
+      formattedProps: takumiProps,
+      dimensions,
+      scaling,
+      targetWidth,
+      targetHeight,
+      fonts,
+      quality: DEFAULT_AVIF_QUALITY,
+      loadImageAsset,
+      dataUriToBuffer,
+      bufferToArrayBuffer,
+      startPerf,
+      endPerf,
+    });
 
     if (!pngBuffer) {
-      startPerf(`[imageGenerator] props-sanitization`);
-      let sanitizedProps;
-      try {
-        sanitizedProps = structuredClone(propsWithColoring);
-      } catch {
-        sanitizedProps = JSON.parse(
-          JSON.stringify(propsWithColoring, (_, value) =>
-            typeof value === "bigint" ? Number(value) : value
-          )
-        );
-      }
-      formattedProps = {
-        ...formatValue(sanitizedProps),
-        style: { display: "flex" },
-        renderBackend: "satori",
-      };
-      if (scaling.debug) {
-        formattedProps.debug = scaling.debug;
-      }
-      attachI18nProps(formattedProps);
-      endPerf(`[imageGenerator] props-sanitization`);
-
-      svg = await renderWithSatori({
-        Component,
-        formattedProps,
-        dimensions,
-        scaling,
-        fonts,
-        componentName: component,
-        fetchEmojiSvg,
-        loadImageAsset,
-        startPerf,
-        endPerf,
-      });
+      throw new Error("Takumi rendering failed - no fallback available");
     }
 
-    if (!pngBuffer) {
-      try {
-        pngBuffer = await rasterizeSvgToWebp({
-          svg,
-          targetWidth,
-          targetHeight,
-          dimensions,
-          useResvg: USE_RESVG_RASTER,
-          quality: DEFAULT_AVIF_QUALITY,
-          effort: DEFAULT_AVIF_EFFORT,
-          startPerf,
-          endPerf,
-        });
-        if (PERF_LOGGING) {
-          console.log(
-            `${outputFormat.toUpperCase()} Buffer created:`,
-            pngBuffer?.length ?? 0,
-            "bytes"
-          );
-        }
-      } catch (sharpError) {
-        console.error("Image conversion failed:", sharpError);
-        throw sharpError;
-      }
-    } else {
-      if (PERF_LOGGING) {
-        console.log(
-          "Using Takumi-generated buffer:",
-          pngBuffer?.length ?? 0,
-          "bytes"
-        );
-      }
+    if (PERF_LOGGING) {
+      console.log(
+        "Using Takumi-generated buffer:",
+        pngBuffer?.length ?? 0,
+        "bytes"
+      );
     }
-
-    // Release SVG memory
-    svg = null;
 
     // Return final result
     const finalBuffer = pngBuffer;
@@ -1527,7 +1522,6 @@ async function performActualGenerationLogic(
     endPerf(`[imageGenerator] core-generation`);
     // Clean up potentially large objects from memory in case of error
     pngBuffer = null;
-    svg = null;
     // Note: props/component are passed by value/reference, cleanup might not be effective here
     // await cleanup(true); // Consider if cleanup is needed here or only in the outer function
     throw {
@@ -1747,6 +1741,15 @@ export async function generateImage(
 }
 // --- End Exported generateImage Function ---
 
+// Export color processing functions for external use
+export {
+  processColors,
+  createVibrantColor,
+  generateTexture,
+  generateAccentColor,
+  getDefaultColors
+};
+
 // Enhanced cache performance reporting
 export function generateCachePerformanceReport() {
   // Silent report: return metrics without console logs
@@ -1815,7 +1818,7 @@ export async function warmupCache(urls, maxUrls = 10) {
 
   for (const url of urlsToProcess) {
     try {
-      await processImageColors(url);
+      await processImageColors(url, {}); // Use default options for warmup
       successCount++;
       console.log(`✅ Warmed cache for: ${url}`);
     } catch (error) {
