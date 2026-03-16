@@ -41,7 +41,7 @@ router.put("/:key", async (req: CacheRouteRequest, res: ResponseLike) => {
       return res.status(400).json({ error: "value is required" });
     }
 
-    const normalizedTtl = typeof ttl === "number" ? ttl : undefined;
+    const normalizedTtl = null;
     const result = await Database.setCache(decodedKey, value, normalizedTtl);
     res.json(serializeBigInt(result));
   } catch (error) {

@@ -56,6 +56,24 @@ type UserWithUpgrades = {
   upgrades?: unknown;
 };
 
+const MAX_UPGRADE_DISCOUNT = 30;
+
+function clampUpgradeDiscount(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  if (value < 0) {
+    return 0;
+  }
+
+  if (value > MAX_UPGRADE_DISCOUNT) {
+    return MAX_UPGRADE_DISCOUNT;
+  }
+
+  return value;
+}
+
 async function updateUpgrades(
   client: UpgradeClient,
   guildId: string,
@@ -129,7 +147,7 @@ async function purchaseUpgrade(
     throw new Error("User economy data not found");
   }
 
-  const discountPercent = Number(economy.upgradeDiscount || 0);
+  const discountPercent = clampUpgradeDiscount(Number(economy.upgradeDiscount || 0));
   let finalPrice = upgradeInfo.price;
 
   if (discountPercent > 0) {

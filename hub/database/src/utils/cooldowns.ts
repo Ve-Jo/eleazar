@@ -78,18 +78,42 @@ async function getCooldown(
   const cooldowns = parseCooldownData(cooldownRecord?.data, guildId, userId);
   const lastUsed = cooldowns[type] || 0;
   const baseTime = cooldownDurations[type] || 0;
+  const now = Date.now();
+  const isAbsoluteExpiry = lastUsed > now;
+  let remaining = isAbsoluteExpiry
+    ? Math.max(0, lastUsed - now)
+    : Math.max(0, lastUsed + baseTime - now);
+
+  if (remaining <= 0) {
+    return 0;
+  }
+
+  const needsUpgradeCooldownEffects = ["crime", "work", "upgraderevert"].includes(type);
+
+  if (!needsUpgradeCooldownEffects) {
+    return remaining;
+  }
+
+  const userUpgrades = (await client.upgrade.findMany({
+    where: { userId, guildId },
+  })) as UpgradeRecord[];
+
+  const cooldownMasteryLevel =
+    userUpgrades.find((upgrade) => upgrade.type === "cooldown_mastery")?.level || 1;
+  const cooldownMasteryReduction = Math.min(
+    60 * 60 * 1000,
+    (cooldownMasteryLevel - 1) * UPGRADES.cooldown_mastery.effectValue
+  );
+  remaining = Math.max(0, remaining - cooldownMasteryReduction);
 
   if (type === "crime") {
-    const userUpgrades = (await client.upgrade.findMany({
-      where: { userId, guildId },
-    })) as UpgradeRecord[];
     const crimeUpgrade = userUpgrades.find((upgrade) => upgrade.type === "crime");
     const crimeLevel = crimeUpgrade?.level || 1;
     const reduction = (crimeLevel - 1) * UPGRADES.crime.effectValue;
-    return Math.max(0, lastUsed + baseTime - reduction - Date.now());
+    return Math.max(0, remaining - reduction);
   }
 
-  return Math.max(0, lastUsed + baseTime - Date.now());
+  return remaining;
 }
 
 async function updateCooldown(

@@ -84,7 +84,11 @@ async function openCrate(
 
   if (["daily", "weekly"].includes(type)) {
     const cooldown = await getCrateCooldown(guildId, userId, type);
-    if (cooldown && Date.now() < cooldown) {
+    const crateConfig = CRATE_TYPES[type as keyof typeof CRATE_TYPES];
+    const cooldownDuration = crateConfig?.cooldown || 0;
+    const cooldownEndsAt = Number(cooldown || 0) + cooldownDuration;
+
+    if (cooldown && cooldownDuration > 0 && Date.now() < cooldownEndsAt) {
       throw new Error(`Cooldown active: ${cooldown}`);
     }
 

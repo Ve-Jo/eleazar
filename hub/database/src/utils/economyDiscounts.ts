@@ -12,6 +12,24 @@ type EconomyDiscountClient = {
 
 type EnsureUserFn = (guildId: string, userId: string) => Promise<unknown>;
 
+const MAX_UPGRADE_DISCOUNT = 30;
+
+function clampUpgradeDiscount(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  if (value < 0) {
+    return 0;
+  }
+
+  if (value > MAX_UPGRADE_DISCOUNT) {
+    return MAX_UPGRADE_DISCOUNT;
+  }
+
+  return value;
+}
+
 async function getUpgradeDiscount(
   client: EconomyDiscountClient,
   guildId: string,
@@ -30,7 +48,7 @@ async function getUpgradeDiscount(
     return 0;
   }
 
-  return Number(economy.upgradeDiscount || 0);
+  return clampUpgradeDiscount(Number(economy.upgradeDiscount || 0));
 }
 
 async function addUpgradeDiscount(
@@ -51,8 +69,8 @@ async function addUpgradeDiscount(
     },
   })) as EconomyRecord | null;
 
-  const currentDiscount = Number(economy?.upgradeDiscount || 0);
-  const newDiscount = currentDiscount + discountPercent;
+  const currentDiscount = clampUpgradeDiscount(Number(economy?.upgradeDiscount || 0));
+  const newDiscount = clampUpgradeDiscount(currentDiscount + discountPercent);
 
   return client.economy.upsert({
     where: {

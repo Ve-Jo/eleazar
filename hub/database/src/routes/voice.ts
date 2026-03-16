@@ -8,6 +8,7 @@ const router = express.Router();
 type VoiceRouteRequest = RequestLike & {
   params: Record<string, string>;
   body: Record<string, unknown>;
+  query?: Record<string, unknown>;
 };
 
 router.post("/sessions", async (req: VoiceRouteRequest, res: ResponseLike) => {
@@ -22,7 +23,13 @@ router.post("/sessions", async (req: VoiceRouteRequest, res: ResponseLike) => {
       });
     }
 
-    const session = await Database.createVoiceSession(guildId, userId, channelId);
+    const joinedAt = typeof req.body.joinedAt === "number" ? req.body.joinedAt : Date.now();
+    const session = await Database.createVoiceSession(
+      guildId,
+      userId,
+      channelId,
+      joinedAt
+    );
     res.json(serializeBigInt(session));
   } catch (error) {
     console.error("Error creating voice session:", error);
@@ -85,7 +92,14 @@ router.get(
         return res.status(400).json({ error: "guildId is required" });
       }
 
-      const sessions = await Database.getAllVoiceSessions(guildId);
+      const channelId =
+        typeof req.query?.channelId === "string" ? req.query.channelId : "";
+
+      if (!channelId) {
+        return res.status(400).json({ error: "channelId is required" });
+      }
+
+      const sessions = await Database.getAllVoiceSessions(guildId, channelId);
       res.json(serializeBigInt(sessions));
     } catch (error) {
       console.error("Error getting guild voice sessions:", error);
@@ -98,19 +112,19 @@ router.post("/xp/calculate", async (req: VoiceRouteRequest, res: ResponseLike) =
   try {
     const userId = typeof req.body.userId === "string" ? req.body.userId : "";
     const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
-    const timeSpent =
-      typeof req.body.timeSpent === "number" ? req.body.timeSpent : undefined;
+    const joinedAt =
+      typeof req.body.joinedAt === "number" ? req.body.joinedAt : undefined;
 
-    if (!userId || !guildId || timeSpent === undefined) {
+    if (!userId || !guildId || joinedAt === undefined) {
       return res.status(400).json({
-        error: "userId, guildId, and timeSpent are required",
+        error: "userId, guildId, and joinedAt are required",
       });
     }
 
     const result = await Database.calculateAndAddVoiceXP(
       guildId,
       userId,
-      timeSpent
+      { joinedAt }
     );
     res.json(serializeBigInt(result));
   } catch (error) {

@@ -1,7 +1,13 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import crypto from "crypto";
-import Database from "../client.ts";
+import DatabaseInstance from "../client.ts";
 import MexcService from "./mexcService.ts";
+
+type DatabaseWithPrismaClient = {
+  client: PrismaClient;
+};
+
+const Database = DatabaseInstance as unknown as DatabaseWithPrismaClient;
 
 type DepositMemoData = {
   userId: string;

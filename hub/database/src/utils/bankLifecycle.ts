@@ -76,7 +76,14 @@ async function updateBankBalance(
     let finalRate = currentBank.bankRate;
     let finalStartTime = currentBank.bankStartTime;
 
+    if (finalBalance.lessThanOrEqualTo(0)) {
+      finalBalance = new Prisma.Decimal(0);
+      finalRate = new Prisma.Decimal(0);
+      finalStartTime = 0;
+    }
+
     if (
+      finalBalance.greaterThan(0) &&
       Number(currentBank.bankStartTime) > 0 &&
       currentBank.bankRate.greaterThan(0)
     ) {
@@ -140,6 +147,12 @@ async function calculateBankBalance(
   tx: BankLifecycleTransaction | null = null
 ): Promise<Prisma.Decimal | string> {
   if (!user.economy?.bankBalance) {
+    return "0.00000";
+  }
+
+  const bankBalance = new Prisma.Decimal(user.economy.bankBalance);
+
+  if (bankBalance.lessThanOrEqualTo(0)) {
     return "0.00000";
   }
 

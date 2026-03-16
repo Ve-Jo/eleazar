@@ -13,22 +13,6 @@ function calculateInterest(
     return Number(principal).toFixed(5);
   }
 
-  if (principal > 0 && principal < 1000) {
-    const smallRate = (annualRate + 300) / 100;
-    const thresholdYears = (1000 - principal) / (principal * smallRate);
-
-    if (timeInYears <= thresholdYears) {
-      const interest = principal * smallRate * timeInYears;
-      return Number(principal + interest).toFixed(5);
-    }
-
-    const remainingYears = timeInYears - thresholdYears;
-    const normalRate = annualRate / 100;
-    const crossPrincipal = 1000;
-    const interestAfter = crossPrincipal * normalRate * remainingYears;
-    return Number(crossPrincipal + interestAfter).toFixed(5);
-  }
-
   const rate = annualRate / 100;
   const interest = principal * rate * timeInYears;
   return Number(principal + interest).toFixed(5);
@@ -49,26 +33,6 @@ function calculateInterestDecimal(
     timeInYears.equals(new Prisma.Decimal(0))
   ) {
     return principal;
-  }
-
-  const threshold = new Prisma.Decimal(1000);
-  if (
-    principal.lessThan(threshold) &&
-    !principal.equals(new Prisma.Decimal(0))
-  ) {
-    const smallRate = annualRate.plus(new Prisma.Decimal(300)).dividedBy(100);
-    const thresholdYears = threshold.minus(principal).dividedBy(principal.times(smallRate));
-
-    if (
-      timeInYears.lessThan(thresholdYears) ||
-      timeInYears.equals(thresholdYears)
-    ) {
-      return principal.plus(principal.times(smallRate).times(timeInYears));
-    }
-
-    const remainingYears = timeInYears.minus(thresholdYears);
-    const normalRate = annualRate.dividedBy(100);
-    return threshold.plus(threshold.times(normalRate).times(remainingYears));
   }
 
   const rate = annualRate.dividedBy(100);

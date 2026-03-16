@@ -10,6 +10,7 @@ type EconomyMutationTransaction = {
     findUnique: (args: unknown) => Promise<unknown>;
     upsert: (args: unknown) => Promise<unknown>;
     update: (args: unknown) => Promise<unknown>;
+    updateMany: (args: unknown) => Promise<{ count: number }>;
   };
   statistics: {
     upsert: (args: unknown) => Promise<unknown>;
@@ -66,6 +67,24 @@ type UpgradeRecord = {
   level?: number;
 };
 
+const MAX_EFFECTIVE_BANK_RATE = new Prisma.Decimal(45);
+
+function clampDecimalNonNegative(value: Prisma.Decimal): Prisma.Decimal {
+  return value.lessThan(0) ? new Prisma.Decimal(0) : value;
+}
+
+function clampBankRate(value: Prisma.Decimal): Prisma.Decimal {
+  if (value.lessThan(0)) {
+    return new Prisma.Decimal(0);
+  }
+
+  if (value.greaterThan(MAX_EFFECTIVE_BANK_RATE)) {
+    return MAX_EFFECTIVE_BANK_RATE;
+  }
+
+  return value;
+}
+
 async function addBalance(
   client: EconomyMutationClient,
   ensureUser: EnsureUserFn,
@@ -76,9 +95,12 @@ async function addBalance(
   await ensureUser(guildId, userId);
 
   const decimalAmount = new Prisma.Decimal(amount);
+  const isZero = decimalAmount.equals(0);
+  const isPositive = decimalAmount.greaterThan(0);
+  const decrementAmount = decimalAmount.abs();
 
   return client.$transaction(async (tx) => {
-    if (decimalAmount.equals(0)) {
+    if (isZero) {
       const existingEconomy = await tx.economy.findUnique({
         where: {
           guildId_userId: {
@@ -100,29 +122,63 @@ async function addBalance(
       }
     }
 
-    const economy = await tx.economy.upsert({
+    if (isPositive) {
+      await tx.economy.upsert({
+        where: {
+          guildId_userId: {
+            guildId,
+            userId,
+          },
+        },
+        create: {
+          guildId,
+          userId,
+          balance: decimalAmount,
+          bankBalance: new Prisma.Decimal(0),
+          bankRate: new Prisma.Decimal(0),
+          bankStartTime: 0,
+        },
+        update: {
+          balance: {
+            increment: decimalAmount,
+          },
+        },
+      });
+    } else {
+      const decrementResult = await tx.economy.updateMany({
+        where: {
+          guildId,
+          userId,
+          balance: {
+            gte: decrementAmount,
+          },
+        },
+        data: {
+          balance: {
+            decrement: decrementAmount,
+          },
+        },
+      });
+
+      if (decrementResult.count === 0) {
+        throw new Error("Insufficient balance");
+      }
+    }
+
+    const economy = await tx.economy.findUnique({
       where: {
         guildId_userId: {
           guildId,
           userId,
         },
       },
-      create: {
-        guildId,
-        userId,
-        balance: decimalAmount,
-        bankBalance: new Prisma.Decimal(0),
-        bankRate: new Prisma.Decimal(0),
-        bankStartTime: 0,
-      },
-      update: {
-        balance: {
-          increment: decimalAmount,
-        },
-      },
     });
 
-    if (decimalAmount.greaterThan(0)) {
+    if (!economy) {
+      throw new Error("User economy data not found");
+    }
+
+    if (isPositive) {
       await tx.statistics.upsert({
         where: {
           guildId_userId: {
@@ -331,12 +387,20 @@ async function deposit(
       userUpgrades.find((upgrade) => upgrade.type === "bank_rate")?.level || 1;
     const upgradeBoostPercent =
       (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
-    const newBankRate = new Prisma.Decimal(
+    const rawBankRate = new Prisma.Decimal(
       5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
     );
+    const newBankRate = clampBankRate(rawBankRate);
     console.log(`New bank rate calculated: ${newBankRate}`);
 
-    const feeAmount = depositAmount.times(0.05);
+    const taxOptimizationLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "tax_optimization")?.level || 1;
+    const taxReduction = Math.min(
+      0.5,
+      (taxOptimizationLevel - 1) * (UPGRADES.tax_optimization.effectMultiplier || 0)
+    );
+    const feeRate = new Prisma.Decimal(0.05 * (1 - taxReduction));
+    const feeAmount = depositAmount.times(feeRate);
     const finalDepositAmount = depositAmount.minus(feeAmount);
     console.log(
       `Deposit fee (5%): ${feeAmount}, final deposit amount: ${finalDepositAmount}`
@@ -403,7 +467,7 @@ async function withdraw(
 ): Promise<unknown> {
   await ensureUser(guildId, userId);
 
-  const withdrawAmount = new Prisma.Decimal(amount);
+  let withdrawAmount = new Prisma.Decimal(amount);
 
   return client.$transaction(async (tx) => {
     const user = (await tx.user.findUnique({
@@ -440,6 +504,13 @@ async function withdraw(
       (user.economy as UserEconomyShape & { bankDistributed?: Prisma.Decimal | null })
         .bankDistributed || new Prisma.Decimal(0);
     const totalBankBalance = currentBankBalance.plus(bankDistributed);
+    const epsilon = new Prisma.Decimal(0.00001);
+
+    if (withdrawAmount.greaterThanOrEqualTo(totalBankBalance)) {
+      withdrawAmount = totalBankBalance;
+    } else if (totalBankBalance.minus(withdrawAmount).abs().lessThanOrEqualTo(epsilon)) {
+      withdrawAmount = totalBankBalance;
+    }
 
     if (totalBankBalance.lessThan(withdrawAmount)) {
       throw new Error("Insufficient bank balance");
@@ -470,8 +541,15 @@ async function withdraw(
       remainingToWithdraw = remainingToWithdraw.minus(bankWithdrawal);
     }
 
+    newBankBalance = clampDecimalNonNegative(newBankBalance);
+    newBankDistributed = clampDecimalNonNegative(newBankDistributed);
+
     const totalRemainingBalance = newBankBalance.plus(newBankDistributed);
     const isWithdrawingAll = totalRemainingBalance.lessThanOrEqualTo(0);
+
+    const userUpgrades = (await tx.upgrade.findMany({
+      where: { guildId, userId },
+    })) as UpgradeRecord[];
 
     let newBankRate = new Prisma.Decimal(0);
     let newBankStartTime = 0;
@@ -479,20 +557,25 @@ async function withdraw(
     if (!isWithdrawingAll && newBankBalance.greaterThan(0)) {
       const chattingLevel = user.Level ? calculateLevel(user.Level.xp).level : 1;
       const gamingLevel = user.Level ? calculateLevel(user.Level.gameXp).level : 1;
-      const userUpgrades = (await tx.upgrade.findMany({
-        where: { guildId, userId },
-      })) as UpgradeRecord[];
       const bankRateUpgradeLevel =
         userUpgrades.find((upgrade) => upgrade.type === "bank_rate")?.level || 1;
       const upgradeBoostPercent =
         (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
-      newBankRate = new Prisma.Decimal(
+      const rawBankRate = new Prisma.Decimal(
         5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
       );
+      newBankRate = clampBankRate(rawBankRate);
       newBankStartTime = Date.now();
     }
 
-    const feeAmount = withdrawAmount.times(0.05);
+    const taxOptimizationLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "tax_optimization")?.level || 1;
+    const taxReduction = Math.min(
+      0.5,
+      (taxOptimizationLevel - 1) * (UPGRADES.tax_optimization.effectMultiplier || 0)
+    );
+    const feeRate = new Prisma.Decimal(0.05 * (1 - taxReduction));
+    const feeAmount = withdrawAmount.times(feeRate);
     const finalWithdrawAmount = withdrawAmount.minus(feeAmount);
     console.log(
       `Withdraw fee (5%): ${feeAmount}, final withdraw amount: ${finalWithdrawAmount}`
