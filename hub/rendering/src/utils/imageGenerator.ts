@@ -8,7 +8,7 @@ import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
 import {
-  rasterizeSvgToWebp,
+  rasterizeSvgToPng,
   renderWithTakumi,
 } from "./renderBackends.js";
 
@@ -1357,7 +1357,7 @@ async function performActualGenerationLogic(
           : 1,
       debug: !!scaling.debug,
     };
-    const outputFormat = "webp";
+    const outputFormat = "png";
 
     // --- Component Loading Logic ---
     let Component;

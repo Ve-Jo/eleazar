@@ -197,74 +197,195 @@ const Balance = (props) => {
             flexDirection: "column",
           }}
         >
-          <div style={{ display: "flex" }}>
+          <div style={{ display: "flex", alignItems: "stretch", gap: "8px" }}>
+            {/* Level Bars - Inline to auto-align with wallet/bank stack */}
             <div
               style={{
-                width: "260px", // Keep original width
+                width: "36px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                zIndex: 1,
+                alignSelf: "stretch",
+              }}
+            >
+              {/* Flex-distributed bars with min heights; fill uses percentage of each bar */}
+              {/* Chatting Level */}
+              <div
+                style={{
+                  width: "36px",
+                  background: "rgba(189, 78, 255, 0.2)",
+                  borderRadius: "10px 10px 0 0",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  paddingTop: "2px",
+                  flexGrow: chattingLevel,
+                  minHeight: "55px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    paddingTop: "4px",
+                    fontSize: "6px",
+                    gap: "1px",
+                    zIndex: 1,
+                    position: "relative",
+                    color: textColor,
+                    opacity: 0.9,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>
+                    {translations.chatting || "ЧАТТИНГ"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: `${Math.max(0, Math.min(1, chatFillRatio)) * 100}%`,
+                    background: "#bd4eff",
+                    position: "absolute",
+                    bottom: "0",
+                    left: "0",
+                    opacity: 0.7,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color: textColor,
+                    gap: "3px",
+                    zIndex: 2,
+                  }}
+                >
+                  <span style={{ top: "3px" }}>{chattingLevel}</span>
+                  <span style={{ fontSize: "9px", opacity: 0.8 }}>lvl</span>
+                </div>
+              </div>
+
+              {/* Gaming Level */}
+              <div
+                style={{
+                  width: "36px",
+                  background: "rgba(213, 86, 86, 0.2)",
+                  borderRadius: "0 0 12px 12px",
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  paddingTop: "2px",
+                  flexGrow: gamingLevel,
+                  minHeight: "55px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    paddingTop: "5px",
+                    fontSize: "6px",
+                    gap: "1px",
+                    zIndex: 1,
+                    position: "relative",
+                    color: textColor,
+                    opacity: 0.9,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>
+                    {translations.gaming || "ГЕЙМИНГ"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: `${Math.max(0, Math.min(1, gameFillRatio)) * 100}%`,
+                    background: "#d55656",
+                    position: "absolute",
+                    bottom: "0",
+                    left: "0",
+                    opacity: 0.7,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "baseline",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    color: textColor,
+                    gap: "3px",
+                    zIndex: 2,
+                  }}
+                >
+                  <span style={{ top: "3px" }}>{gamingLevel}</span>
+                  <span style={{ fontSize: "9px", opacity: 0.8 }}>lvl</span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
                 display: "flex",
                 flexDirection: "column",
                 marginLeft: "0px",
               }}
             >
-              <div
+              <h2
                 style={{
+                  margin: "0",
+                  fontSize: "24px",
                   display: "flex",
-                  flexDirection: "row",
+                  marginLeft: "0px",
+                  color: textColor,
                   alignItems: "center",
-                  gap: "10px",
-                  left: "1px",
                 }}
               >
-                <img
-                  src={
-                    interaction?.guild?.iconURL ||
-                    "https://cdn.discordapp.com/embed/avatars/0.png"
-                  }
-                  alt="Guild Icon"
-                  width={24}
-                  height={24}
-                  style={{ borderRadius: "5px" }}
-                />
-                <h2
+                {translations.title}
+                <span
                   style={{
-                    margin: "0",
-                    fontSize: "24px",
+                    fontSize: "14px",
+                    opacity: "0.5",
+                    marginLeft: "8px",
+                    lineHeight: "24px",
                     display: "flex",
-                    marginLeft: "10px",
-                    color: textColor,
                     alignItems: "center",
                   }}
                 >
-                  {translations.title}
-                  <span
-                    style={{
-                      fontSize: "14px",
-                      opacity: "0.5",
-                      marginLeft: "8px",
-                      lineHeight: "24px",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {interaction?.user?.username ||
-                      interaction?.user?.displayName ||
-                      "{username}"}
-                  </span>
-                </h2>
-              </div>
+                  {interaction?.user?.username ||
+                    interaction?.user?.displayName ||
+                    "{username}"}
+                </span>
+              </h2>
 
               {/* Banknotes are now inside the bank rectangle */}
 
               <div
                 style={{
+                  marginTop: "5px",  
                   display: "flex",
                   flexDirection: "column",
-                  marginTop: "10px",
-                  gap: "5px",
-                  marginLeft: "42px",
+                  width: "auto", // Natural width based on content
+                  minWidth: "200px", // Minimum reasonable width
+                  maxWidth: "320px", // Maximum width limit
                 }}
               >
-                {/* Wallet Section - Independent container */}
                 <div
                   style={{
                     display: "flex",
@@ -278,7 +399,7 @@ const Balance = (props) => {
                     style={{
                       display: "flex",
                       backgroundColor: overlayBackground,
-                      borderRadius: "10px 10px 10px 0px",
+                      borderRadius: "12px",
                       padding: "5px 12px",
                       alignItems: "center",
                       alignSelf: "flex-start",
@@ -299,7 +420,7 @@ const Balance = (props) => {
                         container: {
                           position: "absolute",
                           overflow: "hidden",
-                          top: "10px",
+                          top: "0px",
                         },
                         banknote: {
                           width: "12px",
@@ -314,6 +435,7 @@ const Balance = (props) => {
                         fontSize: "24px",
                         marginRight: "15px",
                         flexShrink: 0,
+                        marginBottom: "7px",
                         position: "relative",
                         zIndex: 1,
                       }}
@@ -361,6 +483,7 @@ const Balance = (props) => {
                     flexDirection: "column",
                     gap: "0px",
                     marginLeft: "0px",
+                    marginTop: "5px",
                     width: "auto", // Natural width based on content
                     minWidth: "200px", // Minimum reasonable width
                     maxWidth: "320px", // Maximum width limit
@@ -370,7 +493,7 @@ const Balance = (props) => {
                     style={{
                       display: "flex",
                       backgroundColor: overlayBackground,
-                      borderRadius: "0 10px 0px 0",
+                      borderRadius: "12px 12px 0 0",
                       padding: "5px 12px",
                       alignItems: "center",
                       alignSelf: "flex-start",
@@ -378,7 +501,8 @@ const Balance = (props) => {
                       overflow: "hidden",
                       boxSizing: "border-box",
                       flexShrink: 0,
-                      width: "100%", // Full width to match annual + distribution panel
+                      width: "calc(100% - 80px)", // leave space under avatar
+                      maxWidth: "320px",
                     }}
                   >
                     {/* Bank banknotes inside the rectangle */}
@@ -390,7 +514,7 @@ const Balance = (props) => {
                       styleOverrides={{
                         container: {
                           position: "absolute",
-                          top: "10px",
+                          top: "0px",
                           overflow: "hidden",
                         },
                         banknote: {
@@ -534,7 +658,7 @@ const Balance = (props) => {
                       alignItems: "stretch",
                       alignSelf: "flex-start",
                       flexShrink: 0,
-                      width: "auto", // Natural width based on content
+                      width: "calc(100% - 80px)", // Match bank width and leave right margin
                       minWidth: "200px", // Minimum reasonable width
                       maxWidth: "320px", // Same max width as bank balance above
                     }}
@@ -548,7 +672,7 @@ const Balance = (props) => {
                             ? "rgba(137, 137, 137, 0.5)"
                             : "rgba(210, 210, 210, 0.5)",
                         color: coloring?.isDarkText ? "#000" : "#FFF",
-                        borderRadius: "0 0px 0px 10px",
+                        borderRadius: "0 0 0 12px",
                         padding: "8px 8px",
                         alignItems: "center",
                         justifyContent: "center",
@@ -697,7 +821,7 @@ const Balance = (props) => {
                             display: "flex",
                             flexDirection: "row",
                             background: "#76b94d",
-                            borderRadius: "0 0 15px 0px",
+                            borderRadius: "0 0 12px 0",
                             padding: "2px 6px",
                             alignItems: "center",
                             justifyContent: "space-between",
@@ -791,10 +915,31 @@ const Balance = (props) => {
                   style={{
                     objectFit: "cover",
                     borderRadius: "25px",
-                    border: `1px solid ${coloring.overlayBackground}`,
                   }}
                 />
               </div>
+            </div>
+
+            {/* Guild Icon - Bottom Right */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "5px",
+                right: "5px",
+                zIndex: 2,
+                borderRadius: "5px",
+              }}
+            >
+              <img
+                src={
+                  interaction?.guild?.iconURL ||
+                  "https://cdn.discordapp.com/embed/avatars/0.png"
+                }
+                alt="Guild Icon"
+                width={24}
+                height={24}
+                style={{ borderRadius: "5px" }}
+              />
             </div>
 
             <div
@@ -912,256 +1057,75 @@ const Balance = (props) => {
               </span>
             </div>
           )}
-        </div>
 
-        {/* Level Bars - Positioned on the left side */}
-        <div
-          style={{
-            position: "absolute",
-            left: "22px",
-            top: "59px",
-            width: "36px",
-            height: "156px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "4px",
-            zIndex: 1,
-          }}
-        >
-          {/* Hard-limited total height with proportional bar distribution */}
-          {(() => {
-            const maxLevel = Math.max(chattingLevel, gamingLevel, 1); // Ensure at least 1 to avoid division by zero
-            const totalMaxHeight = 158; // Hard limit for combined height of both bars
-            const minBarHeight = 55; // Minimum height for each bar
-
-            // Calculate level ratios
-            const chattingRatio = chattingLevel / maxLevel;
-            const gamingRatio = gamingLevel / maxLevel;
-
-            // Calculate ideal heights based on levels
-            const idealChattingHeight =
-              minBarHeight +
-              (totalMaxHeight - minBarHeight * 2) * chattingRatio;
-            const idealGamingHeight =
-              minBarHeight + (totalMaxHeight - minBarHeight * 2) * gamingRatio;
-
-            // Ensure minimum heights and cap total
-            const totalIdealHeight = idealChattingHeight + idealGamingHeight;
-
-            let chattingHeight, gamingHeight;
-            if (totalIdealHeight <= totalMaxHeight) {
-              // If total fits within limit, use ideal heights
-              chattingHeight = Math.max(minBarHeight, idealChattingHeight);
-              gamingHeight = Math.max(minBarHeight, idealGamingHeight);
-            } else {
-              // If total exceeds limit, scale down proportionally
-              const scaleFactor = totalMaxHeight / totalIdealHeight;
-              chattingHeight = Math.max(
-                minBarHeight,
-                idealChattingHeight * scaleFactor
-              );
-              gamingHeight = Math.max(
-                minBarHeight,
-                idealGamingHeight * scaleFactor
-              );
-            }
-
-            return [
-              /* Chatting Level - Dynamic height */
+          {isMarried && (
+            <div
+              style={{
+                position: "absolute",
+                left: "25px",
+                top: "235px",
+                minWidth: "160px",
+                width: "auto",
+                maxWidth: "280px",
+                height: "31px",
+                backgroundColor: "#bb3d36",
+                borderRadius: "0 0 10px 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                zIndex: 1,
+                padding: "0 12px 0 8px",
+                boxSizing: "border-box",
+              }}
+            >
               <div
-                key="chatting-level"
                 style={{
-                  width: "36px",
-                  height: `${chattingHeight}px`,
-                  background: `linear-gradient(to bottom, ${overlayBackground}, rgba(193, 86, 255, 0.5))`,
-                  borderRadius: "10px 10px 0 0",
-                  position: "relative",
+                  fontSize: "16px",
                   display: "flex",
-                  flexDirection: "column",
                   alignItems: "center",
-                  paddingTop: "2px",
+                  justifyContent: "center",
+                  marginRight: "8px",
+                  flexShrink: "0",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "6px",
-                    color: secondaryTextColor,
-                    marginTop: "3px",
-                    textTransform: "uppercase",
-                    fontFamily: "Inter", fontWeight: 500,
-                    fontWeight: 600,
-                    marginBottom: "2px",
-                    display: "flex",
-                  }}
-                >
-                  {translations.chatting || "ЧАТТИНГ"}
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    height: `${Math.max(0, chattingHeight * chatFillRatio)}px`,
-                    background: "#bd4eff",
-                    position: "absolute",
-                    bottom: "0",
-                    left: "0",
-                    borderRadius: "0 0 0 0",
-                    display: "flex",
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: "24px",
-                    color: textColor,
-                    fontFamily: "Inter", fontWeight: 500,
-                    position: "absolute",
-                    bottom: "8px",
-                    display: "flex",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span>{chattingLevel}</span>
-                  <span
-                    style={{
-                      fontSize: "8px",
-                      marginLeft: "1px",
-                      top: "-3px",
-                    }}
-                  >
-                    lvl
-                  </span>
-                </div>
-              </div>,
-
-              /* Gaming Level - Dynamic height */
-              <div
-                key="gaming-level"
+                💍
+              </div>
+              <img
+                src={partnerAvatarUrl}
+                alt={partnerUsername}
+                width={19}
+                height={19}
                 style={{
-                  width: "36px",
-                  height: `${gamingHeight}px`,
-                  background: `linear-gradient(to bottom, ${overlayBackground}, rgba(255, 90, 90, 0.5))`,
-                  borderRadius: "0 0 12px 12px",
-                  position: "relative",
+                  borderRadius: "50%",
                   display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  paddingTop: "2px",
+                  flexShrink: "0",
+                  marginRight: "8px",
+                  objectFit: "cover",
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "14px",
+                  color: textColor,
+                  fontFamily: "Inter", fontWeight: 500,
+                  display: "flex",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  flex: "1",
+                  minWidth: "0",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "6px",
-                    color: secondaryTextColor,
-                    marginTop: "3px",
-                    textTransform: "uppercase",
-                    fontFamily: "Inter", fontWeight: 500,
-                    marginBottom: "2px",
-                    display: "flex",
-                  }}
-                >
-                  {translations.gaming || "ГЕЙМИНГ"}
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    height: `${Math.max(0, gamingHeight * gameFillRatio)}px`,
-                    background: "#d55656",
-                    position: "absolute",
-                    bottom: "0",
-                    left: "0",
-                    borderRadius: "0 0 12px 12px",
-                    display: "flex",
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: "24px",
-                    color: textColor,
-                    fontFamily: "Inter", fontWeight: 500,
-                    position: "absolute",
-                    bottom: "12px",
-                    display: "flex",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <span>{gamingLevel}</span>
-                  <span
-                    style={{ fontSize: "8px", marginLeft: "1px", top: "-3px" }}
-                  >
-                    lvl
-                  </span>
-                </div>
-              </div>,
-            ];
-          })()}
+                {marriageCreatedAt
+                  ? `${translations.married} (${prettyMilliseconds(
+                      Date.now() - new Date(marriageCreatedAt).getTime()
+                    )})`
+                  : translations.married}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
-      {isMarried && (
-        <div
-          style={{
-            position: "absolute",
-            left: "25px",
-            top: "235px",
-            minWidth: "160px",
-            width: "auto",
-            maxWidth: "280px",
-            height: "31px",
-            backgroundColor: "#bb3d36",
-            borderRadius: "0 0 10px 10px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            zIndex: 1,
-            padding: "0 12px 0 8px",
-            boxSizing: "border-box",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "8px",
-              flexShrink: "0",
-            }}
-          >
-            💍
-          </div>
-          <img
-            src={partnerAvatarUrl}
-            alt={partnerUsername}
-            width={19}
-            height={19}
-            style={{
-              borderRadius: "50%",
-              display: "flex",
-              flexShrink: "0",
-              marginRight: "8px",
-              objectFit: "cover",
-            }}
-          />
-          <div
-            style={{
-              fontSize: "14px",
-              color: textColor,
-              fontFamily: "Inter", fontWeight: 500,
-              display: "flex",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              flex: "1",
-              minWidth: "0",
-            }}
-          >
-            {marriageCreatedAt
-              ? `${translations.married} (${prettyMilliseconds(
-                  Date.now() - new Date(marriageCreatedAt).getTime()
-                )})`
-              : translations.married}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

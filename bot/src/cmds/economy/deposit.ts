@@ -316,7 +316,7 @@ const command = {
       const dominantColor = generated?.[1];
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: "deposit_receipt.webp",
+        name: "deposit_receipt.png",
       });
 
       const receiptComponent = new ComponentBuilder({
@@ -331,7 +331,7 @@ const command = {
             })
           )
         )
-        .addImage("attachment://deposit_receipt.webp")
+        .addImage("attachment://deposit_receipt.png")
         .addTimestamp(interaction.locale);
 
       const replyOptions = receiptComponent.toReplyOptions({

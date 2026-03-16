@@ -412,7 +412,7 @@ const command: CasesCommandShape = {
       const dominantColor = generated?.[1];
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "crates.webp",
+        name: "crates.png",
       });
 
       const cratesComponent = new ComponentBuilder({
@@ -427,7 +427,7 @@ const command: CasesCommandShape = {
             })
           )
         )
-        .addImage("attachment://crates.webp");
+        .addImage("attachment://crates.png");
 
       if (!disableInteractions) {
         const selectMenu = await this.createSelectMenu(cratesList, selectedCrate, i18n);
@@ -732,13 +732,13 @@ const command: CasesCommandShape = {
     const dominantColor = generated?.[1];
 
     const rewardAttachment = new AttachmentBuilder(rewardBuffer, {
-      name: "reward.webp",
+      name: "reward.png",
     });
 
     const rewardComponent = new ComponentBuilder({
       dominantColor: dominantColor as any,
       mode: builderMode as any,
-    }).addImage("attachment://reward.webp");
+    }).addImage("attachment://reward.png");
 
     const backButton = new ButtonBuilder()
       .setCustomId("back_to_crates")

@@ -177,7 +177,7 @@ const command = {
         const dominantColor = generated?.[1];
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "crime_cooldown.webp",
+          name: "crime_cooldown.png",
         });
 
         const cooldownComponent = new ComponentBuilder({
@@ -186,7 +186,7 @@ const command = {
         })
           .addText(String(await i18n.__("commands.economy.crime.title")), "header3")
           .addText(String(await i18n.__("commands.economy.crime.cooldown")))
-          .addImage("attachment://crime_cooldown.webp");
+          .addImage("attachment://crime_cooldown.png");
 
         await interaction.editReply({
           ...cooldownComponent.toReplyOptions({ files: [attachment] }),
@@ -379,7 +379,7 @@ const command = {
         const dominantColor = generated?.[1];
 
         const attachment = new AttachmentBuilder(pngBuffer, {
-          name: "crime_result.webp",
+          name: "crime_result.png",
         });
 
         const resultComponent = new ComponentBuilder({
@@ -397,7 +397,7 @@ const command = {
                 )
               : String(await i18n.__("commands.economy.crime.failTarget", { amount }))
           )
-          .addImage("attachment://crime_result.webp");
+          .addImage("attachment://crime_result.png");
 
         const resultOptions = resultComponent.toReplyOptions({
           files: [attachment],

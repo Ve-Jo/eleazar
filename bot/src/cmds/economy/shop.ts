@@ -615,14 +615,14 @@ const command = {
 
         const pngBuffer = generated?.[0];
         const dominantColor = generated?.[1];
-        const attachment = new AttachmentBuilder(pngBuffer, { name: "shop_upgrades.webp" });
+        const attachment = new AttachmentBuilder(pngBuffer, { name: "shop_upgrades.png" });
 
         const shopComponent = new ComponentBuilder({
           dominantColor: dominantColor as any,
           mode: builderMode,
         })
           .addText(String(await i18n.__("commands.economy.shop.title")), "header3")
-          .addImage("attachment://shop_upgrades.webp");
+          .addImage("attachment://shop_upgrades.png");
 
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId("switch_upgrade")
