@@ -1426,7 +1426,19 @@ class HubClient {
       );
     }
 
-    // Check if response is JSON (with coloring data) or binary (image buffer)
+    // Prefer binary transport with optional coloring metadata header
+    const coloringHeader = response.headers.get("x-render-coloring");
+    if (coloringHeader) {
+      const buffer = await response.buffer();
+      let coloring: unknown = null;
+      try {
+        const decoded = Buffer.from(coloringHeader, "base64").toString("utf-8");
+        coloring = JSON.parse(decoded);
+      } catch {}
+      return [buffer, coloring];
+    }
+
+    // Check if response is JSON (legacy path) or binary (image buffer)
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       const jsonResponse = (await response.json()) as Record<string, unknown>;
