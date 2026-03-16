@@ -377,7 +377,7 @@ const command = {
       )) as [Buffer, string];
 
       const attachment = new AttachmentBuilder(pngBuffer, {
-        name: "commands.webp",
+        name: "commands.png",
       });
 
       return [attachment, dominantColor];
@@ -393,7 +393,7 @@ const command = {
         mode: "v2",
       })
         .addText(String(await getTranslation("commands.help.commands.title")), "header3")
-        .addImage("attachment://commands.webp");
+        .addImage("attachment://commands.png");
 
       if (!disableInteractions) {
         const categoryMenu = new StringSelectMenuBuilder()

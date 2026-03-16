@@ -242,7 +242,7 @@ const command = {
 
       const upscaledImageBuffer = await upscaledImageResponse.arrayBuffer();
       const resultAttachment = new AttachmentBuilder(Buffer.from(upscaledImageBuffer)).setName(
-        "upscaled_image.webp",
+        "upscaled_image.png",
       );
 
       await interaction.editReply({

@@ -517,7 +517,7 @@ export default {
 
       const message = await interaction.followUp({
         content: `${startMessage}\n${highScoreText}`,
-        files: [{ attachment: buffer, name: "snake.webp" }],
+        files: [{ attachment: buffer, name: "snake.png" }],
         components: [row1, row2],
         fetchReply: true,
       });
@@ -631,7 +631,7 @@ export default {
 
               await message.edit({
                 content: content,
-                files: [{ attachment: finalBoard, name: "snake.webp" }],
+                files: [{ attachment: finalBoard, name: "snake.png" }],
                 components: [],
               });
             } catch (error) {
@@ -864,7 +864,7 @@ export default {
 
             await message.edit({
               content: content,
-              files: [{ attachment: stopBoard, name: "snake.webp" }],
+              files: [{ attachment: stopBoard, name: "snake.png" }],
               components: [],
             });
 
@@ -912,7 +912,7 @@ export default {
             }),
           );
           gameInstance.updateImageTimestamp();
-          messageFiles = [{ attachment: newBoard, name: "snake.webp" }];
+          messageFiles = [{ attachment: newBoard, name: "snake.png" }];
         }
 
         // Fetch and edit the message

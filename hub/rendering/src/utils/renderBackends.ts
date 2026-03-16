@@ -1,2 +1,2 @@
 export { renderWithTakumi } from "./takumiBackend.js";
-export { rasterizeSvgToWebp } from "./rasterBackend.js";
+export { rasterizeSvgToPng } from "./rasterBackend.js";

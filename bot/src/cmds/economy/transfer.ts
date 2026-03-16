@@ -274,7 +274,7 @@ const command = {
       const dominantColor = generated?.[1];
 
       const attachment = new AttachmentBuilder(buffer, {
-        name: "transfer_receipt.webp",
+        name: "transfer_receipt.png",
       });
 
       const transferComponent = new ComponentBuilder({
@@ -282,7 +282,7 @@ const command = {
         mode: builderMode,
       })
         .addText(String(await i18n.__("commands.economy.transfer.title")), "header3")
-        .addImage("attachment://transfer_receipt.webp")
+        .addImage("attachment://transfer_receipt.png")
         .addTimestamp(interaction.locale);
 
       const replyOptions = transferComponent.toReplyOptions({
