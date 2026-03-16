@@ -1,17 +1,24 @@
-// @ts-nocheck
 import React from "react";
 import { ImageResponse } from "@takumi-rs/image-response";
+import type { Font } from "@takumi-rs/core";
+
+type SatoriFont = {
+  name: string;
+  weight?: number;
+  style?: string;
+  data?: ArrayBuffer | Uint8Array;
+};
 
 const EMPTY_BUFFER = Buffer.alloc(0);
 const takumiAssetBufferCache = new Map();
 const TAKUMI_ASSET_BUFFER_CACHE_MAX_SIZE =
-  parseInt(process.env.TAKUMI_ASSET_BUFFER_CACHE_MAX_SIZE, 10) || 256;
+  parseInt(process.env.TAKUMI_ASSET_BUFFER_CACHE_MAX_SIZE || "256", 10);
 const TAKUMI_ASSET_BUFFER_TTL_MS =
-  parseInt(process.env.TAKUMI_ASSET_BUFFER_TTL_MS, 10) || 10 * 60 * 1000;
+  parseInt(process.env.TAKUMI_ASSET_BUFFER_TTL_MS || "600000", 10);
 const TAKUMI_PERSISTENT_IMAGES_MAX_SIZE =
-  parseInt(process.env.TAKUMI_PERSISTENT_IMAGES_MAX_SIZE, 10) || 128;
+  parseInt(process.env.TAKUMI_PERSISTENT_IMAGES_MAX_SIZE || "128", 10);
 
-function getCachedTakumiAssetBuffer(key) {
+function getCachedTakumiAssetBuffer(key: string) {
   const entry = takumiAssetBufferCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > TAKUMI_ASSET_BUFFER_TTL_MS) {
@@ -21,7 +28,7 @@ function getCachedTakumiAssetBuffer(key) {
   return entry;
 }
 
-function setCachedTakumiAssetBuffer(key, asset) {
+function setCachedTakumiAssetBuffer(key: string, asset: { buffer: Buffer; arrayBuffer: ArrayBuffer }) {
   if (
     !key ||
     !asset ||
@@ -61,7 +68,7 @@ function getPersistentImagesSnapshot() {
   return persistentImages;
 }
 
-function resolveSourceKey(src) {
+function resolveSourceKey(src: string | URL | { href?: string; toString?: () => string }): string {
   return typeof src === "string"
     ? src
     : typeof src?.href === "string"
@@ -72,10 +79,10 @@ function resolveSourceKey(src) {
 }
 
 async function resolveSourceAsset(
-  src,
-  loadImageAsset,
-  dataUriToBuffer,
-  bufferToArrayBuffer
+  src: string,
+  loadImageAsset: (path: string) => Promise<string>,
+  dataUriToBuffer: (dataUri: string) => Buffer | null,
+  bufferToArrayBuffer: (buffer: Buffer) => Promise<ArrayBuffer>
 ) {
   if (!src) {
     return {
@@ -87,7 +94,7 @@ async function resolveSourceAsset(
   const cached = getCachedTakumiAssetBuffer(src);
   if (cached) return cached;
 
-  let buffer = EMPTY_BUFFER;
+  let buffer: Buffer = EMPTY_BUFFER;
   if (src.startsWith("data:")) {
     buffer = dataUriToBuffer(src) ?? EMPTY_BUFFER;
   } else {
@@ -96,12 +103,34 @@ async function resolveSourceAsset(
   }
 
   if (buffer.length > 0) {
-    const arrayBuffer = await bufferToArrayBuffer(buffer);
+    const arrayBuffer = await bufferToArrayBuffer(buffer) as ArrayBuffer;
     const asset = { buffer, arrayBuffer };
     setCachedTakumiAssetBuffer(src, asset);
     return asset;
   }
-  return { buffer: EMPTY_BUFFER, arrayBuffer: await bufferToArrayBuffer(EMPTY_BUFFER) };
+  return { buffer: EMPTY_BUFFER, arrayBuffer: await bufferToArrayBuffer(EMPTY_BUFFER) as ArrayBuffer };
+}
+
+function transformSatoriToTakumiFonts(satoriFonts: SatoriFont[]): Font[] {
+  return satoriFonts
+    .filter(font => font.name && font.data)
+    .map(font => {
+      let data: ArrayBuffer;
+      if (font.data instanceof ArrayBuffer) {
+        data = font.data;
+      } else if (font.data instanceof Uint8Array) {
+        data = font.data.buffer as ArrayBuffer;
+      } else {
+        throw new Error(`Font ${font.name} has unsupported data type`);
+      }
+      
+      return {
+        name: font.name,
+        data,
+        weight: font.weight,
+        style: font.style
+      };
+    });
 }
 
 export async function renderWithTakumi({
@@ -111,16 +140,33 @@ export async function renderWithTakumi({
   scaling,
   targetWidth,
   targetHeight,
-  fonts,
+  fonts: satoriFonts,
   quality,
   loadImageAsset,
   dataUriToBuffer,
   bufferToArrayBuffer,
   startPerf,
   endPerf,
+}: {
+  Component: React.ComponentType<any>;
+  formattedProps: Record<string, any>;
+  dimensions: { width: number; height: number };
+  scaling: { image: number; debug?: boolean };
+  targetWidth?: number;
+  targetHeight?: number;
+  fonts: SatoriFont[];
+  quality?: number;
+  loadImageAsset: (src: string) => Promise<string>;
+  dataUriToBuffer: (dataUri: string) => Buffer | null;
+  bufferToArrayBuffer: (buffer: Buffer) => Promise<ArrayBuffer>;
+  startPerf?: (label: string) => void;
+  endPerf?: (label: string) => void;
 }) {
   startPerf?.(`[imageGenerator] takumi-generation`);
   try {
+    // Transform SatoriFont format to Takumi Font format
+    const takumiFonts = transformSatoriToTakumiFonts(satoriFonts);
+    
     const response = new ImageResponse(
       React.createElement(Component, formattedProps),
       {
@@ -131,23 +177,11 @@ export async function renderWithTakumi({
         emoji: "twemoji",
         devicePixelRatio: scaling.image,
         drawDebugBorder: scaling.debug,
-        fonts,
+        fonts: takumiFonts,
         dithering: "floyd-steinberg",
         persistentImages: getPersistentImagesSnapshot(),
         jsx: {
           defaultStyles: false,
-        },
-        fetch: async (src) => {
-          const resolvedSrc = resolveSourceKey(src);
-          const asset = await resolveSourceAsset(
-            resolvedSrc,
-            loadImageAsset,
-            dataUriToBuffer,
-            bufferToArrayBuffer
-          );
-          return {
-            arrayBuffer: async () => asset.arrayBuffer,
-          };
         },
       }
     );

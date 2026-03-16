@@ -1131,9 +1131,7 @@ app.get("/:componentName", async (req, res) => {
     }
     const backendControls = `
       <div class="backend-controls">
-        <span>Backend: </span>
-        <button class="backend-btn" data-backend="satori" onclick="changeBackend('satori')">Satori</button>
-        <button class="backend-btn" data-backend="takumi" onclick="changeBackend('takumi')">Takumi (Experimental)</button>
+        <span>Backend: Takumi</span>
       </div>
     `;
 
@@ -1154,7 +1152,7 @@ app.get("/:componentName", async (req, res) => {
           let isMarried = localStorage.getItem('isMarried') !== 'false';
           let currentRenderLayer = localStorage.getItem('renderLayer:${componentName}') || 'full';
           let doublePassEnabled = localStorage.getItem('doublePass:${componentName}') !== 'false';
-          let currentBackend = localStorage.getItem('previewRenderBackend') || 'satori';
+          let currentBackend = 'takumi';
 
           // Get mock data from localStorage or use initial data from server
           let mockDataJson = localStorage.getItem('mockDataJson');
@@ -1226,13 +1224,7 @@ app.get("/:componentName", async (req, res) => {
             refreshImage();
           }
 
-          function changeBackend(backend) {
-            currentBackend = backend === 'takumi' ? 'takumi' : 'satori';
-            localStorage.setItem('previewRenderBackend', currentBackend);
-            document.querySelectorAll('.backend-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.backend === currentBackend));
-            refreshImage();
-          }
-
+          
           function updateMockData() {
             const editor = document.getElementById('mockDataEditor');
             if (!editor) return;
@@ -1554,11 +1546,7 @@ app.get("/:componentName", async (req, res) => {
             cursor: pointer;
             font-weight: 500;
           }
-          .backend-btn.active[data-backend="satori"] {
-            background: #3f51b5;
-            color: white;
-          }
-          .backend-btn.active[data-backend="takumi"] {
+                    .backend-btn.active[data-backend="takumi"] {
             background: #ff9800;
             color: white;
           }
@@ -1795,8 +1783,6 @@ app.get("/:componentName/image", async (req, res) => {
     const debug = req.query.debug === "true";
     const theme = req.query.theme || "dark";
     const isDarkTheme = theme === "dark";
-    const requestedBackend = String(req.query.backend || "satori").toLowerCase();
-    const renderBackend = requestedBackend === "takumi" ? "takumi" : "satori";
     const renderLayer = req.query.renderLayer || "full";
     const doublePass = req.query.doublePass !== "false";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
@@ -1830,7 +1816,7 @@ app.get("/:componentName/image", async (req, res) => {
     }
 
     console.log(
-      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}, backend: ${renderBackend}`
+      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}, backend: takumi`
     );
 
     // Use custom mock data if provided, otherwise generate default
@@ -2054,7 +2040,6 @@ app.get("/:componentName/image", async (req, res) => {
           disableThrottle: true,
           doublePass,
           doublePassComponent: componentName,
-          renderBackend,
         }
       );
       if (!buffer || !Buffer.isBuffer(buffer))
