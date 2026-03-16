@@ -128,6 +128,7 @@ const Banknotes = ({
               style={{
                 width: "3px",
                 height: "100%",
+                display: "flex",
                 background: "#FF9800",
               }}
             />

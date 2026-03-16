@@ -1118,6 +1118,24 @@ app.get("/:componentName", async (req, res) => {
         </div>
       `;
     }
+    if (componentName === "2048") {
+      additionalControls = `
+        <div class="type-controls">
+          <span>Layer: </span>
+          <button class="type-btn layer-btn active" data-layer="full" onclick="changeRenderLayer('full')">Full</button>
+          <button class="type-btn layer-btn" data-layer="static" onclick="changeRenderLayer('static')">Static</button>
+          <button class="type-btn layer-btn" data-layer="dynamic" onclick="changeRenderLayer('dynamic')">Dynamic</button>
+        </div>
+        <button id="doublePassButton" class="type-btn" onclick="toggleDoublePass()">Double Pass On</button>
+      `;
+    }
+    const backendControls = `
+      <div class="backend-controls">
+        <span>Backend: </span>
+        <button class="backend-btn" data-backend="satori" onclick="changeBackend('satori')">Satori</button>
+        <button class="backend-btn" data-backend="takumi" onclick="changeBackend('takumi')">Takumi (Experimental)</button>
+      </div>
+    `;
 
     // Create preview page HTML
     const html = `
@@ -1134,6 +1152,9 @@ app.get("/:componentName", async (req, res) => {
           let currentMode = localStorage.getItem('transferMode') || 'transfer';
           let currentType = localStorage.getItem('levelUpType') || 'chat';
           let isMarried = localStorage.getItem('isMarried') !== 'false';
+          let currentRenderLayer = localStorage.getItem('renderLayer:${componentName}') || 'full';
+          let doublePassEnabled = localStorage.getItem('doublePass:${componentName}') !== 'false';
+          let currentBackend = localStorage.getItem('previewRenderBackend') || 'satori';
 
           // Get mock data from localStorage or use initial data from server
           let mockDataJson = localStorage.getItem('mockDataJson');
@@ -1179,11 +1200,36 @@ app.get("/:componentName", async (req, res) => {
             refreshImage();
           }
 
+          function changeRenderLayer(layer) {
+            currentRenderLayer = layer;
+            localStorage.setItem('renderLayer:${componentName}', layer);
+            document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
+            refreshImage();
+          }
+
+          function toggleDoublePass() {
+            doublePassEnabled = !doublePassEnabled;
+            localStorage.setItem('doublePass:${componentName}', doublePassEnabled);
+            const button = document.getElementById('doublePassButton');
+            if (button) {
+              button.classList.toggle('active', doublePassEnabled);
+              button.textContent = doublePassEnabled ? 'Double Pass On' : 'Double Pass Off';
+            }
+            refreshImage();
+          }
+
           function changeMarried(married) {
             if ('${componentName}' !== 'Balance') return;
             isMarried = married;
             localStorage.setItem('isMarried', married);
             document.querySelectorAll('.marriage-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.married === String(married)));
+            refreshImage();
+          }
+
+          function changeBackend(backend) {
+            currentBackend = backend === 'takumi' ? 'takumi' : 'satori';
+            localStorage.setItem('previewRenderBackend', currentBackend);
+            document.querySelectorAll('.backend-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.backend === currentBackend));
             refreshImage();
           }
 
@@ -1210,8 +1256,13 @@ app.get("/:componentName", async (req, res) => {
             if (!img) return;
             let url = '/${componentName}/image?lang=' + currentLang;
             url += '&debug=' + debugMode + '&theme=' + (darkTheme ? 'dark' : 'light');
+            url += '&backend=' + currentBackend;
             if ('${componentName}' === 'Transfer') { url += '&mode=' + currentMode; }
             if ('${componentName}' === 'LevelUp') { url += '&type=' + currentType; }
+            if ('${componentName}' === '2048') {
+              url += '&renderLayer=' + currentRenderLayer;
+              url += '&doublePass=' + doublePassEnabled;
+            }
             if ('${componentName}' === 'Balance') {
               // Update mock data to include/exclude marriage status
               try {
@@ -1399,6 +1450,14 @@ app.get("/:componentName", async (req, res) => {
             if ('${componentName}' === 'Transfer') { document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === currentMode)); }
             if ('${componentName}' === 'LevelUp') { document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === currentType)); }
             if ('${componentName}' === 'Balance') { document.querySelectorAll('.marriage-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.married === String(isMarried))); }
+            document.querySelectorAll('.backend-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.backend === currentBackend));
+            if ('${componentName}' === '2048') {
+              document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === currentRenderLayer));
+              if (document.getElementById('doublePassButton')) {
+                document.getElementById('doublePassButton').classList.toggle('active', doublePassEnabled);
+                document.getElementById('doublePassButton').textContent = doublePassEnabled ? 'Double Pass On' : 'Double Pass Off';
+              }
+            }
 
             // Init JSON editor
             const editor = document.getElementById('mockDataEditor');
@@ -1427,11 +1486,13 @@ app.get("/:componentName", async (req, res) => {
             border: 2px solid #ff0000;
             border-radius: 8px;
             overflow: hidden;
+            width: 100%;
+            max-width: 100%;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           }
           .preview img {
             display: block;
-            max-width: 100%;
+            width: 100%;
             height: auto;
           }
           .controls {
@@ -1478,6 +1539,28 @@ app.get("/:componentName", async (req, res) => {
           }
           .debug-btn.active {
             background: #F44336;
+          }
+          .backend-controls {
+            display: flex;
+            gap: 5px;
+            margin-left: 10px;
+            align-items: center;
+          }
+          .backend-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #e0e0e0;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .backend-btn.active[data-backend="satori"] {
+            background: #3f51b5;
+            color: white;
+          }
+          .backend-btn.active[data-backend="takumi"] {
+            background: #ff9800;
+            color: white;
           }
           .theme-btn {
             padding: 8px 12px;
@@ -1664,6 +1747,7 @@ app.get("/:componentName", async (req, res) => {
            </div>
            <button id="debugButton" onclick="toggleDebug()">Debug</button>
            <button id="themeButton" onclick="toggleTheme()">Theme</button>
+           ${backendControls}
            ${additionalControls}
         </div>
         <div class="preview"> <img src="#" alt="Loading preview..."> <div class="dimensions"></div> </div>
@@ -1711,6 +1795,10 @@ app.get("/:componentName/image", async (req, res) => {
     const debug = req.query.debug === "true";
     const theme = req.query.theme || "dark";
     const isDarkTheme = theme === "dark";
+    const requestedBackend = String(req.query.backend || "satori").toLowerCase();
+    const renderBackend = requestedBackend === "takumi" ? "takumi" : "satori";
+    const renderLayer = req.query.renderLayer || "full";
+    const doublePass = req.query.doublePass !== "false";
     const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
 
     // --- Import Component with aggressive cache clearing ---
@@ -1742,7 +1830,7 @@ app.get("/:componentName/image", async (req, res) => {
     }
 
     console.log(
-      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}`
+      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}, backend: ${renderBackend}`
     );
 
     // Use custom mock data if provided, otherwise generate default
@@ -1754,6 +1842,9 @@ app.get("/:componentName/image", async (req, res) => {
       if (mockData) {
         mockData.locale = lang;
         mockData.debug = debug;
+        if (componentName === "2048") {
+          mockData.renderLayer = renderLayer;
+        }
       }
 
       // Apply mode/type/theme settings to custom mock data
@@ -1786,6 +1877,9 @@ app.get("/:componentName/image", async (req, res) => {
       }
       if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
+      }
+      if (componentName === "2048" && mockData) {
+        mockData.renderLayer = renderLayer;
       }
       if (componentName === "UpgradesDisplay" && mockData) {
         // Apply theme settings for specific components if needed
@@ -1837,6 +1931,9 @@ app.get("/:componentName/image", async (req, res) => {
       }
       if (componentName === "LevelUp" && mockData) {
         mockData.type = type;
+      }
+      if (componentName === "2048" && mockData) {
+        mockData.renderLayer = renderLayer;
       }
       mockData.debug = debug;
       if (componentName === "UpgradesDisplay" && mockData) {
@@ -1953,7 +2050,12 @@ app.get("/:componentName/image", async (req, res) => {
         mockData,
         { image: 2, emoji: 2, debug: debug },
         mockData.i18n,
-        { disableThrottle: true }
+        {
+          disableThrottle: true,
+          doublePass,
+          doublePassComponent: componentName,
+          renderBackend,
+        }
       );
       if (!buffer || !Buffer.isBuffer(buffer))
         throw new Error("Generated image invalid");
@@ -1982,7 +2084,7 @@ app.get("/:componentName/image", async (req, res) => {
     // Send response
     const isGif =
       buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
-    res.setHeader("Content-Type", isGif ? "image/gif" : "image/avif");
+    res.setHeader("Content-Type", isGif ? "image/gif" : "image/webp");
     res.send(buffer);
   } catch (error) {
     console.error("Error in /image route:", error);

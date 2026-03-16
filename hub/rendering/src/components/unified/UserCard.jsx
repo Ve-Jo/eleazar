@@ -15,6 +15,9 @@ const UserCard = (props) => {
     showGridSize = true, // New prop to control grid size visibility
     addIncreaseToBalance = true, // New prop to control if increaseAmount should be added to balance
   } = props;
+  const renderBackend = props.renderBackend || "satori";
+  const toUnit = (value) =>
+    renderBackend === "takumi" ? value : `${value}px`;
 
   // Dynamic scaling based on container size
   const scaleFactor = Math.min(size.width / 540, size.height / 103);
@@ -48,10 +51,7 @@ const UserCard = (props) => {
   };
 
   // Scale all measurements
-  const scaleValue = (val) => {
-    console.log(val * scaleFactor);
-    return val * scaleFactor;
-  };
+  const scaleValue = (val) => val * scaleFactor;
   const scaled = {
     avatar: {
       left: scaleValue(BASE_POS.avatar.left),
@@ -99,8 +99,6 @@ const UserCard = (props) => {
         }
       : null,
   };
-
-  console.log(`SCALED`, scaled);
 
   const translations = Object.entries(UserCard.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -288,7 +286,7 @@ const UserCard = (props) => {
                 top: `${yPos}px`,
                 width: "15px",
                 height: "5px",
-                background: "#4CAF50",
+                backgroundColor: "#4CAF50",
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
@@ -297,10 +295,11 @@ const UserCard = (props) => {
             >
               <div
                 style={{
+                  display: "flex",
                   position: "relative",
                   width: "3px",
                   height: "100%",
-                  background: "#FF9800", // Orange stripe
+                  backgroundColor: "#FF9800", // Orange stripe
                 }}
               />
             </div>
@@ -316,7 +315,7 @@ const UserCard = (props) => {
                 top: `${yPos}px`,
                 width: "15px",
                 height: "5px",
-                background: "#DAA520", // Gold gradient
+                backgroundColor: "#DAA520", // Gold gradient
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
@@ -338,7 +337,7 @@ const UserCard = (props) => {
     bottom: `${position.bottom + 20}px`,
     width: `${scaledSize.width - 40}px`,
     height: `${scaledSize.height}px`,
-    background: "transparent",
+    backgroundColor: "transparent",
     borderRadius: `${scaleValue(25)}px`,
     overflow: "hidden",
     display: "flex",
@@ -351,7 +350,7 @@ const UserCard = (props) => {
     top: "0px",
     width: "100%",
     height: "100%",
-    background: coloring.backgroundGradient || backgroundGradient,
+    backgroundImage: coloring.backgroundGradient || backgroundGradient,
     borderRadius: `${scaleValue(25)}px`,
     display: "flex",
     zIndex: 1,
@@ -384,22 +383,28 @@ const UserCard = (props) => {
     top: "0px",
     width: `${scaled.money.width}px`,
     height: `${scaled.money.height}px`,
-    background: overlayBackground,
+    backgroundColor: overlayBackground,
     borderRadius: `${scaleValue(20)}px`,
     display: "flex",
   };
 
   const dollarEmojiStyle = {
     position: "absolute",
-    left: `${scaleValue(13)}px`,
-    top: `${scaleValue(20)}px`,
-    width: `${scaleValue(29)}px`,
-    height: `${scaleValue(29)}px`,
+    left: toUnit(scaleValue(13)),
+    top: toUnit(scaleValue(20)),
+    width: toUnit(scaleValue(29)),
+    height: toUnit(scaleValue(29)),
     display: "flex",
     fontSize: `${scaleValue(24)}px`,
     justifyContent: "center",
     alignItems: "center",
     color: "#FFD700",
+  };
+  const dollarEmojiImageStyle = {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    objectFit: "contain",
   };
 
   const balanceTextStyle = {
@@ -468,7 +473,7 @@ const UserCard = (props) => {
     top: "0px",
     width: `${scaled.gamingLevel.width}px`, // Use full container width
     height: `${scaled.gamingLevel.height}px`,
-    background: `linear-gradient(to left, ${overlayBackground} 0%, rgba(255, 68, 68, 0.5) 100%)`,
+    backgroundImage: `linear-gradient(to left, ${overlayBackground} 0%, rgba(255, 68, 68, 0.5) 100%)`,
     borderRadius: `${scaleValue(20)}px`, // Rounded corners on left side only
     display: "flex",
     flexDirection: "column",
@@ -484,7 +489,7 @@ const UserCard = (props) => {
     top: "0px",
     width: `${scaled.gamingLevel.width * gameFillRatio}px`, // Use full container width for fill
     height: `${scaleValue(70)}px`,
-    background: "#d55656",
+    backgroundColor: "#d55656",
     borderRadius: `${scaleValue(20)}px ${scaleValue(20)}px ${scaleValue(
       20
     )}px ${scaleValue(20)}px`,
@@ -499,7 +504,7 @@ const UserCard = (props) => {
     width: `${scaleValue(7)}px`,
     right: "0px", // Remove right margin to align with container
     height: `${scaleValue(70)}px`,
-    background: "#d67373",
+    backgroundColor: "#d67373",
     borderRadius: "0px 0px 0px 0px",
     display: "flex",
   };
@@ -539,13 +544,20 @@ const UserCard = (props) => {
 
   const avatarStyle = {
     position: "absolute",
-    left: `${scaled.avatar.left}px`,
-    top: `${scaled.avatar.top}px`,
-    width: `${scaled.avatar.width}px`,
-    height: `${scaled.avatar.height}px`,
+    left: toUnit(scaled.avatar.left),
+    top: toUnit(scaled.avatar.top),
+    width: toUnit(scaled.avatar.width),
+    height: toUnit(scaled.avatar.height),
     zIndex: 2,
     display: "flex",
-    borderRadius: `${scaleValue(20)}px`,
+    borderRadius: toUnit(scaleValue(20)),
+  };
+  const avatarImageStyle = {
+    width: toUnit(scaled.avatar.width),
+    height: toUnit(scaled.avatar.height),
+    objectFit: "cover",
+    display: "flex",
+    borderRadius: toUnit(scaleValue(20)),
   };
 
   const gridSizeStyle =
@@ -579,7 +591,17 @@ const UserCard = (props) => {
       {/* Money Container */}
       <div style={moneyContainerStyle}>
         <div style={moneyBackgroundStyle}></div>
-        <div style={dollarEmojiStyle}>💵</div>
+        <div style={dollarEmojiStyle}>
+          {renderBackend === "takumi" ? (
+            <img 
+              src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4b5.png"
+              alt="money"
+              style={dollarEmojiImageStyle}
+            />
+          ) : (
+            "💵"
+          )}
+        </div>
 
         {/* Balance Text with Color Highlighting for Earned/Lost Amount */}
         <div style={balanceTextStyle}>
@@ -754,12 +776,7 @@ const UserCard = (props) => {
             "https://cdn.discordapp.com/embed/avatars/0.png"
           }
           alt="User Avatar"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            borderRadius: `${scaleValue(20)}px`,
-          }}
+          style={avatarImageStyle}
         />
       </div>
 

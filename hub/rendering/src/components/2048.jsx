@@ -1,15 +1,12 @@
 import UserCard from "./unified/UserCard.jsx";
 
 const Game2048 = (props) => {
-  let { grid, score, earning, interaction, i18n, database, coloring } = props;
+  const renderLayer = props.renderLayer || "full";
+  const isStaticLayer = renderLayer === "static";
+  const isDynamicLayer = renderLayer === "dynamic";
 
-  const translations = Object.entries(Game2048.localization_strings).reduce(
-    (acc, [key, translations]) => ({
-      ...acc,
-      [key]: translations[i18n?.getLocale?.()] || translations.en,
-    }),
-    {}
-  );
+  let { grid, score, earning, interaction, i18n, database, coloring } = props;
+  const renderBackend = props.renderBackend || "satori";
 
   if (!grid) {
     grid = [
@@ -21,14 +18,6 @@ const Game2048 = (props) => {
     score = 1024;
     earning = 55.0;
   }
-
-  const getScaleFontSize = (number) => {
-    const numStr = number.toString();
-    if (numStr.length <= 3) return "30px";
-    if (numStr.length <= 4) return "26px";
-    if (numStr.length <= 5) return "22px";
-    return "18px";
-  };
 
   const tileColors = {
     0: "#CDC1B4",
@@ -48,7 +37,7 @@ const Game2048 = (props) => {
   const containerStyle = {
     width: "540px",
     height: "661px",
-    backgroundColor: "#BBADA0",
+    backgroundColor: isDynamicLayer ? "transparent" : "#BBADA0",
     borderRadius: "25px",
     fontFamily: "Inter600",
     position: "relative",
@@ -62,7 +51,7 @@ const Game2048 = (props) => {
     top: "0px",
     width: "540px",
     height: "558px",
-    background: "#BBADA0",
+    background: isDynamicLayer ? "transparent" : "#BBADA0",
     borderRadius: "25px 25px 0 0",
     padding: "25px",
     display: "flex",
@@ -70,8 +59,9 @@ const Game2048 = (props) => {
     gap: "10px",
   };
 
-  const tileStyle = (value) => ({
-    backgroundColor: tileColors[value],
+  const tileStyle = (value, transparentZero = false) => ({
+    backgroundColor:
+      transparentZero && value === 0 ? "transparent" : tileColors[value] || tileColors[0],
     borderRadius: "5px",
     display: "flex",
     justifyContent: "center",
@@ -79,52 +69,74 @@ const Game2048 = (props) => {
     fontSize: value < 100 ? "42px" : value < 1000 ? "32px" : "24px",
     fontWeight: "bold",
     color: value < 8 ? "#776E65" : "#F9F6F2",
+    textAlign: "center",
+    lineHeight: renderBackend === "takumi" ? 1 : "normal",
   });
+
+  const staticGrid = grid.map((row) => row.map(() => 0));
+  const gridToRender = isStaticLayer ? staticGrid : grid;
+  const transparentZeros = isDynamicLayer;
 
   return (
     <div style={containerStyle}>
-      {/* Game Screen */}
       <div style={gameScreenStyle}>
-        {grid.map((row, rowIndex) => (
+        {gridToRender.map((row, rowIndex) => (
           <div key={rowIndex} style={{ display: "flex", gap: "10px" }}>
             {row.map((value, colIndex) => (
               <div
                 key={colIndex}
                 style={{
-                  ...tileStyle(value),
+                  ...tileStyle(value, transparentZeros),
                   width: "115px",
                   height: "115px",
                   display: "flex",
+                  position: "relative",
                 }}
               >
-                {value !== 0 && value}
+                {value !== 0 && !isStaticLayer && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "0px",
+                      top: "0px",
+                      width: "115px",
+                      height: "115px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      lineHeight: "1",
+                    }}
+                  >
+                    {value}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         ))}
       </div>
 
-      {}
-
-      {/* Use the unified UserCard component */}
-      <UserCard
-        interaction={interaction}
-        score={score}
-        earning={earning}
-        balance={database?.economy?.balance || 0} // Wallet balance only
-        increaseAmount={earning}
-        levelProgress={
-          database?.levelProgress || {
-            chat: database?.levelProgress?.chat,
-            game: database?.levelProgress?.game,
+      {!isStaticLayer && (
+        <UserCard
+          interaction={interaction}
+          score={score}
+          earning={earning}
+          balance={database?.economy?.balance || 0}
+          increaseAmount={earning}
+          levelProgress={
+            database?.levelProgress || {
+              chat: database?.levelProgress?.chat,
+              game: database?.levelProgress?.game,
+            }
           }
-        }
-        i18n={i18n}
-        coloring={coloring}
-        position={{ bottom: 0, left: 0 }}
-        size={{ width: 540, height: 103 }}
-        gridSize="4x4"
-      />
+          i18n={i18n}
+          coloring={coloring}
+          position={{ bottom: 0, left: 0 }}
+          size={{ width: 540, height: 103 }}
+          gridSize="4x4"
+        />
+      )}
     </div>
   );
 };

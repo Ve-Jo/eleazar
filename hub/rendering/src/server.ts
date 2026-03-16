@@ -95,15 +95,17 @@ app.post("/generate", async (req: RequestLike, res: ResponseLike) => {
     );
 
     if (Buffer.isBuffer(result)) {
-      res.set("Content-Type", "image/png");
+      res.set("Content-Type", "image/webp");
       res.send(result);
     } else if (Array.isArray(result)) {
       // If returnDominant is true, result is [buffer, coloring]
       const [buffer, coloring] = result as [Buffer, unknown];
-      res.json({
-        image: buffer.toString("base64"),
-        coloring,
-      });
+      res.set("Content-Type", "image/webp");
+      res.set(
+        "X-Render-Coloring",
+        Buffer.from(JSON.stringify(coloring ?? null), "utf-8").toString("base64")
+      );
+      res.send(buffer);
     } else {
       res.status(500).json({ error: "Invalid result format" });
     }
