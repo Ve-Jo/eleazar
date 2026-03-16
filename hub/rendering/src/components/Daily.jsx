@@ -25,7 +25,7 @@ const Daily = (props) => {
         borderRadius: database.bannerUrl ? "0px" : "20px",
         padding: "10px 20px",
         color: textColor,
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",

@@ -59,7 +59,7 @@ const Snake = (props) => {
     height: "661px",
     backgroundColor: "#4CAF50",
     borderRadius: "25px",
-    fontFamily: "Inter600",
+    fontFamily: "Inter", fontWeight: 500,
     position: "relative",
     overflow: "hidden",
     display: "flex",

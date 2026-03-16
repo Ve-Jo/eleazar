@@ -34,7 +34,7 @@ const VoiceRoomPanel = (props) => {
         display: "flex",
         flexDirection: "column",
         gap: "12px",
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         background: backgroundGradient,
         color: textColor,
       }}

@@ -70,7 +70,7 @@ const Coinflip = (props) => {
     height: "353px", // Increased height to accommodate UserCard (250 + 103)
     background: backgroundGradient,
     borderRadius: "15px",
-    fontFamily: "Inter600, Roboto, sans-serif",
+    fontFamily: "Inter", fontWeight: 500,
     padding: "20px",
     display: "flex",
     flexDirection: "row", // Side-by-side layout

@@ -257,7 +257,7 @@ const GameLauncher = (props) => {
             padding: "4px 8px",
             borderRadius: "12px",
             backgroundColor: overlayBackground || "rgba(0, 0, 0, 0.25)",
-            fontFamily: "Inter600",
+            fontFamily: "Inter", fontWeight: 500,
             color: textColor || "#FFFFFF",
           }}
         >
@@ -278,7 +278,7 @@ const GameLauncher = (props) => {
                 ? "rgba(255, 165, 0, 0.8)"
                 : "#FFA500"
               : "rgba(0, 0, 0, 0)",
-            fontFamily: "Inter600",
+            fontFamily: "Inter", fontWeight: 500,
             borderRadius: isHighlighted
               ? `0 0 ${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
                   BORDER_RADIUS - HIGHLIGHT_BORDER
@@ -304,7 +304,7 @@ const GameLauncher = (props) => {
         borderRadius: "20px",
         padding: "25px",
         color: textColor,
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         display: "flex",
         flexDirection: "column",
         background: backgroundGradient,
@@ -372,7 +372,7 @@ const GameLauncher = (props) => {
           display: "flex",
           flexDirection: "column",
           gap: "5px",
-          overflowY: "auto",
+          overflowY: "hidden",
           marginRight: "-25px",
           paddingRight: "25px",
         }}
@@ -416,7 +416,7 @@ const GameLauncher = (props) => {
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  fontFamily: "Inter400",
+                  fontFamily: "Inter", fontWeight: 500,
                 }}
               >
                 <div
@@ -467,7 +467,7 @@ const GameLauncher = (props) => {
                       paddingBottom: "10px",
                       marginRight: "-25px",
                       paddingRight: "25px",
-                      overflowX: "auto",
+                      overflowX: "hidden",
                       msOverflowStyle: "none",
                       WebkitOverflowScrolling: "touch",
                       scrollbarWidth: "none",

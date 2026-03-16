@@ -177,7 +177,7 @@ const Statistics = (props) => {
         height: "210px",
         position: "relative",
         backgroundColor: "black",
-        fontFamily: "Inter800, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         padding: "0px",
         display: "flex",
         flexDirection: "column",

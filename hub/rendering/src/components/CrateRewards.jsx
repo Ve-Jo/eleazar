@@ -74,7 +74,7 @@ const CrateRewards = (props) => {
               fontSize: "18px",
               fontWeight: "bold",
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -87,7 +87,7 @@ const CrateRewards = (props) => {
             style={{
               fontSize: "14px",
               color,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -118,7 +118,7 @@ const CrateRewards = (props) => {
         height,
         borderRadius: "20px",
         padding: "25px",
-        fontFamily: "Inter400, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         color: textColor,
         background: backgroundGradient,
         display: "flex",
@@ -156,7 +156,7 @@ const CrateRewards = (props) => {
               fontSize: "32px",
               fontWeight: "bold",
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               display: "flex",
             }}
           >
@@ -188,7 +188,7 @@ const CrateRewards = (props) => {
             display: "flex",
             flexDirection: "column",
             width: "65%", // Fixed percentage instead of flexBasis
-            overflowY: "auto",
+            overflowY: "hidden",
             paddingRight: "20px",
           }}
         >
@@ -198,7 +198,7 @@ const CrateRewards = (props) => {
               fontWeight: "bold",
               marginBottom: "15px",
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               display: "flex",
             }}
           >
@@ -282,7 +282,7 @@ const CrateRewards = (props) => {
                     padding: "20px",
                     color: tertiaryTextColor,
                     fontSize: "18px",
-                    fontFamily: "Inter400",
+                    fontFamily: "Inter", fontWeight: 500,
                     display: "flex",
                     justifyContent: "center",
                     width: "100%",
@@ -327,7 +327,7 @@ const CrateRewards = (props) => {
               fontWeight: "bold",
               color: "#ffb700",
               textAlign: "center",
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
             }}
           >
             {crateName}

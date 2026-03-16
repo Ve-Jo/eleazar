@@ -39,7 +39,7 @@ const LevelUp = (props) => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        fontFamily: "Inter700, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         color: "white",
         fontSize: "20px",
         position: "relative",

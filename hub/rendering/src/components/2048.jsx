@@ -39,7 +39,7 @@ const Game2048 = (props) => {
     height: "661px",
     backgroundColor: isDynamicLayer ? "transparent" : "#BBADA0",
     borderRadius: "25px",
-    fontFamily: "Inter600",
+    fontFamily: "Inter", fontWeight: 500,
     position: "relative",
     overflow: "hidden",
     display: "flex",

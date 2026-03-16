@@ -220,7 +220,7 @@ const MusicPlayer = (props) => {
         height,
         borderRadius: "20px",
         color: "white",
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",

@@ -157,7 +157,7 @@ const Tower = (props) => {
     height: "550px",
     background: backgroundGradient,
     borderRadius: "15px",
-    fontFamily: "Inter600, Roboto, sans-serif",
+    fontFamily: "Inter", fontWeight: 500,
     padding: "25px",
     display: "flex",
     flexDirection: "column",

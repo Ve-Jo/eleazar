@@ -68,7 +68,7 @@ const Crypto2 = (props) => {
         backgroundColor: "#1a1a1a",
         color: "white",
         padding: "30px",
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         fontSize: "24px",
       }}
     >

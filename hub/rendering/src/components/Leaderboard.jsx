@@ -584,7 +584,7 @@ const Leaderboard = (props) => {
         height: height,
         display: "flex",
         flexDirection: "column",
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         backgroundColor: "#2196f3",
         borderRadius: "10px",
         boxSizing: "border-box",
@@ -600,7 +600,7 @@ const Leaderboard = (props) => {
           width: "100%",
           maxWidth: "100%",
           height: height - 55,
-          overflowY: "auto",
+          overflowY: "hidden",
           overflowX: "hidden",
           boxSizing: "border-box",
         }}

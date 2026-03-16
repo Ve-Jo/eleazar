@@ -403,6 +403,10 @@ const UserCard = (props) => {
     objectFit: "contain",
   };
 
+  // Calculate balance increase percentage and direction
+  const balanceIncreasePercentage = balance > 0 ? (increaseAmount / balance) * 100 : 0;
+  const isBalanceDecrease = increaseAmount < 0;
+
   const balanceTextStyle = {
     position: "absolute",
     left: `${scaleValue(55)}px`,
@@ -417,7 +421,8 @@ const UserCard = (props) => {
   const balanceNumberStyle = {
     color: textColor,
     fontSize: `${27 * scaleFactor}px`,
-    fontFamily: "Inter600",
+    fontFamily: "Inter", fontWeight: 500,
+    fontWeight: 600,
     textRendering: "geometricPrecision",
     letterSpacing: "0px",
     display: "flex",
@@ -428,9 +433,20 @@ const UserCard = (props) => {
     position: "absolute",
     left: `${scaleValue(99)}px`,
     top: `${scaleValue(8)}px`,
-    height: `${scaleValue(18)}px`,
+    color:
+      (balanceIncreasePercentage > 0 && !isBalanceDecrease) ||
+      (balanceIncreasePercentage < 0 && isBalanceDecrease)
+        ? "#4ade80"
+        : balanceIncreasePercentage === 0
+        ? textColor
+        : "#ff4444",
+    fontSize: `${15 * scaleFactor}px`,
+    fontFamily: "Inter",
+    fontWeight: 500,
+    textRendering: "geometricPrecision",
+    letterSpacing: "0px",
     display: "flex",
-    alignItems: "center",
+    lineHeight: 1,
   };
 
   const increaseNumberStyle = {
@@ -441,7 +457,8 @@ const UserCard = (props) => {
         ? "#ff4444"
         : textColor,
     fontSize: `${15 * scaleFactor}px`,
-    fontFamily: "Inter600",
+    fontFamily: "Inter",
+    fontWeight: 500,
     textRendering: "geometricPrecision",
     letterSpacing: "0px",
     display: "flex",
@@ -529,7 +546,8 @@ const UserCard = (props) => {
   const scoreValueStyle = {
     color: textColor,
     fontSize: "42px",
-    fontFamily: "Inter600",
+    fontFamily: "Inter", fontWeight: 500,
+    fontWeight: 700,
     textRendering: "geometricPrecision",
     letterSpacing: "0px",
     display: "flex",
@@ -570,7 +588,8 @@ const UserCard = (props) => {
   const gridSizeValueStyle = {
     color: tertiaryTextColor,
     fontSize: "20px",
-    fontFamily: "Inter600",
+    fontFamily: "Inter", fontWeight: 500,
+    fontWeight: 500,
     textRendering: "geometricPrecision",
     letterSpacing: "0px",
     display: "flex",
@@ -711,7 +730,8 @@ const UserCard = (props) => {
             style={{
               fontSize: `${27 * scaleFactor}px`,
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
+              fontWeight: 600,
               display: "flex",
               alignItems: "baseline",
               justifyContent: "flex-start",
@@ -734,7 +754,8 @@ const UserCard = (props) => {
             style={{
               fontSize: `${12 * scaleFactor}px`,
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
+              fontWeight: 400,
               display: "flex",
               justifyContent: "flex-start",
               textRendering: "geometricPrecision",

@@ -79,7 +79,7 @@ const CratesDisplay = (props) => {
           alignItems: "center",
           fontWeight: "bold",
           fontSize: "14px",
-          fontFamily: "Inter600",
+          fontFamily: "Inter", fontWeight: 500,
         }}
       >
         {crate.count}
@@ -99,7 +99,7 @@ const CratesDisplay = (props) => {
           padding: "6px 10px",
           fontWeight: "bold",
           fontSize: "12px",
-          fontFamily: "Inter600",
+          fontFamily: "Inter", fontWeight: 500,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -176,7 +176,7 @@ const CratesDisplay = (props) => {
               fontWeight: "bold",
               fontSize: "16px",
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               textAlign: "center",
               height: "40px",
               display: "flex",
@@ -197,7 +197,7 @@ const CratesDisplay = (props) => {
               fontSize: "11px",
               color: textColor,
               opacity: 0.9,
-              fontFamily: "Inter400",
+              fontFamily: "Inter", fontWeight: 500,
               textAlign: "center",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -226,7 +226,7 @@ const CratesDisplay = (props) => {
         height,
         borderRadius: "20px",
         padding: "25px",
-        fontFamily: "Inter400, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         color: textColor,
         background: backgroundGradient,
         display: "flex",
@@ -264,7 +264,7 @@ const CratesDisplay = (props) => {
               fontSize: "36px",
               fontWeight: "bold",
               color: textColor,
-              fontFamily: "Inter600",
+              fontFamily: "Inter", fontWeight: 500,
               display: "flex",
             }}
           >
@@ -298,7 +298,7 @@ const CratesDisplay = (props) => {
               }}
             >
               <span style={{ display: "flex" }}>💵</span>
-              <span style={{ fontFamily: "Inter600", display: "flex" }}>
+              <span style={{ fontFamily: "Inter", fontWeight: 500, fontWeight: 600, display: "flex" }}>
                 {database.balance?.toFixed(2) || 0}
               </span>
             </div>
@@ -315,7 +315,7 @@ const CratesDisplay = (props) => {
               <span style={{ display: "flex" }}>✨</span>
               <span
                 style={{
-                  fontFamily: "Inter600",
+                  fontFamily: "Inter", fontWeight: 500,
                   display: "flex",
                   maxWidth: "200px",
                   overflow: "hidden",
@@ -344,7 +344,7 @@ const CratesDisplay = (props) => {
             fontWeight: "bold",
             marginBottom: "15px",
             color: textColor,
-            fontFamily: "Inter600",
+            fontFamily: "Inter", fontWeight: 500,
             display: "flex",
           }}
         >
@@ -353,7 +353,7 @@ const CratesDisplay = (props) => {
         <div
           style={{
             display: "flex",
-            overflowX: "auto",
+            overflowX: "hidden",
             msOverflowStyle: "none",
             WebkitOverflowScrolling: "touch",
             scrollbarWidth: "none",

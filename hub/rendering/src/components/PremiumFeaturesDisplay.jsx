@@ -50,7 +50,7 @@ const PremiumFeaturesDisplay = (props) => {
         flexDirection: "row",
         justifyContent: "space-between",
         position: "relative",
-        overflowY: "auto",
+        overflowY: "hidden",
       }}
     >
       <div style={{ width: "68%", display: "flex", flexDirection: "column" }}>

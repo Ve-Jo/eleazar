@@ -246,7 +246,7 @@ const Level2 = (props) => {
         width: "400px",
         height: "254px",
         display: "flex",
-        fontFamily: "Inter700",
+        fontFamily: "Inter", fontWeight: 500,
         color: "white",
         fontSize: "20px",
         position: "relative",
@@ -311,7 +311,7 @@ const Level2 = (props) => {
             display: "flex",
             alignItems: "center",
             fontSize: "14px",
-            fontFamily: "Inter500",
+            fontFamily: "Inter", fontWeight: 500,
           }}
         >
           <div

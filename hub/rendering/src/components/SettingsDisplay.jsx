@@ -147,7 +147,7 @@ const SettingsDisplay = (props) => {
         style={{
           display: "flex",
           flexDirection: "column",
-          fontFamily: "Inter600, sans-serif",
+          fontFamily: "Inter", fontWeight: 500,
           marginBottom: position === "top" ? "5px" : "0",
           marginTop: position === "bottom" ? "5px" : "0",
         }}
@@ -279,12 +279,12 @@ const SettingsDisplay = (props) => {
         borderRadius: "20px",
         padding: "20px",
         color: textColor,
-        fontFamily: "Inter600, sans-serif",
+        fontFamily: "Inter", fontWeight: 500,
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-start",
         position: "relative",
-        overflowY: "auto",
+        overflowY: "hidden",
         background: backgroundGradient,
       }}
     >
