@@ -203,6 +203,23 @@ async function handleLevelUp(
     const isGameLevel = type !== "chat" && type !== "voice";
     const currentLevel = Number(levelUpInfo.newLevel) || 1;
 
+    let currentXP = 0;
+    let requiredXP = 0;
+    let previousLevel = Number(levelUpInfo.newLevel) - 1 || 0;
+
+    try {
+      const levelCalc = await hubClient.getUserLevel(
+        guildId,
+        userId,
+        isGameLevel ? "gaming" : "activity"
+      );
+      currentXP = Number(levelCalc.currentXP) || 0;
+      requiredXP = Number(levelCalc.requiredXP) || 0;
+      previousLevel = Number(levelCalc.level) - 1 || previousLevel;
+    } catch (levelErr) {
+      console.error("Failed to fetch level progress for LevelUp card:", levelErr);
+    }
+
     const buffer = await generateImage(
       "LevelUp",
       {
@@ -227,6 +244,9 @@ async function handleLevelUp(
         },
         type: isGameLevel ? "game" : "chat",
         level: currentLevel,
+        oldLevel: previousLevel,
+        currentXP,
+        requiredXP,
         locale: userLocale,
       },
       { image: 2, emoji: 1 },

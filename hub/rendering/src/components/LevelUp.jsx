@@ -56,32 +56,20 @@ const LevelUp = (props) => {
       style={{
         width: `${LevelUp.dimensions.width}px`,
         height: `${LevelUp.dimensions.height}px`,
+        background: backgroundGradient,
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         gap: "8px",
         fontFamily: "Inter, system-ui, -apple-system, sans-serif",
         color: "#f8fbff",
-        position: "relative",
+        position: "relative",   
         borderRadius: "14px",
         overflow: "hidden",
-        background: backgroundGradient || baseColor,
         boxSizing: "border-box",
         padding: "16px 18px",
       }}
     >
-      {/* Subtle grid/shine overlay */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0 25%, transparent 25% 50%, rgba(255,255,255,0.04) 50% 75%, transparent 75% 100%)",
-          backgroundSize: "18px 18px",
-          opacity: 0.35,
-          pointerEvents: "none",
-        }}
-      />
-
       <div
         style={{
           display: "flex",
@@ -200,8 +188,8 @@ function normalizeColor(color) {
 }
 
 LevelUp.dimensions = {
-  width: 600,
-  height: 175,
+  width: 550,
+  height: 150,
 };
 
 LevelUp.localization_strings = {
