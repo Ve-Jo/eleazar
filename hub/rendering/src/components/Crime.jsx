@@ -1,3 +1,6 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const Crime = (props) => {
   const { i18n } = props;
 
@@ -21,6 +24,11 @@ const Crime = (props) => {
       username: "{username}",
       displayName: "{displayName}",
     };
+
+  const victimBalance = Number(props.victim?.balance || 0);
+  const robberBalance = Number(props.robber?.balance || 0);
+  const delta = Number(props.amount || 0);
+  const showDelta = props.success !== undefined;
 
   return (
     <div
@@ -86,36 +94,50 @@ const Crime = (props) => {
               style={{ objectFit: "cover", borderRadius: "15px" }}
             />
           </div>
-          <div
-            style={{
-              position: "absolute",
-              top: "0px",
-              left: "95px",
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
-              borderRadius: "10px",
-              padding: "5px 25px 5px 10px",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <span style={{ fontSize: "24px", fontWeight: "bold" }}>
-              💵 {props.victim?.balance.toFixed(2) || "{balance}"}
-            </span>
-            {props.success !== undefined && (
-              <span
-                style={{
-                  position: "absolute",
-                  right: "5px",
-                  top: "8px",
-                  fontSize: "16px",
-                  color: props.success ? "#C66161" : "#6EE78C",
-                  fontWeight: "bold",
+          <div style={{ position: "absolute", top: "-6px", left: "95px", width: "180px" }}>
+            <InfoRectangle
+              icon="💵"
+              background="rgba(255, 255, 255, 0.2)"
+              borderRadius="12px"
+              padding="6px 10px"
+              minWidth="0px"
+              maxWidth="200px"
+              iconSize="18px"
+              iconMarginRight="6px"
+              title={translations.victim}
+              titleStyle={{ fontSize: "11px", opacity: 0.85, letterSpacing: "0.08em", color: "#fff" }}
+              value={
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: "#fff" }}>
+                  <span style={{ fontSize: "22px", fontWeight: 700 }}>
+                    {victimBalance.toFixed(2)}
+                  </span>
+                  {showDelta && (
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: props.success ? "#C66161" : "#6EE78C",
+                      }}
+                    >
+                      {props.success ? "-" : "+"}
+                      {delta.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              }
+              style={{ position: "relative", width: "100%", boxSizing: "border-box", minHeight: "60px" }}
+            >
+              <Banknotes
+                amount={Math.max(victimBalance, 0)}
+                style="banknotes"
+                division={50}
+                xspacing={18}
+                styleOverrides={{
+                  container: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 },
+                  banknote: { width: "10px", height: "3px" },
                 }}
-              >
-                {props.success ? "-" : "+"}
-                {props.amount?.toFixed(2) || "{amount}"}
-              </span>
-            )}
+              />
+            </InfoRectangle>
           </div>
         </div>
 
@@ -160,36 +182,50 @@ const Crime = (props) => {
               style={{ objectFit: "cover", borderRadius: "15px" }}
             />
           </div>
-          <div
-            style={{
-              position: "absolute",
-              bottom: "0px",
-              right: "95px",
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
-              borderRadius: "10px",
-              padding: "5px 25px 5px 10px",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <span style={{ fontSize: "24px", fontWeight: "bold" }}>
-              💵 {props.robber?.balance.toFixed(2) || "{balance}"}
-            </span>
-            {props.success !== undefined && (
-              <span
-                style={{
-                  position: "absolute",
-                  right: "5px",
-                  top: "8px",
-                  fontSize: "16px",
-                  color: props.success ? "#6EE78C" : "#C66161",
-                  fontWeight: "bold",
+          <div style={{ position: "absolute", bottom: "-6px", right: "95px", width: "180px" }}>
+            <InfoRectangle
+              icon="💵"
+              background="rgba(255, 255, 255, 0.2)"
+              borderRadius="12px"
+              padding="6px 10px"
+              minWidth="0px"
+              maxWidth="200px"
+              iconSize="18px"
+              iconMarginRight="6px"
+              title={translations.robber}
+              titleStyle={{ fontSize: "11px", opacity: 0.85, letterSpacing: "0.08em", color: "#fff" }}
+              value={
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: "#fff" }}>
+                  <span style={{ fontSize: "22px", fontWeight: 700 }}>
+                    {robberBalance.toFixed(2)}
+                  </span>
+                  {showDelta && (
+                    <span
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: props.success ? "#6EE78C" : "#C66161",
+                      }}
+                    >
+                      {props.success ? "+" : "-"}
+                      {delta.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              }
+              style={{ position: "relative", width: "100%", boxSizing: "border-box", minHeight: "60px" }}
+            >
+              <Banknotes
+                amount={Math.max(robberBalance, 0)}
+                style="banknotes"
+                division={50}
+                xspacing={18}
+                styleOverrides={{
+                  container: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 },
+                  banknote: { width: "10px", height: "3px" },
                 }}
-              >
-                {props.success ? "+" : "-"}
-                {props.amount?.toFixed(2) || "{amount}"}
-              </span>
-            )}
+              />
+            </InfoRectangle>
           </div>
         </div>
       </div>

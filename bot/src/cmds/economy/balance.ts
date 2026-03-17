@@ -160,6 +160,8 @@ const command = {
 
     let chatLevelData: GenericRecord | null = null;
     let gameLevelData: GenericRecord | null = null;
+    let chatRank: { rank: number; total: number } | null = null;
+    let gameRank: { rank: number; total: number } | null = null;
 
     if (userData.Level) {
       const chatXP = Number(userData.Level.xp || 0);
@@ -167,6 +169,27 @@ const command = {
 
       const gameXP = Number(userData.Level.gameXp || 0);
       gameLevelData = (hubClient as any).calculateLevel(gameXP);
+    }
+
+    try {
+      const guildUsers = (await (hubClient as any).getGuildUsers(interaction.guild.id)) as GenericRecord[];
+      const computeRank = (users: GenericRecord[], xpField: string, userId: string) => {
+        const scored = users
+          .map((u) => ({ id: u.id || u.userId, xp: Number(u?.Level?.[xpField] || 0) }))
+          .filter((entry) => entry.id && Number.isFinite(entry.xp));
+        const sorted = scored.sort((a, b) => {
+          if (b.xp === a.xp) return (a.id || "").localeCompare(b.id || "");
+          return b.xp - a.xp;
+        });
+        const idx = sorted.findIndex((entry) => entry.id === userId);
+        if (idx === -1) return null;
+        return { rank: idx + 1, total: sorted.length };
+      };
+
+      chatRank = computeRank(guildUsers, "xp", user.id);
+      gameRank = computeRank(guildUsers, "gameXp", user.id);
+    } catch (error) {
+      console.warn(`Failed to compute ranks for guild ${interaction.guild.id}:`, error);
     }
 
     const getUpgradeLevel = (entry: unknown, key: string): number => {
@@ -300,8 +323,8 @@ const command = {
         database: {
           ...userData,
           levelProgress: {
-            chat: chatLevelData,
-            game: gameLevelData,
+            chat: { ...chatLevelData, rank: chatRank?.rank, total: chatRank?.total },
+            game: { ...gameLevelData, rank: gameRank?.rank, total: gameRank?.total },
           },
           hints: {
             dailyAvailable,

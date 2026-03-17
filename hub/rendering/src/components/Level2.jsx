@@ -1,180 +1,5 @@
 import prettyMilliseconds from "pretty-ms";
-
-const StyledRectangle = ({
-  primaryText,
-  secondaryText,
-  timerText,
-  color = "purple",
-  primaryTextStyles = {},
-  secondaryTextStyles = {},
-  timerTextStyles = {},
-  progressBar = false,
-  progressBarXP = 0,
-  progressBarMaxXP = 100,
-  roundness = 0,
-}) => {
-  // Format the timer text to ensure it's always showing days/hours left
-  const formatTimer = (timeStr) => {
-    if (!timeStr) return "";
-    const parts = timeStr.split(":");
-    if (parts.length === 2) {
-      // if it's just hours:minutes
-      return parts.join(":");
-    }
-    // Convert days to a more readable format
-    const days = Math.floor(parseInt(parts[0]) / 24);
-    const hours = parseInt(parts[0]) % 24;
-    if (days > 0) {
-      return `${days}d ${hours}h`;
-    }
-    return `${hours}h ${parts[1]}m`;
-  };
-
-  // Calculate progress as a percentage between 0-100
-  const progress = Math.min((progressBarXP / progressBarMaxXP) * 100, 100);
-  const calculated_percentage = (400 / 100) * progress;
-  const opacity = Math.max(0, 1 - progressBarXP / progressBarMaxXP);
-  const numberLength = progressBarXP.toString().length;
-  console.log(progress);
-
-  const darkenColor = (color) => {
-    // Map of common color names to hex values
-    const colorMap = {
-      purple: "#800080",
-      blue: "#0000FF",
-      red: "#FF0000",
-      green: "#008000",
-    };
-
-    // If it's a named color, convert to hex
-    if (!color.startsWith("#")) {
-      color = colorMap[color.toLowerCase()] || "#000000";
-    }
-
-    let hex = color.replace("#", "");
-    if (hex.length === 3) {
-      hex = hex
-        .split("")
-        .map((char) => char + char)
-        .join("");
-    }
-    let r = parseInt(hex.substring(0, 2), 16);
-    let g = parseInt(hex.substring(2, 4), 16);
-    let b = parseInt(hex.substring(4, 6), 16);
-
-    // Darken by 20%
-    r = Math.max(0, Math.floor(r * 0.8));
-    g = Math.max(0, Math.floor(g * 0.8));
-    b = Math.max(0, Math.floor(b * 0.8));
-
-    return `#${r.toString(16).padStart(2, "0")}${g
-      .toString(16)
-      .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-  };
-
-  console.log(`PROGRESS BAR XP: `, progressBarXP);
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "33.33%",
-        display: "flex",
-        backgroundColor: color,
-        borderRadius: roundness,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {progressBar && (
-        <>
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              height: "100%",
-              width: `${calculated_percentage}px`,
-              backgroundColor: darkenColor(color),
-              transition: "width 0.3s ease-in-out",
-            }}
-          />
-          {console.log(`CALCULATED_PERCENTAGE:`, calculated_percentage)}
-          <div
-            style={{
-              position: "absolute",
-              display: "flex",
-              top: "5px",
-              left: `${
-                calculated_percentage < 90
-                  ? 10
-                  : calculated_percentage - (50 + numberLength * 12)
-              }px`,
-              fontSize: "24px",
-              fontWeight: "bold",
-              transition: "opacity 0.3s ease-in-out",
-            }}
-          >
-            {progressBarXP}XP
-          </div>
-        </>
-      )}
-      <div
-        style={{
-          position: "absolute",
-          right: "5px",
-          display: "flex",
-          bottom: "-3px",
-          fontSize: "57px",
-          ...primaryTextStyles,
-        }}
-      >
-        {primaryText}
-      </div>
-      {/*{timerText && (
-        <div
-          style={{
-            position: "absolute",
-            display: "flex",
-            right: "5px",
-            top: "8px",
-            opacity: "0.5",
-            ...timerTextStyles,
-          }}
-        >
-          {formatTimer(timerText)}
-        </div>
-      )}*/}
-      {progressBar && (
-        <div
-          style={{
-            position: "absolute",
-            display: "flex",
-            right: "8px",
-            top: "5px",
-            fontSize: "24px",
-            opacity: opacity,
-            transition: "opacity 0.3s ease-in-out",
-          }}
-        >
-          {progressBarMaxXP}XP
-        </div>
-      )}
-      <div
-        style={{
-          position: "absolute",
-          display: "flex",
-          bottom: "-9px",
-          left: "15px",
-          fontSize: "35px",
-          ...secondaryTextStyles,
-        }}
-      >
-        {secondaryText}
-      </div>
-    </div>
-  );
-};
+import InfoRectangle from "./unified/InfoRectangle.jsx";
 
 const Level2 = (props) => {
   let {
@@ -189,30 +14,20 @@ const Level2 = (props) => {
     seasonEnds = Date.now() + 1000 * 60 * 60 * 24 * 7,
     seasonNumber = 1,
     i18n,
-    nextLevelRole,
+    coloring = {},
+    chatRank,
+    gameRank,
+    availableRoles = [],
   } = props;
 
-  // Ensure all numeric values are actually numbers
   currentXP = Number(currentXP);
   requiredXP = Number(requiredXP);
   level = Number(level);
   gameCurrentXP = Number(gameCurrentXP);
   gameRequiredXP = Number(gameRequiredXP);
-  gameLevel = Number(gameLevel);
+  gameLevel = Math.max(1, Number(gameLevel));
   seasonXP = Number(seasonXP);
 
-  // Debug log to verify the values
-  console.log("Level2 Component Debug:");
-  console.log({
-    chat: { level, currentXP, requiredXP },
-    game: { gameLevel, gameCurrentXP, gameRequiredXP },
-  });
-
-  // Ensure gameLevel is correctly displayed even when it's greater than 1
-  // A level of 0 would be displayed as 1 (minimum level)
-  gameLevel = Math.max(1, gameLevel);
-
-  // Calculate remaining time more precisely
   const timeRemaining = seasonEnds
     ? Math.max(0, Number(seasonEnds) - Date.now())
     : 0;
@@ -236,107 +51,256 @@ const Level2 = (props) => {
     {}
   );
 
-  const baseUrl = process.env.BASE_URL || "http://localhost:2333";
-  const imageUrl = new URL("/images/Frame25.png", baseUrl).toString();
+  const {
+    textColor = "#f8fbff",
+    secondaryTextColor = "rgba(248,251,255,0.78)",
+    tertiaryTextColor = "rgba(248,251,255,0.6)",
+    overlayBackground = "rgba(255,255,255,0.08)",
+    backgroundGradient,
+  } = coloring || {};
+
+  const accentGame = "#1DB935";
+  const accentChat = "#2196F3";
+  const accentSeason = "#8732a8";
+
+  const chatProgress = Math.min(1, Math.max(0, currentXP / Math.max(1, requiredXP)));
+  const gameProgress = Math.min(1, Math.max(0, gameCurrentXP / Math.max(1, gameRequiredXP)));
+
+  const username = interaction?.user?.displayName || interaction?.user?.username || "Player";
+  const avatarURL = interaction?.user?.avatarURL;
+
+  const rolesToShow = (availableRoles && availableRoles.length > 0
+    ? availableRoles
+    : [
+        /*{ name: "Veteran", color: "#ffb347", requiredLevel: 10 },
+        { name: "Elite", color: "#6ec6ff", requiredLevel: 20 },
+        { name: "Mythic", color: "#bd4eff", requiredLevel: 30 },
+        { name: "Veteran", color: "#ffb347", requiredLevel: 10 },
+        { name: "Elite", color: "#6ec6ff", requiredLevel: 20 },
+        { name: "Mythic", color: "#bd4eff", requiredLevel: 30 },*/
+      ]
+  );
+  const visibleRoles = rolesToShow.slice(0, 4);
+  const moreRolesCount = Math.max(0, rolesToShow.length - visibleRoles.length);
 
   return (
     <div
       style={{
-        backgroundSize: "cover",
-        width: "400px",
-        height: "254px",
+        width: `${Level2.dimensions.width}px`,
+        height: `${Level2.dimensions.height}px`,
         display: "flex",
-        fontFamily: "Inter", fontWeight: 500,
-        color: "white",
-        fontSize: "20px",
+        flexDirection: "column",
+        padding: "16px",
+        borderRadius: "14px",
+        background: backgroundGradient || "#0f172a",
+        color: textColor,
+        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
         position: "relative",
+        overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
-      {/* No need to log interaction here, we've already logged what we need */}
-
-      <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-        <StyledRectangle
-          primaryText={`${translations.season} ${seasonNumber}`}
-          secondaryText={`${seasonXP}XP`}
-          timerText={formattedTime}
-          roundness="10px 10px 0 0"
-          color="#8732a8"
-        />
-        <StyledRectangle
-          primaryText={translations.games}
-          secondaryText={`${gameLevel}LVL`}
-          secondaryTextStyles={{ fontSize: "52px", bottom: "-11px" }}
-          color="#1DB935"
-          progressBar={true}
-          progressBarXP={gameCurrentXP}
-          progressBarMaxXP={gameRequiredXP}
-        />
-        <StyledRectangle
-          primaryText={translations.chat}
-          secondaryText={`${level}LVL`}
-          color="#2196F3"
-          primaryTextStyles={{ fontSize: "48px" }}
-          secondaryTextStyles={{ fontSize: "52px", bottom: "-13px" }}
-          roundness="0 0 10px 10px"
-          progressBar={true}
-          progressBarXP={currentXP}
-          progressBarMaxXP={requiredXP}
-        />
-      </div>
-      <img
-        style={{
-          width: "60px",
-          height: "60px",
-          objectFit: "cover",
-          position: "absolute",
-          display: "flex",
-          borderRadius: "20px",
-          padding: "10px",
-        }}
-        src={interaction.user.avatarURL}
-        alt="Frame25"
-        width={256}
-        height={256}
-      />
-      {/* Display Next Level Role Reward */}
-      {nextLevelRole && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "10px",
-            left: "10px",
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            padding: "3px 8px",
-            borderRadius: "8px",
-            display: "flex",
-            alignItems: "center",
-            fontSize: "14px",
-            fontFamily: "Inter", fontWeight: 500,
-          }}
-        >
-          <div
-            style={{
-              width: "10px",
-              height: "10px",
-              borderRadius: "50%",
-              backgroundColor: nextLevelRole.color || "#ffffff", // Use role color or white default
-              marginRight: "5px",
-              border: "1px solid rgba(255, 255, 255, 0.5)",
-            }}
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: "10px", height: "100%" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+            {avatarURL ? (
+              <img
+                src={avatarURL}
+                alt="avatar"
+                style={{ width: "48px", height: "48px", borderRadius: "16px", objectFit: "cover" }}
+              />
+            ) : null}
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px", overflow: "hidden" }}>
+              <span style={{ fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px", color: tertiaryTextColor, fontWeight: 700 }}>{translations.season} {seasonNumber}</span>
+              <span style={{ fontSize: "20px", fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{username}</span>
+            </div>
+          </div>
+          <InfoRectangle
+            icon={<span>🏆</span>}
+            background={overlayBackground}
+            title={translations.season}
+            titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 700, textTransform: "uppercase" }}
+            value={
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                  <span style={{ fontSize: "18px", fontWeight: 800 }}>{Math.floor(seasonXP)}</span>
+                  <span style={{ fontSize: "10px", color: tertiaryTextColor }}>XP</span>
+                </div>
+                <span style={{ fontSize: "11px", color: secondaryTextColor, fontWeight: 600, letterSpacing: "0.3px" }}>{formattedTime}</span>
+              </div>
+            }
+            padding="10px 12px"
+            minWidth="200px"
+            maxWidth="200px"
           />
-          <span>
-            {translations.nextRole}: {nextLevelRole.name} (Lvl{" "}
-            {nextLevelRole.requiredLevel})
-          </span>
         </div>
-      )}
+
+        <div style={{ display: "flex", gap: "10px", flex: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "45%" }}>
+            <InfoRectangle
+              icon={<span>💬</span>}
+              background={overlayBackground}
+              title={
+                <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {translations.chat}
+                  {chatRank?.rank ? (
+                    <span style={{ fontSize: "10px", opacity: 0.8, fontWeight: 700, color: tertiaryTextColor }}>
+                      #{chatRank.rank}
+                    </span>
+                  ) : null}
+                </span>
+              }
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 700, textTransform: "uppercase" }}
+              value={
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: textColor }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800 }}>{level}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 700, opacity: 0.8, position: "relative", bottom: "4px" }}>{translations.lvlSuffix || "lvl"}</span>
+                    <span style={{ fontSize: "11px", color: tertiaryTextColor, position: "relative", bottom: "4px" }}>
+                      {Math.floor(currentXP)} / {Math.max(1, Math.floor(requiredXP))} XP
+                    </span>
+                  </div>
+                </div>
+              }
+              padding="12px"
+              minWidth="0px"
+              maxWidth="auto"
+              style={{ width: "100%" }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${chatProgress * 100}%`,
+                  background: `${accentChat}55`,
+                  transition: "width 0.3s ease-out",
+                  zIndex: 0,
+                }}
+              />
+            </InfoRectangle>
+
+            <InfoRectangle
+              icon={<span>🎮</span>}
+              background={overlayBackground}
+              title={
+                <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {translations.games}
+                  {gameRank?.rank ? (
+                    <span style={{ fontSize: "10px", opacity: 0.8, fontWeight: 700, color: tertiaryTextColor }}>
+                      #{gameRank.rank}
+                    </span>
+                  ) : null}
+                </span>
+              }
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 700, textTransform: "uppercase" }}
+              value={
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: textColor }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800 }}>{gameLevel}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 700, opacity: 0.8, position: "relative", bottom: "4px" }}>{translations.lvlSuffix || "lvl"}</span>
+                    <span style={{ fontSize: "11px", color: tertiaryTextColor, position: "relative", bottom: "4px" }}>
+                      {Math.floor(gameCurrentXP)} / {Math.max(1, Math.floor(gameRequiredXP))} XP
+                    </span>
+                  </div>
+                </div>
+              }
+              padding="12px"
+              minWidth="0px"
+              maxWidth="auto"
+              style={{ width: "100%" }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${gameProgress * 100}%`,
+                  background: `${accentGame}55`,
+                  transition: "width 0.3s ease-out",
+                  zIndex: 0,
+                }}
+              />
+            </InfoRectangle>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, justifyContent: "flex-start" }}>
+            <InfoRectangle
+              icon={<span>🎖️</span>}
+              background={overlayBackground}
+              title={translations.nextRole}
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 700, textTransform: "uppercase" }}
+              value={
+                visibleRoles && visibleRoles.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+                    {visibleRoles.map((role, idx) => {
+                      const roleProgress = Math.min(1, Math.max(0, level / Math.max(1, Number(role.requiredLevel || 0))));
+                      return (
+                        <div
+                          key={`${role.name}-${idx}`}
+                          style={{
+                            position: "relative",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 8px",
+                            borderRadius: "10px",
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            width: "100%",
+                            boxSizing: "border-box",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: `${roleProgress * 100}%`,
+                              background: `${role.color || accentChat}55`,
+                              zIndex: 0,
+                              transition: "width 0.3s ease-out",
+                            }}
+                          />
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              background: role.color || "#ffffff",
+                              border: "1px solid rgba(255,255,255,0.4)",
+                              flexShrink: 0,
+                              position: "relative",
+                              zIndex: 1,
+                            }}
+                          />
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: textColor, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative", zIndex: 1 }}>{role.name}</span>
+                          <span style={{ fontSize: "10px", color: tertiaryTextColor, flexShrink: 0, position: "relative", zIndex: 1 }}>lvl {role.requiredLevel}</span>
+                        </div>
+                      );
+                    })}
+                    {moreRolesCount > 0 ? (
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 8px", borderRadius: "10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", width: "100%", boxSizing: "border-box", color: tertiaryTextColor, fontSize: "10px", fontWeight: 700 }}>
+                        +{moreRolesCount} more
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: "12px", color: tertiaryTextColor }}>{translations.noNextRole || "No upcoming role"}</span>
+                )
+              }
+              padding="12px"
+              minWidth="0px"
+              maxWidth="100%"
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 Level2.dimensions = {
-  width: 400,
-  height: 254,
+  width: 430,
+  height: 264,
 };
 
 Level2.localization_strings = {
@@ -359,6 +323,21 @@ Level2.localization_strings = {
     ru: "След. роль",
     en: "Next Role",
     uk: "Наст. роль",
+  },
+  levelLabel: {
+    ru: "Уровень",
+    en: "Level",
+    uk: "Рівень",
+  },
+  lvlSuffix: {
+    ru: "ур.",
+    en: "lvl",
+    uk: "рів.",
+  },
+  noNextRole: {
+    ru: "Нет ближайшей роли",
+    en: "No upcoming role",
+    uk: "Немає найближчої ролі",
   },
 };
 

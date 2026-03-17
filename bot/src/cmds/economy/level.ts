@@ -140,6 +140,70 @@ const command = {
       const gameXp = Number(userData.Level?.gameXp || 0);
       const gameLevelInfo = (hubClient as any).calculateLevel(gameXp) as LevelInfo;
 
+      let chatRank: { rank: number; total: number } | null = null;
+      let gameRank: { rank: number; total: number } | null = null;
+      let availableRoles: { name: string; color: string; requiredLevel: number }[] = [];
+      let ownedRoleIds: Set<string> = new Set();
+
+      try {
+        const discordMember = await (interaction.guild as any).members.fetch(user.id).catch(() => null);
+        const roleIds = (discordMember?.roles?.cache?.keys?.() ? Array.from(discordMember.roles.cache.keys()) : []) as string[];
+        ownedRoleIds = new Set(roleIds);
+      } catch (error) {
+        console.warn(`Failed to fetch member roles for guild ${interaction.guild.id}:`, error);
+      }
+      try {
+        const guildUsers = (await (hubClient as any).getGuildUsers(interaction.guild.id)) as any[];
+        const computeRank = (users: any[], xpField: string, userId: string) => {
+          const scored = users
+            .map((u) => ({ id: u.id || u.userId, xp: Number(u?.Level?.[xpField] || 0) }))
+            .filter((entry) => entry.id && Number.isFinite(entry.xp));
+          const sorted = scored.sort((a, b) => {
+            if (b.xp === a.xp) return (a.id || "").localeCompare(b.id || "");
+            return b.xp - a.xp;
+          });
+          const idx = sorted.findIndex((entry) => entry.id === userId);
+          if (idx === -1) return null;
+          return { rank: idx + 1, total: sorted.length };
+        };
+
+        chatRank = computeRank(guildUsers, "xp", user.id);
+        gameRank = computeRank(guildUsers, "gameXp", user.id);
+      } catch (error) {
+        console.warn(`Failed to compute ranks for guild ${interaction.guild.id}:`, error);
+      }
+
+      try {
+        const levelRoles = (await hubClient.getGuildLevelRoles(interaction.guild.id)) as any[];
+        const upcoming = (levelRoles || [])
+          .filter((role) => Number(role.requiredLevel || 0) > chatLevelInfo.level)
+          .filter((role) => !ownedRoleIds.has(role.roleId))
+          .sort((a, b) => Number(a.requiredLevel || 0) - Number(b.requiredLevel || 0))
+          .slice(0, 4);
+
+        const enriched = await Promise.all(
+          upcoming.map(async (role) => {
+            try {
+              const discordRole = await interaction.guild.roles.fetch(role.roleId).catch(() => null);
+              return {
+                name: discordRole?.name || role.roleId,
+                color: discordRole?.hexColor || "#ffffff",
+                requiredLevel: Number(role.requiredLevel || 0),
+              };
+            } catch (err) {
+              return {
+                name: role.roleId,
+                color: "#ffffff",
+                requiredLevel: Number(role.requiredLevel || 0),
+              };
+            }
+          })
+        );
+        availableRoles = enriched.filter(Boolean) as { name: string; color: string; requiredLevel: number }[];
+      } catch (error) {
+        console.warn(`Failed to fetch guild level roles for ${interaction.guild.id}:`, error);
+      }
+
       const seasonXp = Number(userData.Level?.seasonXp || 0);
       const seasonEnds = seasons?.seasonEnds || Date.now() + 7 * 24 * 60 * 60 * 1000;
       const seasonNumber = seasons?.seasonNumber || 1;
@@ -195,9 +259,12 @@ const command = {
           gameCurrentXP: gameLevelInfo.currentXP,
           gameRequiredXP: gameLevelInfo.requiredXP,
           gameLevel: gameLevelInfo.level,
+          chatRank,
+          gameRank,
           seasonXP: seasonXp,
           seasonEnds: Number(seasonEnds),
           seasonNumber: Number(seasonNumber),
+          availableRoles,
           nextLevelRole: nextLevelRoleInfo,
         },
         { image: 2, emoji: 1 },

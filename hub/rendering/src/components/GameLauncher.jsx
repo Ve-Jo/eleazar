@@ -1,3 +1,6 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const GameLauncher = (props) => {
   console.log(
     "[GameLauncher] Received props:",
@@ -346,23 +349,44 @@ const GameLauncher = (props) => {
             {translations.gameSelection || "Game Selection"}
           </div>
           <div style={{ display: "flex" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                backgroundColor: overlayBackground,
-                borderRadius: "10px",
-                padding: "10px",
-                gap: "5px",
-                alignSelf: "flex-start",
-                color: textColor,
-              }}
+            <InfoRectangle
+              icon="💵"
+              background={overlayBackground}
+              borderRadius="10px"
+              padding="8px 10px"
+              minWidth="0px"
+              maxWidth="180px"
+              iconSize="18px"
+              iconMarginRight="6px"
+              title={translations.balance || "BALANCE"}
+              titleStyle={{ fontSize: "11px", color: secondaryTextColor, opacity: 0.8, letterSpacing: "0.06em" }}
+              value={
+                <div style={{ display: "flex", fontSize: "20px", fontWeight: "bold", color: textColor }}>
+                  {(database?.economy?.balance ?? 0).toFixed(1)}
+                </div>
+              }
+              style={{ position: "relative", alignSelf: "flex-start", flexShrink: 0, gap: "2px" }}
             >
-              <span style={{ display: "flex" }}>💵</span>
-              <span style={{ display: "flex" }}>
-                {database?.economy?.balance?.toFixed(1) || 0}
-              </span>
-            </div>
+              <Banknotes
+                amount={Number(database?.economy?.balance || 0)}
+                style="banknotes"
+                division={50}
+                xspacing={18}
+                styleOverrides={{
+                  container: {
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    overflow: "hidden",
+                    zIndex: 0,
+                  },
+                  banknote: {
+                    width: "10px",
+                    height: "3px",
+                  },
+                }}
+              />
+            </InfoRectangle>
           </div>
         </div>
       </div>

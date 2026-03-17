@@ -196,7 +196,7 @@ export type HubClientLike = {
   getEligibleRolesForLevel: (guildId: string, level: number) => Promise<LevelRoleEnvelope>;
   getNextLevelRole: (guildId: string, currentLevel: number) => Promise<NextLevelRoleEnvelope>;
   addLevelRole: (guildId: string, level: number, roleId: string) => Promise<LevelRole>;
-  removeLevelRole: (guildId: string, level: number) => Promise<DeleteManyResponse>;
+  removeLevelRole: (guildId: string, roleId: string) => Promise<DeleteManyResponse>;
   updateStats: (
     guildId: string,
     userId: string,
@@ -856,9 +856,9 @@ class HubClient {
     });
   }
 
-  async removeLevelRole(guildId: string, level: number): Promise<DeleteManyResponse> {
+  async removeLevelRole(guildId: string, roleId: string): Promise<DeleteManyResponse> {
     return await apiRequest<DeleteManyResponse>(
-      `${this.databaseUrl}/levels/roles/${guildId}/${level}`,
+      `${this.databaseUrl}/levels/roles/${guildId}/${roleId}`,
       {
         method: "DELETE",
       }

@@ -1,10 +1,18 @@
 import React from "react";
+import InfoRectangle from "./unified/InfoRectangle.jsx";
 
 const LevelUp = (props) => {
-  const { interaction, type = "chat", level = 1, i18n } = props;
-
-  // Ensure all values are numbers
-  let numLevel = Number(level);
+  const {
+    interaction,
+    type = "chat",
+    level = 1,
+    oldLevel = Math.max(0, Number(level) - 1),
+    currentXP = 0,
+    requiredXP = 0,
+    dominantColor,
+    coloring = {},
+    i18n,
+  } = props;
 
   const translations = Object.entries(LevelUp.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -14,184 +22,186 @@ const LevelUp = (props) => {
     {}
   );
 
-  const bgColor = type === "game" ? "#1DB935" : "#2196F3";
-  const darkerColor = darkenColor(bgColor);
+  const numLevel = Number(level) || 0;
+  const prevLevel = Number(oldLevel) || Math.max(0, numLevel - 1);
+  const xpNeeded = Math.max(1, Number(requiredXP) || 0);
+  const xpNow = Math.max(0, Number(currentXP) || 0);
+  const progress = Math.min(1, Math.max(0, xpNow / xpNeeded));
 
-  // Get adjacent level numbers for scrolling effect
-  const getAdjacentLevels = (level) => {
-    return [
-      level + 2,
-      level + 1,
-      level,
-      level - 1 > 0 ? level - 1 : 0,
-      level - 2 > 0 ? level - 2 : 0,
-    ];
-  };
+  const palette = type === "game"
+    ? { base: "#1DB935", accent: "#0f9e2b" }
+    : { base: "#2196F3", accent: "#0d7bd4" };
 
-  const adjacentLevels = getAdjacentLevels(numLevel);
+  const normalizedDominant = normalizeColor(dominantColor);
+  const baseColor = normalizedDominant || palette.base;
+  const accentColor = palette.accent;
+
+  const {
+    textColor = "#f8fbff",
+    secondaryTextColor = "rgba(248,251,255,0.7)",
+    tertiaryTextColor = "rgba(248,251,255,0.5)",
+    overlayBackground = "rgba(255,255,255,0.08)",
+    backgroundGradient,
+  } = coloring || {};
+
+  const username = interaction?.user?.displayName || interaction?.user?.username || "Player";
+  const avatarURL = interaction?.user?.avatarURL;
+
+  const modeTint = type === "game"
+    ? { soft: "rgba(29, 185, 53, 0.16)", strong: "rgba(29, 185, 53, 0.8)" }
+    : { soft: "rgba(33, 150, 243, 0.16)", strong: "rgba(33, 150, 243, 0.8)" };
 
   return (
     <div
       style={{
-        width: "600px",
-        height: "150px",
+        width: `${LevelUp.dimensions.width}px`,
+        height: `${LevelUp.dimensions.height}px`,
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        alignItems: "center",
-        fontFamily: "Inter", fontWeight: 500,
-        color: "white",
-        fontSize: "20px",
+        gap: "8px",
+        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+        color: "#f8fbff",
         position: "relative",
-        borderRadius: "10px",
+        borderRadius: "14px",
         overflow: "hidden",
-        backgroundColor: bgColor,
+        background: backgroundGradient || baseColor,
+        boxSizing: "border-box",
+        padding: "16px 18px",
       }}
     >
-      {/* Background */}
+      {/* Subtle grid/shine overlay */}
       <div
         style={{
           position: "absolute",
-          left: 0,
-          top: 0,
-          height: "100%",
-          width: "100%",
-          backgroundColor: bgColor,
-          display: "flex",
+          inset: 0,
+          background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0 25%, transparent 25% 50%, rgba(255,255,255,0.04) 50% 75%, transparent 75% 100%)",
+          backgroundSize: "18px 18px",
+          opacity: 0.35,
+          pointerEvents: "none",
         }}
       />
 
-      {/* Content container - explicitly use flex */}
       <div
         style={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          alignItems: "center",
+          gap: "12px",
+          position: "relative",
           zIndex: 1,
         }}
       >
-        {/* User avatar */}
-        <img
-          style={{
-            width: "80px",
-            height: "80px",
-            objectFit: "cover",
-            position: "absolute",
-            top: "10px",
-            left: "15px",
-            borderRadius: "25%",
-          }}
-          src={interaction.user.avatarURL}
-          alt="User Avatar"
-        />
-
-        {/* Level Up title */}
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "110px",
-            fontSize: "35px",
-            fontWeight: "bold",
-            display: "flex",
-          }}
-        >
-          {translations.levelUp}
-        </div>
-
-        {/* Level info with scrolling effect */}
-        <div
-          style={{
-            position: "absolute",
-            display: "flex",
-            right: "20px",
-            fontSize: "60px",
-            fontWeight: "bold",
-          }}
-        >
-          <div
+        {avatarURL ? (
+          <img
+            src={avatarURL}
+            alt="User Avatar"
             style={{
-              display: "flex",
-              flexDirection: "column",
-              position: "relative",
+              width: "72px",
+              height: "72px",
+              borderRadius: "22px",
+              objectFit: "cover",
             }}
-          >
-            ↑ {numLevel}LVL
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                position: "absolute",
-                opacity: 0.5,
-                right: "0px",
-                top: "0px",
-                lineHeight: "1",
-                color: "rgba(255, 255, 255, 1)",
-              }}
-            >
-              <span style={{ opacity: 0 }}>{adjacentLevels[2]}LVL</span>
-              <span style={{ filter: "blur(1px)" }}>
-                {adjacentLevels[3]}LVL
-              </span>
-            </div>
-          </div>
-        </div>
+          />
+        ) : null}
 
-        {/* Type label (Chat/Game) */}
-        <div
-          style={{
-            position: "absolute",
-            display: "flex",
-            left: "20px",
-            bottom: "-5px",
-            fontSize: "52px",
-            fontWeight: "bold",
-          }}
-        >
-          {type === "game" ? translations.games : translations.chat}
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.6px", opacity: 0.9, fontWeight: 700, fontSize: "12px", color: secondaryTextColor }}>
+            {translations.levelUp}
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "rgba(255,255,255,0.25)" }} />
+            {type === "game" ? translations.games : translations.chat}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", color: textColor }}>
+            <span style={{ fontSize: "28px", fontWeight: 800 }}>{username}</span>
+            <span style={{ fontSize: "13px", opacity: 0.8, fontWeight: 600, position: "relative", bottom: "5px" }}>{translations.reached}</span>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <InfoRectangle
+              icon={<span style={{ transform: "translateY(-1px)" }}>⬆️</span>}
+              background={modeTint.strong}
+              title={translations.levelLabel}
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 600, textTransform: "uppercase" }}
+              value={
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: textColor }}>
+                  <span style={{ fontSize: "26px", fontWeight: 800 }}>{numLevel}</span>
+                  <span style={{ fontSize: "11px", fontWeight: 800, opacity: 0.8, position: "relative", bottom: "5px" }}>{translations.lvlSuffix}</span>
+                  <span style={{ fontSize: "11px", opacity: 0.75, fontWeight: 600, color: tertiaryTextColor, position: "relative", bottom: "5px" }}>
+                    {translations.from} {prevLevel}
+                  </span>
+                </div>
+              }
+              padding="10px 12px"
+              minWidth="0px"
+              maxWidth="220px"
+            />
+
+            <InfoRectangle
+              icon={<span>⭐</span>}
+              background={overlayBackground}
+              title={translations.progress}
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 600, textTransform: "uppercase" }}
+              value={
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "14px", color: textColor }}>
+                  <div style={{
+                    position: "relative",
+                    width: "150px",
+                    height: "10px",
+                    borderRadius: "999px",
+                    background: "rgba(255,255,255,0.12)",
+                    overflow: "hidden",
+                  }}>
+                    <div style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: `${progress * 100}%`,
+                      background: `linear-gradient(90deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4))`,
+                      transition: "width 0.3s ease-out",
+                    }} />
+                  </div>
+                  <span style={{ opacity: 0.9 }}>{Math.round(progress * 100)}%</span>
+                  {xpNeeded ? (
+                    <span style={{ fontSize: "11px", opacity: 0.75, fontWeight: 600 }}>
+                      {`${Math.floor(xpNow)} / ${Math.floor(xpNeeded)} XP`}
+                    </span>
+                  ) : null}
+                </div>
+              }
+              padding="10px 12px"
+              minWidth="0px"
+              maxWidth="260px"
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-function darkenColor(color) {
-  const colorMap = {
-    "#1DB935": "#1DB935", // Green
-    "#2196F3": "#2196F3", // Blue
-  };
+function lightenColor(color, amount = 10) {
+  if (!color || typeof color !== "string") return color;
+  const hex = color.replace("#", "");
+  const num = parseInt(hex.length === 3 ? hex.replace(/(.)/g, "$1$1") : hex, 16);
+  const r = Math.min(255, (num >> 16) + amount);
+  const g = Math.min(255, ((num >> 8) & 0x00ff) + amount);
+  const b = Math.min(255, (num & 0x0000ff) + amount);
+  return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
+}
 
-  if (!color.startsWith("#")) {
-    color = colorMap[color.toLowerCase()] || "#000000";
+function normalizeColor(color) {
+  if (!color || typeof color !== "string") return null;
+  const trimmed = color.trim();
+  const hexMatch = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+  if (hexMatch.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("rgb(") || trimmed.startsWith("rgba(") || trimmed.startsWith("hsl(") || trimmed.startsWith("hsla(")) {
+    return trimmed;
   }
-
-  let hex = color.replace("#", "");
-  if (hex.length === 3) {
-    hex = hex
-      .split("")
-      .map((char) => char + char)
-      .join("");
-  }
-  let r = parseInt(hex.substring(0, 2), 16);
-  let g = parseInt(hex.substring(2, 4), 16);
-  let b = parseInt(hex.substring(4, 6), 16);
-
-  r = Math.max(0, Math.floor(r * 0.8));
-  g = Math.max(0, Math.floor(g * 0.8));
-  b = Math.max(0, Math.floor(b * 0.8));
-
-  return `#${r.toString(16).padStart(2, "0")}${g
-    .toString(16)
-    .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  return null;
 }
 
 LevelUp.dimensions = {
   width: 600,
-  height: 150,
+  height: 175,
 };
 
 LevelUp.localization_strings = {
@@ -199,6 +209,16 @@ LevelUp.localization_strings = {
     en: "Level Up!",
     ru: "Новый уровень!",
     uk: "Новий рівень!",
+  },
+  reached: {
+    en: "reached",
+    ru: "достиг(ла)",
+    uk: "досяг(ла)",
+  },
+  levelLabel: {
+    en: "Level",
+    ru: "Уровень",
+    uk: "Рівень",
   },
   games: {
     en: "Games",
@@ -209,6 +229,26 @@ LevelUp.localization_strings = {
     en: "Chat",
     ru: "Чат",
     uk: "Чат",
+  },
+  lvlSuffix: {
+    en: "lvl",
+    ru: "ур.",
+    uk: "рів.",
+  },
+  from: {
+    en: "from",
+    ru: "с",
+    uk: "з",
+  },
+  progress: {
+    en: "Progress",
+    ru: "Прогресс",
+    uk: "Прогрес",
+  },
+  mode: {
+    en: "Mode",
+    ru: "Режим",
+    uk: "Режим",
   },
 };
 

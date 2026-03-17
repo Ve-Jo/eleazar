@@ -12,6 +12,7 @@ async function getGuildUsers(client: ReadClient, guildId: string): Promise<unkno
     where: { guildId },
     include: {
       economy: true,
+      Level: true,
     },
   });
 }

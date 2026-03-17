@@ -1,3 +1,6 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const Leaderboard = (props) => {
   let {
     users,
@@ -545,30 +548,37 @@ const Leaderboard = (props) => {
                 )}
               </div>
             </div>
-            <div
-              style={{
-                fontSize: `${valueFontSize}px`,
-                fontWeight: "bold",
-                display: "flex",
-                backgroundColor:
-                  user.coloring?.overlayBackground ||
-                  "rgba(255, 255, 255, 0.2)",
-                color: user.coloring?.textColor || "white",
-                borderRadius: "10px",
-                marginRight: "10px",
-                padding: "5px 10px",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                minWidth: "0px",
-                maxWidth: "120px",
-                overflow: "visible",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                position: "relative",
-              }}
+            <InfoRectangle
+              icon="💵"
+              background={user.coloring?.overlayBackground || "rgba(255, 255, 255, 0.2)"}
+              borderRadius="10px"
+              padding="6px 8px"
+              minWidth="0px"
+              maxWidth="140px"
+              iconSize="16px"
+              iconMarginRight="6px"
+              title={translations.categories?.[category] || translations.total}
+              titleStyle={{ fontSize: "9px", color: user.coloring?.secondaryTextColor || "rgba(255,255,255,0.8)", opacity: 0.9, letterSpacing: "0.05em" }}
+              value={
+                <div style={{ display: "flex", fontSize: `${valueFontSize}px`, fontWeight: 700, color: user.coloring?.textColor || "white", whiteSpace: "nowrap" }}>
+                  {getValueString(user.value, category)}
+                </div>
+              }
+              style={{ position: "relative", marginRight: "10px", flexShrink: 0, minHeight: "52px", height: "52px" }}
             >
-              {getValueString(user.value, category)}
-            </div>
+              {"total balance" && ["total", "balance", "bank"].includes(category) && (
+                <Banknotes
+                  amount={Math.max(Number(user.value || 0), 0)}
+                  style={category === "bank" ? "bars" : "banknotes"}
+                  division={50}
+                  xspacing={18}
+                  styleOverrides={{
+                    container: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 },
+                    banknote: { width: "10px", height: "3px" },
+                  }}
+                />
+              )}
+            </InfoRectangle>
           </div>
         </div>
 

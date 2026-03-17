@@ -99,7 +99,8 @@ router.post("/roles", async (req: LevelsRouteRequest, res: ResponseLike) => {
       return res.status(400).json({ error: "Invalid level number" });
     }
 
-    const result = await Database.addLevelRole(guildId, levelNum, roleId);
+    // Signature: addLevelRole(guildId, roleId, requiredLevel)
+    const result = await Database.addLevelRole(guildId, roleId, levelNum);
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding level role:", error);
@@ -108,22 +109,17 @@ router.post("/roles", async (req: LevelsRouteRequest, res: ResponseLike) => {
 });
 
 router.delete(
-  "/roles/:guildId/:level",
+  "/roles/:guildId/:roleId",
   async (req: LevelsRouteRequest, res: ResponseLike) => {
     try {
       const guildId = req.params.guildId ?? "";
-      const level = req.params.level ?? "";
+      const roleId = req.params.roleId ?? "";
 
-      if (!guildId) {
-        return res.status(400).json({ error: "guildId is required" });
+      if (!guildId || !roleId) {
+        return res.status(400).json({ error: "guildId and roleId are required" });
       }
 
-      const levelNum = parseInt(level, 10);
-      if (Number.isNaN(levelNum)) {
-        return res.status(400).json({ error: "Invalid level number" });
-      }
-
-      const result = await Database.removeLevelRole(guildId, levelNum);
+      const result = await Database.removeLevelRole(guildId, roleId);
       res.json(serializeBigInt(result));
     } catch (error) {
       console.error("Error removing level role:", error);

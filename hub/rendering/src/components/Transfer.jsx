@@ -1,3 +1,6 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const Transfer = (props) => {
   let {
     interaction,
@@ -174,42 +177,19 @@ const Transfer = (props) => {
             }}
           >
             {/* Wallet Balance */}
-            <div
-              style={{
-                display: "flex",
-                backgroundColor: overlayBackground,
-                borderRadius: "10px 10px 10px 0",
-                padding: "5px 15px",
-                alignItems: "center",
-                alignSelf: "flex-start",
-                minWidth: "150px",
+            <InfoRectangle
+              icon="💵"
+              background={overlayBackground}
+              borderRadius="10px 10px 10px 0"
+              padding="5px 15px"
+              minWidth="150px"
+              title={translations.wallet || "WALLET"}
+              titleStyle={{
+                fontSize: "14px",
+                color: secondaryTextColor,
+                opacity: "0.8",
               }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: "24px",
-                  marginRight: "15px",
-                }}
-              >
-                💵
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: "14px",
-                    color: secondaryTextColor,
-                    opacity: "0.8",
-                  }}
-                >
-                  {translations.wallet || "WALLET"}
-                </div>
+              value={
                 <div
                   style={{
                     display: "flex",
@@ -220,8 +200,29 @@ const Transfer = (props) => {
                 >
                   {database.economy.balance.toFixed(2) || "{balance}"}
                 </div>
-              </div>
-            </div>
+              }
+              style={{ alignSelf: "flex-start", position: "relative" }}
+            >
+              <Banknotes
+                amount={Number(database.economy.balance || 0)}
+                style="banknotes"
+                division={50}
+                xspacing={24}
+                styleOverrides={{
+                  container: {
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    overflow: "hidden",
+                    zIndex: 0,
+                  },
+                  banknote: {
+                    width: "12px",
+                    height: "4px",
+                  },
+                }}
+              />
+            </InfoRectangle>
 
             {/* Transfer Amount */}
             <div
@@ -393,47 +394,25 @@ const Transfer = (props) => {
             </div>
 
             {/* Bank Balance or Recipient Balance */}
-            <div
-              style={{
-                display: "flex",
-                backgroundColor: overlayBackground,
-                borderRadius: "0 10px 10px 10px",
-                padding: "5px 15px",
-                alignItems: "center",
-                alignSelf: "flex-start",
-                minWidth: "150px",
-                position: "relative",
+            <InfoRectangle
+              icon={isTransfer ? "💵" : "💳"}
+              background={overlayBackground}
+              borderRadius="0 10px 10px 10px"
+              padding="5px 15px"
+              minWidth="150px"
+              title={
+                isTransfer
+                  ? `${translations.balance || "BALANCE"} @${
+                      recipient?.username || "{username}"
+                    }`
+                  : translations.bank || "BANK"
+              }
+              titleStyle={{
+                fontSize: "14px",
+                color: secondaryTextColor,
+                opacity: "0.8",
               }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: "24px",
-                  marginRight: "15px",
-                }}
-              >
-                {isTransfer ? "💵" : "💳"}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    fontSize: "14px",
-                    color: secondaryTextColor,
-                    opacity: "0.8",
-                  }}
-                >
-                  {isTransfer
-                    ? `${translations.balance || "BALANCE"} @${
-                        recipient?.username || "{username}"
-                      }`
-                    : translations.bank || "BANK"}
-                </div>
+              value={
                 <div
                   style={{
                     display: "flex",
@@ -471,8 +450,34 @@ const Transfer = (props) => {
                       </div>
                     )}
                 </div>
-              </div>
-
+              }
+              style={{ alignSelf: "flex-start", position: "relative" }}
+            >
+              <Banknotes
+                amount={
+                  isTransfer
+                    ? Number(recipient?.balance || 0)
+                    : database.combinedBankBalance
+                      ? Number(database.combinedBankBalance)
+                      : Number(database.economy.bankBalance || 0)
+                }
+                style="bars"
+                division={100}
+                xspacing={24}
+                styleOverrides={{
+                  container: {
+                    position: "absolute",
+                    inset: 0,
+                    overflow: "hidden",
+                    pointerEvents: "none",
+                    zIndex: 0,
+                  },
+                  banknote: {
+                    width: "12px",
+                    height: "4px",
+                  },
+                }}
+              />
               {/* Recipient Avatar (only for transfers) */}
               {isTransfer && recipient && (
                 <div
@@ -502,7 +507,7 @@ const Transfer = (props) => {
                   />
                 </div>
               )}
-            </div>
+            </InfoRectangle>
           </div>
         </div>
 

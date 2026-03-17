@@ -2,6 +2,7 @@ import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
 import { getCountryFlag, countryFlags } from "../utils/countryFlagsRender.ts";
 import Banknotes from "./unified/Banknotes.jsx";
+import InfoRectangle from "./unified/InfoRectangle.jsx";
 
 // Function to get gender emoji
 const getGenderEmoji = (gender) => {
@@ -93,6 +94,98 @@ const Balance = (props) => {
     ? Math.min(gameLevelData.currentXP / gameLevelData.requiredXP, 1)
     : 0;
 
+  const renderLevelRectangle = ({
+    icon,
+    title,
+    level,
+    fill,
+    accent,
+    currentXP,
+    requiredXP,
+    isMini,
+    rank,
+  }) => (
+    <InfoRectangle
+      icon={icon}
+      iconSize={isMini ? "16px" : "24px"}
+      iconMarginRight={isMini ? "8px" : "12px"}
+      background={overlayBackground}
+      title={
+        isMini
+          ? null
+          : (
+            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {title}
+              {rank ? (
+                <span style={{ fontSize: "10px", opacity: 0.8, fontWeight: 700, color: tertiaryTextColor }}>
+                  #{rank}
+                </span>
+              ) : null}
+            </span>
+          )
+      }
+      titleStyle={{
+        fontSize: "12px",
+        color: secondaryTextColor,
+        opacity: 0.85,
+        letterSpacing: "0.3px",
+      }}
+      value={
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: "6px",
+            color: textColor,
+          }}
+        >
+          {isMini && (
+            <span style={{ fontSize: "10px", color: secondaryTextColor, opacity: 0.85, marginRight: "4px", fontWeight: 600 }}>
+              {title}
+            </span>
+          )}
+          <span style={{ fontSize: isMini ? "14px" : "22px", fontWeight: 800 }}>{level}</span>
+          <span style={{ fontSize: isMini ? "8px" : "10px", opacity: 0.8 }}>lvl</span>
+          {rank ? (
+            <span style={{ fontSize: isMini ? "10px" : "10px", opacity: 0.85, fontWeight: 700, color: tertiaryTextColor }}>
+              #{rank}
+            </span>
+          ) : null}
+          {currentXP !== undefined && requiredXP !== undefined && !isMini ? (
+            <span
+              style={{
+                fontSize: "10px",
+                opacity: 0.75,
+                fontWeight: 600,
+              }}
+            >
+              {`${Math.floor(currentXP)} / ${Math.max(1, Math.floor(requiredXP))} XP`}
+            </span>
+          ) : null}
+        </div>
+      }
+      padding={isMini ? "6px 8px" : "10px 12px"}
+      minWidth={isMini ? "0px" : "0px"}
+      maxWidth={isMini ? "auto" : "350px"}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        minHeight: isMini ? "32px" : "74px",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: `${Math.max(0, Math.min(1, fill)) * 100}%`,
+          background: `${accent}55`,
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+    </InfoRectangle>
+  );
+
   const translations = Object.entries(Balance.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
@@ -153,12 +246,12 @@ const Balance = (props) => {
       <div
         style={{
           display: "flex",
-          width: "400px", // Keep original width
-          height: "260px", // Fixed height - marriage section always shows
+          width: "500px", // Slightly wider to fit content comfortably
+          height: "300px", // Increased to fit hints block comfortably
           borderRadius: database?.bannerUrl ? "0px" : "20px",
           padding: "20px",
           color: textColor,
-          fontFamily: "Inter", 
+          fontFamily: "Inter",
           fontWeight: 500,
           fontWeight: 600,
           position: "relative",
@@ -213,274 +306,64 @@ const Balance = (props) => {
             position: "relative",
             zIndex: 1,
             width: "100%",
+            height: "100%", // Добавь это, чтобы нижняя часть могла "оттолкнуться"
             display: "flex",
             flexDirection: "column",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "stretch", gap: "8px" }}>
-            {/* Level Bars - Inline to auto-align with wallet/bank stack */}
-            <div
+          }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              marginLeft: "0px",
+            }}
+          >
+            <h2
               style={{
-                width: "36px",
+                margin: "0",
+                fontSize: "24px",
                 display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                zIndex: 1,
-                alignSelf: "stretch",
-              }}
-            >
-              {/* Flex-distributed bars with min heights; fill uses percentage of each bar */}
-              {/* Chatting Level */}
-              <div
-                style={{
-                  width: "36px",
-                  background: "rgba(189, 78, 255, 0.2)",
-                  borderRadius: "10px 10px 0 0",
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  paddingTop: "2px",
-                  flexGrow: chattingLevel,
-                  minHeight: "55px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    paddingTop: "4px",
-                    fontSize: "6px",
-                    gap: "1px",
-                    zIndex: 1,
-                    position: "relative",
-                    color: textColor,
-                    opacity: 0.9,
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>
-                    {translations.chatting || "ЧАТТИНГ"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    height: `${Math.max(0, Math.min(1, chatFillRatio)) * 100}%`,
-                    background: "#bd4eff",
-                    position: "absolute",
-                    bottom: "0",
-                    left: "0",
-                    opacity: 0.7,
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: "10px",
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "baseline",
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    color: textColor,
-                    gap: "3px",
-                    zIndex: 2,
-                  }}
-                >
-                  <span style={{ top: "3px" }}>{chattingLevel}</span>
-                  <span style={{ fontSize: "9px", opacity: 0.8 }}>lvl</span>
-                </div>
-              </div>
-
-              {/* Gaming Level */}
-              <div
-                style={{
-                  width: "36px",
-                  background: "rgba(213, 86, 86, 0.2)",
-                  borderRadius: "0 0 12px 12px",
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  paddingTop: "2px",
-                  flexGrow: gamingLevel,
-                  minHeight: "55px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    paddingTop: "5px",
-                    fontSize: "6px",
-                    gap: "1px",
-                    zIndex: 1,
-                    position: "relative",
-                    color: textColor,
-                    opacity: 0.9,
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>
-                    {translations.gaming || "ГЕЙМИНГ"}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    width: "100%",
-                    height: `${Math.max(0, Math.min(1, gameFillRatio)) * 100}%`,
-                    background: "#d55656",
-                    position: "absolute",
-                    bottom: "0",
-                    left: "0",
-                    opacity: 0.7,
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: "10px",
-                    display: "flex",
-                    flexDirection: "row",
-                    alignItems: "baseline",
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    color: textColor,
-                    gap: "3px",
-                    zIndex: 2,
-                  }}
-                >
-                  <span style={{ top: "3px" }}>{gamingLevel}</span>
-                  <span style={{ fontSize: "9px", opacity: 0.8 }}>lvl</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
                 marginLeft: "0px",
+                marginBottom: "12px",
+                color: textColor,
+                alignItems: "center",
               }}
             >
-              <h2
+              {translations.title}
+              <span
                 style={{
-                  margin: "0",
-                  fontSize: "24px",
+                  fontSize: "14px",
+                  opacity: "0.5",
+                  marginLeft: "8px",
+                  lineHeight: "24px",
                   display: "flex",
-                  marginLeft: "0px",
-                  color: textColor,
                   alignItems: "center",
                 }}
               >
-                {translations.title}
-                <span
-                  style={{
-                    fontSize: "14px",
-                    opacity: "0.5",
-                    marginLeft: "8px",
-                    lineHeight: "24px",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  {interaction?.user?.username ||
-                    interaction?.user?.displayName ||
-                    "{username}"}
-                </span>
-              </h2>
+                {interaction?.user?.username ||
+                  interaction?.user?.displayName ||
+                  "{username}"}
+              </span>
+            </h2>
 
-              {/* Banknotes are now inside the bank rectangle */}
+            {/* Banknotes are now inside the bank rectangle */}
 
-              <div
-                style={{
-                  marginTop: "5px",  
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "auto", // Natural width based on content
-                  minWidth: "200px", // Minimum reasonable width
-                  maxWidth: "320px", // Maximum width limit
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    width: "auto", // Natural width based on content
-                    minWidth: "200px", // Minimum reasonable width
-                    maxWidth: "320px", // Maximum width limit
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      backgroundColor: overlayBackground,
-                      borderRadius: "12px",
-                      padding: "5px 12px",
-                      alignItems: "center",
-                      alignSelf: "flex-start",
-                      position: "relative",
-                      overflow: "hidden",
-                      boxSizing: "border-box",
-                      flexShrink: 0,
-                      width: "auto", // Natural width based on content
+            {/* Main Content Area replacing Columns with Rows */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0px", width: "100%", height: "100%" }}>
+
+              {/* Row 1: Wallet + Chat/Gaming */}
+              <div style={{ display: "flex", flexDirection: "row", gap: "5px", width: "auto", alignItems: "flex-start", marginBottom: "5px" }}>
+                <div style={{ display: "flex" }}>
+                  <InfoRectangle
+                    icon="💵"
+                    background={overlayBackground}
+                    title={translations.wallet.toUpperCase()}
+                    titleStyle={{
+                      fontSize: "14px",
+                      color: secondaryTextColor,
+                      opacity: 0.8,
                     }}
-                  >
-                    {/* Wallet banknotes inside the rectangle */}
-                    <Banknotes
-                      amount={walletBalance}
-                      style="banknotes"
-                      division={50}
-                      xspacing={24}
-                      styleOverrides={{
-                        container: {
-                          position: "absolute",
-                          overflow: "hidden",
-                          top: "0px",
-                        },
-                        banknote: {
-                          width: "12px",
-                          height: "4px",
-                        },
-                      }}
-                    />
-
-                    <div
-                      style={{
-                        display: "flex",
-                        fontSize: "24px",
-                        marginRight: "15px",
-                        flexShrink: 0,
-                        marginBottom: "7px",
-                        position: "relative",
-                        zIndex: 1,
-                      }}
-                    >
-                      💵
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        flexGrow: 1,
-                        position: "relative",
-                        zIndex: 1,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          fontSize: "14px",
-                          color: secondaryTextColor,
-                          opacity: "0.8",
-                        }}
-                      >
-                        {translations.wallet.toUpperCase()}
-                      </div>
+                    value={
                       <div
                         style={{
                           display: "flex",
@@ -489,54 +372,23 @@ const Balance = (props) => {
                           color: textColor,
                         }}
                       >
-                        {/* Use Decimal for formatting wallet */}
                         {walletBalance.toFixed(2) || "{balance}"}
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bank Section - Independent container */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0px",
-                    marginLeft: "0px",
-                    marginTop: "5px",
-                    width: "auto", // Natural width based on content
-                    minWidth: "200px", // Minimum reasonable width
-                    maxWidth: "320px", // Maximum width limit
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      backgroundColor: overlayBackground,
-                      borderRadius: "12px 12px 0 0",
-                      padding: "5px 12px",
-                      alignItems: "center",
-                      alignSelf: "flex-start",
-                      position: "relative",
-                      overflow: "hidden",
-                      boxSizing: "border-box",
-                      flexShrink: 0,
-                      width: "auto", // Natural width based on content
-                      minWidth: "200px", // Minimum reasonable width
-                      maxWidth: "320px", // Maximum width limit
-                    }}
+                    }
+                    style={{ marginBottom: 0, minHeight: "70px", minWidth: "100px", position: "relative" }}
                   >
-                    {/* Bank banknotes inside the rectangle */}
                     <Banknotes
-                      amount={visualBankBalanceAmount}
-                      style="bars"
-                      division={100}
+                      amount={walletBalance}
+                      style="banknotes"
+                      division={50}
                       xspacing={24}
                       styleOverrides={{
                         container: {
                           position: "absolute",
-                          top: "0px",
+                          inset: 0,
+                          pointerEvents: "none",
                           overflow: "hidden",
+                          zIndex: 0,
                         },
                         banknote: {
                           width: "12px",
@@ -544,87 +396,74 @@ const Balance = (props) => {
                         },
                       }}
                     />
+                  </InfoRectangle>
+                </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        fontSize: "24px",
-                        marginRight: "15px",
-                        flexShrink: 0,
-                        position: "relative",
-                        zIndex: 1,
-                      }}
-                    >
-                      💳
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        flexGrow: 1,
-                        position: "relative",
-                        zIndex: 1,
-                      }}
-                    >
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                  <div style={{ display: "flex", height: "auto" }}>
+                    {renderLevelRectangle({
+                      icon: "💬",
+                      title: translations.chatting || "CHATTING",
+                      level: chattingLevel,
+                      fill: chatFillRatio,
+                      accent: "#2196F3",
+                      currentXP: chatLevelData?.currentXP,
+                      requiredXP: chatLevelData?.requiredXP,
+                      isMini: true,
+                      rank: chatLevelData?.rank,
+                    })}
+                  </div>
+                  <div style={{ display: "flex", height: "auto" }}>
+                    {renderLevelRectangle({
+                      icon: "🎮",
+                      title: translations.gaming || "GAMING",
+                      level: gamingLevel,
+                      fill: gameFillRatio,
+                      accent: "#1DB935",
+                      currentXP: gameLevelData?.currentXP,
+                      requiredXP: gameLevelData?.requiredXP,
+                      isMini: true,
+                      rank: gameLevelData?.rank,
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Bank + Hints */}
+              <div style={{ display: "flex", flexDirection: "row", gap: "5px", width: "auto", alignItems: "stretch" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0px" }}>
+                  <InfoRectangle
+                    icon="💳"
+                    background={overlayBackground}
+                    borderRadius="12px 12px 0 0"
+                    title={
                       <div
                         style={{
                           display: "flex",
-                          justifyContent: "space-between",
                           alignItems: "center",
-                          width: "100%",
+                          gap: "4px",
+                          fontSize: "14px",
+                          opacity: 0.8,
+                          color: secondaryTextColor,
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            fontSize: "14px",
-                            opacity: "0.8",
-                            color: secondaryTextColor,
-                          }}
-                        >
-                          {translations.bank.toUpperCase()}
-                          {/* Add clarification if married */}
-                          {isMarried && (
-                            <span
-                              style={{
-                                opacity: 0.7,
-                                marginLeft: "2px",
-                                marginTop: "4px",
-                                fontSize: "8px",
-                              }}
-                            >
-                              ({translations.yours}:{" "}
-                              {individualBankBalance.toFixed(2)})
-                            </span>
-                          )}
-                        </div>
-                        {/* Show user's bank rate even if balance is combined */}
-                        {bankStartTime > 0 && bankRate > 0 ? (
-                          <div
+                        {translations.bank.toUpperCase()}
+                        {isMarried && (
+                          <span
                             style={{
-                              display: "flex",
-                              fontSize: "14px",
-                              opacity: "0.6",
-                              color: textColor,
+                              opacity: 0.7,
+                              fontSize: "8px",
+                              marginTop: "18px",
+                              top: "5px",
+                              left: "-45px",
                             }}
                           >
-                            ≈
-                            {(() => {
-                              const MS_PER_HOUR = 60 * 60 * 1000;
-                              const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
-
-                              const effectiveAnnualRate = bankRate / 100;
-                              const hourlyRate =
-                                effectiveAnnualRate *
-                                (MS_PER_HOUR / MS_PER_YEAR);
-                              return bankBalanceForDisplay
-                                .mul(hourlyRate)
-                                .toFixed(3);
-                            })()}
-                            /h
-                          </div>
-                        ) : null}
+                            ({translations.yours}: {individualBankBalance.toFixed(2)})
+                          </span>
+                        )}
                       </div>
+                    }
+                    value={
                       <div
                         style={{
                           display: "flex",
@@ -633,11 +472,8 @@ const Balance = (props) => {
                           alignItems: "baseline",
                         }}
                       >
-                        {/* Display logic using bankBalanceForDisplay */}
                         {bankStartTime > 0 || isMarried ? (
-                          <div
-                            style={{ display: "flex", alignItems: "baseline" }}
-                          >
+                          <div style={{ display: "flex", alignItems: "baseline" }}>
                             <div style={{ display: "flex" }}>
                               {Math.floor(bankBalanceForDisplay.toNumber())}
                             </div>
@@ -663,15 +499,63 @@ const Balance = (props) => {
                           </div>
                         ) : (
                           <div style={{ display: "flex" }}>
-                            {/* Fallback simple format */}
                             {bankBalanceForDisplay.toFixed(2) || "{bank}"}
                           </div>
                         )}
                       </div>
-                    </div>
-                  </div>
+                    }
+                    // Keep bank height visually aligned with wallet block
+                    style={{ minHeight: "70px", minWidth: "200px", position: "relative" }}
+                  >
+                    <Banknotes
+                      amount={visualBankBalanceAmount}
+                      style="bars"
+                      division={100}
+                      xspacing={24}
+                      styleOverrides={{
+                        container: {
+                          position: "absolute",
+                          inset: 0,
+                          overflow: "hidden",
+                          pointerEvents: "none",
+                          zIndex: 0,
+                        },
+                        banknote: {
+                          width: "12px",
+                          height: "4px",
+                        },
+                      }}
+                    />
+                    {bankStartTime > 0 && bankRate > 0 ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          right: 10,
+                          fontSize: "12px",
+                          opacity: 0.65,
+                          color: textColor,
+                          display: "flex",
+                          gap: "2px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>≈</span>
+                        <span>
+                          {(() => {
+                            const MS_PER_HOUR = 60 * 60 * 1000;
+                            const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
 
-                  {/* Bank Annual Rate Display - Now inside bank container */}
+                            const effectiveAnnualRate = bankRate / 100;
+                            const hourlyRate = effectiveAnnualRate * (MS_PER_HOUR / MS_PER_YEAR);
+                            return bankBalanceForDisplay.mul(hourlyRate).toFixed(3);
+                          })()}
+                        </span>
+                        <span>/h</span>
+                      </div>
+                    ) : null}
+                  </InfoRectangle>
+
                   <div
                     style={{
                       display: "flex",
@@ -679,12 +563,9 @@ const Balance = (props) => {
                       alignItems: "stretch",
                       alignSelf: "flex-start",
                       flexShrink: 0,
-                      width: "auto", // Match bank rectangle width
-                      minWidth: "200px", // Minimum reasonable width
-                      maxWidth: "320px", // Same max width as bank balance above
+                      width: "100%",
                     }}
                   >
-                    {/* Annual Rate - Left side */}
                     <div
                       style={{
                         display: "flex",
@@ -697,8 +578,7 @@ const Balance = (props) => {
                         padding: "8px 8px",
                         alignItems: "center",
                         justifyContent: "center",
-                        width: "50%",
-                        minWidth: "100px",
+                        flex: 1,
                         position: "relative",
                         overflow: "hidden",
                         boxSizing: "border-box",
@@ -708,7 +588,6 @@ const Balance = (props) => {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          left: "5px",
                           justifyContent: "space-between",
                           width: "100%",
                         }}
@@ -719,7 +598,6 @@ const Balance = (props) => {
                         <span
                           style={{
                             fontSize: "10px",
-                            right: "5px",
                             opacity: 0.8,
                             alignSelf: "flex-start",
                             marginTop: "-2px",
@@ -728,7 +606,6 @@ const Balance = (props) => {
                           {translations.annual}
                         </span>
                       </div>
-                      {/* Time text - bottom right */}
                       {bankStartTime > 0 && (
                         <div
                           style={{
@@ -741,35 +618,22 @@ const Balance = (props) => {
                         >
                           {(() => {
                             const now = Date.now();
-                            // Handle different timestamp formats
                             let startTimeMs;
                             if (bankStartTime > 1000000000000) {
-                              // Already in milliseconds (JavaScript timestamp)
                               startTimeMs = bankStartTime;
                             } else if (bankStartTime > 1000000000) {
-                              // Unix timestamp in seconds - convert to milliseconds
                               startTimeMs = bankStartTime * 1000;
                             } else {
-                              // Fallback to current time if invalid
                               startTimeMs = now;
                             }
 
                             const diffMs = now - startTimeMs;
-                            const diffDays = Math.floor(
-                              diffMs / (1000 * 60 * 60 * 24)
-                            );
-                            const diffHours = Math.floor(
-                              (diffMs % (1000 * 60 * 60 * 24)) /
-                                (1000 * 60 * 60)
-                            );
-                            const diffMinutes = Math.floor(
-                              (diffMs % (1000 * 60 * 60)) / (1000 * 60)
-                            );
+                            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                            const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
                             if (diffDays > 0) {
-                              return `${diffDays}${translations.timeDay} ${
-                                diffHours % 24
-                              }${translations.timeHour}`;
+                              return `${diffDays}${translations.timeDay} ${diffHours % 24}${translations.timeHour}`;
                             } else if (diffHours > 0) {
                               return `${diffHours}${translations.timeHour} ${diffMinutes}${translations.timeMinute}`;
                             } else if (diffMinutes > 0) {
@@ -782,14 +646,11 @@ const Balance = (props) => {
                       )}
                     </div>
 
-                    {/* Distribution Reward - Right side */}
                     {(() => {
                       const vaultEarnings = database?.vaultEarnings || 0;
-                      const vaultDistributions =
-                        database?.vaultDistributions || [];
+                      const vaultDistributions = database?.vaultDistributions || [];
                       const hasEarnings = Number(vaultEarnings) > 0;
 
-                      // Show empty placeholder when no earnings
                       if (!hasEarnings) {
                         return (
                           <div
@@ -800,8 +661,7 @@ const Balance = (props) => {
                               padding: "2px 8px",
                               alignItems: "center",
                               justifyContent: "center",
-                              width: "50%",
-                              minWidth: "100px",
+                              flex: 1,
                               color: coloring?.isDarkText ? "#000" : "#FFF",
                             }}
                           >
@@ -810,15 +670,12 @@ const Balance = (props) => {
                         );
                       }
 
-                      // Format time for display
                       const formatTime = (timestamp) => {
                         const now = Date.now();
                         const diffMs = now - timestamp;
                         const diffMinutes = Math.floor(diffMs / (1000 * 60));
                         const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                        const diffDays = Math.floor(
-                          diffMs / (1000 * 60 * 60 * 24)
-                        );
+                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
                         if (diffDays > 0) {
                           return `${diffDays}${translations.timeDay}`;
@@ -831,7 +688,6 @@ const Balance = (props) => {
                         }
                       };
 
-                      // Get last 3 distributions, sorted by timestamp (newest first)
                       const recentDistributions = vaultDistributions
                         .sort((a, b) => b.timestamp - a.timestamp)
                         .slice(0, 3);
@@ -846,17 +702,15 @@ const Balance = (props) => {
                             padding: "2px 6px",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            width: "50%",
-                            minWidth: "100px",
+                            flex: 1,
                             color: "#FFF",
                             position: "relative",
                             overflow: "hidden",
                           }}
                         >
-                          {/* Total earnings - Left side */}
                           <div
                             style={{
-                              fontSize: "16px",
+                              fontSize: "12px",
                               display: "flex",
                               fontWeight: "600",
                               flexShrink: 0,
@@ -865,7 +719,6 @@ const Balance = (props) => {
                             +{Number(vaultEarnings).toFixed(2)}
                           </div>
 
-                          {/* Recent distributions - Right side */}
                           <div
                             style={{
                               display: "flex",
@@ -885,12 +738,11 @@ const Balance = (props) => {
                                   display: "flex",
                                   justifyContent: "flex-start",
                                   width: "100%",
-                                  opacity: 0.8 - index * 0.1, // Fade older entries
+                                  opacity: 0.8 - index * 0.1,
                                 }}
                               >
                                 <span>
-                                  +{Number(dist.amount).toFixed(2)}{" "}
-                                  {formatTime(dist.timestamp)}
+                                  +{Number(dist.amount).toFixed(2)} {formatTime(dist.timestamp)}
                                 </span>
                               </div>
                             ))}
@@ -900,189 +752,222 @@ const Balance = (props) => {
                     })()}
                   </div>
                 </div>
-              </div>
-            </div>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, height: "100%", justifyContent: "flex-end" }}>
+                  {showHints && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        marginTop: "auto",
+                        minHeight: "26px",
+                        justifyContent: "center",
+                        alignItems: "flex-start",
+                        alignSelf: "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                          justifyContent: "flex-start",
+                        }}
+                      >
 
-            {showHints && (
-              <div
-                style={{
-                  marginTop: "10px",
-                  backgroundColor: overlayBackground,
-                  borderRadius: "12px",
-                  padding: "10px 12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: textColor,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  💡 {translations.hintsTitle}
-                </div>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "4px 8px",
+                            borderRadius: "10px",
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            color: hints.dailyAvailable ? textColor : tertiaryTextColor,
+                          }}
+                          title={hints.dailyAvailable ? translations.hintDailyReadyShort : translations.hintDailyCooldownShort}
+                        >
+                          <span aria-hidden="true">📦</span>
+                          <span style={{ fontWeight: 700 }}>{hints.dailyAvailable ? 1 : 0}</span>
+                          <span style={{ fontSize: "9px" }}>{translations.hintDailyLabel}</span>
+                        </div>
 
-                {hints.dailyAvailable ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      color: textColor,
-                    }}
-                  >
-                    📦 {translations.hintDailyReady}
-                  </div>
-                ) : dailyCooldownText ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      color: secondaryTextColor,
-                    }}
-                  >
-                    ⏳ {translations.hintDailyCooldown.replace("{{time}}", dailyCooldownText)}
-                  </div>
-                ) : null}
-
-                {hints.upgradesAffordable && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "12px",
-                      color: textColor,
-                    }}
-                  >
-                    🛠️ {translations.hintUpgradeReady}
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    fontSize: "11px",
-                    color: tertiaryTextColor,
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "4px 8px",
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  >
-                    /cases
-                  </div>
-                  <div
-                    style={{
-                      padding: "4px 8px",
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  >
-                    /shop
-                  </div>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "4px 8px",
+                            borderRadius: "10px",
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            color: hints.upgradesAffordable ? textColor : tertiaryTextColor,
+                          }}
+                          title={hints.upgradesAffordable ? translations.hintUpgradeReadyShort : translations.hintUpgradeLockedShort}
+                        >
+                          <span aria-hidden="true">🛠️</span>
+                          <span style={{ fontWeight: 700 }}>{hints.upgradesAffordable ? 1 : 0}</span>
+                          <span style={{ fontSize: "9px" }}>{translations.hintUpgradeLabel}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
 
+              {/* Row 3: Marriage (Anchored at bottom) */}
+              <div style={{ display: "flex", flexDirection: "row", marginTop: "5px", justifyContent: "flex-start", alignItems: "flex-end", width: "100%" }}>
+                <InfoRectangle
+                  icon="💍"
+                  iconSize="16px"
+                  iconMarginRight="8px"
+                  background={isMarried ? "#bb3d36" : "rgba(137, 137, 137, 0.5)"}
+                  borderRadius="10px"
+                  padding="6px 12px"
+                  minWidth="auto"
+                  maxWidth="100%"
+                  style={{ minHeight: "26px"}}
+                  value={
+                    isMarried ? (
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <img
+                          src={partnerAvatarUrl}
+                          alt={partnerUsername}
+                          width={18}
+                          height={18}
+                          style={{
+                            borderRadius: "50%",
+                            marginRight: "6px",
+                            objectFit: "cover",
+                          }}
+                        />
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            color: textColor,
+                            fontFamily: "Inter", fontWeight: 500,
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                        >
+                          {translations.married}
+                          {marriageCreatedAt && (
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                opacity: 0.5,
+                                marginLeft: "6px",
+                                color: tertiaryTextColor,
+                              }}
+                            >
+                              ({prettyMilliseconds(
+                                Date.now() - new Date(marriageCreatedAt).getTime()
+                              )})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          color: textColor,
+                          fontFamily: "Inter", fontWeight: 500,
+                          opacity: 0.7,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        {translations.single || "Single"}
+                      </div>
+                    )
+                  }
+                />
+              </div>
+
+
+            </div> {/* Close parent column container replacing grid */}
+          </div> {/* Close the flex: 1 content wrapper */}
+
+          <div
+            style={{
+              display: "flex",
+              width: "90px",
+              height: "90px",
+              borderRadius: "25px",
+              overflow: "hidden",
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
+              position: "absolute",
+              top: "5px",
+              right: "5px",
+            }}
+          >
             <div
               style={{
                 display: "flex",
-                width: "90px",
-                height: "90px",
-                borderRadius: "25px",
-                overflow: "hidden",
-                backgroundColor: "rgba(0, 0, 0, 0.3)",
-                position: "absolute",
-                top: "5px",
-                right: "5px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  width: "100%",
-                  height: "100%",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <img
-                  src={
-                    interaction?.user?.avatarURL ||
-                    "https://cdn.discordapp.com/embed/avatars/0.png"
-                  }
-                  alt="User"
-                  width="90"
-                  height="90"
-                  style={{
-                    objectFit: "cover",
-                    borderRadius: "25px",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Guild Icon - Bottom Right */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: "5px",
-                right: "5px",
-                zIndex: 2,
-                borderRadius: "5px",
+                width: "100%",
+                height: "100%",
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
               <img
                 src={
-                  interaction?.guild?.iconURL ||
+                  interaction?.user?.avatarURL ||
                   "https://cdn.discordapp.com/embed/avatars/0.png"
                 }
-                alt="Guild Icon"
-                width={24}
-                height={24}
-                style={{ borderRadius: "5px" }}
+                alt="User"
+                width="90"
+                height="90"
+                style={{
+                  objectFit: "cover",
+                  borderRadius: "25px",
+                }}
               />
             </div>
+          </div>
 
-            <div
-              style={{
-                position: "absolute",
-                textAlign: "center",
-                top: "98px",
-                right: "5px",
-                display: "flex",
-                fontSize: "8px",
-                opacity: "0.4",
-                color: tertiaryTextColor,
-                width: "90px",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "12px",
-              }}
-            >
-              #{interaction?.user?.id || "{id}"}
-            </div>
+          {/* Guild Icon - Bottom Right */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "5px",
+              right: "5px",
+              zIndex: 2,
+              borderRadius: "5px",
+            }}
+          >
+            <img
+              src={
+                interaction?.guild?.iconURL ||
+                "https://cdn.discordapp.com/embed/avatars/0.png"
+              }
+              alt="Guild Icon"
+              width={24}
+              height={24}
+              style={{ borderRadius: "5px" }}
+            />
+          </div>
 
-                      </div>
+          <div
+            style={{
+              position: "absolute",
+              textAlign: "center",
+              top: "98px",
+              right: "5px",
+              display: "flex",
+              fontSize: "8px",
+              opacity: "0.4",
+              color: tertiaryTextColor,
+              width: "90px",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "12px",
+            }}
+          >
+            #{interaction?.user?.id || "{id}"}
+          </div>
 
           {/* Personalization Display - User Profile Info */}
           {(userRealName || userAge || userCountryCode) && (
@@ -1111,100 +996,8 @@ const Balance = (props) => {
             </div>
           )}
 
-          {/* Marriage Status - Always show, different styling based on status */}
-          <div
-            style={{
-              position: "absolute",
-              left: "0px",
-              top: "205px",
-              width: "auto",
-              maxWidth: "100%",
-              height: "25px",
-              backgroundColor: isMarried ? "#bb3d36" : "rgba(137, 137, 137, 0.5)",
-              borderRadius: "10px",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              zIndex: 1,
-              padding: "0 12px 0 8px",
-              boxSizing: "border-box",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "16px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: "8px",
-                flexShrink: 0,
-              }}
-            >
-              💍
-            </div>
-            {isMarried ? (
-              <>
-                <img
-                  src={partnerAvatarUrl}
-                  alt={partnerUsername}
-                  width={19}
-                  height={19}
-                  style={{
-                    borderRadius: "50%",
-                    display: "flex",
-                    flexShrink: 0,
-                    marginRight: "8px",
-                    objectFit: "cover",
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: textColor,
-                    fontFamily: "Inter", fontWeight: 500,
-                    display: "flex",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    flex: "0 1 auto",
-                    minWidth: 0,
-                    maxWidth: "100%",
-                  }}
-                >
-                  {translations.married}
-                  {marriageCreatedAt && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        opacity: 0.5,
-                        marginLeft: "6px",
-                        color: tertiaryTextColor,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ({prettyMilliseconds(
-                        Date.now() - new Date(marriageCreatedAt).getTime()
-                      )})
-                    </span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div
-                style={{
-                  fontSize: "14px",
-                  color: textColor,
-                  fontFamily: "Inter", fontWeight: 500,
-                  opacity: 0.7,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                {translations.single || "Single"}
-              </div>
-            )}
-          </div>
-        </div>
+
+        </div> {/* Close the relative content wrapper */}
       </div>
     </div>
   );
@@ -1212,8 +1005,8 @@ const Balance = (props) => {
 
 // Update the dimensions calculation - make width dynamic too
 Balance.dimensions = {
-  width: 400,
-  height: 260, // Fixed height - marriage section always shows
+  width: 500,
+  height: 300, // Increased to fit hints block comfortably
 };
 
 // Static translations object used by imageGenerator
@@ -1258,15 +1051,45 @@ Balance.localization_strings = {
     ru: "Ежедневный кейс доступен в /cases",
     uk: "Щоденний кейс доступний у /cases",
   },
+  hintDailyLabel: {
+    en: "/cases",
+    ru: "/cases",
+    uk: "/cases",
+  },
+  hintDailyReadyShort: {
+    en: "Daily ready",
+    ru: "Daily готов",
+    uk: "Daily готовий",
+  },
+  hintDailyCooldownShort: {
+    en: "Daily on cooldown",
+    ru: "Daily на кулдауне",
+    uk: "Daily на кулдауне",
+  },
   hintDailyCooldown: {
-    en: "Daily crate ready in {{time}}",
-    ru: "Ежедневный кейс будет через {{time}}",
-    uk: "Щоденний кейс буде через {{time}}",
+    en: "Daily crate ready in {{ time }}",
+    ru: "Ежедневный кейс будет через {{ time }}",
+    uk: "Щоденний кейс буде через {{ time }}",
   },
   hintUpgradeReady: {
     en: "You can afford upgrades in /shop",
     ru: "У вас хватает на улучшения в /shop",
     uk: "У вас вистачає на поліпшення в /shop",
+  },
+  hintUpgradeLabel: {
+    en: "/shop",
+    ru: "/shop",
+    uk: "/shop",
+  },
+  hintUpgradeReadyShort: {
+    en: "Upgrades ready",
+    ru: "Апгрейды доступны",
+    uk: "Апгрейди доступні",
+  },
+  hintUpgradeLockedShort: {
+    en: "Upgrades locked",
+    ru: "Апгрейды недоступны",
+    uk: "Апгрейди недоступні",
   },
   yours: {
     en: "yours",

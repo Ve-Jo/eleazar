@@ -1,3 +1,6 @@
+import InfoRectangle from "./InfoRectangle.jsx";
+import Banknotes from "./Banknotes.jsx";
+
 const UserCard = (props) => {
   let {
     interaction,
@@ -129,207 +132,11 @@ const UserCard = (props) => {
   const requiredGameXP = gameLevelData?.requiredXP || 100;
   const gameFillRatio = Math.min(currentGameXP / requiredGameXP, 1);
 
-  // Banknote generation function - Enhanced version based on Balance.jsx
-  const renderBanknotes = (
-    amount,
-    startX,
-    baseY,
-    style = "banknotes",
-    division = 50,
-    xspacing = 15,
-    containerBounds = null
-  ) => {
-    const totalBanknotes = Math.ceil(amount / division);
-
-    // If no banknotes to render, return empty array
-    if (totalBanknotes <= 0) {
-      return [];
-    }
-
-    const banknotes = [];
-    let currentIndex = 0;
-
-    // Default container bounds if not provided - optimized for relative positioning
-    const bounds = containerBounds || {
-      left: 0,
-      top: 0,
-      right: 89, // Match the dollarBanknoteStyle width
-      bottom: 16, // Match the dollarBanknoteStyle height
-      padding: 0,
-    };
-
-    // Calculate effective boundaries with padding
-    const effectiveLeft = bounds.left + (bounds.padding || 0);
-    const effectiveTop = bounds.top + (bounds.padding || 0);
-    const effectiveRight = bounds.right - (bounds.padding || 0);
-    const effectiveBottom = bounds.bottom - (bounds.padding || 0);
-
-    // Calculate maximum available width and height
-    const availableWidth = effectiveRight - effectiveLeft;
-    const availableHeight = effectiveBottom - effectiveTop;
-
-    // Banknote dimensions
-    const banknoteWidth = 15; // Width of a single banknote
-    const banknoteHeight = 5; // Height of a banknote
-
-    // Dynamically calculate spacing based on container width
-    // Ensure minimum spacing of 5px and maximum of provided xspacing
-    const minSpacing = 5;
-    const providedSpacing = xspacing || 15;
-
-    // Calculate optimal spacing based on container width
-    // Try to fit at least 3 banknotes if possible
-    const minBanknotesPerRow = Math.min(3, totalBanknotes);
-    const optimalSpacing = Math.min(
-      providedSpacing,
-      Math.max(minSpacing, availableWidth / Math.max(minBanknotesPerRow, 1))
-    );
-
-    // Use the calculated spacing
-    const xSpacing = Math.min(optimalSpacing, providedSpacing);
-
-    // Calculate how many banknotes can fit in a row with the calculated spacing
-    const maxFittingInRow = Math.floor(availableWidth / xSpacing);
-
-    // We're not limiting by maxRowLength anymore since we're using container bounds
-    const adjustedMaxRowLength = maxFittingInRow;
-
-    // If we can't fit even one banknote, don't render any
-    if (adjustedMaxRowLength <= 0) {
-      return [];
-    }
-
-    // Calculate how many rows we can fit before hitting the top
-    const ySpacing = 5; // Vertical spacing between rows
-
-    // Add a buffer to prevent touching the top (at least 5px from top)
-    const safeTopMargin = 5;
-    const maxRows = Math.max(
-      1,
-      Math.floor((baseY - effectiveTop - safeTopMargin) / ySpacing)
-    );
-
-    // Calculate rows needed for all banknotes
-    const fullRows = Math.floor(totalBanknotes / adjustedMaxRowLength);
-    const remaining = totalBanknotes % adjustedMaxRowLength;
-    const rowsNeeded = fullRows + (remaining > 0 ? 1 : 0);
-
-    // Limit the number of rows to prevent touching the top
-    const limitedRows = Math.min(rowsNeeded, maxRows);
-
-    // Calculate how many banknotes we can display in the limited rows
-    const maxBanknotesToShow = limitedRows * adjustedMaxRowLength;
-    const limitedBanknotes = Math.min(totalBanknotes, maxBanknotesToShow);
-
-    // Recalculate rows with limited banknotes
-    const limitedFullRows = Math.floor(limitedBanknotes / adjustedMaxRowLength);
-    const limitedRemaining = limitedBanknotes % adjustedMaxRowLength;
-
-    // Render banknotes row by row
-    for (let row = 0; row < limitedRows; row++) {
-      const banknotesInThisRow =
-        row < limitedFullRows
-          ? adjustedMaxRowLength
-          : row === limitedFullRows
-          ? limitedRemaining
-          : 0;
-
-      if (banknotesInThisRow <= 0) continue;
-
-      // Calculate the total width of banknotes in this row
-      const totalWidth = banknotesInThisRow * xSpacing;
-
-      // Center the banknotes within the available space
-      // If startX is within the container, center around it
-      // Otherwise, center within the container
-      const rowCenterX =
-        startX >= effectiveLeft && startX <= effectiveRight
-          ? startX
-          : effectiveLeft + availableWidth / 2;
-
-      const startXPos = Math.max(
-        effectiveLeft,
-        Math.min(rowCenterX - totalWidth / 2, effectiveRight - totalWidth)
-      );
-
-      // Place banknotes in this row
-      for (let col = 0; col < banknotesInThisRow; col++) {
-        if (currentIndex >= limitedBanknotes) break;
-
-        // Add small random offset for natural look (but constrained)
-        const randomOffset = Math.random() * 2 - 1; // Reduced randomness
-
-        // Calculate position with constraints
-        const xPos = Math.max(
-          effectiveLeft,
-          Math.min(
-            startXPos + col * xSpacing + randomOffset,
-            effectiveRight - banknoteWidth
-          )
-        );
-
-        // Ensure banknotes don't touch the top
-        const yPos = Math.max(
-          effectiveTop + safeTopMargin,
-          Math.min(baseY - row * ySpacing, effectiveBottom - banknoteHeight)
-        );
-
-        // Apply styling based on the style parameter
-        if (style === "banknotes") {
-          // Green banknotes with orange stripe
-          banknotes.push(
-            <div
-              key={currentIndex}
-              style={{
-                position: "absolute",
-                left: `${xPos}px`,
-                top: `${yPos}px`,
-                width: "15px",
-                height: "5px",
-                backgroundColor: "#4CAF50",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: 0.3,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  position: "relative",
-                  width: "3px",
-                  height: "100%",
-                  backgroundColor: "#FF9800", // Orange stripe
-                }}
-              />
-            </div>
-          );
-        } else if (style === "bars") {
-          // Green golden bars (solid gold with green border for effect)
-          banknotes.push(
-            <div
-              key={currentIndex}
-              style={{
-                position: "absolute",
-                left: `${xPos}px`,
-                top: `${yPos}px`,
-                width: "15px",
-                height: "5px",
-                backgroundColor: "#DAA520", // Gold gradient
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: 0.3,
-              }}
-            />
-          );
-        }
-        currentIndex++;
-      }
-    }
-
-    return banknotes;
-  };
+  const walletBaseBalance = Number(balance);
+  const walletAmount = addIncreaseToBalance
+    ? walletBaseBalance + Number(increaseAmount)
+    : walletBaseBalance;
+  const increaseValue = Number(increaseAmount) || 0;
 
   const containerStyle = {
     position: "absolute",
@@ -352,117 +159,6 @@ const UserCard = (props) => {
     backgroundImage: coloring.backgroundGradient || backgroundGradient,
     borderRadius: `${scaleValue(25)}px`,
     display: "flex",
-  };
-
-  const moneyContainerStyle = {
-    position: "absolute",
-    left: `${scaled.money.left}px`,
-    top: `${scaled.money.top}px`,
-    width: `${scaled.money.width}px`,
-    height: `${scaled.money.height}px`,
-    display: "flex",
-  };
-
-  const dollarBanknoteStyle = {
-    position: "absolute",
-    left: `${scaled.money.left}px`, // Align with money container
-    bottom: "0px", // Touch the bottom edge of UserCard container
-    width: `${scaled.money.width}px`, // Match balance container width
-    height: "16px",
-    display: "flex",
-    overflow: "hidden",
-  };
-
-  const moneyBackgroundStyle = {
-    position: "absolute",
-    left: "0px",
-    top: "0px",
-    width: `${scaled.money.width}px`,
-    height: `${scaled.money.height}px`,
-    backgroundColor: overlayBackground,
-    borderRadius: `${scaleValue(20)}px`,
-    display: "flex",
-  };
-
-  const dollarEmojiStyle = {
-    position: "absolute",
-    left: toUnit(scaleValue(13)),
-    top: toUnit(scaleValue(20)),
-    width: toUnit(scaleValue(29)),
-    height: toUnit(scaleValue(29)),
-    display: "flex",
-    fontSize: `${scaleValue(24)}px`,
-    justifyContent: "center",
-    alignItems: "center",
-    color: "#FFD700",
-  };
-  const dollarEmojiImageStyle = {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    objectFit: "contain",
-  };
-
-  // Calculate balance increase percentage and direction
-  const balanceIncreasePercentage = balance > 0 ? (increaseAmount / balance) * 100 : 0;
-  const isBalanceDecrease = increaseAmount < 0;
-
-  const balanceTextStyle = {
-    position: "absolute",
-    left: `${scaleValue(55)}px`,
-    top: `${scaleValue(26)}px`,
-    width: `${scaleValue(97)}px`,
-    height: `${scaleValue(29)}px`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  };
-
-  const balanceNumberStyle = {
-    color: textColor,
-    fontSize: `${27 * scaleFactor}px`,
-    fontFamily: "Inter", fontWeight: 500,
-    fontWeight: 600,
-    textRendering: "geometricPrecision",
-    letterSpacing: "0px",
-    display: "flex",
-    lineHeight: 1,
-  };
-
-  const increaseTextStyle = {
-    position: "absolute",
-    left: `${scaleValue(99)}px`,
-    top: `${scaleValue(8)}px`,
-    color:
-      (balanceIncreasePercentage > 0 && !isBalanceDecrease) ||
-      (balanceIncreasePercentage < 0 && isBalanceDecrease)
-        ? "#4ade80"
-        : balanceIncreasePercentage === 0
-        ? textColor
-        : "#ff4444",
-    fontSize: `${15 * scaleFactor}px`,
-    fontFamily: "Inter",
-    fontWeight: 500,
-    textRendering: "geometricPrecision",
-    letterSpacing: "0px",
-    display: "flex",
-    lineHeight: 1,
-  };
-
-  const increaseNumberStyle = {
-    color:
-      increaseAmount > 0
-        ? winColor
-        : increaseAmount < 0
-        ? "#ff4444"
-        : textColor,
-    fontSize: `${15 * scaleFactor}px`,
-    fontFamily: "Inter",
-    fontWeight: 500,
-    textRendering: "geometricPrecision",
-    letterSpacing: "0px",
-    display: "flex",
-    lineHeight: 1,
   };
 
   // Gaming Level - Vertical Progress Bar based on Penpot template and Balance
@@ -600,173 +296,171 @@ const UserCard = (props) => {
     <div style={containerStyle}>
       {/* User Background Color Gradient */}
       <div style={userBackgroundStyle}></div>
-      {/* Money Container */}
-      <div style={moneyContainerStyle}>
-        <div style={moneyBackgroundStyle}></div>
-        <div style={dollarEmojiStyle}>
-          {renderBackend === "takumi" ? (
-            <img 
-              src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4b5.png"
-              alt="money"
-              style={dollarEmojiImageStyle}
-            />
-          ) : (
-            "💵"
-          )}
-        </div>
-
-        {/* Balance Text with Color Highlighting for Earned/Lost Amount */}
-        <div style={balanceTextStyle}>
-          <div style={balanceNumberStyle}>
-            {(() => {
-              // Use only economy.balance (not bankBalance) with earned amounts
-              const walletBalance = Number(balance);
-              const currentBalance = addIncreaseToBalance
-                ? walletBalance + Number(increaseAmount)
-                : walletBalance;
-              const balanceStr = currentBalance.toFixed(2);
-              const increaseStr = Math.abs(increaseAmount).toFixed(2);
-              const [increaseWhole, increaseDecimal] = increaseStr.split(".");
-
-              // For highlighting, we need to consider the actual balance digits
-              const [wholePart, decimalPart] = balanceStr.split(".");
-
-              // Determine color based on increaseAmount
-              const highlightColor =
-                increaseAmount > 0
-                  ? winColor
-                  : increaseAmount < 0
-                  ? "#ff4444"
-                  : textColor;
-
-              // Calculate which digits should be highlighted
-              const wholeDigits = wholePart.split("");
-              const decimalDigits = decimalPart.split("");
-              const increaseWholeDigits = increaseWhole.split("");
-              const increaseDecimalDigits = increaseDecimal.split("");
-
-              // Function to highlight digits from the right
-              const highlightDigits = (digits, highlightDigits, color) => {
-                const result = [];
-                const startHighlight = Math.max(
-                  0,
-                  digits.length - highlightDigits.length
-                );
-
-                for (let i = 0; i < digits.length; i++) {
-                  const isHighlighted =
-                    i >= startHighlight &&
-                    i - startHighlight < highlightDigits.length;
-                  result.push(
-                    <span
-                      key={i}
-                      style={{
-                        color: isHighlighted ? color : textColor,
-                      }}
-                    >
-                      {digits[i]}
-                    </span>
-                  );
-                }
-                return result;
-              };
-
-              return (
-                <>
-                  {highlightDigits(
-                    wholeDigits,
-                    increaseWholeDigits,
-                    highlightColor
-                  )}
-                  <span style={{ color: highlightColor }}>.</span>
-                  {highlightDigits(
-                    decimalDigits,
-                    increaseDecimalDigits,
-                    highlightColor
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Increase Text */}
-        {increaseAmount !== 0 && (
-          <div style={increaseTextStyle}>
-            <div style={increaseNumberStyle}>
-              {increaseAmount > 0 ? "+" : ""}
-              {increaseAmount.toFixed(2)}
+      {/* Wallet InfoRectangle */}
+      <div
+        style={{
+          position: "absolute",
+          left: `${scaled.money.left}px`,
+          top: `${scaled.money.top}px`,
+          width: `${scaled.money.width}px`,
+        }}
+      >
+        <InfoRectangle
+          icon="💵"
+          background={overlayBackground}
+          borderRadius={`${scaleValue(20)}px`}
+          padding={`${scaleValue(6)}px ${scaleValue(10)}px`}
+          minWidth="0px"
+          maxWidth="260px"
+          iconSize={`${scaleValue(18)}px`}
+          iconMarginRight={`${scaleValue(8)}px`}
+          title="WALLET"
+          titleStyle={{
+            fontSize: `${12 * scaleFactor}px`,
+            color: secondaryTextColor,
+            opacity: 0.8,
+            letterSpacing: "0.08em",
+          }}
+          value={
+            <div style={{ display: "flex", flexDirection: "column", gap: `${scaleValue(2)}px` }}>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: `${24 * scaleFactor}px`,
+                  fontWeight: 700,
+                  color: textColor,
+                  lineHeight: 1,
+                }}
+              >
+                {walletAmount.toFixed(2)}
+              </div>
+              {increaseValue !== 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    fontSize: `${14 * scaleFactor}px`,
+                    fontWeight: 600,
+                    color:
+                      increaseValue > 0
+                        ? winColor
+                        : increaseValue < 0
+                        ? "#ff4444"
+                        : textColor,
+                    opacity: 0.9,
+                  }}
+                >
+                  {increaseValue > 0 ? "+" : ""}
+                  {increaseValue.toFixed(2)}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </div>
-      {/* Gaming Level - Vertical Progress Bar based on Penpot template */}
-      <div style={gamingLevelContainerStyle}>
-        {/* Gradient Background - Like in Penpot template */}
-        <div style={gamingLevelBackgroundStyle} />
-
-        {/* Red filling bars - like in Penpot template */}
-        <div style={gamingLevelFillStartStyle} />
-        {/*<div style={gamingLevelFillDifferenceStyle} />*/}
-
-        {/* Content overlay */}
-        <div
+          }
           style={{
-            position: "absolute",
-            left: "0px",
-            top: "0px",
-            width: `${scaled.gamingLevel.width}px`,
-            height: `${scaled.gamingLevel.height}px`,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            justifyContent: "center",
-            paddingLeft: `${scaleValue(15)}px`,
-            paddingRight: `${scaleValue(5)}px`, // Add small right padding for better alignment
+            position: "relative",
+            width: "100%",
+            boxSizing: "border-box",
+            minHeight: `${scaleValue(70)}px`,
+            height: `${scaleValue(70)}px`,
           }}
         >
-          {/* Level Number - Larger text like in Penpot template */}
-          <div
-            style={{
-              fontSize: `${27 * scaleFactor}px`,
-              color: textColor,
-              fontFamily: "Inter", fontWeight: 500,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "flex-start",
-              marginBottom: `${scaleValue(2)}px`,
+          <Banknotes
+            amount={Math.max(walletAmount, 0)}
+            style="banknotes"
+            division={50}
+            xspacing={18}
+            styleOverrides={{
+              container: {
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                overflow: "hidden",
+                zIndex: 0,
+              },
+              banknote: {
+                width: `${10 * scaleFactor}px`,
+                height: `${3 * scaleFactor}px`,
+              },
             }}
-          >
-            <span>{gamingLevel}</span>
-            <span
-              style={{
-                fontSize: `${12 * scaleFactor}px`,
-                top: `${scaleValue(-3)}px`,
-              }}
-            >
-              lvl
-            </span>
-          </div>
+          />
+        </InfoRectangle>
+      </div>
 
-          {/* XP Text - Smaller text like in Penpot template with dynamic progress */}
+      {/* Gaming XP InfoRectangle */}
+      <div
+        style={{
+          position: "absolute",
+          left: `${scaled.gamingLevel.left}px`,
+          top: `${scaled.gamingLevel.top}px`,
+          width: `${scaled.gamingLevel.width}px`,
+        }}
+      >
+        <InfoRectangle
+          icon="🎮"
+          background={overlayBackground}
+          borderRadius={`${scaleValue(20)}px`}
+          padding={`${scaleValue(6)}px ${scaleValue(10)}px`}
+          minWidth="0px"
+          maxWidth="240px"
+          iconSize={`${scaleValue(16)}px`}
+          iconMarginRight={`${scaleValue(6)}px`}
+          title="GAMING"
+          titleStyle={{
+            fontSize: `${11 * scaleFactor}px`,
+            color: secondaryTextColor,
+            opacity: 0.85,
+            letterSpacing: "0.08em",
+          }}
+          value={
+            <div style={{ display: "flex", flexDirection: "column", gap: `${scaleValue(2)}px` }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: `${scaleValue(4)}px`,
+                  fontSize: `${20 * scaleFactor}px`,
+                  fontWeight: 700,
+                  color: textColor,
+                  lineHeight: 1,
+                }}
+              >
+                <span>{gamingLevel}</span>
+                <span style={{ fontSize: `${12 * scaleFactor}px`, opacity: 0.85 }}>{translations.level}</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: `${11 * scaleFactor}px`,
+                  color: textColor,
+                  opacity: 0.9,
+                  fontWeight: 600,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {gameLevelData
+                  ? `${Math.floor(currentGameXP)}/${requiredGameXP} ${translations.xp}`
+                  : `0/100 ${translations.xp}`}
+              </div>
+            </div>
+          }
+          style={{
+            position: "relative",
+            width: "100%",
+            boxSizing: "border-box",
+            minHeight: `${scaleValue(70)}px`,
+            height: `${scaleValue(70)}px`,
+          }}
+        >
           <div
             style={{
-              fontSize: `${12 * scaleFactor}px`,
-              color: textColor,
-              fontFamily: "Inter", fontWeight: 500,
-              fontWeight: 400,
-              display: "flex",
-              justifyContent: "flex-start",
-              textRendering: "geometricPrecision",
-              letterSpacing: "0px",
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              opacity: 0.5,
+              background: `linear-gradient(90deg, #d55656 ${gameFillRatio * 100}%, transparent ${gameFillRatio * 100}%)`,
+              zIndex: 0,
             }}
-          >
-            {gameLevelData
-              ? `${Math.floor(currentGameXP)}/${requiredGameXP} XP`
-              : "0/100 XP"}
-          </div>
-        </div>
+          />
+        </InfoRectangle>
       </div>
       {/* Score Text - only show if enabled */}
       {showScore && (
@@ -794,18 +488,6 @@ const UserCard = (props) => {
         />
       </div>
 
-      {/* Dollar Banknote Generation - Positioned at bottom of UserCard container */}
-      {increaseAmount > 0 && (
-        <div style={dollarBanknoteStyle}>
-          {renderBanknotes(increaseAmount, 44, 12, "banknotes", 10, 18, {
-            left: 0,
-            top: 0,
-            right: scaled.money.width, // Match balance container width
-            bottom: 16,
-            padding: 0,
-          })}
-        </div>
-      )}
     </div>
   );
 };

@@ -1,3 +1,5 @@
+import React from 'react';
+
 const Banknotes = ({
   amount,
   style = "banknotes",
@@ -6,6 +8,12 @@ const Banknotes = ({
   className = "",
   styleOverrides = {},
 }) => {
+  const parsePx = (value) => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") return parseFloat(value);
+    return undefined;
+  };
+
   const renderBanknotes = (amount, style, division, xspacing) => {
     const totalBanknotes = Math.ceil(amount / division);
 
@@ -14,152 +22,136 @@ const Banknotes = ({
     }
 
     const banknotes = [];
+    const placedItems = [];
 
-    // Base banknote dimensions - these will be dynamically adjusted
-    let banknoteWidth = styleOverrides?.banknote?.width ? 
-      parseInt(styleOverrides.banknote.width) : 15;
-    let banknoteHeight = styleOverrides?.banknote?.height ? 
-      parseInt(styleOverrides.banknote.height) : 5;
-    
-    const stackOffset = 4; // Vertical offset between stacked banknotes
+    // Получаем точные размеры (дефолт 12x4, как у тебя в конфиге)
+    const banknoteWidth = styleOverrides?.banknote?.width ? parseInt(styleOverrides.banknote.width) : 12;
+    const banknoteHeight = styleOverrides?.banknote?.height ? parseInt(styleOverrides.banknote.height) : 4;
 
-    // For Satori rendering, we need to work with percentage-based positioning
-    // since we can't get actual container dimensions
-    const maxWidth = 100; // Work in percentage terms
+    const REF_WIDTH = 260; 
+    const banknoteWidthPercent = (banknoteWidth / REF_WIDTH) * 100;
     
-    // Use xspacing directly - handle special case where xspacing is 0
-    const effectiveSpacing = xspacing === 0 ? 0 : (xspacing || 15);
+    const effectiveSpacing = xspacing || 24;
+    const itemTotalWidthPx = banknoteWidth + effectiveSpacing;
     
-    // Convert spacing to percentage based on typical container width (300px)
-    const spacingPercent = (effectiveSpacing / 300) * 100;
-    
-    // Calculate banknote width as percentage
-    const banknoteWidthPercent = (banknoteWidth / 300) * 100;
-    
-    // Calculate how many banknotes can fit per row
-    let banknotesPerRow;
-    if (effectiveSpacing === 0) {
-      // When xspacing is 0, stack banknotes with minimal gap (just banknote width)
-      banknotesPerRow = Math.floor(maxWidth / banknoteWidthPercent);
-    } else {
-      // Normal spacing calculation
-      banknotesPerRow = Math.floor(maxWidth / (banknoteWidthPercent + spacingPercent));
-    }
-    
-    // Ensure we have at least 1 banknote per row
-    banknotesPerRow = Math.max(1, banknotesPerRow);
-    
-    // If too many banknotes for reasonable display, scale down
-    if (totalBanknotes > banknotesPerRow * 4) { // More than 4 rows worth
-      // Scale down banknote size for very dense layouts
-      const scaleFactor = Math.max(0.6, 1 - (totalBanknotes / 50));
-      banknoteWidth = Math.max(8, banknoteWidth * scaleFactor);
-      banknoteHeight = Math.max(3, banknoteHeight * scaleFactor);
+    // Считаем сетку
+    let baseCols = Math.floor(REF_WIDTH / itemTotalWidthPx);
+    baseCols = Math.max(2, baseCols); 
+
+    const maxLeftPercent = 100 - banknoteWidthPercent;
+    const stepXPercent = maxLeftPercent / (baseCols - 1);
+
+    const containerHeight =
+      parsePx(styleOverrides?.container?.height) ??
+      parsePx(styleOverrides?.container?.maxHeight) ??
+      parsePx(styleOverrides?.container?.minHeight);
+    const maxVisibleHeight = containerHeight ?? 260; // default matches REF_WIDTH baseline
+
+    // ВАЖНО: Делаем шаг строго равным высоте элемента. 
+    // Коэффициент 0.35 создает компактную естественную кладку без излишнего подъема
+    const stackOffsetPx = banknoteHeight * 0.50; 
+
+    let itemsLeft = totalBanknotes;
+    let rowIndex = 0;
+    let zIndexCounter = 1;
+
+    while (itemsLeft > 0) {
+      const isOddRow = rowIndex % 2 !== 0;
+      const slotsInRow = isOddRow ? baseCols - 1 : baseCols;
       
-      // Recalculate with new banknote size
-      const newBanknoteWidthPercent = (banknoteWidth / 300) * 100;
-      if (effectiveSpacing === 0) {
-        banknotesPerRow = Math.max(1, Math.floor(maxWidth / newBanknoteWidthPercent));
-      } else {
-        banknotesPerRow = Math.max(1, Math.floor(maxWidth / (newBanknoteWidthPercent + spacingPercent)));
-      }
-    }
+      const itemsToRender = Math.min(itemsLeft, slotsInRow);
+      const emptySlots = slotsInRow - itemsToRender;
+      const startingSlotOffset = Math.floor(emptySlots / 2);
 
-    for (let i = 0; i < totalBanknotes; i++) {
-      // Calculate row and column for left-to-right, top-to-bottom stacking
-      const row = Math.floor(i / banknotesPerRow);
-      const col = i % banknotesPerRow;
+      for (let i = 0; i < itemsToRender; i++) {
+        const slotIndex = i + startingSlotOffset;
+        
+        let baseXPercent = slotIndex * stepXPercent;
+        
+        // Сдвиг в шахматном порядке для нечетных рядов
+        if (isOddRow) {
+          baseXPercent += (stepXPercent / 2);
+        }
 
-      // Calculate position using percentage-based positioning
-      // Start from 0 (left edge) and use xspacing for horizontal positioning
-      let baseXPercent;
-      if (effectiveSpacing === 0) {
-        // When xspacing is 0, position banknotes directly adjacent to each other
-        baseXPercent = col * banknoteWidthPercent;
-      } else {
-        // Normal spacing between banknotes
-        baseXPercent = col * spacingPercent;
-      }
-      const baseY = row * stackOffset;
+        // Adjust Y position for staggered layout - odd rows sit slightly lower
+        const yOffset = isOddRow ? stackOffsetPx * -1 : 0;
+        const finalYPx = (rowIndex * stackOffsetPx) + yOffset;
+        
+        // Add small random X offset for natural variation (±2px)
+        const randomXOffset = (Math.random() - 0.5) * 5;
+        const finalXPercent = Math.max(0, Math.min(baseXPercent + (randomXOffset / REF_WIDTH * 100), maxLeftPercent)); 
 
-      // Add randomness to X coordinate for chaotic stacking effect
-      // Use Math.random() with left bias for aggressive left stacking
-      const randomValue = Math.random(); // Range: 0 to 1
-      const leftBiasedFactor = (randomValue * 0.8) - 0.6; // Range: -0.6 to 0.2 (biased left)
-      
-      // Calculate random offset as percentage (increased for more aggressive stacking)
-      const maxRandomOffset = 5; // Increased random offset for more chaos
-      const randomOffsetPercent = leftBiasedFactor * maxRandomOffset;
+        // Skip rendering items that would be fully outside visible height
+        if (finalYPx + banknoteHeight < 0 || finalYPx > maxVisibleHeight) {
+          continue;
+        }
 
-      // Bounds checking - ensure banknotes don't exceed container width
-      const banknoteWidthPercent = (banknoteWidth / 300) * 100;
-      const maxXPercent = maxWidth - banknoteWidthPercent;
-      
-      // Apply randomness and ensure bounds
-      const randomizedXPercent = baseXPercent + randomOffsetPercent;
-      const finalXPercent = Math.max(0, Math.min(randomizedXPercent, maxXPercent));
-      const finalY = baseY;
+        // Skip rendering items that would truly overlap (both axes); allow vertical stacking rows
+        const finalXPx = (finalXPercent / 100) * REF_WIDTH;
+        const isOverlapping = placedItems.some(({ x, y }) => {
+          const horizontallyOverlaps = Math.abs(x - finalXPx) < banknoteWidth;
+          const verticallyOverlaps = Math.abs(y - finalYPx) < banknoteHeight;
+          return horizontallyOverlaps && verticallyOverlaps;
+        });
 
-      // Calculate zIndex for proper stacking order (higher banknotes on top)
-      const zIndex = i + 1;
+        if (isOverlapping) {
+          continue;
+        }
 
-      // Apply styling based on the style parameter
-      if (style === "banknotes") {
-        banknotes.push(
-          <div
-            key={i}
-            className="banknote"
-            style={{
-              position: "absolute",
-              left: `${finalXPercent}%`,
-              bottom: `${finalY}px`,
-              width: `${banknoteWidth}px`,
-              height: `${banknoteHeight}px`,
-              background: "#4CAF50",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              opacity: 0.4,
-              zIndex: zIndex,
-              ...styleOverrides.banknote,
-            }}
-          >
+        const commonStyle = {
+          position: "absolute",
+          left: `${finalXPercent}%`,
+          bottom: `${finalYPx}px`,
+          width: `${banknoteWidth}px`,
+          height: `${banknoteHeight}px`,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: zIndexCounter,
+          ...styleOverrides.banknote,
+        };
+
+        if (style === "banknotes") {
+          banknotes.push(
             <div
+              key={`${rowIndex}-${i}`}
+              className="banknote"
               style={{
-                width: "3px",
-                height: "100%",
-                display: "flex",
-                background: "#FF9800",
+                ...commonStyle,
+                background: "#4CAF50",
+                opacity: 0.7,
+              }}
+            >
+              <div style={{ width: "3px", height: "100%", background: "#FF9800" }} />
+            </div>
+          );
+        } else if (style === "bars") {
+          banknotes.push(
+            <div
+              key={`${rowIndex}-${i}`}
+              className="banknote"
+              style={{
+                ...commonStyle,
+                background: "#DAA520",
+                opacity: 0.7,
               }}
             />
-          </div>
-        );
-      } else if (style === "bars") {
-        banknotes.push(
-          <div
-            key={i}
-            className="banknote"
-            style={{
-              position: "absolute",
-              left: `${finalXPercent}%`,
-              bottom: `${finalY}px`,
-              width: `${banknoteWidth}px`,
-              height: `${banknoteHeight}px`,
-              background: "#DAA520",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              opacity: 0.4,
-              zIndex: zIndex,
-              ...styleOverrides.banknote,
-            }}
-          />
-        );
+          );
+        }
+        zIndexCounter++;
+        placedItems.push({ x: finalXPx, y: finalYPx });
+      }
+      
+      itemsLeft -= itemsToRender;
+      rowIndex++;
+
+      if ((rowIndex * stackOffsetPx) - stackOffsetPx > maxVisibleHeight) {
+        break;
       }
     }
 
     return banknotes;
-  };
+};
 
   return (
     <div
@@ -167,12 +159,10 @@ const Banknotes = ({
       style={{
         pointerEvents: "none",
         position: "absolute",
-        top: 0,
-        left: 0,
         display: "flex",
         width: "100%",
         height: "100%",
-        overflow: "hidden",
+        overflow: "hidden", // Чтобы стопки не вываливались за границы
         ...styleOverrides.container,
       }}
     >

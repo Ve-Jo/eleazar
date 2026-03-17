@@ -1,9 +1,12 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const CratesDisplay = (props) => {
   const {
     interaction,
     database,
     locale,
-    crates,
+    crates = [],
     selectedCrate = 0,
     coloring,
     width = 750,
@@ -201,10 +204,10 @@ const CratesDisplay = (props) => {
               textAlign: "center",
               overflow: "hidden",
               textOverflow: "ellipsis",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
+              display: "flex",
+              flexDirection: "column",
               maxWidth: "160px",
+              lineHeight: "13px",
               height: "26px",
               marginBottom: "25px", // Space for status box at bottom
             }}
@@ -284,48 +287,57 @@ const CratesDisplay = (props) => {
               display: "flex",
               alignItems: "center",
               marginTop: "10px",
-              gap: "15px",
+              gap: "10px",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                backgroundColor: overlayBackground,
-                borderRadius: "10px",
-                padding: "5px 10px",
-                gap: "5px",
-              }}
+            <InfoRectangle
+              icon="💵"
+              background={overlayBackground}
+              borderRadius="10px"
+              padding="6px 10px"
+              minWidth="0px"
+              maxWidth="200px"
+              iconSize="18px"
+              iconMarginRight="6px"
+              title={translations.balance || "Balance"}
+              titleStyle={{ fontSize: "11px", color: secondaryTextColor, opacity: 0.85, letterSpacing: "0.06em" }}
+              value={
+                <div style={{ display: "flex", fontSize: "20px", fontWeight: 700, color: textColor }}>
+                  {database.balance?.toFixed(2) || 0}
+                </div>
+              }
+              style={{ position: "relative", boxSizing: "border-box", minHeight: "60px", height: "60px" }}
             >
-              <span style={{ display: "flex" }}>💵</span>
-              <span style={{ fontFamily: "Inter", fontWeight: 500, fontWeight: 600, display: "flex" }}>
-                {database.balance?.toFixed(2) || 0}
-              </span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                backgroundColor: overlayBackground,
-                borderRadius: "10px",
-                padding: "5px 10px",
-                gap: "5px",
-              }}
-            >
-              <span style={{ display: "flex" }}>✨</span>
-              <span
-                style={{
-                  fontFamily: "Inter", fontWeight: 500,
-                  display: "flex",
-                  maxWidth: "200px",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+              <Banknotes
+                amount={Math.max(Number(database.balance || 0), 0)}
+                style="banknotes"
+                division={50}
+                xspacing={18}
+                styleOverrides={{
+                  container: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 },
+                  banknote: { width: "10px", height: "3px" },
                 }}
-              >
-                {translations.seasonXP}: {Math.floor(database.seasonXp || 0)}XP
-              </span>
-            </div>
+              />
+            </InfoRectangle>
+
+            <InfoRectangle
+              icon="✨"
+              background={overlayBackground}
+              borderRadius="10px"
+              padding="6px 10px"
+              minWidth="0px"
+              maxWidth="240px"
+              iconSize="16px"
+              iconMarginRight="6px"
+              title={translations.seasonXP}
+              titleStyle={{ fontSize: "11px", color: secondaryTextColor, opacity: 0.85, letterSpacing: "0.06em" }}
+              value={
+                <div style={{ display: "flex", fontSize: "18px", fontWeight: 700, color: textColor }}>
+                  {Math.floor(database.seasonXp || 0)} XP
+                </div>
+              }
+              style={{ position: "relative", boxSizing: "border-box", minHeight: "60px", height: "60px" }}
+            />
           </div>
         </div>
       </div>
@@ -361,7 +373,7 @@ const CratesDisplay = (props) => {
             gap: "5px",
           }}
         >
-          {crates.map((crate, index) => renderCrateCard(crate, index))}
+          {(crates || []).map((crate, index) => renderCrateCard(crate, index))}
         </div>
       </div>
     </div>

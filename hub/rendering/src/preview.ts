@@ -1312,6 +1312,15 @@ app.get("/:componentName", async (req, res) => {
                     }
                   ];
                 }
+
+                // Ensure hint flags exist for previewing hint block
+                if (!mockData.database.hints) {
+                  mockData.database.hints = {
+                    dailyAvailable: true,
+                    dailyRemainingMs: 0,
+                    upgradesAffordable: true,
+                  };
+                }
                 
                 if (isMarried) {
                   mockData.database.marriageStatus = {

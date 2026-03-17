@@ -11,13 +11,26 @@ const CrateRewards = (props) => {
     height = 450,
   } = props;
 
-  // Parse rewards if it's a string
-  const parsedRewards = typeof rewards === 'string' ? JSON.parse(rewards) : rewards;
-  
+  // Parse rewards if it's a string; fall back to safe defaults
+  let parsedRewards;
+  if (typeof rewards === "string") {
+    try {
+      parsedRewards = JSON.parse(rewards);
+    } catch (err) {
+      parsedRewards = null;
+    }
+  } else {
+    parsedRewards = rewards;
+  }
+
+  const normalizedRewards = parsedRewards && typeof parsedRewards === "object"
+    ? parsedRewards
+    : { coins: 0, seasonXp: 0, discount: 0, cooldownReductions: {} };
+
   // Debug logging
   console.log("CrateRewards - Original rewards:", rewards, "Type:", typeof rewards);
-  console.log("CrateRewards - Parsed rewards:", parsedRewards);
-  console.log("CrateRewards - Parsed rewards.coins:", parsedRewards?.coins);
+  console.log("CrateRewards - Parsed rewards:", normalizedRewards);
+  console.log("CrateRewards - Parsed rewards.coins:", normalizedRewards?.coins);
 
   // Extract coloring props or use defaults
   const {
@@ -103,10 +116,10 @@ const CrateRewards = (props) => {
 
   // Count total rewards to determine layout
   const totalRewards =
-    (parsedRewards.coins > 0 ? 1 : 0) +
-    (parsedRewards.seasonXp > 0 ? 1 : 0) +
-    (parsedRewards.discount > 0 ? 1 : 0) +
-    Object.keys(parsedRewards.cooldownReductions || {}).length;
+    (normalizedRewards.coins > 0 ? 1 : 0) +
+    (normalizedRewards.seasonXp > 0 ? 1 : 0) +
+    (normalizedRewards.discount > 0 ? 1 : 0) +
+    Object.keys(normalizedRewards.cooldownReductions || {}).length;
 
   // Use multi-column layout for 4+ rewards
   const useGridLayout = totalRewards >= 4;
@@ -215,36 +228,36 @@ const CrateRewards = (props) => {
             }}
           >
             {/* Coins reward */}
-            {parsedRewards.coins > 0 &&
+            {normalizedRewards.coins > 0 &&
               renderRewardItem(
                 "💵",
                 translations.coins,
-                `+${parsedRewards.coins}`,
+                `+${normalizedRewards.coins}`,
                 "#4caf50" // Green color for positive
               )}
 
 
 
             {/* Season XP reward */}
-            {parsedRewards.seasonXp > 0 &&
+            {normalizedRewards.seasonXp > 0 &&
               renderRewardItem(
                 "🌟",
                 translations.seasonXp,
-                `+${parsedRewards.seasonXp}`,
+                `+${normalizedRewards.seasonXp}`,
                 "#ff6b35" // Orange color
               )}
 
             {/* Discount reward */}
-            {parsedRewards.discount > 0 &&
+            {normalizedRewards.discount > 0 &&
               renderRewardItem(
                 "🛒",
                 translations.discount,
-                `${parsedRewards.discount}% ${translations.onAllUpgrades}`,
+                `${normalizedRewards.discount}% ${translations.onAllUpgrades}`,
                 "#9c27b0" // Purple color
               )}
 
             {/* Cooldown reduction rewards */}
-            {Object.entries(parsedRewards.cooldownReductions || {}).map(
+            {Object.entries(normalizedRewards.cooldownReductions || {}).map(
               ([cooldownType, amount], index) => {
                 // Get readable cooldown type name
                 const cooldownNames = {
@@ -272,10 +285,10 @@ const CrateRewards = (props) => {
             )}
 
             {/* If no rewards, show message */}
-            {!parsedRewards.coins &&
-               !parsedRewards.seasonXp &&
-               !parsedRewards.discount &&
-               Object.keys(parsedRewards.cooldownReductions || {}).length === 0 && (
+            {!normalizedRewards.coins &&
+               !normalizedRewards.seasonXp &&
+               !normalizedRewards.discount &&
+               Object.keys(normalizedRewards.cooldownReductions || {}).length === 0 && (
                 <div
                   style={{
                     textAlign: "center",

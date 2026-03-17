@@ -307,7 +307,7 @@ const command = {
         } else if (subcommand === "remove") {
           const role = interaction.options.getRole("role");
           try {
-            await (hubClient as any).removeLevelRole(guild.id, role.id);
+            await hubClient.removeLevelRole(guild.id, role.id);
             await interaction.editReply(
               await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
@@ -334,13 +334,13 @@ const command = {
             return interaction.editReply(await i18n.__(`${i18nBaseKey}.no_roles`));
           }
 
+          const parsedEmbedColor = process.env.EMBED_COLOR
+            ? Number.parseInt(process.env.EMBED_COLOR, 10)
+            : Number.NaN;
+
           const embed = new EmbedBuilder()
             .setTitle(String(await i18n.__(`${i18nBaseKey}.title`)))
-            .setColor(
-              process.env.EMBED_COLOR
-                ? Number(process.env.EMBED_COLOR)
-                : 0x0099ff
-            )
+            .setColor(Number.isNaN(parsedEmbedColor) ? 0x0099ff : parsedEmbedColor)
             .setTimestamp();
 
           let description = "";

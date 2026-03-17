@@ -440,11 +440,7 @@ const command: CasesCommandShape = {
         cratesComponent.addActionRow(buttonRow);
       }
 
-      return {
-        components: [cratesComponent.build()],
-        files: [attachment],
-        flags: MessageFlags.IsComponentsV2,
-      };
+      return cratesComponent.toReplyOptions({ files: [attachment] }) as Record<string, unknown>;
     };
 
     const initialMessage = await generateCratesMessage();
@@ -459,8 +455,9 @@ const command: CasesCommandShape = {
     collector.on("collect", async (componentInteraction: ComponentInteractionLike) => {
       try {
         if (componentInteraction.customId === "select_crate") {
+          await componentInteraction.deferUpdate();
           selectedCrate = parseInt(componentInteraction.values[0] || "0", 10);
-          await componentInteraction.update(await generateCratesMessage());
+          await componentInteraction.editReply(await generateCratesMessage());
         } else if (componentInteraction.customId === "open_crate") {
           await this.handleCrateOpen(
             componentInteraction,
@@ -635,6 +632,7 @@ const command: CasesCommandShape = {
     }
 
     try {
+      await i.deferUpdate();
       const rewardMessage = await this.openCaseAndCreateMessage(
         interaction,
         i18n,
@@ -645,7 +643,7 @@ const command: CasesCommandShape = {
         "INTERACTIVE CASE OPENING"
       );
 
-      await i.update(rewardMessage);
+      await i.editReply(rewardMessage);
       this.setupBackToCratesCollector(message, interaction, i18n, cratesList);
     } catch (error) {
       console.error("Error in interactive case opening:", error);

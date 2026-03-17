@@ -1,3 +1,6 @@
+import InfoRectangle from "./unified/InfoRectangle.jsx";
+import Banknotes from "./unified/Banknotes.jsx";
+
 const UpgradesDisplay = (props) => {
   let {
     interaction,
@@ -126,18 +129,46 @@ const UpgradesDisplay = (props) => {
               🛒 {translations.discount}: {activeDiscount}%
             </div>
           ) : null}
-          <div
-            style={{
-              ...cardShell,
-              borderRadius: "16px",
-              padding: "10px 16px",
-              fontSize: "22px",
-              display: "flex",
-              alignItems: "center",
-            }}
+
+          <InfoRectangle
+            icon="💵"
+            background={cardShell.backgroundColor}
+            borderRadius="14px"
+            padding="6px 10px"
+            minWidth="0px"
+            maxWidth="220px"
+            iconSize="18px"
+            iconMarginRight="8px"
+            title={`${translations.balance}:`}
+            titleStyle={{ fontSize: "11px", color: tertiaryTextColor, letterSpacing: "0.08em" }}
+            value={
+              <div style={{ display: "flex", fontSize: "20px", fontWeight: "bold", color: textColor }}>
+                {formatNumber(balance)}
+              </div>
+            }
+            style={{ position: "relative", flexShrink: 0, gap: "2px" }}
           >
-            💵 {translations.balance}: {formatNumber(balance)}
-          </div>
+            <Banknotes
+              amount={Number(balance || 0)}
+              style="banknotes"
+              division={50}
+              xspacing={18}
+              styleOverrides={{
+                container: {
+                  position: "absolute",
+                  inset: 0,
+                  pointerEvents: "none",
+                  overflow: "hidden",
+                  zIndex: 0,
+                },
+                banknote: {
+                  width: "10px",
+                  height: "3px",
+                },
+              }}
+            />
+          </InfoRectangle>
+
           <img
             src={interaction?.user?.avatarURL || "https://cdn.discordapp.com/embed/avatars/0.png"}
             alt="User Avatar"
