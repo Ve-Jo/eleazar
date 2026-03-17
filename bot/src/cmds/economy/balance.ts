@@ -2,6 +2,7 @@ import { AttachmentBuilder, SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import { CRATE_TYPES, UPGRADES } from "../../../../hub/shared/src/domain.ts";
 
 type TranslatorLike = {
   __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
@@ -21,6 +22,11 @@ type GuildLike = {
 };
 
 type GenericRecord = Record<string, any>;
+
+type UpgradeConfig = {
+  basePrice: number;
+  priceMultiplier: number;
+};
 
 type InteractionLike = {
   replied?: boolean;
@@ -163,6 +169,53 @@ const command = {
       gameLevelData = (hubClient as any).calculateLevel(gameXP);
     }
 
+    const getUpgradeLevel = (entry: unknown, key: string): number => {
+      if (!entry) return 1;
+      if (Array.isArray(entry)) {
+        const found = entry.find((u) => u?.type === key);
+        return typeof found?.level === "number" ? found.level : 1;
+      }
+      if (typeof entry === "object" && entry !== null && key in (entry as Record<string, unknown>)) {
+        const levelValue = (entry as Record<string, any>)[key]?.level;
+        return typeof levelValue === "number" ? levelValue : 1;
+      }
+      return 1;
+    };
+
+    const calculateUpgradePrice = (config: UpgradeConfig, currentLevel: number): number => {
+      return Math.max(
+        1,
+        Math.floor(config.basePrice * Math.pow(config.priceMultiplier, Math.max(0, currentLevel - 1)))
+      );
+    };
+
+    const upgradesConfig = UPGRADES as Record<string, UpgradeConfig>;
+    const userBalance = Number(userData?.economy?.balance || 0);
+    let minUpgradePrice = Infinity;
+    for (const key of Object.keys(upgradesConfig)) {
+      const config = upgradesConfig[key];
+      if (!config) continue;
+      const currentLevel = getUpgradeLevel(userData?.upgrades, key);
+      const price = calculateUpgradePrice(config, currentLevel);
+      minUpgradePrice = Math.min(minUpgradePrice, price);
+    }
+    const upgradesAffordable = Number.isFinite(minUpgradePrice) && userBalance >= minUpgradePrice;
+
+    const crateTypes = CRATE_TYPES as Record<string, { cooldown: number }>;
+    const now = Date.now();
+    let dailyAvailable = false;
+    let dailyRemainingMs: number | null = null;
+    if (crateTypes?.daily?.cooldown) {
+      const cooldownTimestamp = Number(
+        await (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "daily")
+      );
+      const remaining = cooldownTimestamp
+        ? Math.max(0, cooldownTimestamp + crateTypes.daily.cooldown - now)
+        : 0;
+      dailyAvailable = remaining <= 0;
+      dailyRemainingMs = remaining;
+    }
+
     let guildVault: GenericRecord | null = null;
     let userVaultDistributions: unknown = [];
     const guildId = interaction.guild.id;
@@ -249,6 +302,13 @@ const command = {
           levelProgress: {
             chat: chatLevelData,
             game: gameLevelData,
+          },
+          hints: {
+            dailyAvailable,
+            dailyRemainingMs,
+            upgradesAffordable,
+            minUpgradePrice: Number.isFinite(minUpgradePrice) ? minUpgradePrice : null,
+            balance: userBalance,
           },
         }
       },

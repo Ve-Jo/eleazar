@@ -34,8 +34,20 @@ const Balance = (props) => {
   // --- Personalization Data ---
   const userRealName = database?.realName;
   const userAge = database?.age;
-  const userCountryCode = database?.countryCode;
   const userGender = database?.gender;
+  const userLocale = database?.locale || "en"; // Default to English if no locale
+
+  // Function to derive country from locale
+  const getCountryFromLocale = (locale) => {
+    const localeToCountryMap = {
+      "en": "US", // English -> United States
+      "ru": "RU", // Russian -> Russia  
+      "uk": "UA", // Ukrainian -> Ukraine
+    };
+    return localeToCountryMap[locale] || "US"; // Default to US if locale not found
+  };
+
+  const userCountryCode = getCountryFromLocale(userLocale);
 
   // Function to format personalization display
   const formatPersonalizationDisplay = () => {
@@ -89,6 +101,13 @@ const Balance = (props) => {
     {}
   );
 
+  const hints = database?.hints || {};
+  const showHints = hints.dailyAvailable || hints.upgradesAffordable;
+  const dailyCooldownText =
+    hints.dailyAvailable || hints.dailyRemainingMs === null
+      ? null
+      : prettyMilliseconds(Math.max(0, Number(hints.dailyRemainingMs) || 0), { compact: true });
+
   const {
     textColor,
     secondaryTextColor,
@@ -135,11 +154,12 @@ const Balance = (props) => {
         style={{
           display: "flex",
           width: "400px", // Keep original width
-          height: "235px", // Only height changes when married
+          height: "260px", // Fixed height - marriage section always shows
           borderRadius: database?.bannerUrl ? "0px" : "20px",
           padding: "20px",
           color: textColor,
-          fontFamily: "Inter", fontWeight: 500,
+          fontFamily: "Inter", 
+          fontWeight: 500,
           fontWeight: 600,
           position: "relative",
           overflow: "hidden",
@@ -501,8 +521,9 @@ const Balance = (props) => {
                       overflow: "hidden",
                       boxSizing: "border-box",
                       flexShrink: 0,
-                      width: "calc(100% - 80px)", // leave space under avatar
-                      maxWidth: "320px",
+                      width: "auto", // Natural width based on content
+                      minWidth: "200px", // Minimum reasonable width
+                      maxWidth: "320px", // Maximum width limit
                     }}
                   >
                     {/* Bank banknotes inside the rectangle */}
@@ -658,7 +679,7 @@ const Balance = (props) => {
                       alignItems: "stretch",
                       alignSelf: "flex-start",
                       flexShrink: 0,
-                      width: "calc(100% - 80px)", // Match bank width and leave right margin
+                      width: "auto", // Match bank rectangle width
                       minWidth: "200px", // Minimum reasonable width
                       maxWidth: "320px", // Same max width as bank balance above
                     }}
@@ -882,6 +903,106 @@ const Balance = (props) => {
               </div>
             </div>
 
+            {showHints && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  backgroundColor: overlayBackground,
+                  borderRadius: "12px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: textColor,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  💡 {translations.hintsTitle}
+                </div>
+
+                {hints.dailyAvailable ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      color: textColor,
+                    }}
+                  >
+                    📦 {translations.hintDailyReady}
+                  </div>
+                ) : dailyCooldownText ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      color: secondaryTextColor,
+                    }}
+                  >
+                    ⏳ {translations.hintDailyCooldown.replace("{{time}}", dailyCooldownText)}
+                  </div>
+                ) : null}
+
+                {hints.upgradesAffordable && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12px",
+                      color: textColor,
+                    }}
+                  >
+                    🛠️ {translations.hintUpgradeReady}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    fontSize: "11px",
+                    color: tertiaryTextColor,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "4px 8px",
+                      background: "rgba(255,255,255,0.06)",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    /cases
+                  </div>
+                  <div
+                    style={{
+                      padding: "4px 8px",
+                      background: "rgba(255,255,255,0.06)",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    /shop
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div
               style={{
                 display: "flex",
@@ -961,75 +1082,7 @@ const Balance = (props) => {
               #{interaction?.user?.id || "{id}"}
             </div>
 
-            {/* Marriage Status - moved inside the card */}
-            {isMarried && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: "25px",
-                  top: "221px",
-                  minWidth: "146px",
-                  width: "auto",
-                  maxWidth: "200px",
-                  height: "31px",
-                  backgroundColor: "#bb3d36",
-                  borderRadius: "10px 10px 10px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  zIndex: 1,
-                  padding: "0 12px 0 8px",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: "8px",
-                    flexShrink: 0,
-                  }}
-                >
-                  💍
-                </div>
-                <img
-                  src={partnerAvatarUrl}
-                  alt={partnerUsername}
-                  width={19}
-                  height={19}
-                  style={{
-                    borderRadius: "50%",
-                    display: "flex",
-                    flexShrink: 0,
-                    marginRight: "8px",
-                    objectFit: "cover",
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: textColor,
-                    fontFamily: "Inter", fontWeight: 500,
-                    fontWeight: 500,
-                    display: "flex",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {marriageCreatedAt
-                    ? `${translations.married} (${prettyMilliseconds(
-                        Date.now() - new Date(marriageCreatedAt).getTime()
-                      )})`
-                    : translations.married}
-                </div>
-              </div>
-            )}
-          </div>
+                      </div>
 
           {/* Personalization Display - User Profile Info */}
           {(userRealName || userAge || userCountryCode) && (
@@ -1058,72 +1111,99 @@ const Balance = (props) => {
             </div>
           )}
 
-          {isMarried && (
+          {/* Marriage Status - Always show, different styling based on status */}
+          <div
+            style={{
+              position: "absolute",
+              left: "0px",
+              top: "205px",
+              width: "auto",
+              maxWidth: "100%",
+              height: "25px",
+              backgroundColor: isMarried ? "#bb3d36" : "rgba(137, 137, 137, 0.5)",
+              borderRadius: "10px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              zIndex: 1,
+              padding: "0 12px 0 8px",
+              boxSizing: "border-box",
+            }}
+          >
             <div
               style={{
-                position: "absolute",
-                left: "25px",
-                top: "235px",
-                minWidth: "160px",
-                width: "auto",
-                maxWidth: "280px",
-                height: "31px",
-                backgroundColor: "#bb3d36",
-                borderRadius: "0 0 10px 10px",
+                fontSize: "16px",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "flex-start",
-                zIndex: 1,
-                padding: "0 12px 0 8px",
-                boxSizing: "border-box",
+                justifyContent: "center",
+                marginRight: "8px",
+                flexShrink: 0,
               }}
             >
-              <div
-                style={{
-                  fontSize: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "8px",
-                  flexShrink: "0",
-                }}
-              >
-                💍
-              </div>
-              <img
-                src={partnerAvatarUrl}
-                alt={partnerUsername}
-                width={19}
-                height={19}
-                style={{
-                  borderRadius: "50%",
-                  display: "flex",
-                  flexShrink: "0",
-                  marginRight: "8px",
-                  objectFit: "cover",
-                }}
-              />
+              💍
+            </div>
+            {isMarried ? (
+              <>
+                <img
+                  src={partnerAvatarUrl}
+                  alt={partnerUsername}
+                  width={19}
+                  height={19}
+                  style={{
+                    borderRadius: "50%",
+                    display: "flex",
+                    flexShrink: 0,
+                    marginRight: "8px",
+                    objectFit: "cover",
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: textColor,
+                    fontFamily: "Inter", fontWeight: 500,
+                    display: "flex",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    flex: "0 1 auto",
+                    minWidth: 0,
+                    maxWidth: "100%",
+                  }}
+                >
+                  {translations.married}
+                  {marriageCreatedAt && (
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        opacity: 0.5,
+                        marginLeft: "6px",
+                        color: tertiaryTextColor,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ({prettyMilliseconds(
+                        Date.now() - new Date(marriageCreatedAt).getTime()
+                      )})
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
               <div
                 style={{
                   fontSize: "14px",
                   color: textColor,
                   fontFamily: "Inter", fontWeight: 500,
+                  opacity: 0.7,
                   display: "flex",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  flex: "1",
-                  minWidth: "0",
+                  alignItems: "center",
                 }}
               >
-                {marriageCreatedAt
-                  ? `${translations.married} (${prettyMilliseconds(
-                      Date.now() - new Date(marriageCreatedAt).getTime()
-                    )})`
-                  : translations.married}
+                {translations.single || "Single"}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1133,12 +1213,7 @@ const Balance = (props) => {
 // Update the dimensions calculation - make width dynamic too
 Balance.dimensions = {
   width: 400,
-  height: function (props) {
-    const isMarried = props?.database?.marriageStatus?.status === "MARRIED";
-    const hasPersonalization =
-      props?.database?.realName || props?.database?.age;
-    return isMarried ? 267 : hasPersonalization ? 255 : 235;
-  },
+  height: 260, // Fixed height - marriage section always shows
 };
 
 // Static translations object used by imageGenerator
@@ -1167,6 +1242,31 @@ Balance.localization_strings = {
     en: "Married",
     ru: "В браке",
     uk: "У шлюбі",
+  },
+  single: {
+    en: "Single",
+    ru: "Свободен",
+    uk: "Вільний",
+  },
+  hintsTitle: {
+    en: "Try these next",
+    ru: "Попробуйте дальше",
+    uk: "Спробуйте далі",
+  },
+  hintDailyReady: {
+    en: "Daily crate is ready in /cases",
+    ru: "Ежедневный кейс доступен в /cases",
+    uk: "Щоденний кейс доступний у /cases",
+  },
+  hintDailyCooldown: {
+    en: "Daily crate ready in {{time}}",
+    ru: "Ежедневный кейс будет через {{time}}",
+    uk: "Щоденний кейс буде через {{time}}",
+  },
+  hintUpgradeReady: {
+    en: "You can afford upgrades in /shop",
+    ru: "У вас хватает на улучшения в /shop",
+    uk: "У вас вистачає на поліпшення в /shop",
   },
   yours: {
     en: "yours",

@@ -10,20 +10,18 @@ type TranslatorLike = {
   __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
 };
 
-type PersonalizationField = "realName" | "age" | "gender" | "countryCode" | "all";
+type PersonalizationField = "realName" | "age" | "gender" | "all";
 
 type PersonalizationProfile = {
   realName?: string | null;
   age?: number | null;
   gender?: string | null;
-  countryCode?: string | null;
 };
 
 type PersonalizationInput = {
   realName?: string;
   age?: number;
   gender?: string;
-  countryCode?: string;
 };
 
 type InteractionLike = {
@@ -74,14 +72,6 @@ const command = {
                 { name: "Other", value: "other" }
               )
           )
-          .addStringOption((option) =>
-            option
-              .setName("country")
-              .setDescription("Your country code (2 letters, e.g., US, GB, CA)")
-              .setRequired(false)
-              .setMaxLength(2)
-              .setMinLength(2)
-          )
       )
       .addSubcommand((subcommand) =>
         subcommand
@@ -96,7 +86,6 @@ const command = {
                 { name: "name", value: "realName" },
                 { name: "age", value: "age" },
                 { name: "gender", value: "gender" },
-                { name: "country", value: "countryCode" },
                 { name: "all", value: "all" }
               )
           )
@@ -174,14 +163,6 @@ const command = {
               uk: "Ваша стать (чоловіча, жіноча, небінарна або своя)",
             },
           },
-          country: {
-            name: { en: "country", ru: "страна", uk: "країна" },
-            description: {
-              en: "Your country code (2 letters, e.g., US, GB, CA)",
-              ru: "Код вашей страны (2 буквы, например, RU, GB, US)",
-              uk: "Код вашої країни (2 літери, наприклад, UA, GB, US)",
-            },
-          },
         },
         success: {
           en: "Profile updated successfully!",
@@ -203,11 +184,6 @@ const command = {
             en: "Gender must be 1-20 characters and contain only letters",
             ru: "Пол должен быть 1-20 символов и содержать только буквы",
             uk: "Стать має бути 1-20 символів і містити лише літери",
-          },
-          invalid_country: {
-            en: "Country code must be a valid 2-letter ISO code (e.g., US, GB, CA)",
-            ru: "Код страны должен быть действительным 2-буквенным ISO кодом (например, RU, GB, US)",
-            uk: "Код країни має бути дійсним 2-літерним ISO кодом (наприклад, UA, GB, US)",
           },
         },
       },
@@ -257,11 +233,6 @@ const command = {
         en: "Gender",
         ru: "Пол",
         uk: "Стать",
-      },
-      country: {
-        en: "Country",
-        ru: "Страна",
-        uk: "Країна",
       },
       privacy: {
         en: "Privacy",
@@ -331,10 +302,6 @@ async function handleSetProfile(
     }
   }
 
-  const country = interaction.options.getString("country");
-  if (country) {
-    updateData.countryCode = country.toUpperCase();
-  }
 
   if (Object.keys(updateData).length === 0) {
     return interaction.editReply({
@@ -404,7 +371,6 @@ async function handleResetProfile(
         realName: null,
         age: null,
         gender: null,
-        countryCode: null,
       };
     } else {
       resetData[field] = null;
@@ -427,7 +393,7 @@ async function handleResetProfile(
 
 function hasAnyPersonalizationData(profile: PersonalizationProfile): boolean {
   return Boolean(
-    profile.realName || profile.age || profile.gender || profile.countryCode
+    profile.realName || profile.age || profile.gender
   );
 }
 
