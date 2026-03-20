@@ -79,16 +79,21 @@ const Balance = (props) => {
   // --- XP Data for Level Bars ---
   // Use the pre-calculated level data from hubClient.calculateLevel (passed via levelProgress)
   const chatLevelData = database?.levelProgress?.chat;
+  const voiceLevelData = database?.levelProgress?.voice;
   const gameLevelData = database?.levelProgress?.game;
 
   // --- Level Data ---
   const chattingLevel = chatLevelData?.level || 1;
+  const voiceLevel = voiceLevelData?.level || 1;
   const gamingLevel = gameLevelData?.level || 1;
   const cachesCount = database?.caches?.count || 2;
 
   // Extract XP data for fill calculations
   const chatFillRatio = chatLevelData
     ? Math.min(chatLevelData.currentXP / chatLevelData.requiredXP, 1)
+    : 0;
+  const voiceFillRatio = voiceLevelData
+    ? Math.min(voiceLevelData.currentXP / voiceLevelData.requiredXP, 1)
     : 0;
   const gameFillRatio = gameLevelData
     ? Math.min(gameLevelData.currentXP / gameLevelData.requiredXP, 1)
@@ -104,12 +109,15 @@ const Balance = (props) => {
     requiredXP,
     isMini,
     rank,
+    showMiniTitle = true,
+    borderRadius,
   }) => (
     <InfoRectangle
       icon={icon}
       iconSize={isMini ? "16px" : "24px"}
       iconMarginRight={isMini ? "8px" : "12px"}
       background={overlayBackground}
+      borderRadius={borderRadius}
       title={
         isMini
           ? null
@@ -139,7 +147,7 @@ const Balance = (props) => {
             color: textColor,
           }}
         >
-          {isMini && (
+          {isMini && showMiniTitle && (
             <span style={{ fontSize: "10px", color: secondaryTextColor, opacity: 0.85, marginRight: "4px", fontWeight: 600 }}>
               {title}
             </span>
@@ -586,20 +594,39 @@ const Balance = (props) => {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                  <div style={{ display: "flex", height: "auto" }}>
-                    {renderLevelRectangle({
-                      icon: "💬",
-                      title: translations.chatting || "CHATTING",
-                      level: chattingLevel,
-                      fill: chatFillRatio,
-                      accent: "#2196F3",
-                      currentXP: chatLevelData?.currentXP,
-                      requiredXP: chatLevelData?.requiredXP,
-                      isMini: true,
-                      rank: chatLevelData?.rank,
-                    })}
+                  <div style={{ display: "flex", height: "auto", gap: "37px" }}>
+                    <div style={{ display: "flex", width: "25%" }}>
+                      {renderLevelRectangle({
+                        icon: "💬",
+                        title: translations.chatting || "CHATTING",
+                        level: chattingLevel,
+                        fill: chatFillRatio,
+                        accent: "#2196F3",
+                        currentXP: chatLevelData?.currentXP,
+                        requiredXP: chatLevelData?.requiredXP,
+                        isMini: true,
+                        rank: chatLevelData?.rank,
+                        showMiniTitle: false,
+                        borderRadius: "12px 0 0 12px",
+                      })}
+                    </div>
+                    <div style={{ display: "flex", width: "75%" }}>
+                      {renderLevelRectangle({
+                        icon: "🎤",
+                        title: translations.voice || "VOICE",
+                        level: voiceLevel,
+                        fill: voiceFillRatio,
+                        accent: "#00BCD4",
+                        currentXP: voiceLevelData?.currentXP,
+                        requiredXP: voiceLevelData?.requiredXP,
+                        isMini: true,
+                        rank: voiceLevelData?.rank,
+                        showMiniTitle: false,
+                        borderRadius: "0 12px 12px 0",
+                      })}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", height: "auto" }}>
+                  <div style={{ display: "flex", height: "auto", }}>
                     {renderLevelRectangle({
                       icon: "🎮",
                       title: translations.gaming || "GAMING",
@@ -1279,6 +1306,11 @@ Balance.localization_strings = {
     en: "CHATTING",
     ru: "ЧАТТИНГ",
     uk: "ЧАТТІНГ",
+  },
+  voice: {
+    en: "VOICE",
+    ru: "ГОЛОС",
+    uk: "ГОЛОС",
   },
   gaming: {
     en: "GAMING",

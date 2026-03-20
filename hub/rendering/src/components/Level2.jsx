@@ -7,6 +7,9 @@ const Level2 = (props) => {
     currentXP = 0,
     requiredXP = 100,
     level = 1,
+    voiceCurrentXP = 0,
+    voiceRequiredXP = 100,
+    voiceLevel = 1,
     gameCurrentXP = 0,
     gameRequiredXP = 100,
     gameLevel = 1,
@@ -16,6 +19,7 @@ const Level2 = (props) => {
     i18n,
     coloring = {},
     chatRank,
+    voiceRank,
     gameRank,
     availableRoles = [],
   } = props;
@@ -23,6 +27,9 @@ const Level2 = (props) => {
   currentXP = Number(currentXP);
   requiredXP = Number(requiredXP);
   level = Number(level);
+  voiceCurrentXP = Number(voiceCurrentXP);
+  voiceRequiredXP = Number(voiceRequiredXP);
+  voiceLevel = Math.max(1, Number(voiceLevel));
   gameCurrentXP = Number(gameCurrentXP);
   gameRequiredXP = Number(gameRequiredXP);
   gameLevel = Math.max(1, Number(gameLevel));
@@ -61,10 +68,20 @@ const Level2 = (props) => {
 
   const accentGame = "#1DB935";
   const accentChat = "#2196F3";
+  const accentVoice = "#00BCD4";
   const accentSeason = "#8732a8";
 
   const chatProgress = Math.min(1, Math.max(0, currentXP / Math.max(1, requiredXP)));
+  const voiceProgress = Math.min(1, Math.max(0, voiceCurrentXP / Math.max(1, voiceRequiredXP)));
   const gameProgress = Math.min(1, Math.max(0, gameCurrentXP / Math.max(1, gameRequiredXP)));
+
+  const modeLevelMap = {
+    text: level,
+    voice: voiceLevel,
+    gaming: gameLevel,
+    combined_activity: level + voiceLevel,
+    combined_all: level + voiceLevel + gameLevel,
+  };
 
   const username = interaction?.user?.displayName || interaction?.user?.username || "Player";
   const avatarURL = interaction?.user?.avatarURL;
@@ -220,6 +237,48 @@ const Level2 = (props) => {
                 }}
               />
             </InfoRectangle>
+
+            <InfoRectangle
+              icon={<span>🎤</span>}
+              background={overlayBackground}
+              title={
+                <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {translations.voice}
+                  {voiceRank?.rank ? (
+                    <span style={{ fontSize: "10px", opacity: 0.8, fontWeight: 700, color: tertiaryTextColor }}>
+                      #{voiceRank.rank}
+                    </span>
+                  ) : null}
+                </span>
+              }
+              titleStyle={{ fontSize: "11px", letterSpacing: "0.3px", color: secondaryTextColor, fontWeight: 700, textTransform: "uppercase" }}
+              value={
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", color: textColor }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800 }}>{voiceLevel}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 700, opacity: 0.8, position: "relative", bottom: "4px" }}>{translations.lvlSuffix || "lvl"}</span>
+                    <span style={{ fontSize: "11px", color: tertiaryTextColor, position: "relative", bottom: "4px" }}>
+                      {Math.floor(voiceCurrentXP)} / {Math.max(1, Math.floor(voiceRequiredXP))} XP
+                    </span>
+                  </div>
+                </div>
+              }
+              padding="12px"
+              minWidth="0px"
+              maxWidth="auto"
+              style={{ width: "100%" }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${voiceProgress * 100}%`,
+                  background: `${accentVoice}55`,
+                  transition: "width 0.3s ease-out",
+                  zIndex: 0,
+                }}
+              />
+            </InfoRectangle>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, justifyContent: "flex-start" }}>
             <InfoRectangle
@@ -231,7 +290,9 @@ const Level2 = (props) => {
                 visibleRoles && visibleRoles.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
                     {visibleRoles.map((role, idx) => {
-                      const roleProgress = Math.min(1, Math.max(0, level / Math.max(1, Number(role.requiredLevel || 0))));
+                      const mode = String(role.mode || "text");
+                      const modeLevel = Number(modeLevelMap[mode] ?? modeLevelMap.text ?? 0);
+                      const roleProgress = Math.min(1, Math.max(0, modeLevel / Math.max(1, Number(role.requiredLevel || 0))));
                       return (
                         <div
                           key={`${role.name}-${idx}`}
@@ -272,7 +333,7 @@ const Level2 = (props) => {
                             }}
                           />
                           <span style={{ fontSize: "11px", fontWeight: 700, color: textColor, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative", zIndex: 1 }}>{role.name}</span>
-                          <span style={{ fontSize: "10px", color: tertiaryTextColor, flexShrink: 0, position: "relative", zIndex: 1 }}>lvl {role.requiredLevel}</span>
+                          <span style={{ fontSize: "10px", color: tertiaryTextColor, flexShrink: 0, position: "relative", zIndex: 1 }}>{mode} · lvl {role.requiredLevel}</span>
                         </div>
                       );
                     })}
@@ -300,7 +361,7 @@ const Level2 = (props) => {
 
 Level2.dimensions = {
   width: 430,
-  height: 264,
+  height: 364,
 };
 
 Level2.localization_strings = {
@@ -318,6 +379,11 @@ Level2.localization_strings = {
     ru: "Чат",
     en: "Chat",
     uk: "Чат",
+  },
+  voice: {
+    ru: "Голос",
+    en: "Voice",
+    uk: "Голос",
   },
   nextRole: {
     ru: "След. роль",

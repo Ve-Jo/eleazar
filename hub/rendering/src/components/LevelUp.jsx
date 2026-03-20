@@ -30,7 +30,9 @@ const LevelUp = (props) => {
 
   const palette = type === "game"
     ? { base: "#1DB935", accent: "#0f9e2b" }
-    : { base: "#2196F3", accent: "#0d7bd4" };
+    : type === "voice"
+      ? { base: "#00BCD4", accent: "#0097A7" }
+      : { base: "#2196F3", accent: "#0d7bd4" };
 
   const normalizedDominant = normalizeColor(dominantColor);
   const baseColor = normalizedDominant || palette.base;
@@ -49,7 +51,9 @@ const LevelUp = (props) => {
 
   const modeTint = type === "game"
     ? { soft: "rgba(29, 185, 53, 0.16)", strong: "rgba(29, 185, 53, 0.8)" }
-    : { soft: "rgba(33, 150, 243, 0.16)", strong: "rgba(33, 150, 243, 0.8)" };
+    : type === "voice"
+      ? { soft: "rgba(0, 188, 212, 0.16)", strong: "rgba(0, 188, 212, 0.8)" }
+      : { soft: "rgba(33, 150, 243, 0.16)", strong: "rgba(33, 150, 243, 0.8)" };
 
   return (
     <div
@@ -96,7 +100,7 @@ const LevelUp = (props) => {
           <div style={{ display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.6px", opacity: 0.9, fontWeight: 700, fontSize: "12px", color: secondaryTextColor }}>
             {translations.levelUp}
             <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "rgba(255,255,255,0.25)" }} />
-            {type === "game" ? translations.games : translations.chat}
+            {type === "game" ? translations.games : type === "voice" ? translations.voice : translations.chat}
           </div>
 
           <div style={{ display: "flex", alignItems: "baseline", gap: "10px", color: textColor }}>
@@ -212,6 +216,11 @@ LevelUp.localization_strings = {
     en: "Games",
     ru: "Игры",
     uk: "Ігри",
+  },
+  voice: {
+    en: "Voice",
+    ru: "Голос",
+    uk: "Голос",
   },
   chat: {
     en: "Chat",
