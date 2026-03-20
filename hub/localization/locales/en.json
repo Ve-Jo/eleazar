@@ -638,7 +638,7 @@
                 "description": "The chat level required to receive this role"
               }
             },
-            "success": "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+            "success": "Successfully set role {{roleName}} at level {{level}} (mode: {{mode}}, replace lower: {{replaceLowerRoles}}).",
             "error_level_exists": "Error: Another role ({{existingRoleName}}) is already assigned to level {{level}}.",
             "error_role_exists": "Error: Role {{roleName}} is already assigned to level {{existingLevel}}. Remove it first.",
             "error_level_invalid": "Error: Required level must be 1 or higher.",
@@ -661,7 +661,7 @@
             "description": "List all configured level role rewards",
             "title": "Configured Level Roles",
             "no_roles": "No level roles configured yet.",
-            "entry": "Level {{level}}: {{roleMention}}"
+            "entry": "Level {{level}} [{{mode}} | replace lower: {{replaceLowerRoles}}]: {{roleMention}}"
           }
         }
       },
