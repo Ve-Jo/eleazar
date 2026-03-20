@@ -57,6 +57,7 @@ export type HubUserEconomy = {
 
 export type HubUserLevel = {
   xp?: number | string;
+  voiceXp?: number | string;
   gameXp?: number | string;
 };
 
@@ -78,6 +79,7 @@ export type HubUserRecord = {
   cooldowns?: { data?: unknown } | Record<string, unknown> | null;
   levelProgress?: {
     chat?: LevelCalculation;
+    voice?: LevelCalculation;
     game?: LevelCalculation;
   };
   [key: string]: unknown;
@@ -110,6 +112,8 @@ export type LevelRole = {
   requiredLevel?: number;
   level?: number;
   roleId: string;
+  mode?: "text" | "voice" | "gaming" | "combined_activity" | "combined_all" | string;
+  replaceLowerRoles?: boolean;
   [key: string]: unknown;
 };
 
@@ -238,11 +242,13 @@ export type AddXpResponse = {
 };
 
 export type UserLevelsResponse = {
-  activity: LevelCalculation;
+  text: LevelCalculation;
+  voice: LevelCalculation;
   gaming: LevelCalculation;
   season: LevelCalculation;
   details: {
-    activity: Record<string, unknown>;
+    text: Record<string, unknown>;
+    voice: Record<string, unknown>;
     gaming: Record<string, unknown>;
   };
 };

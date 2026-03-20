@@ -200,7 +200,9 @@ async function handleLevelUp(
 
     typedI18n.setLocale(userLocale);
 
-    const isGameLevel = type !== "chat" && type !== "voice";
+    const normalizedType = String(type || "chat").toLowerCase();
+    const isVoiceLevel = normalizedType === "voice";
+    const isGameLevel = normalizedType !== "chat" && normalizedType !== "voice";
     const currentLevel = Number(levelUpInfo.newLevel) || 1;
 
     let currentXP = 0;
@@ -211,7 +213,7 @@ async function handleLevelUp(
       const levelCalc = await hubClient.getUserLevel(
         guildId,
         userId,
-        isGameLevel ? "gaming" : "activity"
+        isGameLevel ? "gaming" : isVoiceLevel ? "voice" : "activity"
       );
       currentXP = Number(levelCalc.currentXP) || 0;
       requiredXP = Number(levelCalc.requiredXP) || 0;
@@ -242,7 +244,7 @@ async function handleLevelUp(
             }),
           },
         },
-        type: isGameLevel ? "game" : "chat",
+        type: isGameLevel ? "game" : isVoiceLevel ? "voice" : "chat",
         level: currentLevel,
         oldLevel: previousLevel,
         currentXP,
@@ -263,7 +265,7 @@ async function handleLevelUp(
     });
 
     const embed = new EmbedBuilder()
-      .setColor(isGameLevel ? 0x1db935 : 0x2196f3)
+      .setColor(isGameLevel ? 0x1db935 : isVoiceLevel ? 0x00bcd4 : 0x2196f3)
       .setImage(`attachment://level-up-${userId}.png`)
       .setTimestamp();
 

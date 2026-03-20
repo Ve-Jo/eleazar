@@ -7,7 +7,7 @@ type HandleLevelUpClient = Parameters<typeof handleLevelUp>[0];
 type HandleLevelUpChannel = Parameters<typeof handleLevelUp>[5];
 
 type VoiceSessionLike = {
-  joinTime?: number | string;
+  joinedAt?: number | string;
 };
 
 type VoiceXpResult = {
@@ -74,16 +74,18 @@ const event = {
 
       if (oldState.channelId && !newState.channelId) {
         console.log("[Voice XP] User left voice channel completely");
+        console.log(`[Voice XP] DEBUG getVoiceSession params: guildId=${guildId}, userId=${userId}`);
         const session = (await hubClient.getVoiceSession(
           guildId,
           userId
         )) as VoiceSessionLike | null;
+        console.log(`[Voice XP] DEBUG getVoiceSession result:`, session);
 
-        if (session?.joinTime !== undefined) {
+        if (session?.joinedAt !== undefined) {
           console.log(
             `[Voice XP] Found active session for ${member.user.tag}, processing XP`
           );
-          const sessionDuration = Date.now() - toMilliseconds(session.joinTime);
+          const sessionDuration = Date.now() - toMilliseconds(session.joinedAt);
           const { timeSpent, xpAmount, levelUp } =
             (await hubClient.calculateVoiceXP(
               guildId,
@@ -181,11 +183,11 @@ const event = {
           userId
         )) as VoiceSessionLike | null;
 
-        if (session?.joinTime !== undefined) {
+        if (session?.joinedAt !== undefined) {
           console.log(
             `[Voice XP] Found active session during channel switch for ${member.user.tag}`
           );
-          const sessionDuration = Date.now() - toMilliseconds(session.joinTime);
+          const sessionDuration = Date.now() - toMilliseconds(session.joinedAt);
           const { timeSpent, xpAmount, levelUp } =
             (await hubClient.calculateVoiceXP(
               guildId,
@@ -267,7 +269,9 @@ const event = {
         );
         if (nonBotMembers.size >= 1) {
           console.log(`[Voice XP] Starting new session in channel ${newChannel.name}`);
-          await hubClient.createVoiceSession(userId, guildId, newState.channelId);
+          console.log(`[Voice XP] DEBUG createVoiceSession params: guildId=${guildId}, userId=${userId}, channelId=${newState.channelId}`);
+          const newSession = await hubClient.createVoiceSession(guildId, userId, newState.channelId);
+          console.log(`[Voice XP] DEBUG createVoiceSession result:`, newSession);
         } else {
           console.log("[Voice XP] Not enough users in new channel for XP tracking");
         }

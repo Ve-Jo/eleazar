@@ -202,9 +202,23 @@ export type HubClientLike = {
   purchaseUpgrade: (guildId: string, userId: string, upgradeType: string) => Promise<UpgradeRecord>;
   getUserUpgrades: (guildId: string, userId: string) => Promise<UserUpgradesResponse>;
   getGuildLevelRoles: (guildId: string) => Promise<LevelRole[]>;
-  getEligibleRolesForLevel: (guildId: string, level: number) => Promise<LevelRoleEnvelope>;
-  getNextLevelRole: (guildId: string, currentLevel: number) => Promise<NextLevelRoleEnvelope>;
-  addLevelRole: (guildId: string, level: number, roleId: string) => Promise<LevelRole>;
+  getEligibleRolesForLevel: (
+    guildId: string,
+    level: number,
+    mode?: string
+  ) => Promise<LevelRoleEnvelope>;
+  getNextLevelRole: (
+    guildId: string,
+    currentLevel: number,
+    mode?: string
+  ) => Promise<NextLevelRoleEnvelope>;
+  addLevelRole: (
+    guildId: string,
+    level: number,
+    roleId: string,
+    mode?: string,
+    replaceLowerRoles?: boolean
+  ) => Promise<LevelRole>;
   removeLevelRole: (guildId: string, roleId: string) => Promise<DeleteManyResponse>;
   updateStats: (
     guildId: string,
@@ -868,22 +882,36 @@ class HubClient {
     return await apiRequest<LevelRole[]>(`${this.databaseUrl}/levels/roles/${guildId}`);
   }
 
-  async getEligibleRolesForLevel(guildId: string, level: number): Promise<LevelRoleEnvelope> {
+  async getEligibleRolesForLevel(
+    guildId: string,
+    level: number,
+    mode: string = "text"
+  ): Promise<LevelRoleEnvelope> {
     return await apiRequest<LevelRoleEnvelope>(
-      `${this.databaseUrl}/levels/roles/${guildId}/level/${level}`
+      `${this.databaseUrl}/levels/roles/${guildId}/level/${level}?mode=${encodeURIComponent(mode)}`
     );
   }
 
-  async getNextLevelRole(guildId: string, currentLevel: number): Promise<NextLevelRoleEnvelope> {
+  async getNextLevelRole(
+    guildId: string,
+    currentLevel: number,
+    mode: string = "text"
+  ): Promise<NextLevelRoleEnvelope> {
     return await apiRequest<NextLevelRoleEnvelope>(
-      `${this.databaseUrl}/levels/roles/${guildId}/next/${currentLevel}`
+      `${this.databaseUrl}/levels/roles/${guildId}/next/${currentLevel}?mode=${encodeURIComponent(mode)}`
     );
   }
 
-  async addLevelRole(guildId: string, level: number, roleId: string): Promise<LevelRole> {
+  async addLevelRole(
+    guildId: string,
+    level: number,
+    roleId: string,
+    mode: string = "text",
+    replaceLowerRoles: boolean = true
+  ): Promise<LevelRole> {
     return await apiRequest<LevelRole, string>(`${this.databaseUrl}/levels/roles`, {
       method: "POST",
-      body: JSON.stringify({ guildId, level, roleId }),
+      body: JSON.stringify({ guildId, level, roleId, mode, replaceLowerRoles }),
     });
   }
 

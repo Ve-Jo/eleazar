@@ -160,13 +160,18 @@ const command = {
     }
 
     let chatLevelData: GenericRecord | null = null;
+    let voiceLevelData: GenericRecord | null = null;
     let gameLevelData: GenericRecord | null = null;
     let chatRank: { rank: number; total: number } | null = null;
+    let voiceRank: { rank: number; total: number } | null = null;
     let gameRank: { rank: number; total: number } | null = null;
 
     if (userData.Level) {
       const chatXP = Number(userData.Level.xp || 0);
       chatLevelData = (hubClient as any).calculateLevel(chatXP);
+
+      const voiceXP = Number(userData.Level.voiceXp || 0);
+      voiceLevelData = (hubClient as any).calculateLevel(voiceXP);
 
       const gameXP = Number(userData.Level.gameXp || 0);
       gameLevelData = (hubClient as any).calculateLevel(gameXP);
@@ -188,6 +193,7 @@ const command = {
       };
 
       chatRank = computeRank(guildUsers, "xp", user.id);
+      voiceRank = computeRank(guildUsers, "voiceXp", user.id);
       gameRank = computeRank(guildUsers, "gameXp", user.id);
     } catch (error) {
       console.warn(`Failed to compute ranks for guild ${interaction.guild.id}:`, error);
@@ -380,6 +386,7 @@ const command = {
           ...userData,
           levelProgress: {
             chat: { ...chatLevelData, rank: chatRank?.rank, total: chatRank?.total },
+            voice: { ...voiceLevelData, rank: voiceRank?.rank, total: voiceRank?.total },
             game: { ...gameLevelData, rank: gameRank?.rank, total: gameRank?.total },
           },
           hints: {
