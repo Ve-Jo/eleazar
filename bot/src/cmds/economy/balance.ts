@@ -269,18 +269,31 @@ const command = {
 
     const crateTypes = CRATE_TYPES as Record<string, { cooldown: number }>;
     const now = Date.now();
-    let dailyAvailable = false;
-    let dailyRemainingMs: number | null = null;
-    if (crateTypes?.daily?.cooldown) {
-      const cooldownTimestamp = Number(
-        await (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "daily")
-      );
-      const remaining = cooldownTimestamp
-        ? Math.max(0, cooldownTimestamp + crateTypes.daily.cooldown - now)
-        : 0;
-      dailyAvailable = remaining <= 0;
-      dailyRemainingMs = remaining;
-    }
+    const [dailyCooldownTimestamp, weeklyCooldownTimestamp, crimeCooldownResponse] = await Promise.all([
+      (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "daily"),
+      (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "weekly"),
+      (hubClient as any).getCooldown(interaction.guild.id, user.id, "crime"),
+    ]);
+
+    const dailyRemaining = crateTypes?.daily?.cooldown
+      ? Number(dailyCooldownTimestamp)
+        ? Math.max(0, Number(dailyCooldownTimestamp) + crateTypes.daily.cooldown - now)
+        : 0
+      : 0;
+    const weeklyRemaining = crateTypes?.weekly?.cooldown
+      ? Number(weeklyCooldownTimestamp)
+        ? Math.max(0, Number(weeklyCooldownTimestamp) + crateTypes.weekly.cooldown - now)
+        : 0
+      : 0;
+
+    const openableCasesCount = Number(dailyRemaining <= 0) + Number(weeklyRemaining <= 0);
+    const nextCaseRemainingMs = [dailyRemaining, weeklyRemaining]
+      .filter((remaining) => remaining > 0)
+      .sort((a, b) => a - b)[0] ?? null;
+    const dailyCooldownMs = Number(crateTypes?.daily?.cooldown || 0);
+    const weeklyCooldownMs = Number(crateTypes?.weekly?.cooldown || 0);
+    const crimeCooldownMs = 2 * 60 * 60 * 1000;
+    const crimeRemainingMs = Math.max(0, Number(crimeCooldownResponse?.cooldown || 0));
 
     let guildVault: GenericRecord | null = null;
     let userVaultDistributions: unknown = [];
@@ -370,8 +383,18 @@ const command = {
             game: { ...gameLevelData, rank: gameRank?.rank, total: gameRank?.total },
           },
           hints: {
-            dailyAvailable,
-            dailyRemainingMs,
+            dailyAvailable: openableCasesCount,
+            dailyRemainingMs: nextCaseRemainingMs,
+            casesCooldowns: {
+              dailyRemainingMs: dailyRemaining,
+              dailyCooldownMs,
+              weeklyRemainingMs: weeklyRemaining,
+              weeklyCooldownMs,
+              closestRemainingMs: nextCaseRemainingMs,
+            },
+            crimeAvailable: crimeRemainingMs <= 0,
+            crimeRemainingMs,
+            crimeCooldownMs,
             upgradesAffordable: affordableUpgradesCount,
             minUpgradePrice: null,
             balance: userBalance,

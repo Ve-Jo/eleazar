@@ -502,6 +502,8 @@ const command: CasesCommandShape = {
       this.getCooldownTime(interaction, "daily"),
       this.getCooldownTime(interaction, "weekly"),
     ]);
+    const dailyCount = dailyCooldown <= 0 ? 1 : 0;
+    const weeklyCount = weeklyCooldown <= 0 ? 1 : 0;
 
     const cratesList: CrateListItem[] = [
       {
@@ -515,7 +517,7 @@ const command: CasesCommandShape = {
         emoji: crateTypes.daily?.emoji || "🎁",
         available: dailyCooldown <= 0,
         cooldown: dailyCooldown,
-        count: -1,
+        count: dailyCount,
       },
       {
         id: "weekly",
@@ -528,7 +530,7 @@ const command: CasesCommandShape = {
         emoji: crateTypes.weekly?.emoji || "🎁",
         available: weeklyCooldown <= 0,
         cooldown: weeklyCooldown,
-        count: -1,
+        count: weeklyCount,
       },
     ];
 
@@ -652,10 +654,16 @@ const command: CasesCommandShape = {
       this.setupBackToCratesCollector(message, interaction, i18n, cratesList);
     } catch (error) {
       console.error("Error in interactive case opening:", error);
-      await i.reply({
+      const errorPayload = {
         content: await i18n.__("commands.economy.cases.error"),
         ephemeral: true,
-      });
+      };
+
+      if (i.deferred || i.replied) {
+        await i.followUp(errorPayload);
+      } else {
+        await i.reply(errorPayload);
+      }
     }
   },
 
@@ -700,8 +708,14 @@ const command: CasesCommandShape = {
     const rewardRecord = (rewards && typeof rewards === "object"
       ? (rewards as Record<string, unknown>)
       : {}) as Record<string, unknown>;
+    const userData = await (hubClient as any).getUser(interaction.guild.id, interaction.user.id);
+    const cratesList = await this.buildCratesList(interaction, i18n);
+    const selectedCrateIndex = Math.max(
+      0,
+      cratesList.findIndex((crate) => crate.id === crateType)
+    );
     const generated = (await generateImage(
-      "CrateRewards",
+      "CratesDisplay",
       {
         interaction: {
           user: {
@@ -722,12 +736,22 @@ const command: CasesCommandShape = {
             }),
           },
         },
+        database: {
+          balance: Math.round(Number(userData.economy?.balance || 0)),
+          xp: userData.Level?.xp || 0,
+          seasonXp: userData.Level?.seasonXp || 0,
+        },
         locale: interaction.locale,
-        crateType,
-        crateEmoji,
-        crateName,
+        crates: cratesList,
+        selectedCrate: selectedCrateIndex,
         rewards,
         dailyStatus: rewardRecord.dailyStatus || null,
+        openedCrate: {
+          id: crateType,
+          name: crateName,
+          emoji: crateEmoji,
+        },
+        viewMode: "rewards",
         dominantColor: "user",
         returnDominant: true,
       },
