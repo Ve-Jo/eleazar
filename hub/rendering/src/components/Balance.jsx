@@ -195,12 +195,37 @@ const Balance = (props) => {
   );
 
   const hints = database?.hints || {};
-  const showHints = hints.dailyAvailable || hints.upgradesAffordable || hints.workAvailable;
+  const crimeRemainingMs = Math.max(0, Number(hints.crimeRemainingMs || 0));
+  const crimeCooldownMs = Math.max(1, Number(hints.crimeCooldownMs || 1));
+  const crimeOnCooldown = crimeRemainingMs > 0;
+  const crimeCooldownProgress = Math.min(1, Math.max(0, (crimeCooldownMs - crimeRemainingMs) / crimeCooldownMs));
+  const casesCooldowns = hints.casesCooldowns || {};
+  const dailyCaseRemainingMs = Math.max(0, Number(casesCooldowns.dailyRemainingMs || 0));
+  const weeklyCaseRemainingMs = Math.max(0, Number(casesCooldowns.weeklyRemainingMs || 0));
+  const dailyCaseCooldownMs = Math.max(1, Number(casesCooldowns.dailyCooldownMs || 24 * 60 * 60 * 1000));
+  const weeklyCaseCooldownMs = Math.max(1, Number(casesCooldowns.weeklyCooldownMs || 7 * 24 * 60 * 60 * 1000));
+  const dailyCaseProgress = Math.min(1, Math.max(0, (dailyCaseCooldownMs - dailyCaseRemainingMs) / dailyCaseCooldownMs));
+  const weeklyCaseProgress = Math.min(1, Math.max(0, (weeklyCaseCooldownMs - weeklyCaseRemainingMs) / weeklyCaseCooldownMs));
+  const closestCaseRemainingMsRaw =
+    casesCooldowns.closestRemainingMs === null || casesCooldowns.closestRemainingMs === undefined
+      ? hints.dailyRemainingMs
+      : casesCooldowns.closestRemainingMs;
+  const closestCaseRemainingMs =
+    closestCaseRemainingMsRaw === null ? 0 : Math.max(0, Number(closestCaseRemainingMsRaw || 0));
+  const caseAvailableCount =
+    typeof hints.dailyAvailable === "number" ? hints.dailyAvailable : (hints.dailyAvailable ? 1 : 0);
+  const casesOnCooldown = caseAvailableCount <= 0 && closestCaseRemainingMs > 0;
+  const showHints =
+    hints.dailyAvailable ||
+    casesOnCooldown ||
+    hints.upgradesAffordable ||
+    hints.workAvailable ||
+    typeof hints.crimeAvailable === "boolean" ||
+    crimeOnCooldown;
   const dailyCooldownText =
     hints.dailyAvailable || hints.dailyRemainingMs === null
       ? null
       : prettyMilliseconds(Math.max(0, Number(hints.dailyRemainingMs) || 0), { compact: true });
-
   const {
     textColor,
     secondaryTextColor,
@@ -208,6 +233,167 @@ const Balance = (props) => {
     overlayBackground,
     backgroundGradient,
   } = coloring;
+  const baseHintStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "5px",
+    padding: "4px 8px",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    width: "auto",
+    minHeight: "28px",
+    boxSizing: "border-box",
+  };
+  const grayEmojiHintStyle = {
+    ...baseHintStyle,
+    justifyContent: "center",
+    width: "32px",
+    minWidth: "32px",
+    padding: "0px",
+    height: "30px",
+    minHeight: "30px",
+    borderRadius: "8px",
+    background: "rgba(255,255,255,0.06)",
+    color: tertiaryTextColor,
+    lineHeight: "1",
+  };
+  const dailyIsActive =
+    caseAvailableCount > 0 || casesOnCooldown;
+  const upgradesAreActive =
+    typeof hints.upgradesAffordable === "number"
+      ? hints.upgradesAffordable > 0
+      : Boolean(hints.upgradesAffordable);
+  const workIsActive = Number(hints.workEarnings?.totalCap || 0) > 0;
+  const hintChips = [
+    (
+      <div
+        key="daily"
+        style={
+          dailyIsActive
+            ? {
+                ...baseHintStyle,
+                background: `linear-gradient(to right,
+                  rgba(94, 171, 255, 0.42) 0%,
+                  rgba(94, 171, 255, 0.42) ${Math.min(100, dailyCaseProgress * 100)}%,
+                  rgba(94, 171, 255, 0) ${Math.min(100, dailyCaseProgress * 100)}%,
+                  rgba(94, 171, 255, 0) 100%),
+                  linear-gradient(to right,
+                  rgba(184, 121, 255, 0.38) 0%,
+                  rgba(184, 121, 255, 0.38) ${Math.min(100, weeklyCaseProgress * 100)}%,
+                  rgba(184, 121, 255, 0) ${Math.min(100, weeklyCaseProgress * 100)}%,
+                  rgba(184, 121, 255, 0) 100%),
+                  rgba(255,255,255,0.06)`,
+                color: casesOnCooldown ? tertiaryTextColor : textColor,
+              }
+            : grayEmojiHintStyle
+        }
+        title={
+          casesOnCooldown
+            ? `${translations.hintDailyCooldownShort}: ${prettyMilliseconds(closestCaseRemainingMs, { compact: true })}`
+            : (hints.dailyAvailable ? translations.hintDailyReadyShort : translations.hintDailyCooldownShort)
+        }
+      >
+        <span aria-hidden="true">📦</span>
+        {dailyIsActive ? (
+          <>
+            <span style={{ fontWeight: 700 }}>
+              {casesOnCooldown
+                ? prettyMilliseconds(closestCaseRemainingMs, { compact: true })
+                : caseAvailableCount}
+            </span>
+            {!casesOnCooldown ? (
+              <span style={{ fontSize: "9px" }}>{translations.hintDailyLabel}</span>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    ),
+    (
+      <div
+        key="upgrade"
+        style={
+          upgradesAreActive
+            ? {
+                ...baseHintStyle,
+                background: "rgba(255,255,255,0.06)",
+                color: textColor,
+              }
+            : grayEmojiHintStyle
+        }
+        title={hints.upgradesAffordable ? translations.hintUpgradeReadyShort : translations.hintUpgradeLockedShort}
+      >
+        <span aria-hidden="true">🛠️</span>
+        {upgradesAreActive ? (
+          <>
+            <span style={{ fontWeight: 700 }}>{typeof hints.upgradesAffordable === "number" ? hints.upgradesAffordable : (hints.upgradesAffordable ? 1 : 0)}</span>
+            <span style={{ fontSize: "9px" }}>{translations.hintUpgradeLabel}</span>
+          </>
+        ) : null}
+      </div>
+    ),
+    (
+      <div
+        key="work"
+        style={
+          workIsActive
+            ? {
+                ...baseHintStyle,
+                background: `linear-gradient(to right,
+                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} 0%,
+                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%,
+                  rgba(255,255,255,0.06) ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%,
+                  rgba(255,255,255,0.06) 100%)`,
+                color: textColor,
+              }
+            : grayEmojiHintStyle
+        }
+        title={hints.workEarnings ? `${((hints.workEarnings.progress || 0) * 100).toFixed(2)}% of daily limit` : translations.hintWorkReadyShort}
+      >
+        <span aria-hidden="true">🎮</span>
+        {workIsActive ? (
+          <>
+            <span style={{ fontWeight: 700 }}>
+              {`${((hints.workEarnings.progress || 0) * 100).toFixed(2)}%`}
+            </span>
+            <span style={{ fontSize: "9px" }}>{translations.hintWorkLabel}</span>
+          </>
+        ) : null}
+      </div>
+    ),
+    (
+      <div
+        key="crime"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "4px 8px",
+          borderRadius: "10px",
+          background: crimeOnCooldown
+            ? `linear-gradient(to right,
+                rgba(160,160,160,0.65) 0%,
+                rgba(160,160,160,0.65) ${Math.min(100, crimeCooldownProgress * 100)}%,
+                rgba(255,255,255,0.06) ${Math.min(100, crimeCooldownProgress * 100)}%,
+                rgba(255,255,255,0.06) 100%)`
+            : "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          color: hints.crimeAvailable ? textColor : tertiaryTextColor,
+          width: "auto",
+        }}
+        title={crimeOnCooldown ? translations.hintCrimeCooldownShort : translations.hintCrimeReadyShort}
+      >
+        <span aria-hidden="true">🦹</span>
+        <span style={{ fontWeight: 700 }}>
+          {crimeOnCooldown
+            ? prettyMilliseconds(crimeRemainingMs, { compact: true })
+            : (typeof hints.crimeAvailable === "number" ? hints.crimeAvailable : (hints.crimeAvailable ? 1 : 0))}
+        </span>
+        {!crimeOnCooldown ? (
+          <span style={{ fontSize: "9px" }}>{translations.hintCrimeLabel}</span>
+        ) : null}
+      </div>
+    ),
+  ];
 
   const bankStartTime = database?.economy?.bankStartTime || 0;
   const bankRate = database?.economy?.bankRate || 0;
@@ -769,79 +955,15 @@ const Balance = (props) => {
                       <div
                         style={{
                           display: "flex",
-                          flexDirection: "column",
+                          flexDirection: "row",
+                          flexWrap: "wrap",
                           gap: "6px",
+                          maxWidth: "60%",
                           justifyContent: "flex-start",
                           alignItems: "flex-start",
                         }}
                       >
-
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            padding: "4px 8px",
-                            borderRadius: "10px",
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            color: hints.dailyAvailable ? textColor : tertiaryTextColor,
-                            width: "auto",
-                          }}
-                          title={hints.dailyAvailable ? translations.hintDailyReadyShort : translations.hintDailyCooldownShort}
-                        >
-                          <span aria-hidden="true">📦</span>
-                          <span style={{ fontWeight: 700 }}>{typeof hints.dailyAvailable === 'number' ? hints.dailyAvailable : (hints.dailyAvailable ? 1 : 0)}</span>
-                          <span style={{ fontSize: "9px" }}>{translations.hintDailyLabel}</span>
-                        </div>
-
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            padding: "4px 8px",
-                            borderRadius: "10px",
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            color: hints.upgradesAffordable ? textColor : tertiaryTextColor,
-                            width: "auto",
-                          }}
-                          title={hints.upgradesAffordable ? translations.hintUpgradeReadyShort : translations.hintUpgradeLockedShort}
-                        >
-                          <span aria-hidden="true">🛠️</span>
-                          <span style={{ fontWeight: 700 }}>{typeof hints.upgradesAffordable === 'number' ? hints.upgradesAffordable : (hints.upgradesAffordable ? 1 : 0)}</span>
-                          <span style={{ fontSize: "9px" }}>{translations.hintUpgradeLabel}</span>
-                        </div>
-
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            padding: "4px 8px",
-                            borderRadius: "10px",
-                            background: hints.workEarnings?.totalCap > 0
-                              ? `linear-gradient(to right, 
-                                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} 0%, 
-                                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%, 
-                                  rgba(255,255,255,0.06) ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%, 
-                                  rgba(255,255,255,0.06) 100%)`
-                              : "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.08)",
-                            color: textColor,
-                            width: "auto",
-                          }}
-                          title={hints.workEarnings ? `${((hints.workEarnings.progress || 0) * 100).toFixed(2)}% of daily limit` : translations.hintWorkReadyShort}
-                        >
-                          <span aria-hidden="true">🎮</span>
-                          <span style={{ fontWeight: 700 }}>
-                            {hints.workEarnings?.totalCap > 0
-                              ? `${((hints.workEarnings.progress || 0) * 100).toFixed(2)}%`
-                              : (typeof hints.workAvailable === 'number' ? hints.workAvailable : (hints.workAvailable ? 1 : 0))}
-                          </span>
-                          <span style={{ fontSize: "9px" }}>{translations.hintWorkLabel}</span>
-                        </div>
+                        {hintChips}
                       </div>
                     </div>
                   )}
@@ -1132,6 +1254,21 @@ Balance.localization_strings = {
     en: "Games available in /work",
     ru: "Игры доступны в /work",
     uk: "Ігри доступні в /work",
+  },
+  hintCrimeLabel: {
+    en: "/crime",
+    ru: "/crime",
+    uk: "/crime",
+  },
+  hintCrimeReadyShort: {
+    en: "Crime ready",
+    ru: "Crime готов",
+    uk: "Crime готовий",
+  },
+  hintCrimeCooldownShort: {
+    en: "Crime on cooldown",
+    ru: "Crime на кулдауне",
+    uk: "Crime на кулдауні",
   },
   yours: {
     en: "yours",
