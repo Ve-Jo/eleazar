@@ -2,11 +2,6 @@ import InfoRectangle from "./unified/InfoRectangle.jsx";
 import Banknotes from "./unified/Banknotes.jsx";
 
 const GameLauncher = (props) => {
-  console.log(
-    "[GameLauncher] Received props:",
-    JSON.stringify(props, null, 2).substring(0, 1000)
-  );
-
   const {
     interaction,
     database,
@@ -15,8 +10,9 @@ const GameLauncher = (props) => {
     selectedGame = null,
     highlightedGame = 0,
     highlightedCategory = 0,
-    width = 750,
-    height = 500,
+    gameDailyStatus = null,
+    width = 600,
+    height = 650,
     gameStats = {
       2048: { highScore: 0 },
       snake: { highScore: 0 },
@@ -25,31 +21,29 @@ const GameLauncher = (props) => {
     coloring,
   } = props;
 
-  // Early return if critical props are missing
   if (!interaction || !i18n) {
-    console.error("[GameLauncher] Missing critical props");
     return <div>Loading...</div>;
   }
 
   const {
-    textColor,
-    secondaryTextColor,
-    tertiaryTextColor,
-    overlayBackground,
-    backgroundGradient,
+    textColor = "#f8fbff",
+    secondaryTextColor = "rgba(248,251,255,0.78)",
+    tertiaryTextColor = "rgba(248,251,255,0.58)",
+    overlayBackground = "rgba(255,255,255,0.08)",
+    backgroundGradient = "linear-gradient(145deg, #0d4678 0%, #233681 45%, #311d68 100%)",
   } = coloring || {};
 
-  // Rest of the imports and initial setup remains the same...
-  const translations = Object.entries(
-    GameLauncher.localization_strings || {}
-  ).reduce((acc, [key, translationObj]) => {
-    if (translationObj && i18n && i18n.getLocale) {
-      acc[key] = translationObj[i18n.getLocale()] || translationObj.en || key;
-    } else {
-      acc[key] = key;
-    }
-    return acc;
-  }, {});
+  const translations = Object.entries(GameLauncher.localization_strings || {}).reduce(
+    (acc, [key, translationObj]) => {
+      if (translationObj && i18n && i18n.getLocale) {
+        acc[key] = translationObj[i18n.getLocale()] || translationObj.en || key;
+      } else {
+        acc[key] = key;
+      }
+      return acc;
+    },
+    {}
+  );
 
   const defaultCategories = {
     eleazar: {
@@ -62,9 +56,9 @@ const GameLauncher = (props) => {
           emoji: "🎲",
         },
         {
-          id: "2048",
-          title: "2048",
-          emoji: "🎲",
+          id: "snake",
+          title: "Snake",
+          emoji: "🐍",
         },
       ],
     },
@@ -82,13 +76,6 @@ const GameLauncher = (props) => {
     },
   };
 
-  console.log("[GameLauncher] games prop:", games);
-  console.log("[GameLauncher] games type:", typeof games);
-  console.log(
-    "[GameLauncher] games keys:",
-    games ? Object.keys(games) : "null"
-  );
-
   const groupedGames =
     games ||
     Object.entries(defaultCategories).reduce((acc, [key, category]) => {
@@ -101,199 +88,122 @@ const GameLauncher = (props) => {
       return acc;
     }, {});
 
-  console.log("[GameLauncher] groupedGames:", groupedGames);
-
-  const transformedGames = Object.entries(groupedGames || {}).reduce(
-    (acc, [key, value]) => {
-      console.log("[GameLauncher] Processing category:", key, "value:", value);
-      if (!value || !value.games_list) {
-        console.log("[GameLauncher] Skipping category due to missing data");
-        return acc;
-      }
-
-      const categoryKey = Object.entries(defaultCategories).find(
-        ([_, category]) =>
-          category && translations[category.translationKey] === key
-      );
-
-      const localizedKey =
-        categoryKey && categoryKey[1] && defaultCategories[categoryKey[0]]
-          ? translations[defaultCategories[categoryKey[0]].translationKey] ||
-            key
-          : key;
-
-      const result = {
-        ...acc,
-        [localizedKey]: value,
-      };
-
-      console.log(
-        "[GameLauncher] transformedGames so far:",
-        Object.keys(result)
-      );
-      return result;
-    },
-    {}
+  const categoryEntries = Object.entries(groupedGames || {});
+  const safeCategoryIndex = Math.min(
+    Math.max(0, highlightedCategory),
+    Math.max(0, categoryEntries.length - 1)
   );
-
-  console.log(
-    "[GameLauncher] Final transformedGames:",
-    Object.keys(transformedGames)
+  const selectedCategoryEntry = categoryEntries[safeCategoryIndex] || ["-", { avatar: null, games_list: [] }];
+  const [selectedCategoryKey, selectedCategoryValue] = selectedCategoryEntry;
+  const selectedCategoryGames = Array.isArray(selectedCategoryValue?.games_list)
+    ? selectedCategoryValue.games_list
+    : [];
+  const allGames = categoryEntries.flatMap(([categoryKey, categoryValue], categoryIndex) =>
+    (Array.isArray(categoryValue?.games_list) ? categoryValue.games_list : []).map((game, gameIndex) => ({
+      categoryKey,
+      categoryIndex,
+      game,
+      gameIndex,
+    }))
   );
-
-  const isCategoryVisible = (categoryIndex) => {
-    return categoryIndex - 1 <= highlightedCategory;
-  };
-
-  const isGameVisible = (categoryIndex, gameIndex) => {
-    if (categoryIndex > highlightedCategory) return true;
-    if (categoryIndex === highlightedCategory) return true;
-    return false;
-  };
+  const safeGameIndex = Math.min(
+    Math.max(0, highlightedGame),
+    Math.max(0, selectedCategoryGames.length - 1)
+  );
+  const selectedGameData = selectedCategoryGames[safeGameIndex] || null;
+  const selectedGameTitle =
+    typeof selectedGameData?.title === "object"
+      ? selectedGameData?.title?.translation || selectedGameData?.title?.en || selectedGameData?.id || "-"
+      : selectedGameData?.title || selectedGameData?.id || "-";
+  const selectedGameEmoji = selectedGameData?.emoji || "🎮";
+  const selectedHighScore = selectedGameData?.id
+    ? Number(gameStats?.[selectedGameData.id]?.highScore || selectedGameData?.highScore || 0)
+    : 0;
+  const cap = Number(gameDailyStatus?.cap || 0);
+  const earnedToday = Number(gameDailyStatus?.earnedToday || 0);
+  const remainingToday = Number(gameDailyStatus?.remainingToday || 0);
+  const upgradeLevel = Number(gameDailyStatus?.upgradeLevel || 1);
+  const capProgress = cap > 0 ? Math.min(100, Math.round((earnedToday / cap) * 100)) : 0;
+  const formatAmount = (value) => (Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1));
+  const displayName = interaction?.user?.displayName || interaction?.user?.username || "Player";
 
   const renderGameCard = (game, gameIndex, categoryIndex) => {
-    if (!isGameVisible(categoryIndex, gameIndex)) return null;
-    if (!game || !game.id) return null;
-
-    // Get high score either from game object or gameStats
-    const highScore =
-      game.highScore || (gameStats && gameStats[game.id]?.highScore) || 0;
-    console.log(`Rendering game ${game.id} with highScore:`, highScore);
-
-    // Ensure all required properties exist
-    const gameTitle =
-      typeof game.title === "object"
-        ? game.title.translation || game.title.en || game.id
-        : game.title;
-    const gameEmoji = game.emoji || "🎮";
-
-    if (!gameTitle) {
-      console.warn(`Game ${game.id} missing title`, game);
+    if (!game || !game.id) {
       return null;
     }
 
-    const isHighlighted =
-      highlightedGame === gameIndex && categoryIndex === highlightedCategory;
-    const BORDER_RADIUS = 18;
-    const HIGHLIGHT_BORDER = 6;
-
-    const cardBackground =
-      selectedGame === game.id
-        ? coloring?.isDarkText
-          ? "rgba(255, 165, 0, 0.8)"
-          : "#FFA500"
-        : coloring?.isDarkText
-        ? "rgba(29, 185, 53, 0.8)"
-        : "#1DB935";
+    const title =
+      typeof game.title === "object"
+        ? game.title.translation || game.title.en || game.id
+        : game.title || game.id;
+    const highScore = Number(gameStats?.[game.id]?.highScore || game.highScore || 0);
+    const inFocusedCategory = categoryIndex === safeCategoryIndex;
+    const active = inFocusedCategory && gameIndex === safeGameIndex;
+    const chosen = selectedGame === game.id;
 
     return (
       <div
         key={game.id}
         style={{
-          minWidth: "200px",
-          height: "130px",
+          minWidth: "128px",
+          width: "128px",
+          height: "124px",
+          borderRadius: "22px",
+          padding: "12px",
           display: "flex",
-          backgroundColor: cardBackground,
-          borderRadius: `${BORDER_RADIUS}px`,
-          border: isHighlighted
-            ? `${HIGHLIGHT_BORDER}px solid ${
-                coloring?.isDarkText ? "rgba(255, 165, 0, 0.8)" : "#FFA500"
-              }`
-            : "none",
-          position: "relative",
-          flexShrink: 0,
+          flexDirection: "column",
+          justifyContent: "space-between",
+          backgroundColor: active
+            ? "rgba(255,255,255,0.16)"
+            : inFocusedCategory
+            ? "rgba(255,255,255,0.07)"
+            : "rgba(255,255,255,0.04)",
+          border: chosen
+            ? "1px solid rgba(255,199,69,0.45)"
+            : active
+            ? "1px solid rgba(109,247,167,0.45)"
+            : inFocusedCategory
+            ? "1px solid rgba(255,255,255,0.08)"
+            : "1px solid rgba(255,255,255,0.05)",
+          boxSizing: "border-box",
           overflow: "hidden",
+          flexShrink: 0,
+          opacity: inFocusedCategory ? 1 : 0.52,
         }}
       >
-        {game.thumbnail ? (
-          <img
-            src={game.thumbnail}
-            alt={game.title}
-            width={200}
-            height={100}
-            style={{
-              width: "100%",
-              height: "80%",
-              objectFit: "cover",
-              position: "absolute",
-              display: "flex",
-              top: 0,
-              left: 0,
-              borderRadius: isHighlighted
-                ? `${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
-                    BORDER_RADIUS - HIGHLIGHT_BORDER
-                  }px 0 0`
-                : `${BORDER_RADIUS}px ${BORDER_RADIUS}px 0 0`,
-            }}
-          />
-        ) : (
+        <div
+          style={{
+            width: "52px",
+            height: "46px",
+            borderRadius: "16px",
+            backgroundColor: inFocusedCategory ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "24px",
+          }}
+        >
+          {game.emoji || "🎮"}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <div
             style={{
-              width: "100%",
-              height: "80%",
-              backgroundColor: "rgba(255, 255, 255, 0.1)",
-              position: "absolute",
-              top: 0,
-              left: 0,
+              fontSize: "13px",
+              fontWeight: 700,
+              color: inFocusedCategory ? textColor : secondaryTextColor,
+              lineHeight: 1.1,
               display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              fontSize: "64px",
-              borderRadius: isHighlighted
-                ? `${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
-                    BORDER_RADIUS - HIGHLIGHT_BORDER
-                  }px 0 0`
-                : `${BORDER_RADIUS}px ${BORDER_RADIUS}px 0 0`,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
-            {gameEmoji}
+            {title}
           </div>
-        )}
-        <div
-          style={{
-            fontSize: "24px",
-            fontWeight: "bold",
-            position: "absolute",
-            bottom: "30px",
-            right: "0px",
-            display: "flex",
-            padding: "4px 8px",
-            borderRadius: "12px",
-            backgroundColor: overlayBackground || "rgba(0, 0, 0, 0.25)",
-            fontFamily: "Inter", fontWeight: 500,
-            color: textColor || "#FFFFFF",
-          }}
-        >
-          {gameTitle}
-        </div>
-        {/* High Score Display */}
-        <div
-          style={{
-            fontSize: "16px",
-            fontWeight: "bold",
-            position: "absolute",
-            bottom: "0",
-            left: "0",
-            right: "0",
-            height: "30px",
-            backgroundColor: isHighlighted
-              ? coloring?.isDarkText
-                ? "rgba(255, 165, 0, 0.8)"
-                : "#FFA500"
-              : "rgba(0, 0, 0, 0)",
-            fontFamily: "Inter", fontWeight: 500,
-            borderRadius: isHighlighted
-              ? `0 0 ${BORDER_RADIUS - HIGHLIGHT_BORDER}px ${
-                  BORDER_RADIUS - HIGHLIGHT_BORDER
-                }px`
-              : `0 0 ${BORDER_RADIUS}px ${BORDER_RADIUS}px`,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            color: textColor || "#FFFFFF",
-          }}
-        >
-          {translations.highScore || "Record"}: {highScore}
+          <div style={{ fontSize: "11px", color: secondaryTextColor, display: "flex" }}>
+            {translations.highScore || "Record"}: {highScore}
+          </div>
         </div>
       </div>
     );
@@ -304,233 +214,341 @@ const GameLauncher = (props) => {
       style={{
         width,
         height,
-        borderRadius: "20px",
-        padding: "25px",
+        borderRadius: "30px",
+        padding: "24px",
         color: textColor,
         fontFamily: "Inter", fontWeight: 500,
         display: "flex",
         flexDirection: "column",
         background: backgroundGradient,
+        overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
-      {/* Header section */}
       <div
         style={{
-          fontSize: "24px",
-          fontWeight: "bold",
           display: "flex",
-          marginTop: "-15px",
-          marginBottom: "15px",
+          justifyContent: "space-between",
           alignItems: "center",
-          gap: "15px",
+          gap: "14px",
+          marginBottom: "14px",
         }}
       >
-        <img
-          src={
-            interaction?.user?.avatarURL ||
-            "https://cdn.discordapp.com/embed/avatars/0.png"
-          }
-          style={{
-            width: "100px",
-            height: "100px",
-            borderRadius: "20%",
-            backgroundColor: overlayBackground,
-          }}
-          alt={translations.userAvatarAlt || "User Avatar"}
-        />
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <div
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
+          <img
+            src={interaction?.user?.avatarURL || "https://cdn.discordapp.com/embed/avatars/0.png"}
             style={{
-              fontSize: "64px",
+              width: "62px",
+              height: "62px",
+              borderRadius: "18px",
+              backgroundColor: overlayBackground,
+              border: "1px solid rgba(255,255,255,0.18)",
               display: "flex",
-              color: textColor,
             }}
-          >
-            {translations.gameSelection || "Game Selection"}
-          </div>
-          <div style={{ display: "flex" }}>
-            <InfoRectangle
-              icon="💵"
-              background={overlayBackground}
-              borderRadius="10px"
-              padding="8px 10px"
-              minWidth="0px"
-              maxWidth="180px"
-              iconSize="18px"
-              iconMarginRight="6px"
-              title={translations.balance || "BALANCE"}
-              titleStyle={{ fontSize: "11px", color: secondaryTextColor, opacity: 0.8, letterSpacing: "0.06em" }}
-              value={
-                <div style={{ display: "flex", fontSize: "20px", fontWeight: "bold", color: textColor }}>
-                  {(database?.economy?.balance ?? 0).toFixed(1)}
-                </div>
-              }
-              style={{ position: "relative", alignSelf: "flex-start", flexShrink: 0, gap: "2px" }}
-            >
-              <Banknotes
-                amount={Number(database?.economy?.balance || 0)}
-                style="banknotes"
-                division={50}
-                xspacing={18}
-                styleOverrides={{
-                  container: {
-                    position: "absolute",
-                    inset: 0,
-                    pointerEvents: "none",
-                    overflow: "hidden",
-                    zIndex: 0,
-                  },
-                  banknote: {
-                    width: "10px",
-                    height: "3px",
-                  },
-                }}
-              />
-            </InfoRectangle>
+            alt={translations.userAvatarAlt || "User Avatar"}
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <div style={{ fontSize: "12px", letterSpacing: "0.16em", color: tertiaryTextColor, display: "flex" }}>
+              {translations.commandLabel || "/WORK"}
+            </div>
+            <div style={{ fontSize: "34px", fontWeight: "bold", lineHeight: 1.04, display: "flex" }}>
+              {translations.gameSelection || "Game Selection"}
+            </div>
+            <div style={{ fontSize: "13px", color: secondaryTextColor, display: "flex" }}>
+              {displayName} · {selectedCategoryKey || "-"}
+            </div>
           </div>
         </div>
+
+        <InfoRectangle
+          icon="💵"
+          background={overlayBackground}
+          borderRadius="16px"
+          padding="7px 10px"
+          minWidth="0px"
+          maxWidth="190px"
+          iconSize="16px"
+          iconMarginRight="8px"
+          title={translations.balance || "BALANCE"}
+          titleStyle={{ fontSize: "11px", color: tertiaryTextColor, letterSpacing: "0.08em" }}
+          value={
+            <div style={{ display: "flex", fontSize: "18px", fontWeight: "bold", color: textColor }}>
+              {Number(database?.economy?.balance ?? 0).toFixed(1)}
+            </div>
+          }
+          style={{ position: "relative", flexShrink: 0 }}
+        >
+          <Banknotes
+            amount={Number(database?.economy?.balance || 0)}
+            style="banknotes"
+            division={50}
+            xspacing={18}
+            styleOverrides={{
+              container: {
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                overflow: "hidden",
+                zIndex: 0,
+              },
+              banknote: {
+                width: "10px",
+                height: "3px",
+              },
+            }}
+          />
+        </InfoRectangle>
       </div>
-      {/* Games grid section */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "5px",
-          overflowY: "hidden",
-          marginRight: "-25px",
-          paddingRight: "25px",
-        }}
-      >
-        {Object.entries(transformedGames || {}).map(
-          ([category, categoryData], categoryIndex) => {
-            console.log(
-              `[GameLauncher] Rendering category: ${category}, index: ${categoryIndex}`
-            );
-            console.log(
-              `[GameLauncher] Category data:`,
-              JSON.stringify(categoryData, null, 2).substring(0, 200)
-            );
 
-            if (!isCategoryVisible(categoryIndex)) {
-              console.log(`[GameLauncher] Category ${category} not visible`);
-              return null; // Return null instead of Fragment
-            }
-            if (!categoryData || !categoryData.games_list) {
-              console.log(
-                `[GameLauncher] Category ${category} missing data or games_list`
-              );
-              return null; // Return null instead of Fragment
-            }
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px", flex: 1, overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: "14px", minHeight: "212px" }}>
+          <div
+            style={{
+              flex: 1,
+              borderRadius: "24px",
+              padding: "16px",
+              background: "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              display: "flex",
+              gap: "16px",
+              boxSizing: "border-box",
+              minHeight: "212px",
+            }}
+          >
+            <div
+              style={{
+                width: "152px",
+                minWidth: "152px",
+                borderRadius: "22px",
+                background: "linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "68px",
+                overflow: "hidden",
+              }}
+            >
+              {selectedGameData?.thumbnail ? (
+                <img
+                  src={selectedGameData.thumbnail}
+                  alt={selectedGameTitle}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "flex" }}
+                />
+              ) : (
+                <div style={{ display: "flex" }}>{selectedGameEmoji}</div>
+              )}
+            </div>
 
-            // Ensure categoryData has required properties
-            if (!categoryData.avatar) {
-              console.warn(
-                `[GameLauncher] Category ${category} missing avatar`
-              );
-              return null; // Return null instead of Fragment
-            }
-
-            console.log(
-              `[GameLauncher] Category ${category} has ${categoryData.games_list.length} games`
-            );
-
-            return (
-              <div
-                key={category}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  fontFamily: "Inter", fontWeight: 500,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    marginBottom: "15px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <img
-                    src={
-                      categoryData?.avatar ||
-                      "https://cdn.discordapp.com/embed/avatars/0.png"
-                    }
-                    alt={translations.userAvatarAlt || "Category Avatar"}
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      borderRadius: "25%",
-                      marginRight: "5px",
-                      backgroundColor: overlayBackground,
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: "36px",
-                      display: "flex",
-                      color: textColor,
-                    }}
-                  >
-                    {category || "Unknown Category"}
-                  </span>
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <div style={{ fontSize: "12px", color: tertiaryTextColor, letterSpacing: "0.10em", display: "flex" }}>
+                    {translations.focusedGame || "Focused game"}
+                  </div>
+                  <div style={{ fontSize: "28px", fontWeight: "bold", lineHeight: 1.02, display: "flex" }}>
+                    {selectedGameTitle}
+                  </div>
+                  <div style={{ fontSize: "13px", color: secondaryTextColor, display: "flex", marginTop: "6px" }}>
+                    {translations.categoryLabel || "Category"}: {selectedCategoryKey || "-"}
+                  </div>
                 </div>
+
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                  <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>
+                    {translations.dailyCapLabel || "Daily cap"}
+                  </div>
+                  <div style={{ fontSize: "22px", fontWeight: 700, color: textColor, display: "flex" }}>
+                    {cap.toFixed(0)}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <InfoRectangle
+                  icon="🏆"
+                  background={overlayBackground}
+                  borderRadius="12px"
+                  padding="8px 10px"
+                  minWidth="0px"
+                  maxWidth="144px"
+                  iconSize="14px"
+                  iconMarginRight="6px"
+                  title={translations.highScore || "Record"}
+                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
+                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{selectedHighScore}</div>}
+                />
+                <InfoRectangle
+                  icon="⬆️"
+                  background={overlayBackground}
+                  borderRadius="12px"
+                  padding="8px 10px"
+                  minWidth="0px"
+                  maxWidth="144px"
+                  iconSize="14px"
+                  iconMarginRight="6px"
+                  title={translations.upgradeLevel || "Upgrade lvl"}
+                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
+                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>L{upgradeLevel}</div>}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginTop: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: "11px", color: secondaryTextColor, display: "flex" }}>
+                    {translations.dailyCapProgress || "Daily cap progress"}
+                  </div>
+                  <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>
+                    {capProgress}%
+                  </div>
+                </div>
+
                 <div
                   style={{
-                    position: "relative",
-                    marginBottom: "10px",
+                    height: "12px",
+                    width: "100%",
+                    borderRadius: "999px",
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                    overflow: "hidden",
                     display: "flex",
                   }}
                 >
                   <div
                     style={{
+                      width: `${capProgress}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #6df7a7 0%, #42c1ff 100%)",
+                      borderRadius: "999px",
                       display: "flex",
-                      gap: "15px",
-                      paddingBottom: "10px",
-                      marginRight: "-25px",
-                      paddingRight: "25px",
-                      overflowX: "hidden",
-                      msOverflowStyle: "none",
-                      WebkitOverflowScrolling: "touch",
-                      scrollbarWidth: "none",
                     }}
-                  >
-                    {categoryData.games_list &&
-                      categoryData.games_list
-                        .map((game, gameIndex) => {
-                          console.log(
-                            `[GameLauncher] Processing game ${gameIndex}:`,
-                            game?.id,
-                            game?.title
-                          );
-                          const renderedCard = renderGameCard(
-                            game,
-                            gameIndex,
-                            categoryIndex
-                          );
-                          console.log(
-                            `[GameLauncher] Rendered card for ${game?.id}:`,
-                            renderedCard ? "success" : "null"
-                          );
-                          return renderedCard;
-                        })
-                        .filter(Boolean)}
-                  </div>
+                  />
                 </div>
               </div>
-            );
-          }
-        )}
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <InfoRectangle
+                  icon="💸"
+                  background={overlayBackground}
+                  borderRadius="12px"
+                  padding="8px 10px"
+                  minWidth="0px"
+                  maxWidth="144px"
+                  iconSize="14px"
+                  iconMarginRight="6px"
+                  title={translations.earnedToday || "Earned today"}
+                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
+                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{formatAmount(earnedToday)}</div>}
+                />
+                <InfoRectangle
+                  icon="🪙"
+                  background={overlayBackground}
+                  borderRadius="12px"
+                  padding="8px 10px"
+                  minWidth="0px"
+                  maxWidth="144px"
+                  iconSize="14px"
+                  iconMarginRight="6px"
+                  title={translations.remainingToday || "Remaining today"}
+                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
+                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{formatAmount(remainingToday)}</div>}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            borderRadius: "24px",
+            padding: "14px",
+            backgroundColor: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            overflow: "hidden",
+            boxSizing: "border-box",
+            flex: 1,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <img
+                src={selectedCategoryValue?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                alt={selectedCategoryKey}
+                style={{ width: "30px", height: "30px", borderRadius: "10px", backgroundColor: overlayBackground, display: "flex" }}
+              />
+              <div style={{ fontSize: "16px", fontWeight: 700, color: textColor, display: "flex" }}>
+                {selectedCategoryKey || "-"}
+              </div>
+            </div>
+
+            <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
+              {allGames.length} {translations.gamesLabel || "games"}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "14px",
+              overflow: "hidden",
+              alignItems: "stretch",
+            }}
+          >
+            {categoryEntries.map(([categoryKey, categoryValue], categoryIndex) => {
+              const categoryGames = Array.isArray(categoryValue?.games_list) ? categoryValue.games_list : [];
+              const active = categoryIndex === safeCategoryIndex;
+
+              return (
+                <div
+                  key={categoryKey}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    minWidth: "0px",
+                    opacity: active ? 1 : 0.58,
+                    flex: categoryGames.length > 0 ? `0 0 ${Math.max(148, categoryGames.length * 136)}px` : "0 0 148px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                    <img
+                      src={categoryValue?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                      alt={categoryKey}
+                      style={{ width: "24px", height: "24px", borderRadius: "8px", display: "flex" }}
+                    />
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: active ? textColor : secondaryTextColor,
+                        display: "flex",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {categoryKey}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {categoryGames.map((game, gameIndex) => renderGameCard(game, gameIndex, categoryIndex))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 GameLauncher.dimensions = {
-  width: 750,
-  height: 500,
+  width: 600,
+  height: 650,
 };
 
 // Static translations object
@@ -549,6 +567,56 @@ GameLauncher.localization_strings = {
     en: "Record",
     ru: "Рекорд",
     uk: "Рекорд",
+  },
+  commandLabel: {
+    en: "/work",
+    ru: "/work",
+    uk: "/work",
+  },
+  focusedGame: {
+    en: "Focused game",
+    ru: "Выбранная игра",
+    uk: "Обрана гра",
+  },
+  categoryLabel: {
+    en: "Category",
+    ru: "Категория",
+    uk: "Категорія",
+  },
+  categoriesLabel: {
+    en: "Categories",
+    ru: "Категории",
+    uk: "Категорії",
+  },
+  dailyCapLabel: {
+    en: "Daily cap",
+    ru: "Дневной лимит",
+    uk: "Денний ліміт",
+  },
+  dailyCapProgress: {
+    en: "Daily cap progress",
+    ru: "Прогресс дневного лимита",
+    uk: "Прогрес денного ліміту",
+  },
+  earnedToday: {
+    en: "Earned today",
+    ru: "Заработано сегодня",
+    uk: "Зароблено сьогодні",
+  },
+  remainingToday: {
+    en: "Remaining today",
+    ru: "Осталось сегодня",
+    uk: "Залишилось сьогодні",
+  },
+  upgradeLevel: {
+    en: "Upgrade lvl",
+    ru: "Уровень улучш.",
+    uk: "Рівень покр.",
+  },
+  gamesLabel: {
+    en: "games",
+    ru: "игр",
+    uk: "ігор",
   },
   oldGamesCategory: {
     en: "Legacy Games",

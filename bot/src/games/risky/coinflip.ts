@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import hubClient from "../../api/hubClient.ts";
+import { awardGameCoins } from "../../utils/gameDailyEarnings.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -637,9 +638,15 @@ export default {
                 changeAmount = parseFloat(
                   (gameInstance.betAmount * profitMultiplier).toFixed(2),
                 );
+                const payoutResult = await awardGameCoins(
+                  guildId,
+                  userId,
+                  "coinflip",
+                  changeAmount,
+                );
+                changeAmount = Number(payoutResult.awardedAmount || 0);
                 gameInstance.totalWon += changeAmount;
                 gameInstance.sessionChange += changeAmount; // Update session change
-                await hubClient.addBalance(guildId, userId, changeAmount);
                 messageContent = await getTranslation(
                   "games.coinflip.winMessage",
                   {

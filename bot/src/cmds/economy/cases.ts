@@ -371,6 +371,10 @@ const command: CasesCommandShape = {
     let selectedCrate = 0;
 
     const generateCratesMessage = async (disableInteractions = false): Promise<Record<string, unknown>> => {
+      const dailyStatus = await (hubClient as any).getDailyCrateStatus(
+        interaction.guild.id,
+        interaction.user.id
+      );
       const generated = (await generateImage(
         "CratesDisplay",
         {
@@ -400,6 +404,7 @@ const command: CasesCommandShape = {
           },
           locale: interaction.locale,
           crates: cratesList,
+          dailyStatus,
           selectedCrate,
           dominantColor: "user",
           returnDominant: true,
@@ -692,6 +697,9 @@ const command: CasesCommandShape = {
     rewards,
     builderMode
   ): Promise<Record<string, unknown>> {
+    const rewardRecord = (rewards && typeof rewards === "object"
+      ? (rewards as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
     const generated = (await generateImage(
       "CrateRewards",
       {
@@ -719,6 +727,7 @@ const command: CasesCommandShape = {
         crateEmoji,
         crateName,
         rewards,
+        dailyStatus: rewardRecord.dailyStatus || null,
         dominantColor: "user",
         returnDominant: true,
       },

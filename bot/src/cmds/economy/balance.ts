@@ -3,6 +3,7 @@ import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import { CRATE_TYPES, UPGRADES } from "../../../../hub/shared/src/domain.ts";
+import { loadGames } from "../../utils/loadGames.ts";
 
 type TranslatorLike = {
   __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
@@ -214,15 +215,57 @@ const command = {
 
     const upgradesConfig = UPGRADES as Record<string, UpgradeConfig>;
     const userBalance = Number(userData?.economy?.balance || 0);
-    let minUpgradePrice = Infinity;
+    let affordableUpgradesCount = 0;
     for (const key of Object.keys(upgradesConfig)) {
       const config = upgradesConfig[key];
       if (!config) continue;
       const currentLevel = getUpgradeLevel(userData?.upgrades, key);
       const price = calculateUpgradePrice(config, currentLevel);
-      minUpgradePrice = Math.min(minUpgradePrice, price);
+      if (userBalance >= price) {
+        affordableUpgradesCount++;
+      }
     }
-    const upgradesAffordable = Number.isFinite(minUpgradePrice) && userBalance >= minUpgradePrice;
+
+    const gamesMap = await loadGames();
+    const hasAvailableGames = gamesMap.size > 0;
+
+    // Calculate total daily earnings potential across all games
+    let totalDailyCap = 0;
+    let totalEarnedToday = 0;
+    const gameStatuses: Array<{ gameId: string; cap: number; earned: number; remaining: number }> = [];
+
+    if (hasAvailableGames) {
+      const gameIds = Array.from(gamesMap.keys());
+      const gameStatusPromises = gameIds.map(async (gameId) => {
+        try {
+          const status = await (hubClient as any).getGameDailyStatus(
+            interaction.guild.id,
+            user.id,
+            gameId
+          );
+          return {
+            gameId,
+            cap: status?.cap || 0,
+            earned: status?.earnedToday || 0,
+            remaining: status?.remainingToday || 0,
+          };
+        } catch (error) {
+          console.warn(`Failed to get daily status for game ${gameId}:`, error);
+          return { gameId, cap: 0, earned: 0, remaining: 0 };
+        }
+      });
+
+      const gameStatusesResult = await Promise.all(gameStatusPromises);
+      for (const status of gameStatusesResult) {
+        totalDailyCap += status.cap;
+        totalEarnedToday += status.earned;
+        if (status.cap > 0) {
+          gameStatuses.push(status);
+        }
+      }
+    }
+
+    const workProgress = totalDailyCap > 0 ? totalEarnedToday / totalDailyCap : 0;
 
     const crateTypes = CRATE_TYPES as Record<string, { cooldown: number }>;
     const now = Date.now();
@@ -329,9 +372,17 @@ const command = {
           hints: {
             dailyAvailable,
             dailyRemainingMs,
-            upgradesAffordable,
-            minUpgradePrice: Number.isFinite(minUpgradePrice) ? minUpgradePrice : null,
+            upgradesAffordable: affordableUpgradesCount,
+            minUpgradePrice: null,
             balance: userBalance,
+            workAvailable: hasAvailableGames,
+            workEarnings: {
+              totalCap: totalDailyCap,
+              earnedToday: totalEarnedToday,
+              remainingToday: Math.max(0, totalDailyCap - totalEarnedToday),
+              progress: workProgress,
+              gameCount: gameStatuses.length,
+            },
           },
         }
       },

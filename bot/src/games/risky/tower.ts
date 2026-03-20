@@ -12,6 +12,7 @@ import {
 import { generateImage } from "../../utils/imageGenerator.ts";
 
 import hubClient from "../../api/hubClient.ts";
+import { awardGameCoins } from "../../utils/gameDailyEarnings.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -1056,9 +1057,16 @@ export default {
             gameInstance.lastAction = "prize";
 
             // Add prize to balance
-            const prizeTaken = gameInstance.currentPrize;
+            let prizeTaken = gameInstance.currentPrize;
             if (guildId) {
-              await hubClient.addBalance(guildId, userId, prizeTaken);
+              const payoutResult = await awardGameCoins(
+                guildId,
+                userId,
+                "tower",
+                prizeTaken,
+              );
+              gameInstance.currentPrize = Number(payoutResult.awardedAmount || 0);
+              prizeTaken = gameInstance.currentPrize;
             }
 
             // Session change is now calculated automatically based on balance difference
@@ -1222,11 +1230,18 @@ export default {
               if (gameInstance.currentFloor >= MAX_FLOORS) {
                 // Reached the top - win the max prize
                 gameInstance.gameOver = true;
-                const maxPrize = gameInstance.calculatePrize(MAX_FLOORS - 1);
+                let maxPrize = gameInstance.calculatePrize(MAX_FLOORS - 1);
 
                 // Add prize to balance
                 if (guildId) {
-                  await hubClient.addBalance(guildId, userId, maxPrize);
+                  const payoutResult = await awardGameCoins(
+                    guildId,
+                    userId,
+                    "tower",
+                    maxPrize,
+                  );
+                  gameInstance.currentPrize = Number(payoutResult.awardedAmount || 0);
+                  maxPrize = gameInstance.currentPrize;
                 }
 
                 // Session change is now calculated automatically based on balance difference

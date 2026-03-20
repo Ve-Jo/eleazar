@@ -118,4 +118,40 @@ router.post("/open", async (req: CratesRouteRequest, res: ResponseLike) => {
   }
 });
 
+router.get("/status/:guildId/:userId/daily", async (req: CratesRouteRequest, res: ResponseLike) => {
+  try {
+    const guildId = req.params.guildId ?? "";
+    const userId = req.params.userId ?? "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const result = await Database.getDailyCrateStatus(guildId, userId);
+    res.json(serializeWithBigInt(result));
+  } catch (error) {
+    const typedError = error as ErrorWithMessage;
+    console.error("Error getting daily crate status:", error);
+    res.status(500).json({ error: typedError.message || "Failed to get daily crate status" });
+  }
+});
+
+router.post("/status/:guildId/:userId/daily/reminded", async (req: CratesRouteRequest, res: ResponseLike) => {
+  try {
+    const guildId = req.params.guildId ?? "";
+    const userId = req.params.userId ?? "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const result = await Database.markDailyCrateReminderSent(guildId, userId);
+    res.json(serializeWithBigInt(result));
+  } catch (error) {
+    const typedError = error as ErrorWithMessage;
+    console.error("Error marking daily crate reminder:", error);
+    res.status(500).json({ error: typedError.message || "Failed to mark daily crate reminder" });
+  }
+});
+
 export default router;

@@ -2,6 +2,7 @@ import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import { generateImage } from "../utils/imageGenerator.ts";
 import hubClient from "../api/hubClient.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
+import { awardGameCoins, formatGameRewardSummary } from "../utils/gameDailyEarnings.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -552,6 +553,8 @@ export default {
 
             // Use earningGameXP for timeout case
             const earningGameXP = initialState.state.earningGameXP || 0;
+            let timeoutAwardedAmount = initialState.state.earning;
+            let timeoutBlockedAmount = 0;
 
             try {
               // Only save high score if in a guild
@@ -595,24 +598,30 @@ export default {
 
                 // Only add earnings if there's something to add
                 if (initialState.state.earning > 0) {
-                  await hubClient.addBalance(
+                  const payoutResult = await awardGameCoins(
                     interaction.guildId,
                     interaction.user.id,
+                    "snake",
                     initialState.state.earning,
                   );
+                  timeoutAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                  timeoutBlockedAmount = Number(payoutResult.blockedAmount || 0);
                 }
               }
 
               const timeoutText = await i18n.__(`games.snake.timesOut`, {
                 score: initialState.state.score,
               });
+              const timeoutRewards = formatGameRewardSummary(
+                timeoutAwardedAmount,
+                timeoutBlockedAmount,
+                earningGameXP,
+              );
               const content =
                 typeof timeoutText === "string"
                   ? `${timeoutText}${
                       interaction.guildId
-                        ? ` (+${initialState.state.earning.toFixed(
-                            1,
-                          )} 💵, +${earningGameXP} Game XP)${
+                        ? `${timeoutRewards ? ` (${timeoutRewards})` : ""}${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
                         : ""
@@ -621,9 +630,7 @@ export default {
                       initialState.state.score
                     }${
                       interaction.guildId
-                        ? ` (+${initialState.state.earning.toFixed(
-                            1,
-                          )} 💵, +${earningGameXP} Game XP)${
+                        ? `${timeoutRewards ? ` (${timeoutRewards})` : ""}${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
                         : ""
@@ -788,6 +795,8 @@ export default {
 
             // Use earningGameXP for stop case
             const earningGameXP = state.earningGameXP || 0;
+            let stopAwardedAmount = state.earning;
+            let stopBlockedAmount = 0;
 
             let isNewRecordStop = false;
             if (interaction.guildId) {
@@ -830,33 +839,37 @@ export default {
 
               // Add Balance
               if (state.earning > 0) {
-                await hubClient.addBalance(
+                const payoutResult = await awardGameCoins(
                   interaction.guildId,
                   interaction.user.id,
+                  "snake",
                   state.earning,
                 );
+                stopAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                stopBlockedAmount = Number(payoutResult.blockedAmount || 0);
               }
             }
 
             const stoppedText = await i18n.__(`games.snake.stopped`, {
               score: state.score,
             });
+            const stoppedRewards = formatGameRewardSummary(
+              stopAwardedAmount,
+              stopBlockedAmount,
+              earningGameXP,
+            );
             const content =
               typeof stoppedText === "string"
                 ? `${stoppedText}${
                     interaction.guildId
-                      ? ` (+${state.earning.toFixed(
-                          1,
-                        )} 💵, +${earningGameXP} Game XP)${
+                      ? `${stoppedRewards ? ` (${stoppedRewards})` : ""}${
                           isNewRecordStop ? " 🏆 New High Score!" : ""
                         }`
                       : ""
                   }`
                 : `Game stopped! Final Score: ${state.score}${
                     interaction.guildId
-                      ? ` (+${state.earning.toFixed(
-                          1,
-                        )} 💵, +${earningGameXP} Game XP)${
+                      ? `${stoppedRewards ? ` (${stoppedRewards})` : ""}${
                           isNewRecordStop ? " 🏆 New High Score!" : ""
                         }`
                       : ""

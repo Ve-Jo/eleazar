@@ -2,6 +2,7 @@ import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from "discord.js";
 import { generateImage } from "../utils/imageGenerator.ts";
 import hubClient from "../api/hubClient.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
+import { awardGameCoins, formatGameRewardSummary } from "../utils/gameDailyEarnings.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -689,13 +690,18 @@ export default {
             }
 
             // Only add balance if in a guild
+            let timeoutAwardedAmount = gameInstance.state.earning;
+            let timeoutBlockedAmount = 0;
             if (interaction.guildId) {
               try {
-                await hubClient.addBalance(
+                const payoutResult = await awardGameCoins(
                   interaction.guildId,
                   interaction.user.id,
+                  "2048",
                   gameInstance.state.earning,
                 );
+                timeoutAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                timeoutBlockedAmount = Number(payoutResult.blockedAmount || 0);
               } catch (error) {
                 console.error("Error adding balance on timeout:", error);
                 // Continue with game even if balance addition fails
@@ -705,16 +711,17 @@ export default {
             const timeoutText = await i18n.__(`games.2048.timesOut`, {
               score: gameInstance.state.score,
             });
+            const timeoutRewards = formatGameRewardSummary(
+              timeoutAwardedAmount,
+              timeoutBlockedAmount,
+              earningGameXP,
+            );
             const content =
               typeof timeoutText === "string"
-                ? `${timeoutText} (+${timeoutEarning.toFixed(
-                    1,
-                  )} 💵, +${earningGameXP} Game XP)`
+                ? `${timeoutText}${timeoutRewards ? ` (${timeoutRewards})` : ""}`
                 : `Game ended due to inactivity! Final Score: ${
                     gameInstance.state.score
-                  } (+${timeoutEarning.toFixed(
-                    1,
-                  )} 💵, +${earningGameXP} Game XP)`;
+                  }${timeoutRewards ? ` (${timeoutRewards})` : ""}`;
 
             await message.edit({
               content: content,
@@ -770,6 +777,8 @@ export default {
 
           // Use earningGameXP for stop case
           const earningGameXP = state.earningGameXP || 0;
+          let stopAwardedAmount = state.earning;
+          let stopBlockedAmount = 0;
 
           let isNewRecordStop = false;
           // Only update database if in a guild
@@ -818,11 +827,14 @@ export default {
             // Add Balance
             if (state.earning > 0) {
               try {
-                await hubClient.addBalance(
+                const payoutResult = await awardGameCoins(
                   interaction.guildId,
                   interaction.user.id,
+                  "2048",
                   state.earning,
                 );
+                stopAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                stopBlockedAmount = Number(payoutResult.blockedAmount || 0);
               } catch (error) {
                 console.error("Error adding balance on stop:", error);
                 // Continue with game even if balance addition fails
@@ -833,22 +845,23 @@ export default {
           const stoppedText = await i18n.__(`games.2048.stopped`, {
             score: state.score,
           });
+          const stoppedRewards = formatGameRewardSummary(
+            stopAwardedAmount,
+            stopBlockedAmount,
+            earningGameXP,
+          );
           const stoppedContent =
             typeof stoppedText === "string"
               ? `${stoppedText}${
                   interaction.guildId
-                    ? ` (+${state.earning.toFixed(
-                        1,
-                      )} 💵, +${earningGameXP} Game XP)${
+                    ? `${stoppedRewards ? ` (${stoppedRewards})` : ""}${
                         isNewRecordStop ? " 🏆 New High Score!" : ""
                       }`
                     : ""
                 }`
               : `Game stopped! Final Score: ${state.score}${
                   interaction.guildId
-                    ? ` (+${state.earning.toFixed(
-                        1,
-                      )} 💵, +${earningGameXP} Game XP)${
+                    ? `${stoppedRewards ? ` (${stoppedRewards})` : ""}${
                         isNewRecordStop ? " 🏆 New High Score!" : ""
                       }`
                     : ""
@@ -948,6 +961,8 @@ export default {
 
               // Only update high score if in a guild
               let isNewRecord = false;
+              let finalAwardedAmount = state.earning;
+              let finalBlockedAmount = 0;
               if (interaction.guildId) {
                 // Update high score
                 let isNewRecord = false;
@@ -1008,11 +1023,14 @@ export default {
                 // Only add balance if there's something to add
                 if (state.earning > 0) {
                   try {
-                    await hubClient.addBalance(
+                    const payoutResult = await awardGameCoins(
                       interaction.guildId,
                       interaction.user.id,
+                      "2048",
                       state.earning,
                     );
+                    finalAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                    finalBlockedAmount = Number(payoutResult.blockedAmount || 0);
                   } catch (error) {
                     console.error("Error adding balance on game over:", error);
                     // Continue with game even if balance addition fails
@@ -1033,22 +1051,23 @@ export default {
               const gameOverText = await i18n.__(`games.2048.gameOver`, {
                 score: state.score,
               });
+              const gameOverRewards = formatGameRewardSummary(
+                finalAwardedAmount,
+                finalBlockedAmount,
+                earningGameXP,
+              );
               const gameOverContent =
                 typeof gameOverText === "string"
                   ? `${gameOverText}${
                       interaction.guildId
-                        ? ` (+${state.earning.toFixed(
-                            1,
-                          )} 💵, +${earningGameXP} Game XP)${
+                        ? `${gameOverRewards ? ` (${gameOverRewards})` : ""}${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
                         : ""
                     }`
                   : `Game Over! Final Score: ${state.score}${
                       interaction.guildId
-                        ? ` (+${state.earning.toFixed(
-                            1,
-                          )} 💵, +${earningGameXP} Game XP)${
+                        ? `${gameOverRewards ? ` (${gameOverRewards})` : ""}${
                             isNewRecord ? " 🏆 New High Score!" : ""
                           }`
                         : ""

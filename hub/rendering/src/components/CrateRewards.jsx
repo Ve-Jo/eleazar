@@ -6,6 +6,7 @@ const CrateRewards = (props) => {
     crateEmoji,
     crateName,
     rewards,
+    dailyStatus,
     coloring,
     width = 750,
     height = 450,
@@ -49,6 +50,8 @@ const CrateRewards = (props) => {
     }),
     {}
   );
+  const streak = Number(dailyStatus?.streak || 0);
+  const rewardMultiplier = Number(dailyStatus?.rewardMultiplier || 1);
 
   // Helper function to render a reward item
   const renderRewardItem = (emoji, title, value, color = "#4caf50") => {
@@ -345,6 +348,32 @@ const CrateRewards = (props) => {
           >
             {crateName}
           </div>
+
+          {crateType === "daily" && dailyStatus ? (
+            <div
+              style={{
+                marginTop: "12px",
+                backgroundColor: overlayBackground,
+                borderRadius: "14px",
+                padding: "10px 12px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "4px",
+                width: "220px",
+              }}
+            >
+              <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
+                {translations.streakSummary}
+              </div>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: textColor, display: "flex" }}>
+                {translations.streak}: {streak}
+              </div>
+              <div style={{ fontSize: "12px", color: "#6df7a7", display: "flex" }}>
+                {translations.rewardMultiplier}: x{rewardMultiplier.toFixed(2)}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -473,6 +502,21 @@ CrateRewards.localization_strings = {
     en: "on all upgrades",
     ru: "на всех улучшениях",
     uk: "на всіх улучшеннях",
+  },
+  streakSummary: {
+    en: "Daily streak status",
+    ru: "Статус ежедневной серии",
+    uk: "Статус щоденної серії",
+  },
+  streak: {
+    en: "Streak",
+    ru: "Серия",
+    uk: "Серія",
+  },
+  rewardMultiplier: {
+    en: "Reward boost",
+    ru: "Бонус к награде",
+    uk: "Бонус до нагороди",
   },
 };
 

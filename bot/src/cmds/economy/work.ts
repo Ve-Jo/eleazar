@@ -54,8 +54,11 @@ type MessageLike = {
   edit: (payload: unknown) => Promise<unknown>;
   createMessageComponentCollector: (options: Record<string, unknown>) => {
     on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
+    stop: (reason?: string) => void;
   };
 };
+
+type CategoryGamesMap = Record<string, { avatar: string; games_list: GameInfo[] }>;
 
 type InteractionLike = {
   replied?: boolean;
@@ -245,7 +248,7 @@ const command = {
         await i18n.__("commands.economy.work.riskyGamesCategory")
       );
 
-      const games: Record<string, { avatar: string; games_list: GameInfo[] }> = {};
+      const games: CategoryGamesMap = {};
 
       if (standardGamesArray.length > 0) {
         games[standardCategoryName] = {
@@ -287,16 +290,64 @@ const command = {
       const currentGameRecords = gameRecords;
       const userData = await (hubClient as any).getUser(interaction.guild.id, interaction.user.id);
 
+      const getCurrentCategoryNames = (): string[] => Object.keys(games);
+      const getCurrentCategoryGames = (): GameInfo[] => {
+        const categoryNames = getCurrentCategoryNames();
+        const currentCategoryKey = categoryNames[currentCategory];
+        return (currentCategoryKey ? games[currentCategoryKey]?.games_list : undefined) || [];
+      };
+
+      const getAllGameOptions = (): Array<{ label: string; value: string; description: string; default: boolean }> => {
+        return getCurrentCategoryNames().flatMap((categoryName, categoryIndex) => {
+          const categoryGames = games[categoryName]?.games_list || [];
+
+          return categoryGames.map((game, gameIndex) => ({
+            label: String(game.title || game.id).slice(0, 100),
+            value: game.id,
+            description: categoryName.slice(0, 100),
+            default: categoryIndex === currentCategory && gameIndex === highlightedGame,
+          }));
+        });
+      };
+
+      const setFocusedGameById = (gameId: string): GameInfo | null => {
+        const categoryNames = getCurrentCategoryNames();
+
+        for (let categoryIndex = 0; categoryIndex < categoryNames.length; categoryIndex++) {
+          const categoryName = categoryNames[categoryIndex];
+          if (!categoryName) {
+            continue;
+          }
+          const categoryGames = games[categoryName]?.games_list || [];
+          const gameIndex = categoryGames.findIndex((game: GameInfo) => game.id === gameId);
+
+          if (gameIndex !== -1) {
+            currentCategory = categoryIndex;
+            highlightedGame = gameIndex;
+            selectedGame = null;
+            return categoryGames[gameIndex] || null;
+          }
+        }
+
+        return null;
+      };
+
       const generateGameMessage = async (
         options: { disableInteractions?: boolean } = {}
       ): Promise<Record<string, unknown>> => {
         const { disableInteractions = false } = options;
 
-        const categoryNames = Object.keys(games);
+        const categoryNames = getCurrentCategoryNames();
         const currentCategoryKey = categoryNames[currentCategory];
-        const currentCategoryGames =
-          (currentCategoryKey ? games[currentCategoryKey]?.games_list : undefined) || [];
+        const currentCategoryGames = getCurrentCategoryGames();
         const currentGame = currentCategoryGames[highlightedGame];
+        const gameDailyStatus = currentGame?.id
+          ? await (hubClient as any).getGameDailyStatus(
+              interaction.guild.id,
+              interaction.user.id,
+              currentGame.id
+            )
+          : null;
 
         const generated = (await generateImage(
           "GameLauncher",
@@ -333,6 +384,7 @@ const command = {
             highlightedCategory: currentCategory,
             returnDominant: true,
             gameStats: currentGameRecords || {},
+            gameDailyStatus,
           },
           { image: 2, emoji: 1 },
           i18n as any
@@ -354,27 +406,9 @@ const command = {
           .addImage("attachment://work_games.png");
 
         const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId("select_category")
-          .setPlaceholder(String(await i18n.__("commands.economy.work.selectCategory")))
-          .addOptions(
-            categoryNames.map((category, index) => ({
-              label: category,
-              value: index.toString(),
-              default: currentCategory === index,
-            }))
-          );
-
-        const prevButton = new ButtonBuilder()
-          .setCustomId("prev_game")
-          .setLabel("◀")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(highlightedGame === 0);
-
-        const nextButton = new ButtonBuilder()
-          .setCustomId("next_game")
-          .setLabel("▶")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(highlightedGame >= currentCategoryGames.length - 1);
+          .setCustomId("select_game_menu")
+          .setPlaceholder(String(await i18n.__("commands.economy.work.selectGame")))
+          .addOptions(getAllGameOptions());
 
         const selectButton = new ButtonBuilder()
           .setCustomId("select_game")
@@ -390,11 +424,7 @@ const command = {
           gameLauncherComponent.addActionRow(selectRow);
         }
 
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          prevButton,
-          selectButton,
-          nextButton
-        );
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(selectButton);
 
         if (!disableInteractions) {
           gameLauncherComponent.addActionRow(buttonRow);
@@ -422,11 +452,7 @@ const command = {
         );
         void normalizedInteractionLocale;
 
-        const categoryNames = Object.keys(games);
-        const currentCategoryKey = categoryNames[currentCategory];
-        const currentCategoryGames = currentCategoryKey
-          ? games[currentCategoryKey]?.games_list
-          : undefined;
+        const currentCategoryGames = getCurrentCategoryGames();
 
         if (!currentCategoryGames || currentCategoryGames.length === 0) {
           await componentInteraction.reply({
@@ -436,29 +462,18 @@ const command = {
           return;
         }
 
-        if (componentInteraction.customId === "select_category") {
-          currentCategory = parseInt(componentInteraction.values[0], 10);
-          highlightedGame = 0;
-          selectedGame = null;
-          await componentInteraction.update(await generateGameMessage());
-          return;
-        }
+        if (componentInteraction.customId === "select_game_menu") {
+          await componentInteraction.deferUpdate();
+          const nextGame = setFocusedGameById(componentInteraction.values[0]);
 
-        if (componentInteraction.customId === "prev_game") {
-          if (highlightedGame > 0) {
-            highlightedGame--;
-            selectedGame = null;
-            await componentInteraction.update(await generateGameMessage());
+          if (!nextGame) {
+            await interaction.editReply({
+              content: await i18n.__("commands.economy.work.gameNotFound"),
+            });
+            return;
           }
-          return;
-        }
 
-        if (componentInteraction.customId === "next_game") {
-          if (highlightedGame < currentCategoryGames.length - 1) {
-            highlightedGame++;
-            selectedGame = null;
-            await componentInteraction.update(await generateGameMessage());
-          }
+          await interaction.editReply(await generateGameMessage());
           return;
         }
 
@@ -474,6 +489,7 @@ const command = {
 
           selectedGame = game.id;
           await componentInteraction.deferUpdate();
+          collector.stop("game_started");
 
           try {
             const gameModule = (await getGameModule(game.id)) as GameModuleLike | null;
@@ -481,7 +497,7 @@ const command = {
               throw new Error(`Game module ${game.id} missing execute function`);
             }
 
-            await gameModule.execute(interaction, i18n);
+            await gameModule.execute(componentInteraction, i18n);
           } catch (error) {
             console.error(`Error executing game ${game.id}:`, error);
             await componentInteraction.followUp({

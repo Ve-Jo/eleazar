@@ -8,6 +8,7 @@ import hubClient from "./src/api/hubClient.ts";
 import Replicate from "replicate";
 import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.ts";
+import { startDailyCrateReminders } from "./src/runners/dailyCrateReminders.ts";
 
 type CoverageMap = Record<string, unknown>;
 const globalAny = globalThis as any;
@@ -221,6 +222,7 @@ async function initializeVoiceSessions() {
 
 await client.login(process.env.DISCORD_TOKEN);
 await initializeVoiceSessions();
+startDailyCrateReminders(client);
 
 // Start the Client API Server
 //startApiClientServer();

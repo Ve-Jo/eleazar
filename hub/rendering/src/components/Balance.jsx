@@ -195,7 +195,7 @@ const Balance = (props) => {
   );
 
   const hints = database?.hints || {};
-  const showHints = hints.dailyAvailable || hints.upgradesAffordable;
+  const showHints = hints.dailyAvailable || hints.upgradesAffordable || hints.workAvailable;
   const dailyCooldownText =
     hints.dailyAvailable || hints.dailyRemainingMs === null
       ? null
@@ -752,16 +752,16 @@ const Balance = (props) => {
                     })()}
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", flex: 1, height: "100%", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, height: "100%", justifyContent: "flex-start" }}>
                   {showHints && (
                     <div
                       style={{
                         display: "flex",
                         flexDirection: "column",
                         gap: "6px",
-                        marginTop: "auto",
+                        marginTop: "0",
                         minHeight: "26px",
-                        justifyContent: "center",
+                        justifyContent: "flex-start",
                         alignItems: "flex-start",
                         alignSelf: "flex-start",
                       }}
@@ -772,6 +772,7 @@ const Balance = (props) => {
                           flexDirection: "column",
                           gap: "6px",
                           justifyContent: "flex-start",
+                          alignItems: "flex-start",
                         }}
                       >
 
@@ -785,11 +786,12 @@ const Balance = (props) => {
                             background: "rgba(255,255,255,0.06)",
                             border: "1px solid rgba(255,255,255,0.08)",
                             color: hints.dailyAvailable ? textColor : tertiaryTextColor,
+                            width: "auto",
                           }}
                           title={hints.dailyAvailable ? translations.hintDailyReadyShort : translations.hintDailyCooldownShort}
                         >
                           <span aria-hidden="true">📦</span>
-                          <span style={{ fontWeight: 700 }}>{hints.dailyAvailable ? 1 : 0}</span>
+                          <span style={{ fontWeight: 700 }}>{typeof hints.dailyAvailable === 'number' ? hints.dailyAvailable : (hints.dailyAvailable ? 1 : 0)}</span>
                           <span style={{ fontSize: "9px" }}>{translations.hintDailyLabel}</span>
                         </div>
 
@@ -803,12 +805,42 @@ const Balance = (props) => {
                             background: "rgba(255,255,255,0.06)",
                             border: "1px solid rgba(255,255,255,0.08)",
                             color: hints.upgradesAffordable ? textColor : tertiaryTextColor,
+                            width: "auto",
                           }}
                           title={hints.upgradesAffordable ? translations.hintUpgradeReadyShort : translations.hintUpgradeLockedShort}
                         >
                           <span aria-hidden="true">🛠️</span>
-                          <span style={{ fontWeight: 700 }}>{hints.upgradesAffordable ? 1 : 0}</span>
+                          <span style={{ fontWeight: 700 }}>{typeof hints.upgradesAffordable === 'number' ? hints.upgradesAffordable : (hints.upgradesAffordable ? 1 : 0)}</span>
                           <span style={{ fontSize: "9px" }}>{translations.hintUpgradeLabel}</span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "4px 8px",
+                            borderRadius: "10px",
+                            background: hints.workEarnings?.totalCap > 0
+                              ? `linear-gradient(to right, 
+                                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} 0%, 
+                                  ${(hints.workEarnings.progress || 0) >= 1 ? "#ff4444" : (hints.workEarnings.progress || 0) >= 0.7 ? "#ffaa00" : "#44ff44"} ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%, 
+                                  rgba(255,255,255,0.06) ${Math.min(100, (hints.workEarnings.progress || 0) * 100)}%, 
+                                  rgba(255,255,255,0.06) 100%)`
+                              : "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            color: textColor,
+                            width: "auto",
+                          }}
+                          title={hints.workEarnings ? `${((hints.workEarnings.progress || 0) * 100).toFixed(2)}% of daily limit` : translations.hintWorkReadyShort}
+                        >
+                          <span aria-hidden="true">🎮</span>
+                          <span style={{ fontWeight: 700 }}>
+                            {hints.workEarnings?.totalCap > 0
+                              ? `${((hints.workEarnings.progress || 0) * 100).toFixed(2)}%`
+                              : (typeof hints.workAvailable === 'number' ? hints.workAvailable : (hints.workAvailable ? 1 : 0))}
+                          </span>
+                          <span style={{ fontSize: "9px" }}>{translations.hintWorkLabel}</span>
                         </div>
                       </div>
                     </div>
@@ -1081,6 +1113,11 @@ Balance.localization_strings = {
     ru: "/shop",
     uk: "/shop",
   },
+  hintWorkLabel: {
+    en: "/work",
+    ru: "/work",
+    uk: "/work",
+  },
   hintUpgradeReadyShort: {
     en: "Upgrades ready",
     ru: "Апгрейды доступны",
@@ -1090,6 +1127,11 @@ Balance.localization_strings = {
     en: "Upgrades locked",
     ru: "Апгрейды недоступны",
     uk: "Апгрейди недоступні",
+  },
+  hintWorkReadyShort: {
+    en: "Games available in /work",
+    ru: "Игры доступны в /work",
+    uk: "Ігри доступні в /work",
   },
   yours: {
     en: "yours",

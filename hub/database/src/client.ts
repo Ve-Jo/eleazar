@@ -111,12 +111,17 @@ import {
   updateGameHighScore as updateGameHighScoreHelper,
 } from "./utils/statisticsMutations.ts";
 import {
+  buildDailyCrateStatus,
+  registerDailyCrateOpen,
+  markDailyCrateReminderSent,
+  getGameDailyStatusFromDb,
+  awardGameDailyEarningsAtomic,
+} from "./utils/economyMeta.ts";
+import {
   savePlayer as savePlayerHelper,
   getPlayer as getPlayerHelper,
   loadPlayers as loadPlayersHelper,
   deletePlayer as deletePlayerHelper,
-  ensurePlayer as ensurePlayerHelper,
-  updatePlayer as updatePlayerHelper,
 } from "./utils/musicPlayers.ts";
 import {
   getInteractionStats as getInteractionStatsHelper,
@@ -948,7 +953,7 @@ class Database {
 
   // Open a crate and get rewards
   async openCrate(guildId, userId, type) {
-    return openCrateHelper(
+    const rewards = await openCrateHelper(
       this.client,
       (targetGuildId, targetUserId, targetType) =>
         this.getCrateCooldown(targetGuildId, targetUserId, targetType),
@@ -1238,6 +1243,93 @@ class Database {
       guildId,
       userId
     );
+  }
+
+  async getDailyCrateStatus(guildId, userId) {
+    const stats = await this.getStatistics(guildId, userId);
+    const cooldownRemainingMs = await this.getCooldown(guildId, userId, "daily");
+    return buildDailyCrateStatus(stats, cooldownRemainingMs, Date.now());
+  }
+
+  async markDailyCrateReminderSent(guildId, userId) {
+    const stats = await this.getStatistics(guildId, userId);
+    const interactionStats = markDailyCrateReminderSent(stats, Date.now());
+    return this.updateStatistics(userId, guildId, {
+      interactionStats,
+    });
+  }
+
+  async getGameDailyStatus(guildId, userId, gameId) {
+    const upgrades = await this.getUserUpgrades(guildId, userId);
+    return getGameDailyStatusFromDb(
+      this.client,
+      guildId,
+      userId,
+      gameId,
+      upgrades,
+      Date.now()
+    );
+  }
+
+  async awardGameDailyEarnings(guildId, userId, gameId, amount) {
+    // First, get current status to know the cap
+    const upgrades = await this.getUserUpgrades(guildId, userId);
+    const status = await getGameDailyStatusFromDb(
+      this.client,
+      guildId,
+      userId,
+      gameId,
+      upgrades,
+      Date.now()
+    );
+
+    // Cap the amount to what's remaining
+    const safeAmount = Math.max(0, Math.min(amount, status.remainingToday));
+    const blockedAmount = Math.max(0, amount - safeAmount);
+
+    if (safeAmount > 0) {
+      // Atomic increment - this is the key fix for race conditions
+      const awardResult = await awardGameDailyEarningsAtomic(
+        this.client,
+        guildId,
+        userId,
+        gameId,
+        safeAmount,
+        Date.now()
+      );
+
+      // Add balance
+      await this.addBalance(guildId, userId, safeAmount);
+
+      return {
+        gameId,
+        dateKey: status.dateKey,
+        earnedToday: awardResult.earnedAfter,
+        remainingToday: status.cap - awardResult.earnedAfter,
+        baseCap: status.baseCap,
+        cap: status.cap,
+        upgradeLevel: status.upgradeLevel,
+        multiplier: status.multiplier,
+        requestedAmount: amount,
+        awardedAmount: safeAmount,
+        blockedAmount,
+      };
+    }
+
+    // No amount to award (already at cap)
+    return {
+      gameId,
+      dateKey: status.dateKey,
+      earnedToday: status.earnedToday,
+      remainingToday: status.remainingToday,
+      baseCap: status.baseCap,
+      cap: status.cap,
+      upgradeLevel: status.upgradeLevel,
+      multiplier: status.multiplier,
+      requestedAmount: amount,
+      awardedAmount: 0,
+      blockedAmount: amount,
+    };
   }
 
   async updateGameHighScore(guildId, userId, gameId, newScore) {

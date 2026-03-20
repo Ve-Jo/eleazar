@@ -365,3 +365,19 @@ model GuildVaultDistribution {
   @@index([distributionDate])
   @@map("guild_vault_distributions")
 }
+
+model GameDailyEarnings {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  guildId     String   @map("guild_id")
+  gameId      String   @map("game_id")
+  dateKey     String   @map("date_key") // Format: YYYY-MM-DD
+  earned      Decimal  @default(0) @db.Decimal(30, 5)
+  lastUpdated BigInt   @default(0) @map("last_updated")
+
+  @@unique([guildId, userId, gameId, dateKey])
+  @@index([guildId, userId])
+  @@index([gameId])
+  @@index([dateKey])
+  @@map("game_daily_earnings")
+}

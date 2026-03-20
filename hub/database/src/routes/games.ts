@@ -48,6 +48,45 @@ router.post("/records/update", async (req: GamesRouteRequest, res: ResponseLike)
   }
 });
 
+router.get("/earnings/:guildId/:userId/:gameId", async (req: GamesRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = req.params.userId ?? "";
+    const guildId = req.params.guildId ?? "";
+    const gameId = req.params.gameId ?? "";
+
+    if (!userId || !guildId || !gameId) {
+      return res.status(400).json({ error: "userId, guildId, and gameId are required" });
+    }
+
+    const result = await Database.getGameDailyStatus(guildId, userId, gameId);
+    res.json(serializeBigInt(result));
+  } catch (error) {
+    console.error("Error getting game earning status:", error);
+    res.status(500).json({ error: "Failed to get game earning status" });
+  }
+});
+
+router.post("/earnings/award", async (req: GamesRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = typeof req.body.userId === "string" ? req.body.userId : "";
+    const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
+    const gameId = typeof req.body.gameId === "string" ? req.body.gameId : "";
+    const amount = typeof req.body.amount === "number" ? req.body.amount : undefined;
+
+    if (!userId || !guildId || !gameId || amount === undefined) {
+      return res.status(400).json({
+        error: "userId, guildId, gameId, and amount are required",
+      });
+    }
+
+    const result = await Database.awardGameDailyEarnings(guildId, userId, gameId, amount);
+    res.json(serializeBigInt(result));
+  } catch (error) {
+    console.error("Error awarding game earnings:", error);
+    res.status(500).json({ error: "Failed to award game earnings" });
+  }
+});
+
 router.post("/xp/add", async (req: GamesRouteRequest, res: ResponseLike) => {
   try {
     const userId = typeof req.body.userId === "string" ? req.body.userId : "";

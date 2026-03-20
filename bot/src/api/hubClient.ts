@@ -147,6 +147,8 @@ export type HubClientLike = {
     type: string
   ) => Promise<number | CooldownResponse>;
   getCrateCooldown: (guildId: string, userId: string, type: string) => Promise<number | null>;
+  getDailyCrateStatus: (guildId: string, userId: string) => Promise<GenericRecordResponse>;
+  markDailyCrateReminderSent: (guildId: string, userId: string) => Promise<GenericRecordResponse>;
   deleteCooldown: (guildId: string, userId: string, type: string) => Promise<CooldownRecordResponse>;
   getAllCooldowns: (guildId: string, userId: string) => Promise<AllCooldownsResponse>;
   addXP: (guildId: string, userId: string, amount: number) => Promise<AddXpResponse>;
@@ -176,6 +178,13 @@ export type HubClientLike = {
     score: number
   ) => Promise<UpdateGameRecordResponse>;
   getGameRecords: (guildId: string, userId: string) => Promise<GameRecordsResponse>;
+  getGameDailyStatus: (guildId: string, userId: string, gameId: string) => Promise<GenericRecordResponse>;
+  awardGameDailyEarnings: (
+    guildId: string,
+    userId: string,
+    gameId: string,
+    amount: number
+  ) => Promise<GenericRecordResponse>;
   createVoiceSession: (
     guildId: string,
     userId: string,
@@ -769,6 +778,28 @@ class HubClient {
     );
   }
 
+  async getGameDailyStatus(
+    guildId: string,
+    userId: string,
+    gameId: string
+  ): Promise<GenericRecordResponse> {
+    return await apiRequest<GenericRecordResponse>(
+      `${this.databaseUrl}/games/earnings/${guildId}/${userId}/${gameId}`
+    );
+  }
+
+  async awardGameDailyEarnings(
+    guildId: string,
+    userId: string,
+    gameId: string,
+    amount: number
+  ): Promise<GenericRecordResponse> {
+    return await apiRequest<GenericRecordResponse, string>(`${this.databaseUrl}/games/earnings/award`, {
+      method: "POST",
+      body: JSON.stringify({ userId, guildId, gameId, amount }),
+    });
+  }
+
   // Voice session management methods
   async createVoiceSession(
     guildId: string,
@@ -1250,6 +1281,24 @@ class HubClient {
         type: crateType,
       }),
     });
+  }
+
+  async getDailyCrateStatus(guildId: string, userId: string): Promise<GenericRecordResponse> {
+    return await apiRequest<GenericRecordResponse>(
+      `${this.databaseUrl}/crates/status/${guildId}/${userId}/daily`
+    );
+  }
+
+  async markDailyCrateReminderSent(
+    guildId: string,
+    userId: string
+  ): Promise<GenericRecordResponse> {
+    return await apiRequest<GenericRecordResponse, string>(
+      `${this.databaseUrl}/crates/status/${guildId}/${userId}/daily/reminded`,
+      {
+        method: "POST",
+      }
+    );
   }
 
   // Guild and Season methods
