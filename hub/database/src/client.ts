@@ -969,6 +969,26 @@ class Database {
       userId,
       type
     );
+
+    if (type === "daily") {
+      const crateCooldownTimestamp = Number(await this.getCrateCooldown(guildId, userId, "daily") || 0);
+      const crateCooldownDuration = Number(CRATE_TYPES?.daily?.cooldown || 0);
+      const cooldownRemainingMs = crateCooldownTimestamp
+        ? Math.max(0, crateCooldownTimestamp + crateCooldownDuration - Date.now())
+        : 0;
+      const stats = await this.getStatistics(userId, guildId);
+      const dailyUpdate = registerDailyCrateOpen(stats, cooldownRemainingMs, Date.now());
+
+      await this.updateStatistics(userId, guildId, {
+        interactionStats: dailyUpdate.interactionStats,
+      });
+
+      if (rewards && typeof rewards === "object") {
+        rewards.dailyStatus = dailyUpdate.status;
+      }
+    }
+
+    return rewards;
   }
 
   // Generate rewards for a crate
@@ -1246,13 +1266,17 @@ class Database {
   }
 
   async getDailyCrateStatus(guildId, userId) {
-    const stats = await this.getStatistics(guildId, userId);
-    const cooldownRemainingMs = await this.getCooldown(guildId, userId, "daily");
+    const stats = await this.getStatistics(userId, guildId);
+    const crateCooldownTimestamp = Number(await this.getCrateCooldown(guildId, userId, "daily") || 0);
+    const crateCooldownDuration = Number(CRATE_TYPES?.daily?.cooldown || 0);
+    const cooldownRemainingMs = crateCooldownTimestamp
+      ? Math.max(0, crateCooldownTimestamp + crateCooldownDuration - Date.now())
+      : 0;
     return buildDailyCrateStatus(stats, cooldownRemainingMs, Date.now());
   }
 
   async markDailyCrateReminderSent(guildId, userId) {
-    const stats = await this.getStatistics(guildId, userId);
+    const stats = await this.getStatistics(userId, guildId);
     const interactionStats = markDailyCrateReminderSent(stats, Date.now());
     return this.updateStatistics(userId, guildId, {
       interactionStats,
