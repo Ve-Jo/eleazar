@@ -29,6 +29,12 @@ type LevelInfo = {
   requiredXP: number;
 };
 
+type LevelRoleLike = {
+  roleId: string;
+  requiredLevel?: number;
+  mode?: string;
+};
+
 type InteractionLike = {
   replied?: boolean;
   deferred?: boolean;
@@ -137,12 +143,16 @@ const command = {
       const chatXp = Number(userData.Level?.xp || 0);
       const chatLevelInfo = (hubClient as any).calculateLevel(chatXp) as LevelInfo;
 
+      const voiceXp = Number(userData.Level?.voiceXp || 0);
+      const voiceLevelInfo = (hubClient as any).calculateLevel(voiceXp) as LevelInfo;
+
       const gameXp = Number(userData.Level?.gameXp || 0);
       const gameLevelInfo = (hubClient as any).calculateLevel(gameXp) as LevelInfo;
 
       let chatRank: { rank: number; total: number } | null = null;
+      let voiceRank: { rank: number; total: number } | null = null;
       let gameRank: { rank: number; total: number } | null = null;
-      let availableRoles: { name: string; color: string; requiredLevel: number }[] = [];
+      let availableRoles: { name: string; color: string; requiredLevel: number; mode: string }[] = [];
       let ownedRoleIds: Set<string> = new Set();
 
       try {
@@ -168,17 +178,38 @@ const command = {
         };
 
         chatRank = computeRank(guildUsers, "xp", user.id);
+        voiceRank = computeRank(guildUsers, "voiceXp", user.id);
         gameRank = computeRank(guildUsers, "gameXp", user.id);
       } catch (error) {
         console.warn(`Failed to compute ranks for guild ${interaction.guild.id}:`, error);
       }
 
       try {
-        const levelRoles = (await hubClient.getGuildLevelRoles(interaction.guild.id)) as any[];
+        const levelRoles = (await hubClient.getGuildLevelRoles(interaction.guild.id)) as LevelRoleLike[];
+        const modeLevels: Record<string, number> = {
+          text: chatLevelInfo.level,
+          voice: voiceLevelInfo.level,
+          gaming: gameLevelInfo.level,
+          combined_activity: chatLevelInfo.level + voiceLevelInfo.level,
+          combined_all: chatLevelInfo.level + voiceLevelInfo.level + gameLevelInfo.level,
+        };
+
         const upcoming = (levelRoles || [])
-          .filter((role) => Number(role.requiredLevel || 0) > chatLevelInfo.level)
+          .filter((role) => {
+            const mode = String(role.mode || "text");
+            const currentLevel = Number(modeLevels[mode] ?? modeLevels.text ?? 0);
+            return Number(role.requiredLevel || 0) > currentLevel;
+          })
           .filter((role) => !ownedRoleIds.has(role.roleId))
-          .sort((a, b) => Number(a.requiredLevel || 0) - Number(b.requiredLevel || 0))
+          .sort((a, b) => {
+            const modeA = String(a.mode || "text");
+            const modeB = String(b.mode || "text");
+            const levelA = Number(modeLevels[modeA] ?? modeLevels.text ?? 0);
+            const levelB = Number(modeLevels[modeB] ?? modeLevels.text ?? 0);
+            const deltaA = Number(a.requiredLevel || 0) - levelA;
+            const deltaB = Number(b.requiredLevel || 0) - levelB;
+            return deltaA - deltaB;
+          })
           .slice(0, 4);
 
         const enriched = await Promise.all(
@@ -189,17 +220,24 @@ const command = {
                 name: discordRole?.name || role.roleId,
                 color: discordRole?.hexColor || "#ffffff",
                 requiredLevel: Number(role.requiredLevel || 0),
+                mode: String(role.mode || "text"),
               };
             } catch (err) {
               return {
                 name: role.roleId,
                 color: "#ffffff",
                 requiredLevel: Number(role.requiredLevel || 0),
+                mode: String(role.mode || "text"),
               };
             }
           })
         );
-        availableRoles = enriched.filter(Boolean) as { name: string; color: string; requiredLevel: number }[];
+        availableRoles = enriched.filter(Boolean) as {
+          name: string;
+          color: string;
+          requiredLevel: number;
+          mode: string;
+        }[];
       } catch (error) {
         console.warn(`Failed to fetch guild level roles for ${interaction.guild.id}:`, error);
       }
@@ -259,7 +297,11 @@ const command = {
           gameCurrentXP: gameLevelInfo.currentXP,
           gameRequiredXP: gameLevelInfo.requiredXP,
           gameLevel: gameLevelInfo.level,
+          voiceCurrentXP: voiceLevelInfo.currentXP,
+          voiceRequiredXP: voiceLevelInfo.requiredXP,
+          voiceLevel: voiceLevelInfo.level,
           chatRank,
+          voiceRank,
           gameRank,
           seasonXP: seasonXp,
           seasonEnds: Number(seasonEnds),

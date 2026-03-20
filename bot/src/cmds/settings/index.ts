@@ -17,6 +17,8 @@ type RoleLike = {
 type LevelRoleLike = {
   roleId: string;
   requiredLevel: number;
+  mode?: string;
+  replaceLowerRoles?: boolean;
 };
 
 type GuildLike = {
@@ -48,6 +50,8 @@ type InteractionLike = {
     getSubcommand: () => string;
     getRole: (name: string) => RoleLike;
     getInteger: (name: string) => number;
+    getString: (name: string) => string | null;
+    getBoolean: (name: string) => boolean | null;
   };
   reply: (payload: { content: unknown; ephemeral: boolean }) => Promise<unknown>;
   deferReply: (payload: { ephemeral: boolean }) => Promise<unknown>;
@@ -77,6 +81,25 @@ const command = {
                   .setDescription("The chat level required to receive this role")
                   .setRequired(true)
                   .setMinValue(1)
+              )
+              .addStringOption((option) =>
+                option
+                  .setName("mode")
+                  .setDescription("Progress mode for this role")
+                  .setRequired(false)
+                  .addChoices(
+                    { name: "Text", value: "text" },
+                    { name: "Voice", value: "voice" },
+                    { name: "Gaming", value: "gaming" },
+                    { name: "Combined Activity (Text + Voice)", value: "combined_activity" },
+                    { name: "Combined All (Text + Voice + Gaming)", value: "combined_all" }
+                  )
+              )
+              .addBooleanOption((option) =>
+                option
+                  .setName("replace_lower_roles")
+                  .setDescription("Remove lower roles in the same mode when granted")
+                  .setRequired(false)
               )
           )
           .addSubcommand((subcommand) =>
@@ -142,7 +165,7 @@ const command = {
             },
           },
           success: {
-            en: "Successfully set role {{roleName}} to be awarded at chat level {{level}}.",
+            en: "Successfully set role {{roleName}} at level {{level}} (mode: {{mode}}, replace lower: {{replaceLowerRoles}}).",
             ru: "Роль {{roleName}} успешно установлена для выдачи на уровне чата {{level}}.",
             uk: "Роль {{roleName}} успішно встановлено для видачі на рівні чату {{level}}.",
           },
@@ -213,7 +236,7 @@ const command = {
             uk: "Рівневі ролі ще не налаштовані.",
           },
           entry: {
-            en: "Level {{level}}: {{roleMention}}",
+            en: "Level {{level}} [{{mode}} | replace lower: {{replaceLowerRoles}}]: {{roleMention}}",
             ru: "Уровень {{level}}: {{roleMention}}",
             uk: "Рівень {{level}}: {{roleMention}}",
           },
@@ -257,6 +280,8 @@ const command = {
         if (subcommand === "add") {
           const role = interaction.options.getRole("role");
           const level = interaction.options.getInteger("level");
+          const mode = interaction.options.getString("mode") || "text";
+          const replaceLowerRoles = interaction.options.getBoolean("replace_lower_roles") ?? true;
           const botMember = await guild.members.fetchMe();
 
           if (botMember.roles.highest.comparePositionTo(role) <= 0) {
@@ -268,11 +293,13 @@ const command = {
           }
 
           try {
-            await hubClient.addLevelRole(guild.id, level, role.id);
+            await hubClient.addLevelRole(guild.id, level, role.id, mode, replaceLowerRoles);
             await interaction.editReply(
               await i18n.__(`${i18nBaseKey}.success`, {
                 roleName: role.name,
                 level,
+                mode,
+                replaceLowerRoles: replaceLowerRoles ? "yes" : "no",
               })
             );
           } catch (dbError) {
@@ -349,6 +376,8 @@ const command = {
             description += `${String(
               await i18n.__(`${i18nBaseKey}.entry`, {
                 level: levelRole.requiredLevel,
+                mode: String(levelRole.mode || "text"),
+                replaceLowerRoles: levelRole.replaceLowerRoles === false ? "no" : "yes",
                 roleMention,
               })
             )}\n`;

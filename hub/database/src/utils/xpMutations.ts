@@ -1,6 +1,8 @@
 type LevelRole = {
   roleId: string;
   requiredLevel: number;
+  mode?: string;
+  replaceLowerRoles?: boolean;
 };
 
 type LevelUpInfo = {
@@ -41,8 +43,62 @@ type XpTransaction = {
 
 type ExistingLevelRecord = {
   xp?: bigint;
+  voiceXp?: bigint;
   gameXp?: bigint;
 };
+
+const MODE_TEXT = "text";
+const MODE_VOICE = "voice";
+const MODE_GAMING = "gaming";
+const MODE_COMBINED_ACTIVITY = "combined_activity";
+const MODE_COMBINED_ALL = "combined_all";
+
+type LevelByMode = {
+  text: number;
+  voice: number;
+  gaming: number;
+};
+
+function calculateLevelFromXpValue(xp: bigint): number {
+  const xpNumber = Number(xp);
+  if (xpNumber < 100) {
+    return 1;
+  }
+  return Math.floor(Math.sqrt(xpNumber / 100)) + 1;
+}
+
+function getLevelForRoleMode(mode: string, levels: LevelByMode): number {
+  switch (mode) {
+    case MODE_TEXT:
+      return levels.text;
+    case MODE_VOICE:
+      return levels.voice;
+    case MODE_GAMING:
+      return levels.gaming;
+    case MODE_COMBINED_ACTIVITY:
+      return levels.text + levels.voice;
+    case MODE_COMBINED_ALL:
+      return levels.text + levels.voice + levels.gaming;
+    default:
+      return levels.text;
+  }
+}
+
+function shouldEvaluateModeForProgressType(mode: string, progressType: string): boolean {
+  if (progressType === MODE_TEXT) {
+    return mode === MODE_TEXT || mode === MODE_COMBINED_ACTIVITY || mode === MODE_COMBINED_ALL;
+  }
+
+  if (progressType === MODE_VOICE) {
+    return mode === MODE_VOICE || mode === MODE_COMBINED_ACTIVITY || mode === MODE_COMBINED_ALL;
+  }
+
+  if (progressType === MODE_GAMING) {
+    return mode === MODE_GAMING || mode === MODE_COMBINED_ALL;
+  }
+
+  return false;
+}
 
 type ExistingStatsRecord = {
   xpStats?: Record<string, number> & { updateMode?: unknown };
@@ -54,7 +110,9 @@ async function resolveLevelRoleChanges(
   getLevelRoles: GetLevelRolesFn,
   guildId: string,
   userId: string,
-  levelUpInfo: LevelUpInfo | null
+  levelUpInfo: LevelUpInfo | null,
+  currentLevels: LevelByMode,
+  progressType: string
 ): Promise<LevelUpInfo | null> {
   if (!levelUpInfo) {
     return null;
@@ -71,15 +129,27 @@ async function resolveLevelRoleChanges(
 
     if (guild) {
       const allLevelRoles = await getLevelRoles(guildId);
-      const highestEligibleRole = allLevelRoles
-        .filter((role) => role.requiredLevel <= levelUpInfo.newLevel)
-        .sort((a, b) => b.requiredLevel - a.requiredLevel)[0];
+
+      const eligibleByMode = allLevelRoles
+        .filter((role) => shouldEvaluateModeForProgressType(String(role.mode || MODE_TEXT), progressType))
+        .filter((role) => {
+          const mode = String(role.mode || MODE_TEXT);
+          const modeLevel = getLevelForRoleMode(mode, currentLevels);
+          return Number(role.requiredLevel || 0) <= modeLevel;
+        })
+        .sort((a, b) => Number(b.requiredLevel || 0) - Number(a.requiredLevel || 0));
+
+      const highestEligibleRole = eligibleByMode[0];
 
       if (highestEligibleRole) {
         assignedRole = highestEligibleRole.roleId;
-        removedRoles = allLevelRoles
-          .filter((role) => role.requiredLevel < highestEligibleRole.requiredLevel)
-          .map((role) => role.roleId);
+        if (highestEligibleRole.replaceLowerRoles !== false) {
+          const targetMode = String(highestEligibleRole.mode || MODE_TEXT);
+          removedRoles = allLevelRoles
+            .filter((role) => String(role.mode || MODE_TEXT) === targetMode)
+            .filter((role) => Number(role.requiredLevel || 0) < Number(highestEligibleRole.requiredLevel || 0))
+            .map((role) => role.roleId);
+        }
       }
     }
   } catch (roleError) {
@@ -134,6 +204,10 @@ async function addXP(
     })) as ExistingLevelRecord | null;
 
     const currentXp = existingLevel?.xp || 0n;
+    const currentVoiceXp = existingLevel?.voiceXp || 0n;
+    const currentGameXp = existingLevel?.gameXp || 0n;
+
+    const shouldTrackVoice = String(type || "").toLowerCase() === MODE_VOICE;
 
     const updatedLevel = await tx.level.upsert({
       where: {
@@ -145,22 +219,50 @@ async function addXP(
       create: {
         guildId,
         userId,
-        xp: amount,
+        xp: shouldTrackVoice ? 0 : amount,
+        voiceXp: shouldTrackVoice ? amount : 0,
         seasonXp: amount,
       },
       update: {
-        xp: { increment: amount },
+        ...(shouldTrackVoice
+          ? { voiceXp: { increment: amount } }
+          : { xp: { increment: amount } }),
         seasonXp: { increment: amount },
       },
     });
 
-    let levelUpInfo = checkLevelUp(currentXp, (updatedLevel as { xp: bigint }).xp);
+    const updatedLevelTyped = updatedLevel as { xp: bigint; voiceXp?: bigint; gameXp?: bigint };
+    const updatedVoiceXp = updatedLevelTyped.voiceXp || 0n;
+    const updatedGameXp = updatedLevelTyped.gameXp || 0n;
+
+    const previousLevels: LevelByMode = {
+      text: calculateLevelFromXpValue(currentXp),
+      voice: calculateLevelFromXpValue(currentVoiceXp),
+      gaming: calculateLevelFromXpValue(currentGameXp),
+    };
+    const newLevels: LevelByMode = {
+      text: calculateLevelFromXpValue(updatedLevelTyped.xp),
+      voice: calculateLevelFromXpValue(updatedVoiceXp),
+      gaming: calculateLevelFromXpValue(updatedGameXp),
+    };
+
+    let levelUpInfo = shouldTrackVoice
+      ? checkLevelUp(currentVoiceXp, updatedVoiceXp)
+      : checkLevelUp(currentXp, updatedLevelTyped.xp);
+
+    const didTextAdvance = newLevels.text > previousLevels.text;
+    const didVoiceAdvance = newLevels.voice > previousLevels.voice;
+    const progressType = didVoiceAdvance ? MODE_VOICE : didTextAdvance ? MODE_TEXT : MODE_TEXT;
+
+    const resolvedLevelUpInfo = levelUpInfo;
     levelUpInfo = await resolveLevelRoleChanges(
       tx,
       getLevelRoles,
       guildId,
       userId,
-      levelUpInfo
+      resolvedLevelUpInfo,
+      newLevels,
+      progressType
     );
 
     const existingStats = (await tx.statistics.findUnique({
@@ -204,7 +306,12 @@ async function addXP(
       });
     }
 
-    return { level: updatedLevel, stats, levelUp: levelUpInfo, type: "chat" };
+    return {
+      level: updatedLevel,
+      stats,
+      levelUp: levelUpInfo,
+      type: shouldTrackVoice ? MODE_VOICE : MODE_TEXT,
+    };
   });
 }
 
@@ -247,6 +354,8 @@ async function addGameXP(
       },
     })) as ExistingLevelRecord | null;
 
+    const currentXp = existingLevel?.xp || 0n;
+    const currentVoiceXp = existingLevel?.voiceXp || 0n;
     const currentGameXp = existingLevel?.gameXp || 0n;
 
     const level = await tx.level.upsert({
@@ -268,13 +377,27 @@ async function addGameXP(
       },
     });
 
-    let levelUp = checkLevelUp(currentGameXp, (level as { gameXp: bigint }).gameXp);
+    const levelTyped = level as { xp?: bigint; voiceXp?: bigint; gameXp: bigint };
+    const previousLevels: LevelByMode = {
+      text: calculateLevelFromXpValue(currentXp),
+      voice: calculateLevelFromXpValue(currentVoiceXp),
+      gaming: calculateLevelFromXpValue(currentGameXp),
+    };
+    const newLevels: LevelByMode = {
+      text: calculateLevelFromXpValue(levelTyped.xp || 0n),
+      voice: calculateLevelFromXpValue(levelTyped.voiceXp || 0n),
+      gaming: calculateLevelFromXpValue(levelTyped.gameXp),
+    };
+
+    let levelUp = checkLevelUp(currentGameXp, levelTyped.gameXp);
     levelUp = await resolveLevelRoleChanges(
       tx,
       getLevelRoles,
       guildId,
       userId,
-      levelUp
+      levelUp,
+      newLevels,
+      newLevels.gaming > previousLevels.gaming ? MODE_GAMING : MODE_GAMING
     );
 
     const existingStats = (await tx.statistics.findUnique({

@@ -67,12 +67,14 @@ model Level {
   userId   String @map("user_id")
   guildId  String @map("guild_id")
   xp       BigInt @default(0)
+  voiceXp  BigInt @default(0) @map("voice_xp")
   gameXp   BigInt @default(0)
   seasonXp BigInt @default(0) @map("season_xp")
   user     User   @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)
 
   @@unique([guildId, userId])
   @@index([xp])
+  @@index([voiceXp])
   @@index([gameXp])
   @@index([seasonXp])
   @@map("levels")
@@ -328,9 +330,11 @@ model LevelRole {
   guildId       String @map("guild_id")
   roleId        String @map("role_id")
   requiredLevel Int    @map("required_level")
+  mode          String @default("text")
+  replaceLowerRoles Boolean @default(true) @map("replace_lower_roles")
 
   @@unique([guildId, roleId])
-  @@unique([guildId, requiredLevel])
+  @@unique([guildId, mode, requiredLevel])
   @@index([guildId])
   @@map("level_roles")
 }

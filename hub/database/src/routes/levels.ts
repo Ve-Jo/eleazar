@@ -42,7 +42,12 @@ router.get(
         return res.status(400).json({ error: "Invalid level number" });
       }
 
-      const role = await Database.getEligibleLevelRole(guildId, levelNum);
+      const mode =
+        typeof (req as { query?: Record<string, unknown> }).query?.mode === "string"
+          ? String((req as { query?: Record<string, unknown> }).query?.mode)
+          : "text";
+
+      const role = await Database.getEligibleLevelRole(guildId, levelNum, mode);
       res.json(serializeBigInt({ role }));
     } catch (error) {
       console.error("Error getting eligible level role:", error);
@@ -67,7 +72,12 @@ router.get(
         return res.status(400).json({ error: "Invalid current level number" });
       }
 
-      const nextRole = await Database.getNextLevelRole(guildId, levelNum);
+      const mode =
+        typeof (req as { query?: Record<string, unknown> }).query?.mode === "string"
+          ? String((req as { query?: Record<string, unknown> }).query?.mode)
+          : "text";
+
+      const nextRole = await Database.getNextLevelRole(guildId, levelNum, mode);
       res.json(serializeBigInt({ nextRole }));
     } catch (error) {
       console.error("Error getting next level role:", error);
@@ -81,6 +91,11 @@ router.post("/roles", async (req: LevelsRouteRequest, res: ResponseLike) => {
     const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
     const levelValue = req.body.level;
     const roleId = typeof req.body.roleId === "string" ? req.body.roleId : "";
+    const mode = typeof req.body.mode === "string" ? req.body.mode : "text";
+    const replaceLowerRoles =
+      typeof req.body.replaceLowerRoles === "boolean"
+        ? req.body.replaceLowerRoles
+        : true;
 
     if (!guildId || levelValue === undefined || !roleId) {
       return res.status(400).json({
@@ -99,8 +114,13 @@ router.post("/roles", async (req: LevelsRouteRequest, res: ResponseLike) => {
       return res.status(400).json({ error: "Invalid level number" });
     }
 
-    // Signature: addLevelRole(guildId, roleId, requiredLevel)
-    const result = await Database.addLevelRole(guildId, roleId, levelNum);
+    const result = await Database.addLevelRole(
+      guildId,
+      roleId,
+      levelNum,
+      mode,
+      replaceLowerRoles
+    );
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding level role:", error);

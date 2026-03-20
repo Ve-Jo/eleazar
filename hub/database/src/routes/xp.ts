@@ -35,14 +35,13 @@ router.get("/level/:guildId/:userId", async (req: XPRouteRequest, res: ResponseL
   try {
     const userId = req.params.userId ?? "";
     const guildId = req.params.guildId ?? "";
-    const type = req.query.type;
-    const isGame = type === "gaming" || type === "game";
+    const type = typeof req.query.type === "string" ? req.query.type : "activity";
 
     if (!userId || !guildId) {
       return res.status(400).json({ error: "userId and guildId are required" });
     }
 
-    const level = await Database.getLevel(guildId, userId, isGame);
+    const level = await Database.getLevel(guildId, userId, type);
     res.json(serializeBigInt(level));
   } catch (error) {
     console.error("Error getting level:", error);

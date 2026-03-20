@@ -1393,13 +1393,13 @@ class Database {
     );
   }
 
-  async getLevel(guildId, userId, isGame = false) {
+  async getLevel(guildId, userId, type = "activity") {
     return getLevelHelper(
       (targetGuildId, targetUserId) => this._getLevelData(targetGuildId, targetUserId),
       (xp) => this.calculateLevel(xp),
       guildId,
       userId,
-      isGame
+      type
     );
   }
 
@@ -1813,16 +1813,29 @@ class Database {
     return getLevelRoles(this.client, guildId);
   }
 
-  async getEligibleLevelRole(guildId, currentLevel) {
-    return getEligibleLevelRole(this.client, guildId, currentLevel);
+  async getEligibleLevelRole(guildId, currentLevel, mode = "text") {
+    return getEligibleLevelRole(this.client, guildId, currentLevel, mode);
   }
 
-  async getNextLevelRole(guildId, currentLevel) {
-    return getNextLevelRole(this.client, guildId, currentLevel);
+  async getNextLevelRole(guildId, currentLevel, mode = "text") {
+    return getNextLevelRole(this.client, guildId, currentLevel, mode);
   }
 
-  async addLevelRole(guildId, roleId, requiredLevel) {
-    return addLevelRole(this.client, guildId, roleId, requiredLevel);
+  async addLevelRole(
+    guildId,
+    roleId,
+    requiredLevel,
+    mode = "text",
+    replaceLowerRoles = true
+  ) {
+    return addLevelRole(
+      this.client,
+      guildId,
+      roleId,
+      requiredLevel,
+      mode,
+      replaceLowerRoles
+    );
   }
 
   async removeLevelRole(guildId, roleId) {

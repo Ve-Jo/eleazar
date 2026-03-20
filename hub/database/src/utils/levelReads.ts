@@ -17,6 +17,7 @@ type GetStatsDataFn = (
 
 type LevelDataShape = {
   xp: number | bigint;
+  voiceXp?: number | bigint;
   gameXp: number | bigint;
   seasonXp: number | bigint;
 };
@@ -31,7 +32,7 @@ async function getLevel(
   calculateLevel: CalculateLevelFn,
   guildId: string,
   userId: string,
-  isGame = false
+  type: string = "activity"
 ): Promise<ReturnType<CalculateLevelFn>> {
   const levelData = (await getLevelData(guildId, userId)) as LevelDataShape | null;
 
@@ -39,7 +40,16 @@ async function getLevel(
     return calculateLevel(0n);
   }
 
-  return calculateLevel(isGame ? levelData.gameXp : levelData.xp);
+  const normalizedType = String(type || "activity").toLowerCase();
+  if (normalizedType === "gaming" || normalizedType === "game") {
+    return calculateLevel(levelData.gameXp);
+  }
+
+  if (normalizedType === "voice") {
+    return calculateLevel(levelData.voiceXp || 0n);
+  }
+
+  return calculateLevel(levelData.xp);
 }
 
 async function getAllLevels(
@@ -49,11 +59,13 @@ async function getAllLevels(
   guildId: string,
   userId: string
 ): Promise<{
-  activity: ReturnType<CalculateLevelFn>;
+  text: ReturnType<CalculateLevelFn>;
+  voice: ReturnType<CalculateLevelFn>;
   gaming: ReturnType<CalculateLevelFn>;
   season: ReturnType<CalculateLevelFn>;
   details: {
-    activity: Record<string, unknown>;
+    text: Record<string, unknown>;
+    voice: Record<string, unknown>;
     gaming: Record<string, unknown>;
   };
 }> {
@@ -64,24 +76,28 @@ async function getAllLevels(
 
   if (!level) {
     return {
-      activity: calculateLevel(0n),
+      text: calculateLevel(0n),
+      voice: calculateLevel(0n),
       gaming: calculateLevel(0n),
       season: calculateLevel(0n),
       details: {
-        activity: {},
+        text: {},
+        voice: {},
         gaming: {},
       },
     };
   }
 
-  const activityDetails = stats?.xpStats || {};
+  const textDetails = stats?.xpStats || {};
+  const voiceDetails = stats?.xpStats || {};
   const gamingDetails = stats?.gameXpStats || {};
 
   return {
-    activity: calculateLevel(level.xp),
+    text: calculateLevel(level.xp),
+    voice: calculateLevel(level.voiceXp || 0n),
     gaming: calculateLevel(level.gameXp),
     season: calculateLevel(level.seasonXp),
-    details: { activity: activityDetails, gaming: gamingDetails },
+    details: { text: textDetails, voice: voiceDetails, gaming: gamingDetails },
   };
 }
 

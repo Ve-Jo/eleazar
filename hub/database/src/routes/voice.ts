@@ -112,19 +112,25 @@ router.post("/xp/calculate", async (req: VoiceRouteRequest, res: ResponseLike) =
   try {
     const userId = typeof req.body.userId === "string" ? req.body.userId : "";
     const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
-    const joinedAt =
-      typeof req.body.joinedAt === "number" ? req.body.joinedAt : undefined;
+    const joinedAt = typeof req.body.joinedAt === "number" ? req.body.joinedAt : undefined;
+    const timeSpent = typeof req.body.timeSpent === "number" ? req.body.timeSpent : undefined;
+    const resolvedJoinedAt =
+      joinedAt !== undefined
+        ? joinedAt
+        : timeSpent !== undefined
+          ? Date.now() - Math.max(0, timeSpent)
+          : undefined;
 
-    if (!userId || !guildId || joinedAt === undefined) {
+    if (!userId || !guildId || resolvedJoinedAt === undefined) {
       return res.status(400).json({
-        error: "userId, guildId, and joinedAt are required",
+        error: "userId, guildId, and (joinedAt or timeSpent) are required",
       });
     }
 
     const result = await Database.calculateAndAddVoiceXP(
       guildId,
       userId,
-      { joinedAt }
+      { joinedAt: resolvedJoinedAt }
     );
     res.json(serializeBigInt(result));
   } catch (error) {
