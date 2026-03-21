@@ -441,6 +441,25 @@ export type SeasonLeaderboardEntry = {
 
 export type SeasonLeaderboardResponse = SeasonLeaderboardEntry[];
 
+export type GameLeaderboardCategory = "games" | "2048" | "snake";
+export type GameLeaderboardScope = "local" | "global";
+
+export type GameLeaderboardEntry = {
+  id: string;
+  userId: string;
+  guildId?: string;
+  score: number;
+  stats?: {
+    gameRecords?: {
+      "2048"?: { highScore?: number };
+      snake?: { highScore?: number };
+    };
+  };
+  [key: string]: unknown;
+};
+
+export type GameLeaderboardResponse = GameLeaderboardEntry[];
+
 export type TransactionExecuteResponse = {
   results: unknown[];
   [key: string]: unknown;

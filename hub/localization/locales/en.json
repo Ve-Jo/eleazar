@@ -57,14 +57,23 @@
         "selectUser": "Select a user to view details",
         "selectCategory": "Select category to view",
         "categories": {
+          "2048": "2048",
           "total": "Total Balance",
           "balance": "Balance",
           "bank": "Bank Balance",
-          "level": "Level"
+          "level": "Level",
+          "chat": "Chat Level",
+          "voice": "Voice Level",
+          "gaming": "Gaming Level",
+          "season": "Season XP",
+          "games": "Total Games",
+          "snake": "Snake"
         },
         "selectedUser": "Selected user at position {{position}}",
         "error": "An error occurred while processing your leaderboard request",
-        "noUsersOnPage": "No valid users found on this page."
+        "noUsersOnPage": "No valid users found on this page.",
+        "scopeLocal": "Local",
+        "scopeGlobal": "Global"
       },
       "work": {
         "options": {

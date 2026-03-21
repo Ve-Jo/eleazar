@@ -24,6 +24,7 @@ import {
 import {
   getGuildUsers,
   getSeasonLeaderboard,
+  getGameLeaderboard,
 } from "./utils/databaseReads.ts";
 import {
   getUserCrates as getUserCratesHelper,
@@ -1884,6 +1885,20 @@ class Database {
       return await getSeasonLeaderboard(this.client, seasonId, limit);
     } catch (error) {
       console.error("Error getting season leaderboard:", error);
+      throw error;
+    }
+  }
+
+  async getGameLeaderboard(
+    category: "games" | "2048" | "snake",
+    scope: "local" | "global" = "local",
+    guildId?: string,
+    limit: number = 100
+  ) {
+    try {
+      return await getGameLeaderboard(this.client, category, scope, guildId, limit);
+    } catch (error) {
+      console.error("Error getting game leaderboard:", error);
       throw error;
     }
   }

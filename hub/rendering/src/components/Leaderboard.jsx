@@ -241,17 +241,66 @@ const Leaderboard = (props) => {
       return info;
     }
 
-    // Handle level category
-    if (category === "level") {
+  // Handle level category - now shows all XP types
+    if (category === "chat") {
       info.push(
         {
           icon: "💭",
-          value: user.xpStats?.chat,
+          value: user.xp,
+          label: translations.totalExperience || "Total XP",
+        },
+        {
+          icon: "🎙️",
+          value: user.voiceXp,
+          label: translations.voiceXP || "Voice XP",
+        },
+        {
+          icon: "🎮",
+          value: user.gameXp,
+          label: translations.gamingExperience || "Gaming XP",
+        }
+      );
+      return info;
+    }
+
+    // Handle voice category
+    if (category === "voice") {
+      info.push(
+        {
+          icon: "🎙️",
+          value: user.voiceXp,
+          label: translations.voiceXP || "Voice XP",
+        },
+        {
+          icon: "💭",
+          value: user.xp,
+          label: translations.chatXP || "Chat XP",
+        },
+        {
+          icon: "🎮",
+          value: user.gameXp,
+          label: translations.gamingExperience || "Gaming XP",
+        }
+      );
+      return info;
+    }
+
+    // Handle gaming category
+    if (category === "gaming") {
+      info.push(
+        {
+          icon: "🎮",
+          value: user.gameXp,
+          label: translations.gamingExperience || "Gaming XP",
+        },
+        {
+          icon: "💭",
+          value: user.xp,
           label: translations.chatXP || "Chat XP",
         },
         {
           icon: "🎙️",
-          value: user.xpStats?.voice,
+          value: user.voiceXp,
           label: translations.voiceXP || "Voice XP",
         }
       );
@@ -272,7 +321,7 @@ const Leaderboard = (props) => {
     if (category === "games" && user.gameRecords) {
       info.push(
         {
-          icon: "🎮",
+          icon: "🔢",
           value: user.gameRecords["2048"]?.highScore,
           label: `2048 ${translations.highScore || "High Score"}`,
         },
@@ -280,6 +329,44 @@ const Leaderboard = (props) => {
           icon: "🐍",
           value: user.gameRecords.snake?.highScore,
           label: `Snake ${translations.highScore || "High Score"}`,
+        }
+      );
+      return info;
+    }
+
+    // Handle 2048 category
+    if (category === "2048" && user.gameRecords) {
+      info.push(
+        {
+          icon: "🐍",
+          value: user.gameRecords.snake?.highScore,
+          label: `Snake ${translations.highScore || "High Score"}`,
+        },
+        {
+          icon: "🎮",
+          value: user.gameRecords["2048"]?.highScore != null && user.gameRecords.snake?.highScore != null
+            ? user.gameRecords["2048"].highScore + user.gameRecords.snake.highScore
+            : 0,
+          label: translations.totalGames || "Total Games",
+        }
+      );
+      return info;
+    }
+
+    // Handle snake category
+    if (category === "snake" && user.gameRecords) {
+      info.push(
+        {
+          icon: "🔢",
+          value: user.gameRecords["2048"]?.highScore,
+          label: `2048 ${translations.highScore || "High Score"}`,
+        },
+        {
+          icon: "🎮",
+          value: user.gameRecords["2048"]?.highScore != null && user.gameRecords.snake?.highScore != null
+            ? user.gameRecords["2048"].highScore + user.gameRecords.snake.highScore
+            : 0,
+          label: translations.totalGames || "Total Games",
         }
       );
       return info;
@@ -784,10 +871,40 @@ Leaderboard.localization_strings = {
       ru: "Уровень",
       uk: "Рівень",
     },
+    chat: {
+      en: "Chat Level",
+      ru: "Уровень чата",
+      uk: "Рівень чату",
+    },
+    voice: {
+      en: "Voice Level",
+      ru: "Уровень голоса",
+      uk: "Рівень голосу",
+    },
+    gaming: {
+      en: "Gaming Level",
+      ru: "Игровой уровень",
+      uk: "Ігровий рівень",
+    },
     games: {
       en: "Games",
       ru: "Игры",
       uk: "Ігри",
+    },
+    2048: {
+      en: "2048",
+      ru: "2048",
+      uk: "2048",
+    },
+    snake: {
+      en: "Snake",
+      ru: "Snake",
+      uk: "Snake",
+    },
+    totalGames: {
+      en: "Total Score",
+      ru: "Общий счет",
+      uk: "Загальний рахунок",
     },
     season: {
       en: "Season XP",
@@ -826,12 +943,12 @@ Leaderboard.localization_strings = {
     uk: "Рекорд",
   },
   totalExperience: {
-    en: "Total Experience",
+    en: "Total XP",
     ru: "Всего опыта",
     uk: "Всього досвіду",
   },
   gamingExperience: {
-    en: "Gaming Experience",
+    en: "Gaming XP",
     ru: "Игровой опыт",
     uk: "Ігровий досвід",
   },

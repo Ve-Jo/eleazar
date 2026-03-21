@@ -35,6 +35,9 @@ import type {
   CooldownRecordResponse,
   DeleteManyResponse,
   EnsureGuildUserRequest,
+  GameLeaderboardCategory,
+  GameLeaderboardResponse,
+  GameLeaderboardScope,
   EnsureUserRequest,
   GameRecordsResponse,
   GuildRecord,
@@ -246,7 +249,13 @@ export type HubClientLike = {
   openCrate: (guildId: string, userId: string, crateType: string) => Promise<GenericRecordResponse>;
   getGuildUsers: (guildId: string) => Promise<HubUserRecord[]>;
   getCurrentSeason: () => Promise<SeasonSummaryResponse>;
-  getSeasonLeaderboard: (limit?: number) => Promise<SeasonLeaderboardResponse>;
+  getSeasonLeaderboard: (seasonId: number, limit?: number) => Promise<SeasonLeaderboardResponse>;
+  getGameLeaderboard: (
+    category: GameLeaderboardCategory,
+    scope?: GameLeaderboardScope,
+    guildId?: string,
+    limit?: number
+  ) => Promise<GameLeaderboardResponse>;
   getUserLocale: (guildId: string, userId: string) => Promise<string | null>;
   setUserLocale: (
     guildId: string,
@@ -1338,9 +1347,30 @@ class HubClient {
     return await apiRequest<SeasonSummaryResponse>(`${this.databaseUrl}/seasons/current`);
   }
 
-  async getSeasonLeaderboard(limit: number = 250): Promise<SeasonLeaderboardResponse> {
+  async getSeasonLeaderboard(seasonId: number, limit: number = 250): Promise<SeasonLeaderboardResponse> {
     return await apiRequest<SeasonLeaderboardResponse>(
-      `${this.databaseUrl}/seasons/leaderboard?limit=${limit}`
+      `${this.databaseUrl}/seasons/leaderboard?seasonId=${seasonId}&limit=${limit}`
+    );
+  }
+
+  async getGameLeaderboard(
+    category: GameLeaderboardCategory,
+    scope: GameLeaderboardScope = "local",
+    guildId?: string,
+    limit: number = 250
+  ): Promise<GameLeaderboardResponse> {
+    const params = new URLSearchParams({
+      category,
+      scope,
+      limit: String(limit),
+    });
+
+    if (scope === "local" && guildId) {
+      params.set("guildId", guildId);
+    }
+
+    return await apiRequest<GameLeaderboardResponse>(
+      `${this.databaseUrl}/games/leaderboard?${params.toString()}`
     );
   }
 

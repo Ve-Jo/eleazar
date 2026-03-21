@@ -61,6 +61,10 @@ function parseBooleanEnv(value, fallback) {
 }
 const USE_RESVG_RASTER = parseBooleanEnv(process.env.USE_RESVG_RASTER, true);
 const PERF_LOGGING = parseBooleanEnv(process.env.RENDER_PERF_LOGGING, false);
+const SKIP_COLOR_PROCESSING_FOR_GAMES = parseBooleanEnv(
+  process.env.RENDER_SKIP_COLOR_PROCESSING_FOR_GAMES,
+  false
+);
 
 // Per-user gradient cache and in-flight deduplication
 const userGradientCache = new Map();
@@ -357,6 +361,35 @@ function setCachedUserGradient(userId, data) {
   userGradientCache.set(userId, { data, timestamp: Date.now() });
   userCacheMetrics.size = userGradientCache.size;
   return data;
+}
+
+function isDataUri(value) {
+  return typeof value === "string" && value.startsWith("data:");
+}
+
+async function getImageBufferForColorExtraction(imageUrl) {
+  if (isDataUri(imageUrl)) {
+    const dataBuffer = dataUriToBuffer(imageUrl);
+    return dataBuffer && dataBuffer.length > 0 ? dataBuffer : null;
+  }
+
+  const response = await fetch(imageUrl, {
+    signal: AbortSignal.timeout(BANNER_TIMEOUT),
+  });
+  if (!response.ok) {
+    console.error(`Failed to fetch image: ${response.status} for ${imageUrl}`);
+    return null;
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function getDefaultColorsCached(imageUrl) {
+  const fallback = getDefaultColors();
+  if (typeof imageUrl === "string" && imageUrl.length > 0) {
+    setCachedColor(imageUrl, fallback);
+  }
+  return fallback;
 }
 
 async function getOrProcessImageColorsDedup(url, options = {}) {
@@ -1034,6 +1067,13 @@ export async function processImageColors(imageUrl, options = {}) {
     `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
   );
 
+  if (options?.skipColorProcessing || options?.useDefaultColorsOnly) {
+    console.timeEnd(
+      `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
+    );
+    return getDefaultColorsCached(imageUrl);
+  }
+
   // Check if imageUrl is not a valid string
   if (
     !imageUrl ||
@@ -1046,7 +1086,7 @@ export async function processImageColors(imageUrl, options = {}) {
     console.timeEnd(
       `[imageGenerator] color-processing-${imageUrl?.slice(-10) || "unknown"}`
     );
-    return getDefaultColors();
+    return getDefaultColorsCached(imageUrl);
   }
 
   // Try to get from enhanced cache first
@@ -1057,6 +1097,13 @@ export async function processImageColors(imageUrl, options = {}) {
       `[imageGenerator] color-processing-${imageUrl.slice(-10)}`
     );
     return cachedColor;
+  }
+
+  if (isDataUri(imageUrl)) {
+    console.timeEnd(
+      `[imageGenerator] color-processing-${imageUrl.slice(-10)}`
+    );
+    return getDefaultColorsCached(imageUrl);
   }
 
   const inflightKey = normalizeUrl(imageUrl);
@@ -1070,25 +1117,16 @@ export async function processImageColors(imageUrl, options = {}) {
 
   const inflightPromise = (async () => {
     try {
-      // Fetch and preprocess the image with blur
-      const response = await fetch(imageUrl, {
-        signal: AbortSignal.timeout(BANNER_TIMEOUT),
-      });
-      if (!response.ok) {
-        console.error(
-          `Failed to fetch image: ${response.status} for ${imageUrl}`
-        );
-        return getDefaultColors();
+      const imageBuffer = await getImageBufferForColorExtraction(imageUrl);
+      if (!imageBuffer) {
+        return getDefaultColorsCached(imageUrl);
       }
-
-      const imageBuffer = Buffer.from(await response.arrayBuffer());
-      console.log(`Image fetched (${imageUrl}), size:`, imageBuffer.length);
 
       if (imageBuffer.length > MAX_BANNER_SIZE) {
         console.warn(
           `Image ${imageUrl} exceeds size limit: ${imageBuffer.length} > ${MAX_BANNER_SIZE}`
         );
-        return getDefaultColors();
+        return getDefaultColorsCached(imageUrl);
       }
 
       console.time(
@@ -1109,8 +1147,6 @@ export async function processImageColors(imageUrl, options = {}) {
         `[imageGenerator] color-extraction-${imageUrl.slice(-10)}`
       );
 
-      console.log("Extracted dominant color:", dominantColorRgb);
-
       if (
         !dominantColorRgb ||
         dominantColorRgb.length !== 3 ||
@@ -1121,7 +1157,7 @@ export async function processImageColors(imageUrl, options = {}) {
           imageUrl,
           dominantColorRgb
         );
-        return getDefaultColors();
+        return getDefaultColorsCached(imageUrl);
       }
 
       // Use juicy color processing (now the only system)
@@ -1148,7 +1184,7 @@ export async function processImageColors(imageUrl, options = {}) {
       } else {
         console.error(`Failed to process image colors for ${imageUrl}:`, error);
       }
-      return getDefaultColors();
+      return getDefaultColorsCached(imageUrl);
     } finally {
       inflightColorRequests.delete(inflightKey);
       console.timeEnd(
@@ -1387,7 +1423,14 @@ async function performActualGenerationLogic(
       : null; // Safer access
     const bannerUrl = props.database?.bannerUrl; // Optional banner
 
-    if (props.dominantColor === "user" || !props.dominantColor) {
+    const shouldSkipAutoColorProcessing =
+      options?.skipColorProcessing === true ||
+      options?.useDefaultColorsOnly === true ||
+      (SKIP_COLOR_PROCESSING_FOR_GAMES && resolveThrottleMode(options) === "game");
+
+    if (shouldSkipAutoColorProcessing) {
+      colorProps = getDefaultColors();
+    } else if (props.dominantColor === "user" || !props.dominantColor) {
       const imageUrl = bannerUrl || defaultImageUrl;
       if (imageUrl) {
         const userId = props?.interaction?.user?.id || "guest";

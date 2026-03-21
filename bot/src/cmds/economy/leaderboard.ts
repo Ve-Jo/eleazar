@@ -10,6 +10,29 @@ import hubClient from "../../api/hubClient.ts";
 import { generateImage, processImageColors } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 
+type LeaderboardCategory =
+  | "total"
+  | "balance"
+  | "bank"
+  | "chat"
+  | "voice"
+  | "gaming"
+  | "season"
+  | "games"
+  | "2048"
+  | "snake";
+
+type GameLeaderboardScope = "local" | "global";
+
+const GAME_CATEGORIES = new Set<LeaderboardCategory>(["games", "2048", "snake"]);
+const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
+
+function isGameCategory(
+  category: LeaderboardCategory
+): category is "games" | "2048" | "snake" {
+  return GAME_CATEGORIES.has(category);
+}
+
 type TranslatorLike = {
   __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
 };
@@ -39,7 +62,7 @@ type GuildLike = {
 type UserDataLike = Record<string, any> & {
   id: string;
   economy?: { balance?: number; bankBalance?: number };
-  Level?: { xp?: number; seasonXp?: number };
+  Level?: { xp?: number; voiceXp?: number; gameXp?: number; seasonXp?: number };
   stats?: {
     xpStats?: { chat?: number; voice?: number };
     gameRecords?: Record<string, { highScore?: number }>;
@@ -54,6 +77,7 @@ type UserDataLike = Record<string, any> & {
 
 type MessageLike = {
   editable?: boolean;
+  components?: unknown[];
   edit: (payload: unknown) => Promise<unknown>;
   createMessageComponentCollector: (options: Record<string, unknown>) => {
     on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
@@ -85,10 +109,16 @@ const command = {
           .setDescription("Category to display")
           .setRequired(false)
           .addChoices(
+            { name: "Season XP", value: "season" },
             { name: "Total Balance", value: "total" },
             { name: "Balance", value: "balance" },
             { name: "Bank Balance", value: "bank" },
-            { name: "Level", value: "level" }
+            { name: "Chat Level", value: "chat" },
+            { name: "Voice Level", value: "voice" },
+            { name: "Gaming Level", value: "gaming" },
+            { name: "Total Games Score", value: "games" },
+            { name: "2048 High Score", value: "2048" },
+            { name: "Snake High Score", value: "snake" }
           )
       );
   },
@@ -123,7 +153,13 @@ const command = {
       total: { en: "Total Balance", ru: "Общий баланс", uk: "Загальний баланс" },
       balance: { en: "Balance", ru: "Баланс", uk: "Баланс" },
       bank: { en: "Bank Balance", ru: "Банковский баланс", uk: "Банківський баланс" },
-      level: { en: "Level", ru: "Уровень", uk: "Рівень" },
+      chat: { en: "Chat Level", ru: "Уровень чата", uk: "Рівень чату" },
+      voice: { en: "Voice Level", ru: "Уровень голоса", uk: "Рівень голосу" },
+      gaming: { en: "Gaming Level", ru: "Игровой уровень", uk: "Ігровий рівень" },
+      season: { en: "Season XP", ru: "Сезонный опыт", uk: "Сезонний досвід" },
+      games: { en: "Total Games", ru: "Всего игр", uk: "Всього ігор" },
+      2048: { en: "2048", ru: "2048", uk: "2048" },
+      snake: { en: "Snake", ru: "Snake", uk: "Snake" },
     },
     selectedUser: {
       en: "Selected user at position {{position}}",
@@ -140,12 +176,24 @@ const command = {
       ru: "На этой странице не найдено действительных пользователей.",
       uk: "На цій сторінці не знайдено дійсних користувачів.",
     },
+    scopeLocal: {
+      en: "Local",
+      ru: "Локальный",
+      uk: "Локальний",
+    },
+    scopeGlobal: {
+      en: "Global",
+      ru: "Глобальный",
+      uk: "Глобальний",
+    },
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
     const guild = interaction.guild;
-    let category = interaction.options.getString("category") || "total";
+    let category =
+      (interaction.options.getString("category") as LeaderboardCategory | null) || "total";
+    let gameScope: GameLeaderboardScope = "local";
 
     try {
       let page = 0;
@@ -166,12 +214,78 @@ const command = {
         }
       };
 
+      const normalizeGameRecords = (
+        records: Record<string, { highScore?: number }> | undefined
+      ): { "2048": { highScore: number }; snake: { highScore: number } } => {
+        return {
+          "2048": { highScore: Number(records?.["2048"]?.highScore || 0) },
+          snake: { highScore: Number(records?.snake?.highScore || 0) },
+        };
+      };
+
+      const disableInteractiveComponents = (components: unknown[]): unknown[] => {
+        return components.map((component) => {
+          const normalized =
+            component && typeof component === "object" && "toJSON" in (component as Record<string, unknown>)
+              ? (component as { toJSON: () => Record<string, unknown> }).toJSON()
+              : (component as Record<string, unknown>);
+
+          if (!normalized || typeof normalized !== "object") {
+            return normalized;
+          }
+
+          const cloned = { ...normalized } as Record<string, unknown>;
+          if (Array.isArray(cloned.components)) {
+            cloned.components = disableInteractiveComponents(cloned.components as unknown[]);
+          }
+
+          const type = Number(cloned.type || 0);
+          if ([2, 3, 5, 6, 7, 8].includes(type)) {
+            cloned.disabled = true;
+          }
+
+          return cloned;
+        });
+      };
+
       const generateLeaderboardMessage = async (): Promise<Record<string, unknown>> => {
         let guildUsers: UserDataLike[];
+
         if (category === "season") {
-          guildUsers = (await (hubClient as any).getSeasonLeaderboard(250)) as UserDataLike[];
+          const currentSeason = await hubClient.getCurrentSeason();
+          const seasonId = Number(currentSeason?.seasonNumber || 0);
+          const seasonRows = seasonId > 0 ? await hubClient.getSeasonLeaderboard(seasonId, 250) : [];
+          guildUsers = seasonRows
+            .map((entry) => {
+              const userId = String(entry.userId || "");
+              const seasonXp = Number((entry as Record<string, unknown>).totalXp || entry.xp || entry.score || 0);
+              return {
+                id: userId,
+                Level: { seasonXp },
+                seasonXp,
+              } as UserDataLike;
+            })
+            .filter((entry) => Boolean(entry.id));
+        } else if (isGameCategory(category)) {
+          const gameRows = await hubClient.getGameLeaderboard(
+            category,
+            gameScope,
+            gameScope === "local" ? guild.id : undefined,
+            250
+          );
+
+          guildUsers = gameRows
+            .map((entry) => ({
+              id: String(entry.userId || entry.id || ""),
+              stats: {
+                gameRecords: normalizeGameRecords(
+                  (entry.stats as { gameRecords?: Record<string, { highScore?: number }> })?.gameRecords
+                ),
+              },
+            }))
+            .filter((entry) => Boolean(entry.id));
         } else {
-          guildUsers = (await (hubClient as any).getGuildUsers(guild.id)) as UserDataLike[];
+          guildUsers = (await hubClient.getGuildUsers(guild.id)) as UserDataLike[];
         }
 
         sortedUsers = guildUsers
@@ -180,7 +294,7 @@ const command = {
             let displayValue = 0;
             switch (category) {
               case "season":
-                sortValue = Number(userData.seasonXp || 0);
+                sortValue = Number(userData.Level?.seasonXp || userData.seasonXp || 0);
                 displayValue = sortValue;
                 break;
               case "total":
@@ -195,13 +309,33 @@ const command = {
                 sortValue = Number(userData.economy?.bankBalance || 0);
                 displayValue = sortValue;
                 break;
-              case "level":
+              case "chat":
                 sortValue = Number(userData.Level?.xp || 0);
-                displayValue = (hubClient as any).calculateLevel(sortValue).level;
+                displayValue = hubClient.calculateLevel(sortValue).level;
+                break;
+              case "voice":
+                sortValue = Number(userData.Level?.voiceXp || 0);
+                displayValue = hubClient.calculateLevel(sortValue).level;
+                break;
+              case "gaming":
+                sortValue = Number(userData.Level?.gameXp || 0);
+                displayValue = hubClient.calculateLevel(sortValue).level;
                 break;
               case "games": {
                 const gameRecords = userData.stats?.gameRecords || { 2048: { highScore: 0 }, snake: { highScore: 0 } };
                 sortValue = Number(gameRecords["2048"]?.highScore || 0) + Number(gameRecords.snake?.highScore || 0);
+                displayValue = sortValue;
+                break;
+              }
+              case "2048": {
+                const gameRecords2048 = userData.stats?.gameRecords || { 2048: { highScore: 0 } };
+                sortValue = Number(gameRecords2048["2048"]?.highScore || 0);
+                displayValue = sortValue;
+                break;
+              }
+              case "snake": {
+                const gameRecordsSnake = userData.stats?.gameRecords || { snake: { highScore: 0 } };
+                sortValue = Number(gameRecordsSnake.snake?.highScore || 0);
                 displayValue = sortValue;
                 break;
               }
@@ -228,14 +362,16 @@ const command = {
                 coloring: colorProps,
               } as UserDataLike;
             } catch (error) {
-              console.error(`Failed to fetch member ${userData.id}:`, error);
-              return null;
+              return {
+                ...userData,
+                name: `User ${String(userData.id).slice(-6)}`,
+                avatarURL: DEFAULT_AVATAR,
+              } as UserDataLike;
             }
           })
         );
 
-        const validUsersWithData = potentialUsersWithData.filter((user): user is UserDataLike => user !== null);
-        const usersToDisplayFinal = validUsersWithData.slice(0, pageSize);
+        const usersToDisplayFinal = potentialUsersWithData.slice(0, pageSize);
 
         const prevButton = new ButtonBuilder()
           .setCustomId("prev_page")
@@ -260,7 +396,7 @@ const command = {
         }
 
         const generated = (await generateImage(
-          "Leaderboard",
+          "Leaderboard2",
           {
             interaction: {
               user: {
@@ -277,8 +413,16 @@ const command = {
             },
             locale: interaction.locale,
             category,
+            gameScope,
             users: usersToDisplayFinal.map((user) => {
               const originalPosition = sortedUsers.findIndex((sortedUser) => sortedUser.id === user.id) + 1;
+              const chatXp = Number(user.Level?.xp || 0);
+              const voiceXp = Number(user.Level?.voiceXp || 0);
+              const gameXp = Number(user.Level?.gameXp || 0);
+              const totalXp = chatXp + voiceXp + gameXp;
+              const chatLevelData = hubClient.calculateLevel(chatXp);
+              const voiceLevelData = hubClient.calculateLevel(voiceXp);
+              const gamingLevelData = hubClient.calculateLevel(gameXp);
               return {
                 id: user.id,
                 position: originalPosition,
@@ -290,16 +434,28 @@ const command = {
                 balance: Number(user.economy?.balance || 0),
                 bank: Number(user.economy?.bankBalance || 0),
                 totalBalance: Number(user.economy?.balance || 0) + Number(user.economy?.bankBalance || 0),
-                xp: Number(user.Level?.xp || 0),
-                level: (hubClient as any).calculateLevel(Number(user.Level?.xp || 0)).level,
+                xp: chatXp,
+                chatCurrentXP: chatLevelData.currentXP,
+                chatRequiredXP: chatLevelData.requiredXP,
+                voiceXp: voiceXp,
+                voiceCurrentXP: voiceLevelData.currentXP,
+                voiceRequiredXP: voiceLevelData.requiredXP,
+                gameXp: gameXp,
+                gameCurrentXP: gamingLevelData.currentXP,
+                gameRequiredXP: gamingLevelData.requiredXP,
+                totalXp: totalXp,
+                level: chatLevelData.level,
+                voiceLevel: voiceLevelData.level,
+                gamingLevel: gamingLevelData.level,
                 xpStats: {
-                  chat: Number(user.stats?.xpStats?.chat || 0),
-                  voice: Number(user.stats?.xpStats?.voice || 0),
+                  chat: chatXp,
+                  voice: voiceXp,
+                  gaming: gameXp,
                 },
                 gameRecords: user.stats?.gameRecords || { 2048: { highScore: 0 }, snake: { highScore: 0 } },
                 seasonStats: {
                   rank: sortedUsers.findIndex((entry) => entry.id === user.id) + 1,
-                  totalXP: Number(user.Level?.seasonXp || 0),
+                  totalXP: Number(user.Level?.seasonXp || user.seasonXp || 0),
                 },
               };
             }),
@@ -328,30 +484,73 @@ const command = {
 
         leaderboardComponent.addButtons(prevButton, nextButton);
 
+        if (isGameCategory(category)) {
+          const localLabel = String(await i18n.__("commands.economy.leaderboard.scopeLocal"));
+          const globalLabel = String(await i18n.__("commands.economy.leaderboard.scopeGlobal"));
+          const currentScopeLabel = gameScope === "global" ? globalLabel : localLabel;
+
+          const scopeToggleButton = new ButtonBuilder()
+            .setCustomId("leaderboard_scope_toggle")
+            .setLabel(`${currentScopeLabel}`)
+            .setStyle(ButtonStyle.Secondary);
+
+          leaderboardComponent.addButtons(scopeToggleButton);
+        }
+
         if (usersToDisplayFinal.length > 0) {
           const categoryMenu = new StringSelectMenuBuilder()
             .setCustomId("select_category")
             .setPlaceholder(String(await i18n.__("commands.economy.leaderboard.selectCategory")))
             .addOptions([
               {
-                label: String(await i18n.__("commands.economy.leaderboard.categories.total")),
+                label: `✨ ${String(await i18n.__("commands.economy.leaderboard.categories.season"))}`,
+                value: "season",
+                default: category === "season",
+              },
+              {
+                label: `🏦 ${String(await i18n.__("commands.economy.leaderboard.categories.total"))}`,
                 value: "total",
                 default: category === "total",
               },
               {
-                label: String(await i18n.__("commands.economy.leaderboard.categories.balance")),
+                label: `💰 ${String(await i18n.__("commands.economy.leaderboard.categories.balance"))}`,
                 value: "balance",
                 default: category === "balance",
               },
               {
-                label: String(await i18n.__("commands.economy.leaderboard.categories.bank")),
+                label: `💳 ${String(await i18n.__("commands.economy.leaderboard.categories.bank"))}`,
                 value: "bank",
                 default: category === "bank",
               },
               {
-                label: String(await i18n.__("commands.economy.leaderboard.categories.level")),
-                value: "level",
-                default: category === "level",
+                label: `💬 ${String(await i18n.__("commands.economy.leaderboard.categories.chat"))}`,
+                value: "chat",
+                default: category === "chat",
+              },
+              {
+                label: `🎤 ${String(await i18n.__("commands.economy.leaderboard.categories.voice"))}`,
+                value: "voice",
+                default: category === "voice",
+              },
+              {
+                label: `🎮 ${String(await i18n.__("commands.economy.leaderboard.categories.gaming"))}`,
+                value: "gaming",
+                default: category === "gaming",
+              },
+              {
+                label: `🏆 ${String(await i18n.__("commands.economy.leaderboard.categories.games"))}`,
+                value: "games",
+                default: category === "games",
+              },
+              {
+                label: `🔢 ${String(await i18n.__("commands.economy.leaderboard.categories.2048"))}`,
+                value: "2048",
+                default: category === "2048",
+              },
+              {
+                label: `🐍 ${String(await i18n.__("commands.economy.leaderboard.categories.snake"))}`,
+                value: "snake",
+                default: category === "snake",
               },
             ]);
 
@@ -434,7 +633,18 @@ const command = {
               highlightedPosition = parseInt(componentInteraction.values[0] || "0", 10);
               needsUpdate = true;
             } else if (componentInteraction.customId === "select_category") {
-              category = componentInteraction.values[0] || category;
+              const nextCategory =
+                (componentInteraction.values[0] as LeaderboardCategory | undefined) || category;
+              const wasGameCategory = isGameCategory(category);
+              category = nextCategory;
+              if (!isGameCategory(category) || !wasGameCategory) {
+                gameScope = "local";
+              }
+              page = 0;
+              highlightedPosition = null;
+              needsUpdate = true;
+            } else if (componentInteraction.customId === "leaderboard_scope_toggle") {
+              gameScope = gameScope === "local" ? "global" : "local";
               page = 0;
               highlightedPosition = null;
               needsUpdate = true;
@@ -460,11 +670,15 @@ const command = {
         collector.on("end", (collected: { size: number }, reason: string) => {
           console.log(`Leaderboard collector ended. Reason: ${reason}, Collected: ${collected.size}`);
           if (message && message.editable) {
-            message.edit({ components: [] }).catch((error: any) => {
-              if (error?.code !== 10008) {
-                console.error("Failed to remove components on collector end:", error);
-              }
-            });
+            const messageComponents = Array.isArray(message.components) ? message.components : [];
+            if (messageComponents.length > 0) {
+              const disabledComponents = disableInteractiveComponents(messageComponents);
+              message.edit({ components: disabledComponents }).catch((error: any) => {
+                if (error?.code !== 10008) {
+                  console.error("Failed to disable components on collector end:", error);
+                }
+              });
+            }
           }
         });
       }

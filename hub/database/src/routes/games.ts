@@ -8,7 +8,40 @@ const router = express.Router();
 type GamesRouteRequest = RequestLike & {
   params: Record<string, string>;
   body: Record<string, unknown>;
+  query: Record<string, string | undefined>;
 };
+
+router.get("/leaderboard", async (req: GamesRouteRequest, res: ResponseLike) => {
+  try {
+    const category = req.query.category;
+    const scope = req.query.scope ?? "local";
+    const guildId = req.query.guildId;
+    const limitRaw = req.query.limit ?? "250";
+    const limit = parseInt(limitRaw, 10);
+
+    if (category !== "games" && category !== "2048" && category !== "snake") {
+      return res.status(400).json({ error: "category must be games, 2048, or snake" });
+    }
+
+    if (scope !== "local" && scope !== "global") {
+      return res.status(400).json({ error: "scope must be local or global" });
+    }
+
+    if (scope === "local" && !guildId) {
+      return res.status(400).json({ error: "guildId is required for local scope" });
+    }
+
+    if (Number.isNaN(limit) || limit <= 0) {
+      return res.status(400).json({ error: "limit must be a positive number" });
+    }
+
+    const leaderboard = await Database.getGameLeaderboard(category, scope, guildId, limit);
+    res.json(serializeBigInt(leaderboard));
+  } catch (error) {
+    console.error("Error getting game leaderboard:", error);
+    res.status(500).json({ error: "Failed to get game leaderboard" });
+  }
+});
 
 router.get("/records/:guildId/:userId", async (req: GamesRouteRequest, res: ResponseLike) => {
   try {
