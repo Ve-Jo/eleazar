@@ -32,3 +32,23 @@ export function getCountryFlag(countryCode?: string | null): string | null {
   }
   return countryFlags[countryCode.toUpperCase()] || null;
 }
+
+/**
+ * Convert country code to twemoji SVG URL.
+ * Country flags use regional indicator symbols:
+ * - Each letter maps to a codepoint: 1f1e6 + (letter position in alphabet)
+ * - US = U (1f1fa) + S (1f1f8) -> https://...twemoji/1f1fa-1f1f8.svg
+ */
+export function getCountryFlagUrl(countryCode: string | null | undefined, size: number = 32): string | null {
+  if (!countryCode || countryCode.length !== 2) {
+    return null;
+  }
+  
+  const code = countryCode.toUpperCase();
+  // Convert each letter to regional indicator codepoint
+  // A=1f1e6, B=1f1e7, ... Z=1f1ff
+  const codepoint1 = (0x1f1e6 + code.charCodeAt(0) - 65).toString(16);
+  const codepoint2 = (0x1f1e6 + code.charCodeAt(1) - 65).toString(16);
+  
+  return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${codepoint1}-${codepoint2}.svg`;
+}

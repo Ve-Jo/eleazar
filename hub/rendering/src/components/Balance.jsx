@@ -1,6 +1,6 @@
 import prettyMilliseconds from "pretty-ms";
 import Decimal from "decimal.js";
-import { getCountryFlag, countryFlags } from "../utils/countryFlagsRender.ts";
+import { getCountryFlag } from "../utils/countryFlagsRender.ts";
 import Banknotes from "./unified/Banknotes.jsx";
 import InfoRectangle from "./unified/InfoRectangle.jsx";
 
@@ -64,12 +64,14 @@ const Balance = (props) => {
       if (genderEmoji) parts.push(genderEmoji);
     }
 
+    // Add country flag emoji - the rendering layer (takumiBackend) will convert
+    // regional indicator symbols to img elements automatically
     if (userCountryCode) {
       const countryFlag = getCountryFlag(userCountryCode);
       if (countryFlag) parts.push(countryFlag);
     }
 
-    return parts.join(", ");
+    return parts.join(" ");
   };
 
   const isMarried = props?.database?.marriageStatus?.status === "MARRIED";

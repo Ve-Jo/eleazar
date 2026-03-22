@@ -1,6 +1,7 @@
 import React from "react";
 import { ImageResponse } from "@takumi-rs/image-response";
 import type { Font } from "@takumi-rs/core";
+import { processFlagEmojis } from "./flagEmojiProcessor.ts";
 
 type SatoriFont = {
   name: string;
@@ -167,8 +168,12 @@ export async function renderWithTakumi({
     // Transform SatoriFont format to Takumi Font format
     const takumiFonts = transformSatoriToTakumiFonts(satoriFonts);
     
+    // Create the React element and process flag emojis
+    const element = React.createElement(Component, formattedProps);
+    const processedElement = processFlagEmojis(element, 16 * scaling.image);
+    
     const response = new ImageResponse(
-      React.createElement(Component, formattedProps),
+      processedElement,
       {
         width: dimensions.width * scaling.image,
         height: dimensions.height * scaling.image,
