@@ -260,30 +260,29 @@ const command = {
           (hubClient as any).getUser(guild.id, targetId, true),
         ])) as [EconomyUserData, EconomyUserData];
 
-        const crimeUpgrade = freshUserData.upgrades?.find((upgrade) => upgrade.type === "crime");
-        const crimeLevel = crimeUpgrade?.level || 1;
-        const successChance = Math.min(0.55, 0.3 + (crimeLevel - 1) * 0.04);
+        // crime_mastery combines crime cooldown, success chance, and fine reduction
+        const crimeMasteryUpgrade = freshUserData.upgrades?.find((upgrade) => upgrade.type === "crime_mastery");
+        const crimeMasteryLevel = crimeMasteryUpgrade?.level || 1;
+        const successChance = Math.min(0.55, 0.3 + (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectSuccess || 0));
         const success = Math.random() < successChance;
 
-        const targetShieldUpgrade = targetData.upgrades?.find(
-          (upgrade) => upgrade.type === "wallet_shield"
+        // vault_guard provides theft defense for the target
+        const targetVaultGuardUpgrade = targetData.upgrades?.find(
+          (upgrade) => upgrade.type === "vault_guard"
         );
-        const targetShieldLevel = targetShieldUpgrade?.level || 1;
+        const targetVaultGuardLevel = targetVaultGuardUpgrade?.level || 1;
         const targetShieldReduction = Math.min(
           0.35,
-          (targetShieldLevel - 1) * (UPGRADES.wallet_shield.effectMultiplier || 0)
+          (targetVaultGuardLevel - 1) * (UPGRADES.vault_guard.effectMultiplier || 0)
         );
 
-        const baseMaxStealPercent = Math.min(0.15, 0.08 + (crimeLevel - 1) * 0.01);
+        const baseMaxStealPercent = Math.min(0.15, 0.08 + (crimeMasteryLevel - 1) * 0.01);
         const maxStealPercent = Math.max(0.02, baseMaxStealPercent * (1 - targetShieldReduction));
 
-        const fraudProtectionUpgrade = freshUserData.upgrades?.find(
-          (upgrade) => upgrade.type === "fraud_protection"
-        );
-        const fraudProtectionLevel = fraudProtectionUpgrade?.level || 1;
+        // crime_mastery also provides fine reduction
         const fraudReduction = Math.min(
           0.3,
-          (fraudProtectionLevel - 1) * (UPGRADES.fraud_protection.effectMultiplier || 0)
+          (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectMultiplier || 0)
         );
 
         let amount = 0;
