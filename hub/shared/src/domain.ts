@@ -45,75 +45,56 @@ export type CrateTypeConfig = (typeof CRATE_TYPES)[CrateTypeKey];
 export type CrateRewardConfig = CrateTypeConfig["rewards"];
 
 export const UPGRADES = {
+  // Economy - unchanged
   daily_bonus: {
     emoji: "🎁",
     basePrice: 20,
     priceMultiplier: 1.5,
-    effectMultiplier: 0.15,
-    category: "economy",
-  },
-  daily_cooldown: {
-    emoji: "⏳",
-    basePrice: 50,
-    priceMultiplier: 1.4,
-    effectValue: 30 * 60 * 1000,
-    category: "cooldowns",
-  },
-  crime: {
-    emoji: "🦹",
-    basePrice: 50,
-    priceMultiplier: 1.2,
-    effectValue: 20 * 60 * 1000,
-    category: "cooldowns",
-  },
-  bank_rate: {
-    emoji: "💰",
-    basePrice: 100,
-    priceMultiplier: 1.6,
-    effectValue: 0.05,
+    effectMultiplier: 0.15, // +15% daily rewards per level
     category: "economy",
   },
   games_earning: {
     emoji: "🎮",
     basePrice: 75,
     priceMultiplier: 1.3,
-    effectMultiplier: 0.1,
+    effectMultiplier: 0.1, // +10% game payouts per level
     category: "economy",
   },
-  fraud_protection: {
-    emoji: "🛡️",
-    basePrice: 90,
+  // Activity - merges crime + fraud_protection
+  crime_mastery: {
+    emoji: "🦹",
+    basePrice: 60,
+    priceMultiplier: 1.25,
+    effectMultiplier: 0.06, // -6% crime fines per level
+    effectValue: 20 * 60 * 1000, // -20min crime cooldown per level
+    effectSuccess: 0.04, // +4% crime success chance per level
+    category: "activity",
+  },
+  // Cooldowns - reduces daily/weekly cooldowns by percentage
+  time_wizard: {
+    emoji: "⏳",
+    basePrice: 100,
     priceMultiplier: 1.35,
-    effectMultiplier: 0.06,
-    category: "economy",
-  },
-  wallet_shield: {
-    emoji: "🔐",
-    basePrice: 110,
-    priceMultiplier: 1.4,
-    effectMultiplier: 0.07,
-    category: "economy",
-  },
-  vault_insurance: {
-    emoji: "🏦",
-    basePrice: 140,
-    priceMultiplier: 1.45,
-    effectMultiplier: 0.08,
-    category: "economy",
-  },
-  cooldown_mastery: {
-    emoji: "⌛",
-    basePrice: 120,
-    priceMultiplier: 1.3,
-    effectValue: 5 * 60 * 1000,
+    effectMultiplier: 0.01, // -1% daily/weekly cooldowns per level
     category: "cooldowns",
   },
-  tax_optimization: {
-    emoji: "📉",
-    basePrice: 100,
-    priceMultiplier: 1.33,
-    effectMultiplier: 0.01,
-    category: "economy",
+  // Defense - merges wallet_shield + vault_insurance + tax_optimization
+  vault_guard: {
+    emoji: "🛡️",
+    basePrice: 120,
+    priceMultiplier: 1.4,
+    effectMultiplier: 0.07, // -7% theft vulnerability per level
+    effectRisk: 0.08, // -8% risk game losses per level
+    effectFees: 0.01, // -1% bank operation fees per level
+    category: "defense",
+  },
+  // Banking - NEW upgrade for max inactive time
+  bank_vault: {
+    emoji: "🏦",
+    basePrice: 80,
+    priceMultiplier: 1.3,
+    effectValue: 60 * 60 * 1000, // +1 hour max bank accumulation per level
+    category: "banking",
   },
 } as const;
 
@@ -141,15 +122,11 @@ export const DEFAULT_VALUES = {
   cooldowns: {},
   upgrades: {
     daily_bonus: { level: 1 },
-    daily_cooldown: { level: 1 },
-    crime: { level: 1 },
-    bank_rate: { level: 1 },
     games_earning: { level: 1 },
-    fraud_protection: { level: 1 },
-    wallet_shield: { level: 1 },
-    vault_insurance: { level: 1 },
-    cooldown_mastery: { level: 1 },
-    tax_optimization: { level: 1 },
+    crime_mastery: { level: 1 },
+    time_wizard: { level: 1 },
+    vault_guard: { level: 1 },
+    bank_vault: { level: 1 },
   },
   ping: {
     music: { players: 0, ping: 0 },

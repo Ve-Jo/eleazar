@@ -521,8 +521,15 @@ UpgradesDisplay.localization_strings = {
   slot: { en: "Slot", ru: "Позиция", uk: "Позиція" },
   levelBoost: { en: "Level jump", ru: "Рост уровня", uk: "Ріст рівня" },
   commandLabel: { en: "UPGRADE COMMAND CENTER", ru: "ЦЕНТР УЛУЧШЕНИЙ", uk: "ЦЕНТР ПОКРАЩЕНЬ" },
-  category_economy: { en: "Economy", ru: "Экономика", uk: "Економіка" },
-  category_cooldowns: { en: "Cooldowns", ru: "Перезарядки", uk: "Перезарядки" },
+  category_economy: { en: "💰 Economy", ru: "💰 Экономика", uk: "💰 Економіка" },
+  category_activity: { en: "🎯 Activity", ru: "🎯 Активность", uk: "🎯 Активність" },
+  category_cooldowns: { en: "⏳ Cooldowns", ru: "⏳ Перезарядки", uk: "⏳ Перезарядки" },
+  category_defense: { en: "🛡️ Defense", ru: "🛡️ Защита", uk: "🛡️ Захист" },
+  category_banking: { en: "🏦 Banking", ru: "🏦 Банк", uk: "🏦 Банк" },
+  effectPerLevel: { en: "Per level", ru: "За уровень", uk: "За рівень" },
+  maxLevel: { en: "Max level", ru: "Макс. уровень", uk: "Макс. рівень" },
+  currentBonus: { en: "Current bonus", ru: "Текущий бонус", uk: "Поточний бонус" },
+  nextBonus: { en: "Next level bonus", ru: "Бонус след. уровня", uk: "Бонус наст. рівня" },
 };
 
 export default UpgradesDisplay;

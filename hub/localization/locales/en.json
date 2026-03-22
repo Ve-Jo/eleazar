@@ -133,7 +133,7 @@
         "upgrades": {
           "daily_bonus": {
             "name": "Daily Bonus",
-            "description": "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)"
+            "description": "Boosts your daily reward claim by {{effect}}%. Each level adds +15% to your daily coins. Works with /daily command."
           },
           "daily_cooldown": {
             "name": "Daily Cooldown",
@@ -149,7 +149,7 @@
           },
           "games_earning": {
             "name": "Games Earnings",
-            "description": "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)"
+            "description": "Increases all game payouts by {{effect}}%. Affects 2048, Snake, Coinflip, Tower. Each level = +10% earnings."
           },
           "fraud_protection": {
             "name": "Fraud Protection",
@@ -170,6 +170,22 @@
           "tax_optimization": {
             "name": "Tax Optimization",
             "description": "Reduce operation fees by {{effect}}% (+{{increasePerLevel}}%)"
+          },
+          "crime_mastery": {
+            "name": "Crime Mastery",
+            "description": "Master the art of crime! -20min cooldown per level, +4% success chance, -6% fines if caught. Use with /crime."
+          },
+          "time_wizard": {
+            "name": "Time Wizard",
+            "description": "Bend time for daily/weekly rewards! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /daily and /weekly."
+          },
+          "vault_guard": {
+            "name": "Vault Guard",
+            "description": "Ultimate protection! -7% theft vulnerability, -8% risk game losses, -1% bank fees per level. Shields your wealth."
+          },
+          "bank_vault": {
+            "name": "Bank Vault",
+            "description": "Extend bank interest accumulation! Base 2h max inactive time. Each level adds +1 hour (up to 7 days). Bank rate scales with your activity levels."
           }
         },
         "selectedLine": "Selected: {{emoji}} {{name}} (L{{current}} → L{{next}})",
@@ -192,7 +208,14 @@
         "impact_core_cooldowns": "Core cooldowns",
         "impact_bank_operation_fees": "Bank operation fees",
         "panelHintLine": "Full upgrade details are shown in the image panel.",
-        "menuImpactCostLine": "{{impact}} • Cost {{price}}"
+        "menuImpactCostLine": "{{impact}} • Cost {{price}}",
+        "category_activity": "Activity Upgrades",
+        "category_defense": "Defense Upgrades",
+        "category_banking": "Banking Upgrades",
+        "impact_daily_weekly": "Daily/Weekly cooldowns",
+        "impact_crime_mastery": "Crime success & fines",
+        "impact_bank_max_time": "Bank max time",
+        "impact_defense": "Defense & fees"
       },
       "withdraw": {
         "insufficientFunds": "Insufficient funds",
@@ -219,6 +242,14 @@
         "userNotFound": "User not found",
         "imageError": "Failed to generate the image. Please try again.",
         "error": "An error occurred while processing your request"
+      },
+      "continue": {
+        "title": "Bank Continue",
+        "noBankBalance": "You don't have any money in your bank account",
+        "continueSuccess": "✅ Bank interest cycle restarted! You earned **{{interest}}** coins from {{cycles}} completed cycle(s). Your bank is now accumulating interest again.",
+        "continueNoCycle": "✅ Bank timer reset. No cycles were completed yet, so no interest was added. Your bank is now accumulating interest.",
+        "partnerContinueDM": "🏦 Your partner {{user}} continued the bank interest cycle in {{guild}}. Earned: **{{interest}}** coins.",
+        "error": "An error occurred while continuing your bank interest"
       }
     },
     "emotions": {

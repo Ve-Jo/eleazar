@@ -144,7 +144,7 @@ function getUpgradeEffectDetails(
   currentLevel: number
 ): Pick<UpgradeInfoEntry, "effectPerLevel" | "effectUnit" | "currentEffect" | "nextEffect" | "deltaEffect"> {
   const nextLevel = currentLevel + 1;
-  const minuteKeys = new Set(["daily_cooldown", "crime", "cooldown_mastery"]);
+  const minuteKeys = new Set(["crime_mastery", "bank_vault"]);
   const usesMinutes = minuteKeys.has(key);
   const effectUnit: "%" | "m" = usesMinutes ? "m" : "%";
   const baseEffect = usesMinutes
@@ -223,10 +223,25 @@ const command = {
       ru: "Улучшения Экономики",
       uk: "Покращення Економіки",
     },
+    category_activity: {
+      en: "Activity Upgrades",
+      ru: "Улучшения Активности",
+      uk: "Покращення Активності",
+    },
     category_cooldowns: {
       en: "Cooldown Upgrades",
       ru: "Улучшения Перезарядки",
       uk: "Покращення Перезарядки",
+    },
+    category_defense: {
+      en: "Defense Upgrades",
+      ru: "Улучшения Защиты",
+      uk: "Покращення Захисту",
+    },
+    category_banking: {
+      en: "Banking Upgrades",
+      ru: "Улучшения Банка",
+      uk: "Покращення Банку",
     },
     revertButton: {
       en: "Revert",
@@ -318,130 +333,78 @@ const command = {
       ru: "Ежедневные награды",
       uk: "Щоденні нагороди",
     },
-    impact_daily_cooldown: {
-      en: "Daily cooldown",
-      ru: "Перезарядка daily",
-      uk: "Перезарядка daily",
+    impact_daily_weekly: {
+      en: "Daily/Weekly cooldowns",
+      ru: "Daily/Weekly перезарядки",
+      uk: "Daily/Weekly перезарядки",
     },
-    impact_crime_cooldown: {
-      en: "Crime cooldown",
-      ru: "Перезарядка crime",
-      uk: "Перезарядка crime",
+    impact_crime_mastery: {
+      en: "Crime success & fines",
+      ru: "Успех и штрафы crime",
+      uk: "Успіх та штрафи crime",
     },
-    impact_bank_growth: {
-      en: "Bank growth",
-      ru: "Рост банка",
-      uk: "Зростання банку",
+    impact_bank_max_time: {
+      en: "Bank max time",
+      ru: "Макс. время банка",
+      uk: "Макс. час банку",
     },
     impact_game_payouts: {
       en: "Game payouts",
       ru: "Выплаты игр",
       uk: "Виплати ігор",
     },
-    impact_crime_fines: {
-      en: "Crime fines",
-      ru: "Штрафы crime",
-      uk: "Штрафи crime",
-    },
-    impact_theft_defense: {
-      en: "Theft defense",
-      ru: "Защита от кражи",
-      uk: "Захист від крадіжки",
-    },
-    impact_risk_game_losses: {
-      en: "Risk game losses",
-      ru: "Потери в риск-играх",
-      uk: "Втрати в ризик-іграх",
-    },
-    impact_core_cooldowns: {
-      en: "Core cooldowns",
-      ru: "Базовые перезарядки",
-      uk: "Базові перезарядки",
-    },
-    impact_bank_operation_fees: {
-      en: "Bank operation fees",
-      ru: "Банковские комиссии",
-      uk: "Банківські комісії",
+    impact_defense: {
+      en: "Defense & fees",
+      ru: "Защита и комиссии",
+      uk: "Захист та комісії",
     },
     upgrades: {
       daily_bonus: {
         name: { en: "Daily Bonus", ru: "Ежедн. Бонус", uk: "Щоденний Бонус" },
         description: {
-          en: "Increase your daily bonus multiplier by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает ежедневный бонус на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує щоденний бонус на {{effect}}% (+{{increasePerLevel}}%)",
-        },
-      },
-      daily_cooldown: {
-        name: { en: "Daily Cooldown", ru: "Перезарядка Ежедн.", uk: "Перезарядка Щоденного" },
-        description: {
-          en: "Reduce daily cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
-          ru: "Уменьшает перезарядку ежедневного бонуса на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
-          uk: "Зменшує перезарядку щоденного бонусу на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
-        },
-      },
-      crime: {
-        name: { en: "Crime Cooldown", ru: "Преступления", uk: "Крадіжка" },
-        description: {
-          en: "Reduce crime cooldown by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
-          ru: "Уменьшает перезарядку преступления на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
-          uk: "Зменшує перезарядку злочину на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
-        },
-      },
-      bank_rate: {
-        name: { en: "Bank Interest", ru: "Банк. Процент", uk: "Банк. Відсоток" },
-        description: {
-          en: "Increase bank interest rate by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает процентную ставку банка на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує відсоткову ставку банку на {{effect}}% (+{{increasePerLevel}}%)",
+          en: "Boosts your daily reward claim by {{effect}}%. Each level adds +15% to your daily coins. Works with /daily command.",
+          ru: "Увеличивает ежедневную награду на {{effect}}%. Каждый уровень добавляет +15% к ежедневным монетам. Работает с командой /daily.",
+          uk: "Збільшує щоденну нагороду на {{effect}}%. Кожен рівень додає +15% до щоденних монет. Працює з командою /daily.",
         },
       },
       games_earning: {
         name: { en: "Games Earnings", ru: "Доход от Игр", uk: "Дохід від Ігор" },
         description: {
-          en: "Increase earnings from games by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Увеличивает доход от игр на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Збільшує дохід від ігор на {{effect}}% (+{{increasePerLevel}}%)",
+          en: "Increases all game payouts by {{effect}}%. Affects 2048, Snake, Coinflip, Tower. Each level = +10% earnings.",
+          ru: "Увеличивает выплаты всех игр на {{effect}}%. Влияет на 2048, Snake, Coinflip, Tower. Каждый уровень = +10% дохода.",
+          uk: "Збільшує виплати всіх ігор на {{effect}}%. Впливає на 2048, Snake, Coinflip, Tower. Кожен рівень = +10% доходу.",
         },
       },
-      fraud_protection: {
-        name: { en: "Fraud Protection", ru: "Защита от Штрафов", uk: "Захист від Штрафів" },
+      crime_mastery: {
+        name: { en: "Crime Mastery", ru: "Мастер Преступлений", uk: "Майстер Злочинів" },
         description: {
-          en: "Reduce failed-crime fines by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Снижает штрафы за неудачные преступления на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Знижує штрафи за невдалі злочини на {{effect}}% (+{{increasePerLevel}}%)",
+          en: "Master the art of crime! -20min cooldown per level, +4% success chance, -6% fines if caught. Use with /crime.",
+          ru: "Мастерство преступлений! -20мин перезарядка за уровень, +4% шанс успеха, -6% штрафы при поимке. Используйте с /crime.",
+          uk: "Майстерність злочинів! -20хв перезарядка за рівень, +4% шанс успіху, -6% штрафи при затриманні. Використовуйте з /crime.",
         },
       },
-      wallet_shield: {
-        name: { en: "Wallet Shield", ru: "Щит Кошелька", uk: "Щит Гаманця" },
+      time_wizard: {
+        name: { en: "Time Wizard", ru: "Повелитель Времени", uk: "Чарівник Часу" },
         description: {
-          en: "Reduce max stolen amount by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Снижает максимум украденных средств на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Знижує максимум вкрадених коштів на {{effect}}% (+{{increasePerLevel}}%)",
+          en: "Bend time for daily/weekly rewards! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /daily and /weekly.",
+          ru: "Ускоряйте время для daily/weekly наград! Снижает перезарядки на {{effect}}%. Каждый уровень = -1% времени ожидания для /daily и /weekly.",
+          uk: "Прискорюйте час для daily/weekly нагород! Знижує перезарядки на {{effect}}%. Кожен рівень = -1% часу очікування для /daily та /weekly.",
         },
       },
-      vault_insurance: {
-        name: { en: "Vault Insurance", ru: "Страховка Хранилища", uk: "Страхування Сховища" },
+      vault_guard: {
+        name: { en: "Vault Guard", ru: "Страж Хранилища", uk: "Охоронець Сховища" },
         description: {
-          en: "Recover {{effect}}% on risky losses (+{{increasePerLevel}}%)",
-          ru: "Возвращает {{effect}}% при рискованных потерях (+{{increasePerLevel}}%)",
-          uk: "Повертає {{effect}}% при ризикованих втратах (+{{increasePerLevel}}%)",
+          en: "Ultimate protection! -7% theft vulnerability, -8% risk game losses, -1% bank fees per level. Shields your wealth.",
+          ru: "Максимальная защита! -7% уязвимость к краже, -8% потери в риск-играх, -1% банковские комиссии за уровень. Защищает ваше богатство.",
+          uk: "Максимальний захист! -7% вразливість до крадіжки, -8% втрати в ризик-іграх, -1% банківські комісії за рівень. Захищає ваше багатство.",
         },
       },
-      cooldown_mastery: {
-        name: { en: "Cooldown Mastery", ru: "Мастер Перезарядки", uk: "Майстер Перезарядки" },
+      bank_vault: {
+        name: { en: "Bank Vault", ru: "Банковский Сейф", uk: "Банківський Сейф" },
         description: {
-          en: "Reduce cooldowns by {{effect}} minutes (-{{increasePerLevelMinutes}}m)",
-          ru: "Снижает перезарядки на {{effect}} минут (-{{increasePerLevelMinutes}}м)",
-          uk: "Знижує перезарядки на {{effect}} хвилин (-{{increasePerLevelMinutes}}хв)",
-        },
-      },
-      tax_optimization: {
-        name: { en: "Tax Optimization", ru: "Оптимизация Комиссий", uk: "Оптимізація Комісій" },
-        description: {
-          en: "Reduce operation fees by {{effect}}% (+{{increasePerLevel}}%)",
-          ru: "Снижает комиссии операций на {{effect}}% (+{{increasePerLevel}}%)",
-          uk: "Знижує комісії операцій на {{effect}}% (+{{increasePerLevel}}%)",
+          en: "Extend bank interest accumulation! Base 2h max inactive time. Each level adds +1 hour (up to 7 days). Bank rate scales with your activity levels.",
+          ru: "Продлевает накопление процентов банка! Базовое макс. время неактивности 2ч. Каждый уровень добавляет +1 час (до 7 дней). Ставка банка зависит от вашей активности.",
+          uk: "Продовжує накопичення відсотків банку! Базовий макс. час неактивності 2год. Кожен рівень додає +1 годину (до 7 днів). Ставка банку залежить від вашої активності.",
         },
       },
     },
@@ -487,15 +450,11 @@ const command = {
         const userBalance = Math.round(Number(userData.economy?.balance || 0));
         const impactKeys: Record<string, string> = {
           daily_bonus: "daily_rewards",
-          daily_cooldown: "daily_cooldown",
-          crime: "crime_cooldown",
-          bank_rate: "bank_growth",
           games_earning: "game_payouts",
-          fraud_protection: "crime_fines",
-          wallet_shield: "theft_defense",
-          vault_insurance: "risk_game_losses",
-          cooldown_mastery: "core_cooldowns",
-          tax_optimization: "bank_operation_fees",
+          crime_mastery: "crime_mastery",
+          time_wizard: "daily_weekly",
+          vault_guard: "defense",
+          bank_vault: "bank_max_time",
         };
 
         const upgradeEntries = Object.keys(upgradesConfig).map((key) => {
