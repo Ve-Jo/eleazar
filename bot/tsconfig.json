@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.base.json",
-  "include": ["bot.ts", "src/**/*.js", "src/**/*.ts", "src/**/*.tsx"],
+  "include": ["bot.ts", "launcher.ts", "src/**/*.js", "src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules"]
 }

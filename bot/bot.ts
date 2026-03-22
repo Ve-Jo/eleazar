@@ -9,6 +9,7 @@ import Replicate from "replicate";
 import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.ts";
 import { startDailyCrateReminders } from "./src/runners/dailyCrateReminders.ts";
+import { getShardId, isLeaderShard } from "./src/services/runtimeRedis.ts";
 
 type CoverageMap = Record<string, unknown>;
 const globalAny = globalThis as any;
@@ -201,14 +202,6 @@ client.deepinfra = {
 
 console.log("Hub client ready");
 
-// Check database health
-try {
-  await hubClientAny.checkDatabaseHealth();
-  console.log("Database health check passed");
-} catch (error) {
-  console.error("Database health check failed:", error);
-}
-
 // Check and reinitialize voice sessions for existing voice users
 async function initializeVoiceSessions() {
   try {
@@ -221,8 +214,26 @@ async function initializeVoiceSessions() {
 }
 
 await client.login(process.env.DISCORD_TOKEN);
-await initializeVoiceSessions();
-startDailyCrateReminders(client);
+
+const shardId = getShardId(client);
+const leader = isLeaderShard(client);
+
+console.log(`[startup] shard=${shardId} leader=${leader}`);
+
+if (leader) {
+  // Check database health
+  try {
+    await hubClientAny.checkDatabaseHealth();
+    console.log("Database health check passed");
+  } catch (error) {
+    console.error("Database health check failed:", error);
+  }
+
+  await initializeVoiceSessions();
+  startDailyCrateReminders(client);
+} else {
+  console.log("[startup] skipping leader-only startup tasks");
+}
 
 // Start the Client API Server
 //startApiClientServer();

@@ -1,6 +1,6 @@
 {
   "name": "eleazar",
-  "module": "bot.ts",
+  "module": "launcher.ts",
   "devDependencies": {
     "@types/bun": "latest",
     "c8": "^10.1.3",
@@ -72,12 +72,12 @@
     "ws": "^8.18.0"
   },
   "version": "1.0.0",
-  "main": "bot.ts",
+  "main": "launcher.ts",
   "scripts": {
-    "start-node": "bun --expose-gc bot.ts",
+    "start-node": "bun --expose-gc launcher.ts",
     "start": "bun --expose-gc .",
     "dev": "bun --expose-gc .",
-    "coverage": "c8 --clean --reporter=lcov --reporter=text --reporter=html bun --expose-gc bot.ts",
+    "coverage": "c8 --clean --reporter=lcov --reporter=text --reporter=html bun --expose-gc launcher.ts",
     "typecheck": "tsc -p tsconfig.json",
     "ts-debt": "bun ../scripts/check-ts-debt.mjs --target ./src --max-js-files 1 --max-any 965 --max-as-any 197 --max-colon-any 139"
   },
