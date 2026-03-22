@@ -1231,6 +1231,13 @@ class HubClient {
     });
   }
 
+  async continueBankBalance(guildId: string, userId: string): Promise<{ success: boolean; interestAdded: string; newCycle: number }> {
+    return await apiRequest<{ success: boolean; interestAdded: string; newCycle: number }, string>(`${this.databaseUrl}/economy/bank/continue`, {
+      method: "POST",
+      body: JSON.stringify({ userId, guildId }),
+    });
+  }
+
   // Level calculation methods
   calculateLevel(xp: number | bigint): LevelCalculation {
     const xpNumber = typeof xp === "bigint" ? Number(xp) : xp;

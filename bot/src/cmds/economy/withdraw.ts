@@ -160,10 +160,14 @@ const command = {
         return;
       }
 
-      const activeBankBalance = await (hubClient as any).calculateBankBalance(initialUserData);
+      const activeBankResult = await (hubClient as any).calculateBankBalance(initialUserData);
       const balanceData = await (hubClient as any).getBalance(guildId, userId);
       const distributedBalance = Number(balanceData?.bankDistributed || 0);
-      userBankBalance = Number(activeBankBalance) + distributedBalance;
+      // Handle new BankResult format
+      const activeBankBalance = activeBankResult && typeof activeBankResult === "object" && "balance" in activeBankResult
+        ? Number(activeBankResult.balance)
+        : Number(activeBankResult || 0);
+      userBankBalance = activeBankBalance + distributedBalance;
 
       if (marriageStatus && marriageStatus.status === "MARRIED") {
         await (hubClient as any).ensureGuildUser(guildId, marriageStatus.partnerId);
@@ -240,20 +244,28 @@ const command = {
           marriageStatus.partnerId,
           true
         )) as GenericUserData;
-        const refreshedUserActiveBalance = await (hubClient as any).calculateBankBalance(finalUserData);
+        const refreshedUserResult = await (hubClient as any).calculateBankBalance(finalUserData);
         const refreshedUserBalanceData = await (hubClient as any).getBalance(guildId, userId);
         const refreshedUserDistributedBalance = Number(
           refreshedUserBalanceData?.bankDistributed || 0
         );
-        const refreshedUserBankBalance = Number(refreshedUserActiveBalance) + refreshedUserDistributedBalance;
+        // Handle new BankResult format
+        const refreshedUserActiveBalance = refreshedUserResult && typeof refreshedUserResult === "object" && "balance" in refreshedUserResult
+          ? Number(refreshedUserResult.balance)
+          : Number(refreshedUserResult || 0);
+        const refreshedUserBankBalance = refreshedUserActiveBalance + refreshedUserDistributedBalance;
 
-        const partnerActiveBalance = await (hubClient as any).calculateBankBalance(updatedPartner);
+        const partnerResult = await (hubClient as any).calculateBankBalance(updatedPartner);
         const partnerBalanceData = await (hubClient as any).getBalance(
           guildId,
           marriageStatus.partnerId
         );
         const partnerDistributedBalance = Number(partnerBalanceData?.bankDistributed || 0);
-        const partnerBankBalance = Number(partnerActiveBalance) + partnerDistributedBalance;
+        // Handle new BankResult format
+        const partnerActiveBalance = partnerResult && typeof partnerResult === "object" && "balance" in partnerResult
+          ? Number(partnerResult.balance)
+          : Number(partnerResult || 0);
+        const partnerBankBalance = partnerActiveBalance + partnerDistributedBalance;
         const combinedBankBalance = refreshedUserBankBalance + partnerBankBalance;
 
         finalUserData.partnerData = updatedPartner;
@@ -261,12 +273,16 @@ const command = {
         finalUserData.combinedBankBalance = Number(combinedBankBalance).toFixed(5);
         partnerData = updatedPartner;
       } else {
-        const refreshedUserActiveBalance = await (hubClient as any).calculateBankBalance(finalUserData);
+        const refreshedUserResult = await (hubClient as any).calculateBankBalance(finalUserData);
         const refreshedUserBalanceData = await (hubClient as any).getBalance(guildId, userId);
         const refreshedUserDistributedBalance = Number(
           refreshedUserBalanceData?.bankDistributed || 0
         );
-        const refreshedUserBankBalance = Number(refreshedUserActiveBalance) + refreshedUserDistributedBalance;
+        // Handle new BankResult format
+        const refreshedUserActiveBalance = refreshedUserResult && typeof refreshedUserResult === "object" && "balance" in refreshedUserResult
+          ? Number(refreshedUserResult.balance)
+          : Number(refreshedUserResult || 0);
+        const refreshedUserBankBalance = refreshedUserActiveBalance + refreshedUserDistributedBalance;
         finalUserData.combinedBankBalance = Number(refreshedUserBankBalance).toFixed(5);
       }
 

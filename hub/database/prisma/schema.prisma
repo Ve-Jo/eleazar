@@ -52,6 +52,7 @@ model Economy {
   bankBalance     Decimal @default(0) @db.Decimal(30, 5)
   bankRate        Decimal @default(0) @db.Decimal(10, 5)
   bankStartTime   BigInt  @default(0)
+  bankCycle       Int     @default(0) @map("bank_cycle") // Number of completed interest cycles
   bankDistributed Decimal @default(0) @map("bank_distributed") @db.Decimal(30, 5)
   upgradeDiscount Decimal @default(0) @map("upgrade_discount") @db.Decimal(5, 2)
   user            User    @relation(fields: [guildId, userId], references: [guildId, id], onDelete: Cascade)

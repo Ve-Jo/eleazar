@@ -185,6 +185,23 @@ router.post("/bank/update", async (req: EconomyRouteRequest, res: ResponseLike) 
   }
 });
 
+router.post("/bank/continue", async (req: EconomyRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = typeof req.body.userId === "string" ? req.body.userId : "";
+    const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const result = await Database.continueBankBalance(guildId, userId);
+    res.json(serializeBigInt(result));
+  } catch (error) {
+    console.error("Error continuing bank balance:", error);
+    res.status(500).json({ error: "Failed to continue bank balance" });
+  }
+});
+
 router.post("/bank/interest", async (req: EconomyRouteRequest, res: ResponseLike) => {
   try {
     const bankBalance = req.body.bankBalance;

@@ -227,10 +227,14 @@ const command = {
 
       const updatedUser = (await (hubClient as any).getUser(guildId, userId, true)) as GenericUserData;
 
-      const userActiveBalance = await (hubClient as any).calculateBankBalance(updatedUser);
+      const userActiveResult = await (hubClient as any).calculateBankBalance(updatedUser);
       const userBalanceData = await (hubClient as any).getBalance(guildId, userId);
       const userDistributedBalance = Number(userBalanceData?.bankDistributed || 0);
-      const currentBankBalance = Number(userActiveBalance) + userDistributedBalance;
+      // Handle new BankResult format
+      const userActiveBalance = userActiveResult && typeof userActiveResult === "object" && "balance" in userActiveResult
+        ? Number(userActiveResult.balance)
+        : Number(userActiveResult || 0);
+      const currentBankBalance = userActiveBalance + userDistributedBalance;
 
       if (marriageStatus && marriageStatus.status === "MARRIED" && partnerData) {
         const updatedPartner = (await (hubClient as any).getUser(
@@ -238,13 +242,17 @@ const command = {
           marriageStatus.partnerId,
           true
         )) as GenericUserData;
-        const partnerActiveBalance = await (hubClient as any).calculateBankBalance(updatedPartner);
+        const partnerActiveResult = await (hubClient as any).calculateBankBalance(updatedPartner);
         const partnerBalanceData = await (hubClient as any).getBalance(
           guildId,
           marriageStatus.partnerId
         );
         const partnerDistributedBalance = Number(partnerBalanceData?.bankDistributed || 0);
-        const partnerBankBalance = Number(partnerActiveBalance) + partnerDistributedBalance;
+        // Handle new BankResult format
+        const partnerActiveBalance = partnerActiveResult && typeof partnerActiveResult === "object" && "balance" in partnerActiveResult
+          ? Number(partnerActiveResult.balance)
+          : Number(partnerActiveResult || 0);
+        const partnerBankBalance = partnerActiveBalance + partnerDistributedBalance;
         const combinedBankBalance = Number(currentBankBalance) + partnerBankBalance;
 
         updatedUser.partnerData = updatedPartner;

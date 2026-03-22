@@ -117,12 +117,31 @@ const command = {
     }
 
     let individualBankBalance = 0;
+    let bankCycleData = null;
     if (userData.economy) {
-      const activeBankBalance = await (hubClient as any).calculateBankBalance(userData);
+      const bankResult = await (hubClient as any).calculateBankBalance(userData);
       const balanceData = await (hubClient as any).getBalance(interaction.guild.id, user.id);
       const distributedBalance = Number(balanceData?.bankDistributed || 0);
 
-      individualBankBalance = Number(activeBankBalance) + distributedBalance;
+      // Handle new BankResult format with cycle info
+      if (bankResult && typeof bankResult === "object" && "balance" in bankResult) {
+        individualBankBalance = Number(bankResult.balance) + distributedBalance;
+        
+        // Store cycle data for Balance component
+        if (bankResult.maxInactiveMs > 0) {
+          bankCycleData = {
+            cycleCount: bankResult.cycleCount,
+            cycleComplete: bankResult.cycleComplete,
+            maxInactiveMs: bankResult.maxInactiveMs,
+            timeIntoCycle: bankResult.timeIntoCycle,
+            annualRate: bankResult.annualRate,
+          };
+        }
+      } else {
+        // Fallback for old format
+        individualBankBalance = Number(bankResult || 0) + distributedBalance;
+      }
+      
       userData.economy.bankBalance = individualBankBalance;
       combinedBankBalance += Number(individualBankBalance);
     }
@@ -137,9 +156,13 @@ const command = {
         marriageStatus.partnerId
       )) as GenericRecord;
       if (partnerData?.economy) {
-        const partnerBankBalance = await (hubClient as any).calculateBankBalance(partnerData);
+        const partnerBankResult = await (hubClient as any).calculateBankBalance(partnerData);
+        // Handle new BankResult format
+        const partnerBankBalance = partnerBankResult && typeof partnerBankResult === "object" && "balance" in partnerBankResult
+          ? Number(partnerBankResult.balance)
+          : Number(partnerBankResult || 0);
         partnerData.economy.bankBalance = partnerBankBalance;
-        combinedBankBalance += Number(partnerBankBalance);
+        combinedBankBalance += partnerBankBalance;
       }
       userData.combinedBankBalance = Number(combinedBankBalance).toFixed(5);
       userData.individualBankBalance = Number(individualBankBalance).toFixed(5);
@@ -384,6 +407,7 @@ const command = {
         returnDominant: true,
         database: {
           ...userData,
+          bankCycle: bankCycleData,
           levelProgress: {
             chat: { ...chatLevelData, rank: chatRank?.rank, total: chatRank?.total },
             voice: { ...voiceLevelData, rank: voiceRank?.rank, total: voiceRank?.total },

@@ -85,6 +85,7 @@ import {
 import {
   updateBankBalance as updateBankBalanceHelper,
   calculateBankBalance as calculateBankBalanceHelper,
+  continueBankBalance as continueBankBalanceHelper,
 } from "./utils/bankLifecycle.ts";
 import {
   getOrCreateGuildVault as getOrCreateGuildVaultHelper,
@@ -1154,6 +1155,16 @@ class Database {
         this.calculateInterestDecimal(principal, annualRate, timeMs),
       user,
       tx
+    );
+  }
+
+  async continueBankBalance(guildId, userId) {
+    return continueBankBalanceHelper(
+      this.client,
+      (principal, annualRate, timeMs) =>
+        this.calculateInterestDecimal(principal, annualRate, timeMs),
+      guildId,
+      userId
     );
   }
 

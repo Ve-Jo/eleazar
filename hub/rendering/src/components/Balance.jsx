@@ -407,6 +407,7 @@ const Balance = (props) => {
 
   const bankStartTime = database?.economy?.bankStartTime || 0;
   const bankRate = database?.economy?.bankRate || 0;
+  const bankCycle = database?.bankCycle || null;
   // Use combined balance if married, otherwise use individual
   let bankBalanceForDisplay = new Decimal(database?.economy?.bankBalance || 0);
   const individualBankBalance = database?.individualBankBalance // Get individual balance prop
@@ -761,7 +762,9 @@ const Balance = (props) => {
                             const MS_PER_HOUR = 60 * 60 * 1000;
                             const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
 
-                            const effectiveAnnualRate = bankRate / 100;
+                            // Use annualRate from bankCycle (decimal, e.g., 0.054 for 5.4%)
+                            // Fall back to bankRate/100 if bankCycle not available (legacy)
+                            const effectiveAnnualRate = bankCycle?.annualRate ?? (bankRate / 100);
                             const hourlyRate = effectiveAnnualRate * (MS_PER_HOUR / MS_PER_YEAR);
                             return bankBalanceForDisplay.mul(hourlyRate).toFixed(3);
                           })()}
@@ -781,85 +784,119 @@ const Balance = (props) => {
                       width: "100%",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        background:
-                          bankStartTime == 0
-                            ? "rgba(137, 137, 137, 0.5)"
-                            : "rgba(210, 210, 210, 0.5)",
-                        color: coloring?.isDarkText ? "#000" : "#FFF",
-                        borderRadius: "0 0 0 12px",
-                        padding: "8px 8px",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flex: 1,
-                        position: "relative",
-                        overflow: "hidden",
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          width: "100%",
-                        }}
-                      >
-                        <span style={{ fontSize: "16px", fontWeight: "600" }}>
-                          {bankRate}%
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            opacity: 0.8,
-                            alignSelf: "flex-start",
-                            marginTop: "-2px",
-                          }}
-                        >
-                          {translations.annual}
-                        </span>
-                      </div>
-                      {bankStartTime > 0 && (
+                    {(() => {
+                      // Calculate cycle progress
+                      const cycleProgress = bankCycle && bankCycle.maxInactiveMs > 0
+                        ? Math.min(1, bankCycle.timeIntoCycle / bankCycle.maxInactiveMs)
+                        : 0;
+                      const cycleComplete = bankCycle?.cycleComplete || false;
+                      const cycleCount = bankCycle?.cycleCount || 0;
+                      const maxMs = bankCycle?.maxInactiveMs || 0;
+                      const timeIntoMs = bankCycle?.timeIntoCycle || 0;
+                      const remainingMs = maxMs - timeIntoMs;
+                      
+                      // Format time
+                      const formatMs = (ms) => {
+                        const hours = Math.floor(ms / (60 * 60 * 1000));
+                        const mins = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+                        if (hours > 0) return `${hours}h ${mins}m`;
+                        return `${mins}m`;
+                      };
+                      
+                      // No bank balance
+                      if (!bankCycle && bankStartTime == 0) {
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              background: "rgba(137, 137, 137, 0.3)",
+                              borderRadius: "0 0 0 12px",
+                              padding: "8px 8px",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flex: 1,
+                              color: coloring?.isDarkText ? "#000" : "#FFF",
+                            }}
+                          >
+                            <span style={{ fontSize: "11px" }}>—</span>
+                          </div>
+                        );
+                      }
+                      
+                      // Cycle complete - waiting for continue
+                      if (cycleComplete) {
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              background: "linear-gradient(135deg, #4CAF50 0%, #45a049 100%)",
+                              borderRadius: "0 0 0 12px",
+                              padding: "4px 6px",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flex: 1,
+                              color: "#FFF",
+                              flexDirection: "column",
+                              gap: "0px",
+                            }}
+                          >
+                            <span style={{ fontSize: "10px", fontWeight: "700" }}>
+                              ✅ Cycle Done
+                            </span>
+                            <span style={{ fontSize: "8px", opacity: 0.9 }}>
+                              /deposit continue
+                            </span>
+                          </div>
+                        );
+                      }
+                      
+                      // Cycle in progress - show progress bar
+                      const annualRate = bankCycle?.annualRate || bankRate;
+                      return (
                         <div
                           style={{
-                            position: "absolute",
-                            bottom: "8px",
-                            right: "8px",
-                            fontSize: "8px",
-                            opacity: 0.6,
+                            display: "flex",
+                            background: "rgba(60, 60, 60, 0.5)",
+                            borderRadius: "0 0 0 12px",
+                            padding: "4px 6px",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flex: 1,
+                            color: coloring?.isDarkText ? "#000" : "#FFF",
+                            position: "relative",
+                            overflow: "hidden",
+                            flexDirection: "column",
+                            gap: "2px",
                           }}
                         >
-                          {(() => {
-                            const now = Date.now();
-                            let startTimeMs;
-                            if (bankStartTime > 1000000000000) {
-                              startTimeMs = bankStartTime;
-                            } else if (bankStartTime > 1000000000) {
-                              startTimeMs = bankStartTime * 1000;
-                            } else {
-                              startTimeMs = now;
-                            }
-
-                            const diffMs = now - startTimeMs;
-                            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                            const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                            if (diffDays > 0) {
-                              return `${diffDays}${translations.timeDay} ${diffHours % 24}${translations.timeHour}`;
-                            } else if (diffHours > 0) {
-                              return `${diffHours}${translations.timeHour} ${diffMinutes}${translations.timeMinute}`;
-                            } else if (diffMinutes > 0) {
-                              return `${diffMinutes}${translations.timeMinute}`;
-                            } else {
-                              return translations.timeLessThanMinute;
-                            }
-                          })()}
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: `${cycleProgress * 100}%`,
+                              background: "linear-gradient(90deg, rgba(76, 175, 80, 0.6) 0%, rgba(76, 175, 80, 0.3) 100%)",
+                            }}
+                          />
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              width: "100%",
+                              position: "relative",
+                              zIndex: 1,
+                            }}
+                          >
+                            <span style={{ fontSize: "14px", fontWeight: "700" }}>
+                              {(annualRate * 100).toFixed(1)}%
+                            </span>
+                            <span style={{ fontSize: "9px", opacity: 0.8 }}>
+                              ~{formatMs(remainingMs)}
+                            </span>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()}
 
                     {(() => {
                       const vaultEarnings = database?.vaultEarnings || 0;
