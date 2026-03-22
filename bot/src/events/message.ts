@@ -272,8 +272,7 @@ const event = {
       const cooldownTime = await hubClient.getCooldown(author.id, guild.id, "message");
 
       if (cooldownTime === 0) {
-        const xpGuildSettings = (await hubClient.getGuild(guild.id)) as GuildSettingsLike;
-        const xpPerMessage = xpGuildSettings?.settings?.xp_per_message || 15;
+        const xpPerMessage = guildSettings?.settings?.xp_per_message || 15;
 
         const stats = (await hubClient.getStatistics(author.id, guild.id)) as StatisticsLike;
 

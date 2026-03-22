@@ -2,6 +2,7 @@ import { Events, Collection } from "discord.js";
 import hubClient from "../api/hubClient.ts";
 import { I18n } from "../utils/i18n.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
+import { checkAndSetCommandCooldown } from "../services/runtimeRedis.ts";
 
 const cooldowns = new Collection<string, Collection<string, number>>();
 
@@ -88,20 +89,18 @@ const event = {
       }
 
       if (cooldownAmount) {
-        if (!cooldowns.has(fullCommandName)) {
-          cooldowns.set(fullCommandName, new Collection<string, number>());
-        }
-
-        const now = Date.now();
-        const timestamps = cooldowns.get(fullCommandName);
         const cooldownMs = cooldownAmount * 1000;
 
-        if (timestamps?.has(interaction.user.id)) {
-          const previousTimestamp = timestamps.get(interaction.user.id);
-          const expirationTime = (previousTimestamp || 0) + cooldownMs;
+        if (interaction.guild?.id) {
+          const cooldownResult = await checkAndSetCommandCooldown(
+            interaction.guild.id,
+            interaction.user.id,
+            fullCommandName,
+            cooldownMs
+          );
 
-          if (now < expirationTime) {
-            const timeLeft = (expirationTime - now) / 1000;
+          if (!cooldownResult.allowed) {
+            const timeLeft = cooldownResult.retryAfterMs / 1000;
             return interaction.reply({
               content: `Please wait ${timeLeft.toFixed(
                 1
@@ -109,10 +108,32 @@ const event = {
               ephemeral: true,
             });
           }
-        }
+        } else {
+          if (!cooldowns.has(fullCommandName)) {
+            cooldowns.set(fullCommandName, new Collection<string, number>());
+          }
 
-        timestamps?.set(interaction.user.id, now);
-        setTimeout(() => timestamps?.delete(interaction.user.id), cooldownMs);
+          const now = Date.now();
+          const timestamps = cooldowns.get(fullCommandName);
+
+          if (timestamps?.has(interaction.user.id)) {
+            const previousTimestamp = timestamps.get(interaction.user.id);
+            const expirationTime = (previousTimestamp || 0) + cooldownMs;
+
+            if (now < expirationTime) {
+              const timeLeft = (expirationTime - now) / 1000;
+              return interaction.reply({
+                content: `Please wait ${timeLeft.toFixed(
+                  1
+                )} more second(s) before reusing the \`${fullCommandName}\` command.`,
+                ephemeral: true,
+              });
+            }
+          }
+
+          timestamps?.set(interaction.user.id, now);
+          setTimeout(() => timestamps?.delete(interaction.user.id), cooldownMs);
+        }
       }
 
       let locale = interaction.locale || interaction.guild?.preferredLocale || "en";

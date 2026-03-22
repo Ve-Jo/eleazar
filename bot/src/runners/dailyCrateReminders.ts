@@ -1,4 +1,8 @@
 import hubClient from "../api/hubClient.ts";
+import {
+  acquireDistributedLock,
+  releaseDistributedLock,
+} from "../services/runtimeRedis.ts";
 
 type ClientLike = {
   guilds: {
@@ -19,6 +23,8 @@ type GuildLike = {
 };
 
 const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
+const REMINDER_LOCK_KEY = "daily-crate-reminders";
+const REMINDER_LOCK_TTL_MS = Math.floor(REMINDER_INTERVAL_MS * 0.9);
 
 function getReminderText(locale: string | null | undefined, guildName: string): string {
   switch ((locale || "en").split("-")[0]) {
@@ -72,8 +78,29 @@ async function processDailyCrateReminders(client: ClientLike): Promise<void> {
 }
 
 function startDailyCrateReminders(client: ClientLike): void {
+  const runPass = async (label: string): Promise<void> => {
+    const lock = await acquireDistributedLock(REMINDER_LOCK_KEY, REMINDER_LOCK_TTL_MS);
+
+    if (!lock.acquired) {
+      console.log(`[dailyCrateReminders] Skip ${label}; lock not acquired`);
+      return;
+    }
+
+    try {
+      await processDailyCrateReminders(client);
+    } finally {
+      await releaseDistributedLock(REMINDER_LOCK_KEY, lock.token);
+    }
+  };
+
+  // Run immediately on startup to catch up on missed reminders during downtime
+  runPass("startup").catch((error) => {
+    console.error("Initial daily crate reminder pass failed:", error);
+  });
+
+  // Then run on interval
   setInterval(() => {
-    processDailyCrateReminders(client).catch((error) => {
+    runPass("interval").catch((error) => {
       console.error("Daily crate reminder loop failed:", error);
     });
   }, REMINDER_INTERVAL_MS);

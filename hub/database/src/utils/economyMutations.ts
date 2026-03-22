@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { UPGRADES } from "../constants/database.ts";
 
+// Bank constants
+const BASE_BANK_MAX_INACTIVE_MS = 2 * 60 * 60 * 1000; // 2 hours base
+
 type EconomyMutationClient = {
   $transaction: <T>(callback: (tx: EconomyMutationTransaction) => Promise<T>) => Promise<T>;
 };
@@ -383,23 +386,22 @@ async function deposit(
     const userUpgrades = (await tx.upgrade.findMany({
       where: { guildId, userId },
     })) as UpgradeRecord[];
-    const bankRateUpgradeLevel =
-      userUpgrades.find((upgrade) => upgrade.type === "bank_rate")?.level || 1;
-    const upgradeBoostPercent =
-      (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
+    // Bank rate is now activity-based, not upgrade-based
+    // Calculate rate from activity levels
     const rawBankRate = new Prisma.Decimal(
-      5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
+      5 * chattingLevel + 5 * gamingLevel
     );
     const newBankRate = clampBankRate(rawBankRate);
     console.log(`New bank rate calculated: ${newBankRate}`);
 
-    const taxOptimizationLevel =
-      userUpgrades.find((upgrade) => upgrade.type === "tax_optimization")?.level || 1;
-    const taxReduction = Math.min(
+    // vault_guard provides fee reduction
+    const vaultGuardLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "vault_guard")?.level || 1;
+    const feeReduction = Math.min(
       0.5,
-      (taxOptimizationLevel - 1) * (UPGRADES.tax_optimization.effectMultiplier || 0)
+      (vaultGuardLevel - 1) * (UPGRADES.vault_guard.effectFees || 0)
     );
-    const feeRate = new Prisma.Decimal(0.05 * (1 - taxReduction));
+    const feeRate = new Prisma.Decimal(0.05 * (1 - feeReduction));
     const feeAmount = depositAmount.times(feeRate);
     const finalDepositAmount = depositAmount.minus(feeAmount);
     console.log(
@@ -408,6 +410,11 @@ async function deposit(
 
     const finalBankBalance = currentBankBalance.plus(finalDepositAmount);
     console.log(`Final bank balance after deposit: ${finalBankBalance}`);
+
+    // Get bank_vault upgrade for cycle duration
+    const bankVaultLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "bank_vault")?.level || 1;
+    const cycleDuration = BASE_BANK_MAX_INACTIVE_MS + (bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
 
     const updatedEconomy = await tx.economy.update({
       where: {
@@ -422,7 +429,7 @@ async function deposit(
         },
         bankBalance: finalBankBalance,
         bankRate: newBankRate,
-        bankStartTime: Date.now(),
+        bankStartTime: Date.now(), // Reset timer for fresh cycle
       },
     });
 
@@ -557,24 +564,22 @@ async function withdraw(
     if (!isWithdrawingAll && newBankBalance.greaterThan(0)) {
       const chattingLevel = user.Level ? calculateLevel(user.Level.xp).level : 1;
       const gamingLevel = user.Level ? calculateLevel(user.Level.gameXp).level : 1;
-      const bankRateUpgradeLevel =
-        userUpgrades.find((upgrade) => upgrade.type === "bank_rate")?.level || 1;
-      const upgradeBoostPercent =
-        (bankRateUpgradeLevel - 1) * (UPGRADES.bank_rate.effectValue * 100);
+      // Bank rate is now activity-based, not upgrade-based
       const rawBankRate = new Prisma.Decimal(
-        5 * chattingLevel + 5 * gamingLevel + upgradeBoostPercent
+        5 * chattingLevel + 5 * gamingLevel
       );
       newBankRate = clampBankRate(rawBankRate);
       newBankStartTime = Date.now();
     }
 
-    const taxOptimizationLevel =
-      userUpgrades.find((upgrade) => upgrade.type === "tax_optimization")?.level || 1;
-    const taxReduction = Math.min(
+    // vault_guard provides fee reduction
+    const vaultGuardLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "vault_guard")?.level || 1;
+    const feeReduction = Math.min(
       0.5,
-      (taxOptimizationLevel - 1) * (UPGRADES.tax_optimization.effectMultiplier || 0)
+      (vaultGuardLevel - 1) * (UPGRADES.vault_guard.effectFees || 0)
     );
-    const feeRate = new Prisma.Decimal(0.05 * (1 - taxReduction));
+    const feeRate = new Prisma.Decimal(0.05 * (1 - feeReduction));
     const feeAmount = withdrawAmount.times(feeRate);
     const finalWithdrawAmount = withdrawAmount.minus(feeAmount);
     console.log(

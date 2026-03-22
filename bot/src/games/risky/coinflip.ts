@@ -116,12 +116,12 @@ const HOUSE_EDGE_FACTOR = 0.95; // Renamed for clarity with variable probability
 const HOUSE_EDGE_PERCENTAGE = ((1 - HOUSE_EDGE_FACTOR) * 100).toFixed(1);
 const PROBABILITY_OPTIONS = [0.75, 0.5, 0.25]; // Available win probabilities (e.g., 75%, 50%, 25%)
 
-function getVaultInsuranceReduction(userData: UserRecordLike | null | undefined): number {
+function getVaultGuardReduction(userData: UserRecordLike | null | undefined): number {
   const userUpgrades = Array.isArray((userData as any)?.upgrades) ? (userData as any).upgrades : [];
-  const vaultInsuranceLevel =
-    userUpgrades.find((upgrade: { type?: string; level?: number }) => upgrade.type === "vault_insurance")
+  const vaultGuardLevel =
+    userUpgrades.find((upgrade: { type?: string; level?: number }) => upgrade.type === "vault_guard")
       ?.level || 1;
-  return Math.min(0.4, (vaultInsuranceLevel - 1) * 0.08);
+  return Math.min(0.4, (vaultGuardLevel - 1) * 0.08);
 }
 
 function getMaxBetForUser(balance: number, gameLevel: number): number {
@@ -656,7 +656,7 @@ export default {
               } else {
                 gameInstance.lastResult = "lose";
                 const userDataLoss = await hubClient.getUser(guildId, userId);
-                const insuranceReduction = getVaultInsuranceReduction(userDataLoss);
+                const insuranceReduction = getVaultGuardReduction(userDataLoss);
                 const adjustedLoss = gameInstance.betAmount * (1 - insuranceReduction);
                 changeAmount = -parseFloat(adjustedLoss.toFixed(2));
                 gameInstance.totalLost += Math.abs(changeAmount);

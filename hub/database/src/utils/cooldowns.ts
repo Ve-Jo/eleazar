@@ -88,28 +88,30 @@ async function getCooldown(
     return 0;
   }
 
-  const needsUpgradeCooldownEffects = ["crime", "work", "upgraderevert"].includes(type);
+  // time_wizard applies percentage reduction to daily/weekly cooldowns only
+  const dailyWeeklyTypes = new Set(["daily", "weekly", "crate_daily", "crate_weekly"]);
+  const appliesTimeWizard = dailyWeeklyTypes.has(type);
 
-  if (!needsUpgradeCooldownEffects) {
-    return remaining;
+  if (appliesTimeWizard) {
+    const userUpgrades = (await client.upgrade.findMany({
+      where: { userId, guildId },
+    })) as UpgradeRecord[];
+
+    const timeWizardLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "time_wizard")?.level || 1;
+    const reductionPercent = (timeWizardLevel - 1) * (UPGRADES.time_wizard.effectMultiplier || 0);
+    const timeWizardReduction = Math.floor(remaining * reductionPercent);
+    remaining = Math.max(0, remaining - timeWizardReduction);
   }
 
-  const userUpgrades = (await client.upgrade.findMany({
-    where: { userId, guildId },
-  })) as UpgradeRecord[];
-
-  const cooldownMasteryLevel =
-    userUpgrades.find((upgrade) => upgrade.type === "cooldown_mastery")?.level || 1;
-  const cooldownMasteryReduction = Math.min(
-    60 * 60 * 1000,
-    (cooldownMasteryLevel - 1) * UPGRADES.cooldown_mastery.effectValue
-  );
-  remaining = Math.max(0, remaining - cooldownMasteryReduction);
-
+  // crime_mastery provides additional crime-specific cooldown reduction
   if (type === "crime") {
-    const crimeUpgrade = userUpgrades.find((upgrade) => upgrade.type === "crime");
-    const crimeLevel = crimeUpgrade?.level || 1;
-    const reduction = (crimeLevel - 1) * UPGRADES.crime.effectValue;
+    const userUpgrades = (await client.upgrade.findMany({
+      where: { userId, guildId },
+    })) as UpgradeRecord[];
+    const crimeMasteryUpgrade = userUpgrades.find((upgrade) => upgrade.type === "crime_mastery");
+    const crimeMasteryLevel = crimeMasteryUpgrade?.level || 1;
+    const reduction = (crimeMasteryLevel - 1) * UPGRADES.crime_mastery.effectValue;
     return Math.max(0, remaining - reduction);
   }
 

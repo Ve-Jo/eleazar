@@ -162,7 +162,7 @@ type TowerGameState = {
   sessionChange: number;
   initialBalance: number;
   selectedTiles: number[];
-  vaultInsuranceReduction: number;
+  vaultGuardReduction: number;
 };
 
 function parseBalance(value: string | number | null | undefined): number {
@@ -220,7 +220,7 @@ class GameState {
   sessionChange: number;
   initialBalance: number;
   selectedTiles: number[];
-  vaultInsuranceReduction: number;
+  vaultGuardReduction: number;
 
   constructor(
     channelId: string,
@@ -245,7 +245,7 @@ class GameState {
     this.sessionChange = 0; // Track money won/lost during session
     this.initialBalance = 0; // Store initial balance before game starts
     this.selectedTiles = [];
-    this.vaultInsuranceReduction = 0;
+    this.vaultGuardReduction = 0;
   }
 
   // Generate bomb position for the next floor if it doesn't exist
@@ -869,14 +869,14 @@ export default {
               const userUpgrades = Array.isArray(userDataStart?.upgrades)
                 ? userDataStart.upgrades
                 : [];
-              const vaultInsuranceLevel =
+              const vaultGuardLevel =
                 userUpgrades.find(
                   (upgrade: { type?: string; level?: number }) =>
-                    upgrade.type === "vault_insurance"
+                    upgrade.type === "vault_guard"
                 )?.level || 1;
-              gameInstance.vaultInsuranceReduction = Math.min(
+              gameInstance.vaultGuardReduction = Math.min(
                 0.4,
-                (vaultInsuranceLevel - 1) * 0.08
+                (vaultGuardLevel - 1) * 0.08
               );
             } catch (error) {
               console.error("Error fetching initial balance:", error);
@@ -1152,9 +1152,9 @@ export default {
               gameInstance.gameOver = true;
               gameInstance.lastAction = "bomb";
 
-              if (guildId && gameInstance.vaultInsuranceReduction > 0) {
+              if (guildId && gameInstance.vaultGuardReduction > 0) {
                 const refundAmount = parseFloat(
-                  (gameInstance.betAmount * gameInstance.vaultInsuranceReduction).toFixed(2)
+                  (gameInstance.betAmount * gameInstance.vaultGuardReduction).toFixed(2)
                 );
                 if (refundAmount > 0) {
                   await hubClient.addBalance(guildId, userId, refundAmount);

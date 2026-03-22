@@ -3,6 +3,7 @@ import initMusic from "../utils/music.ts";
 import { SlashCommandsHandler } from "../handlers/SlashCommandsHandler.ts";
 import StatusService from "../services/StatusService.ts";
 import { cleanupEmptyVoiceRoomsForGuild } from "./voiceRooms.ts";
+import { getShardId, isLeaderShard } from "../services/runtimeRedis.ts";
 
 type ClientLike = {
   user?: {
@@ -22,9 +23,14 @@ const event = {
   name: Events.ClientReady,
   once: true,
   async execute(client: ClientLike): Promise<void> {
-    console.log(`Ready! Logged in as ${client.user?.tag || "unknown user"}`);
+    const shardId = getShardId(client);
+    const leader = isLeaderShard(client);
 
-    if (client.commands) {
+    console.log(
+      `Ready! Logged in as ${client.user?.tag || "unknown user"} (shard=${shardId}, leader=${leader})`
+    );
+
+    if (leader && client.commands) {
       await SlashCommandsHandler(client as any, client.commands as any);
     }
 
