@@ -3,6 +3,7 @@ import hubClient from "../api/hubClient.ts";
 import { I18n } from "../utils/i18n.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
 import { checkAndSetCommandCooldown } from "../services/runtimeRedis.ts";
+import { recordEventCall } from "../services/metrics.ts";
 
 const cooldowns = new Collection<string, Collection<string, number>>();
 
@@ -59,6 +60,9 @@ type XpResultLike = {
 const event = {
   name: Events.InteractionCreate,
   async execute(interaction: InteractionLike): Promise<unknown> {
+    const startTime = Date.now();
+    let isError = false;
+
     if (!interaction.isChatInputCommand()) return;
 
     console.log(`Received command interaction: ${interaction.commandName}`);
@@ -201,6 +205,7 @@ const event = {
       }
     } catch (error) {
       console.error(`Error executing ${commandName}:`, error);
+      isError = true;
 
       if (!interaction.replied && !interaction.deferred) {
         try {
@@ -220,6 +225,9 @@ const event = {
           console.error("Failed to edit reply with error message:", replyError);
         }
       }
+    } finally {
+      const duration = Date.now() - startTime;
+      recordEventCall("interactionCreate", duration, isError);
     }
   },
 };

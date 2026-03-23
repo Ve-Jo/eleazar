@@ -1,4 +1,5 @@
 import { REST, Routes } from "discord.js";
+import { createHash } from "crypto";
 import { hubClient } from "../api/hubClient.ts";
 
 type LocalizationMap = Record<string, string>;
@@ -77,6 +78,17 @@ class CommandManager {
       const { serverCommands, globalCommands } = await this.prepareCommands(commands);
       const forceServer = process.env.SERVER_SLASHES === "true";
 
+      // Calculate schema hash for change detection
+      const currentHash = this.calculateCommandsHash(serverCommands, globalCommands);
+      const storedHash = await this.getStoredCommandHash();
+
+      if (currentHash === storedHash && !forceServer) {
+        console.log("Command schemas unchanged, skipping Discord API update");
+        return;
+      }
+
+      console.log(`Command schema change detected (hash: ${currentHash.slice(0, 8)}...), updating Discord`);
+
       if (forceServer) {
         console.log("Forcing all commands to be registered to the testing server.");
         await this.registerNewCommands(serverCommands.concat(globalCommands), []);
@@ -85,9 +97,83 @@ class CommandManager {
         await this.registerNewCommands(serverCommands, globalCommands);
       }
 
+      // Store the new hash after successful registration
+      await this.storeCommandHash(currentHash);
       console.log("Command registration completed successfully.");
     } catch (error) {
       console.error("Error in command registration:", error);
+    }
+  }
+
+  /**
+   * Calculate SHA-256 hash of command schemas for change detection.
+   * Normalizes the JSON to ensure consistent hashing.
+   */
+  private calculateCommandsHash(
+    serverCommands: CommandBuilderJson[],
+    globalCommands: CommandBuilderJson[]
+  ): string {
+    const normalized = JSON.stringify({
+      server: serverCommands.sort((a, b) => a.name.localeCompare(b.name)),
+      global: globalCommands.sort((a, b) => a.name.localeCompare(b.name)),
+    });
+    return createHash("sha256").update(normalized).digest("hex");
+  }
+
+  /**
+   * Get stored command hash from Redis or file-based fallback.
+   * Returns null if no hash stored or Redis unavailable.
+   */
+  private async getStoredCommandHash(): Promise<string | null> {
+    try {
+      // Try Redis first (via hub client or direct if available)
+      const { getRuntimeRedisClient, buildPrefixedKey } = await import("../services/runtimeRedis.ts");
+      const client = await getRuntimeRedisClient();
+      if (client) {
+        const key = buildPrefixedKey("command-schema-hash");
+        const hash = await client.get(key);
+        return hash;
+      }
+    } catch {
+      // Redis not available, try file fallback
+    }
+
+    // File-based fallback for non-Redis deployments
+    try {
+      const { readFileSync, existsSync } = await import("fs");
+      const path = ".command-hash";
+      if (existsSync(path)) {
+        return readFileSync(path, "utf-8").trim();
+      }
+    } catch {
+      // File read failed
+    }
+
+    return null;
+  }
+
+  /**
+   * Store command hash to Redis or file-based fallback.
+   */
+  private async storeCommandHash(hash: string): Promise<void> {
+    try {
+      const { getRuntimeRedisClient, buildPrefixedKey } = await import("../services/runtimeRedis.ts");
+      const client = await getRuntimeRedisClient();
+      if (client) {
+        const key = buildPrefixedKey("command-schema-hash");
+        await client.set(key, hash);
+        return;
+      }
+    } catch {
+      // Redis not available, use file fallback
+    }
+
+    // File-based fallback
+    try {
+      const { writeFileSync } = await import("fs");
+      writeFileSync(".command-hash", hash);
+    } catch (error) {
+      console.warn("Failed to store command hash:", error);
     }
   }
 

@@ -3,6 +3,7 @@ import hubClient from "../api/hubClient.ts";
 import { transcribeAudio } from "../cmds/ai/transcribe_audio.ts";
 import { handleLevelUp } from "../utils/levelUpHandler.ts";
 import i18n from "../utils/i18n.ts";
+import { recordEventCall } from "../services/metrics.ts";
 
 const localization_strings = {
   transcription: {
@@ -131,264 +132,276 @@ const event = {
   name: Events.MessageCreate,
   localization_strings,
   async execute(message: MessageLike): Promise<void> {
-    if (message.author.bot) return;
+    const startTime = Date.now();
+    let isError = false;
 
-    const { guild, channel, author } = message;
-    if (!guild) {
-      return;
-    }
-
-    let effectiveLocale = "en";
     try {
-      if (guild?.id) {
-        const userDbLocale = await hubClient.getUserLocale(guild.id, author.id);
-        if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
-          effectiveLocale = userDbLocale;
-        }
+      if (message.author.bot) return;
+
+      const { guild, channel, author } = message;
+      if (!guild) {
+        return;
       }
 
-      if (effectiveLocale === "en" && guild?.preferredLocale) {
+      // Parallelize independent hub calls: locale + guild settings
+      const [userDbLocale, guildSettingsResult] = await Promise.all([
+        guild?.id ? hubClient.getUserLocale(guild.id, author.id).catch(() => null) : null,
+        hubClient.getGuild(guild.id) as Promise<GuildSettingsLike>,
+      ]);
+
+      let effectiveLocale = "en";
+      if (userDbLocale && ["en", "ru", "uk"].includes(userDbLocale)) {
+        effectiveLocale = userDbLocale;
+      } else if (guild?.preferredLocale) {
         const normalizedGuildLocale = (guild.preferredLocale.split("-")[0] || "en").toLowerCase();
         if (["en", "ru", "uk"].includes(normalizedGuildLocale)) {
           effectiveLocale = normalizedGuildLocale;
         }
       }
-    } catch (dbError) {
-      console.error(`Error fetching user locale for ${author.id}, defaulting to 'en':`, dbError);
-    }
 
-    if (message.attachments.size > 0) {
-      const audioAttachment = message.attachments.find((att) =>
-        !!att.contentType?.startsWith("audio/")
-      );
-      if (audioAttachment) {
-        try {
-          await message.channel.sendTyping();
-          const transcription = await transcribeAudio(message.client as any, audioAttachment.url);
+      const guildSettings = guildSettingsResult;
 
-          if (transcription && transcription.text) {
-            const transcriptionText = transcription.text as string;
+      if (message.attachments.size > 0) {
+        const audioAttachment = message.attachments.find((att) =>
+          !!att.contentType?.startsWith("audio/")
+        );
+        if (audioAttachment) {
+          try {
+            await message.channel.sendTyping();
+            const transcription = await transcribeAudio(message.client as any, audioAttachment.url);
 
-            if (transcriptionText.length > 2000) {
-              const chunks = transcriptionText.match(/.{1,2000}/g) || [];
-              for (const chunk of chunks) {
-                await message.reply(chunk);
+            if (transcription && transcription.text) {
+              const transcriptionText = transcription.text as string;
+
+              if (transcriptionText.length > 2000) {
+                const chunks = transcriptionText.match(/.{1,2000}/g) || [];
+                for (const chunk of chunks) {
+                  await message.reply(chunk);
+                }
+              } else {
+                await message.reply(
+                  await i18n.__(
+                    "events.message.transcription.success",
+                    { text: transcriptionText },
+                    effectiveLocale
+                  )
+                );
               }
             } else {
               await message.reply(
-                await i18n.__(
-                  "events.message.transcription.success",
-                  { text: transcriptionText },
-                  effectiveLocale
-                )
+                await i18n.__("events.message.transcription.failed", effectiveLocale)
               );
             }
-          } else {
+          } catch (error) {
+            console.error("Error transcribing voice message:", error);
             await message.reply(
               await i18n.__("events.message.transcription.failed", effectiveLocale)
             );
           }
-        } catch (error) {
-          console.error("Error transcribing voice message:", error);
-          await message.reply(
-            await i18n.__("events.message.transcription.failed", effectiveLocale)
-          );
         }
       }
-    }
 
-    const guildSettings = (await hubClient.getGuild(guild.id)) as GuildSettingsLike;
+      if (guildSettings?.settings?.counting) {
+        const countingData = guildSettings.settings.counting;
 
-    if (guildSettings?.settings?.counting) {
-      const countingData = guildSettings.settings.counting;
+        if (countingData && channel.id === countingData.channel_id) {
+          const lastNumber = parseInt(countingData.message || "0");
+          const currentNumber = parseInt(message.content);
 
-      if (countingData && channel.id === countingData.channel_id) {
-        const lastNumber = parseInt(countingData.message || "0");
-        const currentNumber = parseInt(message.content);
-
-        if (currentNumber === lastNumber) {
-          if (countingData.no_same_user && message.author.id === countingData.lastwritter) {
-            await message.delete();
-            return;
-          }
-
-          if (countingData.only_numbers && isNaN(Number(message.content))) {
-            await message.delete();
-            return;
-          }
-
-          await hubClient.updateGuild(guild.id, {
-            settings: {
-              ...guildSettings.settings,
-              counting: {
-                ...countingData,
-                message: currentNumber + 1,
-                lastwritter: message.author.id,
-              },
-            },
-          });
-
-          if (
-            (countingData.pinoneach || 0) > 0 &&
-            currentNumber % (countingData.pinoneach || 1) === 0
-          ) {
-            if (countingData.pinnedrole !== "0") {
-              if (countingData.lastpinnedmember !== "0" && !countingData.no_unique_role) {
-                const role = guild.roles.cache.get(countingData.pinnedrole || "");
-                let previousMember = guild.members.cache.get(countingData.lastpinnedmember || "");
-                if (!previousMember && countingData.lastpinnedmember) {
-                  previousMember = await guild.members.fetch(countingData.lastpinnedmember);
-                }
-                if (role && previousMember) {
-                  await previousMember.roles.remove(role);
-                }
-              }
-
-              const role = guild.roles.cache.get(countingData.pinnedrole || "");
-              if (role && message.member) {
-                await message.member.roles.add(role);
-              }
-
-              await hubClient.updateGuild(guild.id, {
-                settings: {
-                  ...guildSettings.settings,
-                  counting: {
-                    ...countingData,
-                    lastpinnedmember: message.author.id,
-                  },
-                },
-              });
+          if (currentNumber === lastNumber) {
+            if (countingData.no_same_user && message.author.id === countingData.lastwritter) {
+              await message.delete();
+              return;
             }
 
-            await message.pin();
+            if (countingData.only_numbers && isNaN(Number(message.content))) {
+              await message.delete();
+              return;
+            }
+
+            await hubClient.updateGuild(guild.id, {
+              settings: {
+                ...guildSettings.settings,
+                counting: {
+                  ...countingData,
+                  message: currentNumber + 1,
+                  lastwritter: message.author.id,
+                },
+              },
+            });
+
+            if (
+              (countingData.pinoneach || 0) > 0 &&
+              currentNumber % (countingData.pinoneach || 1) === 0
+            ) {
+              if (countingData.pinnedrole !== "0") {
+                if (countingData.lastpinnedmember !== "0" && !countingData.no_unique_role) {
+                  const role = guild.roles.cache.get(countingData.pinnedrole || "");
+                  let previousMember = guild.members.cache.get(countingData.lastpinnedmember || "");
+                  if (!previousMember && countingData.lastpinnedmember) {
+                    previousMember = await guild.members.fetch(countingData.lastpinnedmember);
+                  }
+                  if (role && previousMember) {
+                    await previousMember.roles.remove(role);
+                  }
+                }
+
+                const role = guild.roles.cache.get(countingData.pinnedrole || "");
+                if (role && message.member) {
+                  await message.member.roles.add(role);
+                }
+
+                await hubClient.updateGuild(guild.id, {
+                  settings: {
+                    ...guildSettings.settings,
+                    counting: {
+                      ...countingData,
+                      lastpinnedmember: message.author.id,
+                    },
+                  },
+                });
+              }
+
+              await message.pin();
+            }
+          } else {
+            await message.delete();
           }
-        } else {
-          await message.delete();
         }
       }
-    }
 
-    try {
-      const cooldownTime = await hubClient.getCooldown(author.id, guild.id, "message");
-
-      if (cooldownTime === 0) {
+      try {
         const xpPerMessage = guildSettings?.settings?.xp_per_message || 15;
 
-        const stats = (await hubClient.getStatistics(author.id, guild.id)) as StatisticsLike;
+        // Parallelize independent hub calls: cooldown + statistics
+        const [cooldownTime, statsResult] = await Promise.all([
+          hubClient.getCooldown(author.id, guild.id, "message"),
+          hubClient.getStatistics(author.id, guild.id) as Promise<StatisticsLike>,
+        ]);
 
-        let xpStats: XpStatsLike = (stats?.xpStats || {}) as XpStatsLike;
-        if (typeof xpStats === "string") {
-          xpStats = JSON.parse(xpStats) as XpStatsLike;
-        }
+        if (cooldownTime === 0) {
+          const stats = statsResult;
 
-        if (!xpStats.channels) {
-          xpStats.channels = {};
-        }
-        if (!xpStats.channels[channel.id]) {
-          xpStats.channels[channel.id] = {
-            name: channel.name,
-            chat: 0,
-            voice: 0,
-          };
-        }
+          let xpStats: XpStatsLike = (stats?.xpStats || {}) as XpStatsLike;
+          if (typeof xpStats === "string") {
+            xpStats = JSON.parse(xpStats) as XpStatsLike;
+          }
 
-        const channelStats = xpStats.channels[channel.id];
-        if (!channelStats) {
-          return;
-        }
+          if (!xpStats.channels) {
+            xpStats.channels = {};
+          }
+          if (!xpStats.channels[channel.id]) {
+            xpStats.channels[channel.id] = {
+              name: channel.name,
+              chat: 0,
+              voice: 0,
+            };
+          }
 
-        channelStats.chat += xpPerMessage;
-        xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
+          const channelStats = xpStats.channels[channel.id];
+          if (!channelStats) {
+            return;
+          }
 
-        await hubClient.updateStats(author.id, guild.id, "messageCount", 1);
+          channelStats.chat += xpPerMessage;
+          xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
 
-        const xpResult = (await hubClient.addXP(
-          author.id,
-          guild.id,
-          xpPerMessage
-        )) as XpResultLike;
+          await hubClient.updateStats(author.id, guild.id, "messageCount", 1);
 
-        if (xpResult.levelUp && xpResult.assignedRole) {
-          try {
-            const member = message.member;
-            if (!member) {
-              console.warn(
-                `Could not find member ${author.id} in guild ${guild.id} for role assignment.`
-              );
-            } else {
-              const botMember = await guild.members.fetchMe();
-              if (!botMember.permissions.has("ManageRoles")) {
+          const xpResult = (await hubClient.addXP(
+            author.id,
+            guild.id,
+            xpPerMessage
+          )) as XpResultLike;
+
+          if (xpResult.levelUp && xpResult.assignedRole) {
+            try {
+              const member = message.member;
+              if (!member) {
                 console.warn(
-                  `Bot lacks ManageRoles permission in guild ${guild.id} to assign level roles.`
+                  `Could not find member ${author.id} in guild ${guild.id} for role assignment.`
                 );
               } else {
-                const roleToAdd = await guild.roles.fetch(xpResult.assignedRole).catch(() => null);
-                if (roleToAdd) {
-                  if (botMember.roles.highest.comparePositionTo(roleToAdd) > 0) {
-                    await member.roles.add(roleToAdd, "Level up reward");
-                    console.log(
-                      `Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag}`
-                    );
+                const botMember = await guild.members.fetchMe();
+                if (!botMember.permissions.has("ManageRoles")) {
+                  console.warn(
+                    `Bot lacks ManageRoles permission in guild ${guild.id} to assign level roles.`
+                  );
+                } else {
+                  const roleToAdd = await guild.roles.fetch(xpResult.assignedRole).catch(() => null);
+                  if (roleToAdd) {
+                    if (botMember.roles.highest.comparePositionTo(roleToAdd) > 0) {
+                      await member.roles.add(roleToAdd, "Level up reward");
+                      console.log(
+                        `Assigned level role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag}`
+                      );
+                    } else {
+                      console.warn(
+                        `Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag} due to role hierarchy.`
+                      );
+                    }
                   } else {
                     console.warn(
-                      `Cannot assign role ${roleToAdd.name} (${roleToAdd.id}) to ${author.tag} due to role hierarchy.`
+                      `Level role ID ${xpResult.assignedRole} not found in guild ${guild.id}.`
                     );
                   }
-                } else {
-                  console.warn(
-                    `Level role ID ${xpResult.assignedRole} not found in guild ${guild.id}.`
-                  );
-                }
 
-                if (xpResult.removedRoles && xpResult.removedRoles.length > 0) {
-                  const rolesToRemove: RoleLike[] = [];
-                  for (const roleIdToRemove of xpResult.removedRoles) {
-                    if (roleIdToRemove === xpResult.assignedRole) continue;
-                    const roleToRemove = await guild.roles.fetch(roleIdToRemove).catch(() => null);
-                    if (roleToRemove && member.roles.cache.has(roleToRemove.id)) {
-                      if (botMember.roles.highest.comparePositionTo(roleToRemove) > 0) {
-                        rolesToRemove.push(roleToRemove);
-                      } else {
-                        console.warn(
-                          `Cannot remove role ${roleToRemove.name} (${roleToRemove.id}) from ${author.tag} due to role hierarchy.`
-                        );
+                  if (xpResult.removedRoles && xpResult.removedRoles.length > 0) {
+                    const rolesToRemove: RoleLike[] = [];
+                    for (const roleIdToRemove of xpResult.removedRoles) {
+                      if (roleIdToRemove === xpResult.assignedRole) continue;
+                      const roleToRemove = await guild.roles.fetch(roleIdToRemove).catch(() => null);
+                      if (roleToRemove && member.roles.cache.has(roleToRemove.id)) {
+                        if (botMember.roles.highest.comparePositionTo(roleToRemove) > 0) {
+                          rolesToRemove.push(roleToRemove);
+                        } else {
+                          console.warn(
+                            `Cannot remove role ${roleToRemove.name} (${roleToRemove.id}) from ${author.tag} due to role hierarchy.`
+                          );
+                        }
                       }
                     }
-                  }
-                  if (rolesToRemove.length > 0) {
-                    await member.roles.remove(rolesToRemove, "Level up role update");
-                    console.log(
-                      `Removed roles ${rolesToRemove
-                        .map((r) => `${r.name} (${r.id})`)
-                        .join(", ")} from ${author.tag}`
-                    );
+                    if (rolesToRemove.length > 0) {
+                      await member.roles.remove(rolesToRemove, "Level up role update");
+                      console.log(
+                        `Removed roles ${rolesToRemove
+                          .map((r) => `${r.name} (${r.id})`)
+                          .join(", ")} from ${author.tag}`
+                      );
+                    }
                   }
                 }
               }
+            } catch (roleError) {
+              console.error(
+                `Error managing level roles for ${author.tag} in guild ${guild.id}:`,
+                roleError
+              );
             }
-          } catch (roleError) {
-            console.error(
-              `Error managing level roles for ${author.tag} in guild ${guild.id}:`,
-              roleError
+          }
+
+          if (xpResult.levelUp) {
+            await handleLevelUp(
+              message.client as any,
+              guild.id,
+              author.id,
+              xpResult.levelUp,
+              xpResult.type || "chat",
+              channel as any
             );
           }
-        }
 
-        if (xpResult.levelUp) {
-          await handleLevelUp(
-            message.client as any,
-            guild.id,
-            author.id,
-            xpResult.levelUp,
-            xpResult.type || "chat",
-            channel as any
-          );
+          await hubClient.setCooldown(author.id, guild.id, "message", 60000);
         }
-
-        await hubClient.setCooldown(author.id, guild.id, "message", 60000);
+      } catch (error) {
+        console.error("Error handling XP gain:", error);
       }
     } catch (error) {
-      console.error("Error handling XP gain:", error);
+      console.error("Error in message handler:", error);
+      isError = true;
+    } finally {
+      const duration = Date.now() - startTime;
+      recordEventCall("messageCreate", duration, isError);
     }
   },
 };
