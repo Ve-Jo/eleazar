@@ -3,10 +3,7 @@ import {
   PermissionsBitField,
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type GuildDataLike = {
   settings?: {
@@ -14,16 +11,6 @@ type GuildDataLike = {
       channel_id?: string;
     };
   };
-};
-
-type InteractionLike = {
-  guild: { id: string };
-  member: {
-    permissions: {
-      has: (permission: bigint) => boolean;
-    };
-  };
-  reply: (payload: { content: unknown; ephemeral: boolean }) => Promise<unknown>;
 };
 
 const command = {
@@ -54,7 +41,7 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<unknown> {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+    if (!(interaction.member as any)?.permissions?.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.reply({
         content: await i18n.__("commands.counting.no_perms"),
         ephemeral: true,

@@ -1,8 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-
-type TranslatorLike = {
-  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type TrackLike = {
   info: {
@@ -22,25 +19,6 @@ type PlayerLike = {
 type AutocompleteOptionLike = {
   name: string;
   value: string;
-};
-
-type MusicInteractionLike = {
-  client: {
-    lavalink: {
-      players: {
-        get: (guildId: string) => PlayerLike | null;
-      };
-    };
-  };
-  guild: { id: string };
-  member: { voice: { channelId?: string | null } };
-  options: {
-    getString: (name: string) => string | null;
-    getFocused: (required: true) => { value: string };
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
-  respond: (options: AutocompleteOptionLike[]) => Promise<unknown>;
 };
 
 const parseTimeToMs = (timeString: string): number | null => {
@@ -130,9 +108,9 @@ const command = {
     },
   },
 
-  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = interaction.client.lavalink.players.get(interaction.guild.id);
+    const player = (interaction.client as any).lavalink.players.get(interaction.guild.id);
     if (!player) {
       await interaction.editReply({
         content: await i18n.__("commands.music.seek.noMusicPlaying"),
@@ -141,7 +119,7 @@ const command = {
       return;
     }
 
-    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+    if ((interaction.member as any)?.voice?.channelId !== player.voiceChannelId) {
       await interaction.editReply({
         content: await i18n.__("commands.music.seek.notInVoiceChannel"),
         ephemeral: true,
@@ -149,7 +127,7 @@ const command = {
       return;
     }
 
-    const timeString = interaction.options.getString("time");
+    const timeString = interaction.options.getString!("time");
     if (!timeString) {
       await interaction.editReply({
         content: await i18n.__("commands.music.seek.invalidTimeFormat"),
@@ -186,24 +164,24 @@ const command = {
     });
   },
 
-  async autocomplete(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
-    const player = interaction.client.lavalink.players.get(interaction.guild.id);
+  async autocomplete(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
+    const player = (interaction.client as any).lavalink.players.get(interaction.guild.id);
     if (!player || !player.queue.current) {
       return;
     }
 
-    const focusedValue = interaction.options.getFocused(true).value;
+    const focusedValue = (interaction.options.getFocused!("time") as any).value as string;
     const currentPosition = Math.floor(player.position / 1000);
     const parsedPosition = parseTimeToMs(focusedValue);
 
     if (parsedPosition !== null) {
       const currentTime = formatTime(currentPosition);
       const newTime = formatTime(parsedPosition / 1000);
-      await interaction.respond([{ name: `${currentTime} -> ${newTime}`, value: focusedValue }]);
+      await (interaction as any).respond([{ name: `${currentTime} -> ${newTime}`, value: focusedValue }]);
       return;
     }
 
-    await interaction.respond([
+    await (interaction as any).respond([
       {
         name: await i18n.__("commands.music.seek.invalidTimeFormat"),
         value: "0:00",

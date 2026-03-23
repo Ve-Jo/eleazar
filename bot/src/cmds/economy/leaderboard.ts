@@ -9,6 +9,7 @@ import {
 import hubClient from "../../api/hubClient.ts";
 import { generateImage, processImageColors } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { UserLike, GuildLike, TranslatorLike, MessageLike, InteractionLike } from "../../types/index.ts";
 
 type LeaderboardCategory =
   | "total"
@@ -33,27 +34,13 @@ function isGameCategory(
   return GAME_CATEGORIES.has(category);
 }
 
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
 type MemberLike = {
   id: string;
   displayName: string;
   displayAvatarURL: (options?: Record<string, unknown>) => string;
 };
 
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
+type ExtendedGuildLike = GuildLike & {
   members: {
     fetch: (userId: string) => Promise<MemberLike>;
   };
@@ -73,29 +60,6 @@ type UserDataLike = Record<string, any> & {
   name?: string;
   avatarURL?: string;
   coloring?: unknown;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  components?: unknown[];
-  edit: (payload: unknown) => Promise<unknown>;
-  createMessageComponentCollector: (options: Record<string, unknown>) => {
-    on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
-  };
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -192,7 +156,7 @@ const command = {
     await interaction.deferReply();
     const guild = interaction.guild;
     let category =
-      (interaction.options.getString("category") as LeaderboardCategory | null) || "total";
+      (interaction.options.getString!("category") as LeaderboardCategory | null) || "total";
     let gameScope: GameLeaderboardScope = "local";
 
     try {
@@ -352,7 +316,8 @@ const command = {
         const potentialUsersWithData = await Promise.all(
           potentialUsersToDisplay.map(async (userData) => {
             try {
-              const member = await guild.members.fetch(userData.id);
+              const member = await guild?.members?.fetch(userData.id);
+              if (!member) throw new Error("Member not found");
               const avatarURL = member.displayAvatarURL({ extension: "png", size: 1024 });
               const colorProps = await processImageColors(avatarURL);
               return {
@@ -583,7 +548,7 @@ const command = {
 
       try {
         const messageOptions = await generateLeaderboardMessage();
-        message = await interaction.editReply(messageOptions);
+        const message = await interaction.editReply(messageOptions) as MessageLike;
       } catch (error) {
         console.error("Error updating leaderboard message:", error);
         const errorOptions = {

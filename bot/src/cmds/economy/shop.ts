@@ -10,24 +10,7 @@ import hubClient from "../../api/hubClient.ts";
 import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-  getUserLocale?: () => string;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
+import type { UserLike, GuildLike, TranslatorLike, MessageLike, InteractionLike } from "../../types/index.ts";
 
 type UserUpgradeEntry = {
   type: string;
@@ -71,25 +54,6 @@ type UpgradeInfoEntry = {
   progress: number;
   originalPrice?: number;
   discountPercent?: number;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  edit: (payload: unknown) => Promise<unknown>;
-  createMessageComponentCollector: (options: Record<string, unknown>) => {
-    on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
-  };
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const normalizeLocale = (locale: unknown, fallback = "en"): string => {
@@ -420,7 +384,7 @@ const command = {
       let upgradeInfo: Record<string, UpgradeInfoEntry> = {};
       const builderMode = "v2" as const;
       const userLocale = normalizeLocale(
-        i18n.getUserLocale?.() ?? interaction.locale,
+        i18n.getLocale?.() ?? interaction.locale,
         "en"
       );
 
@@ -655,7 +619,7 @@ const command = {
       };
 
       const initialMessageOptions = await generateShopMessage();
-      const message = await interaction.editReply(initialMessageOptions);
+      const message = await interaction.editReply(initialMessageOptions) as MessageLike;
 
       const collector = message.createMessageComponentCollector({
         filter: (componentInteraction: any) => componentInteraction.user.id === user.id,

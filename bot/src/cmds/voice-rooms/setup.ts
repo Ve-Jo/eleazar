@@ -9,46 +9,7 @@ import {
 } from "../../utils/voiceRooms.ts";
 
 import "../../utils/voiceRoomsLocalization.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-  getLocale?: () => string;
-};
-
-type ChannelLike = {
-  id: string;
-  name: string;
-  type: ChannelType;
-  parentId?: string | null;
-};
-
-type GuildLike = {
-  id: string;
-  channels: {
-    create: (options: {
-      name: string;
-      type: ChannelType;
-      parent?: string | null;
-    }) => Promise<ChannelLike>;
-  };
-};
-
-type InteractionLike = {
-  guild: GuildLike | null;
-  channel?: ChannelLike | null;
-  member: {
-    permissions: {
-      has: (permission: bigint) => boolean;
-    };
-  };
-  options: {
-    getChannel: (name: string) => ChannelLike | null;
-    getBoolean?: (name: string) => boolean | null;
-  };
-  locale?: string;
-  guildLocale?: string;
-  reply: (payload: { content: unknown; ephemeral?: boolean }) => Promise<unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -141,7 +102,7 @@ const command = {
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<unknown> {
     if (!interaction.guild) return;
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+    if (!interaction.member?.permissions?.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.reply({
         content: await i18n.__("commands.voice-rooms.no_perms"),
         ephemeral: true,
@@ -149,12 +110,12 @@ const command = {
     }
 
     const locale =
-      interaction.locale || interaction.guildLocale || i18n.getLocale?.() || "en";
+      interaction.locale || i18n.getLocale?.() || "en";
 
-    const joinChannel = interaction.options.getChannel("join_channel");
-    const panelChannel = interaction.options.getChannel("panel_channel");
-    const category = interaction.options.getChannel("category");
-    const waitingCategory = interaction.options.getChannel("waiting_category");
+    const joinChannel = interaction.options.getChannel!("join_channel");
+    const panelChannel = interaction.options.getChannel!("panel_channel");
+    const category = interaction.options.getChannel!("category");
+    const waitingCategory = interaction.options.getChannel!("waiting_category");
     const waitingRoomsEnabled = interaction.options.getBoolean?.("waiting_rooms");
 
     let resolvedJoinChannel = joinChannel;
@@ -164,6 +125,14 @@ const command = {
         "voiceRooms.general.joinToCreateName",
         locale
       );
+
+      if (!interaction.guild.channels?.create) {
+        return interaction.reply({
+          content: "Unable to create channels",
+          ephemeral: true,
+        });
+      }
+
       resolvedJoinChannel = await interaction.guild.channels.create({
         name: joinName,
         type: ChannelType.GuildVoice,
@@ -172,14 +141,12 @@ const command = {
     }
 
     const resolvedPanelChannel =
-      panelChannel ?? (interaction.channel?.type === ChannelType.GuildText
-        ? interaction.channel
-        : null);
+      panelChannel ?? (interaction.channel?.id ? interaction.channel : null);
 
     await updateVoiceRoomsSettings(interaction.guild.id, (settings) => ({
       ...settings,
       joinToCreateChannelId: resolvedJoinChannel.id,
-      categoryId: category?.id ?? resolvedJoinChannel.parentId ?? null,
+      categoryId: category?.id ?? (resolvedJoinChannel as { parentId?: string | null }).parentId ?? null,
       panelChannelId: resolvedPanelChannel?.id ?? settings.panelChannelId ?? null,
       waitingRoomsEnabled:
         typeof waitingRoomsEnabled === "boolean"

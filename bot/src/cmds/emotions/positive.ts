@@ -1,6 +1,7 @@
 import { ButtonBuilder, ButtonStyle, SlashCommandSubcommandBuilder } from "discord.js";
 import HMFull from "hmfull";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike, ImageData, ExtendedMessageLike } from "../../types/index.ts";
 
 const positiveEmotionChoices = [
   { name: "wave", value: "wave" },
@@ -15,72 +16,6 @@ const positiveEmotionChoices = [
   { name: "hold", value: "hold" },
   { name: "boop", value: "boop" },
 ] as const;
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  bot?: boolean;
-};
-
-type MemberManagerLike = {
-  fetch: (userId: string) => Promise<unknown>;
-};
-
-type ImageData = {
-  image: string;
-  category: string;
-  emotion: unknown;
-  description: unknown;
-};
-
-type CollectorLike = {
-  on: (event: string, callback: (...args: any[]) => Promise<void> | void) => void;
-};
-
-type FetchedMessageLike = {
-  components: unknown[];
-  edit: (payload: unknown) => Promise<unknown>;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  id?: string;
-  channel?: {
-    messages: {
-      fetch: (messageId: string) => Promise<FetchedMessageLike>;
-    };
-  };
-  createMessageComponentCollector: (options: Record<string, unknown>) => CollectorLike;
-};
-
-type BaseInteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  _isAiProxy?: boolean;
-  locale: string;
-  user: UserLike;
-  member?: unknown;
-  channel?: unknown;
-  client?: unknown;
-  guild: {
-    members: MemberManagerLike;
-  };
-  options: {
-    getString: (name: string) => string | null;
-    getUser: (name: string) => UserLike | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike | unknown>;
-  reply: (payload: unknown) => Promise<MessageLike | unknown>;
-  followUp?: (payload: unknown) => Promise<unknown>;
-  deleteReply?: () => Promise<unknown>;
-  fetchReply?: () => Promise<unknown>;
-  isCommand?: () => boolean;
-  isChatInputCommand?: () => boolean;
-};
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -230,21 +165,21 @@ const command = {
     },
   },
 
-  async execute(interaction: BaseInteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await executePositiveEmotion(interaction, i18n);
   },
 };
 
 async function executePositiveEmotion(
-  interaction: BaseInteractionLike,
+  interaction: InteractionLike,
   i18n: TranslatorLike
 ): Promise<void> {
   const builderMode = "v2";
   await interaction.deferReply();
 
   const user = interaction.user;
-  const targetUser = interaction.options.getUser("user") || user;
-  const emotionType = interaction.options.getString("emotion");
+  const targetUser = interaction.options.getUser!("user") || user;
+  const emotionType = interaction.options.getString!("emotion");
 
   if (targetUser.id === user.id) {
     await interaction.editReply({
@@ -334,7 +269,7 @@ async function executePositiveEmotion(
     emotionComponent.addButtons(nextButton, returnButton);
 
     const replyOptions = emotionComponent.toReplyOptions();
-    const message = (await interaction.editReply(replyOptions)) as MessageLike;
+    const message = await interaction.editReply(replyOptions) as ExtendedMessageLike;
 
     const collector = message.createMessageComponentCollector({
       time: 60000,
@@ -365,8 +300,8 @@ async function executePositiveEmotion(
 
         await componentInteraction.deferUpdate();
 
-        const targetMember = await interaction.guild.members.fetch(targetUser.id);
-        const returnInteraction: BaseInteractionLike = {
+        const targetMember = await interaction.guild?.members?.fetch(targetUser.id);
+        const returnInteraction: InteractionLike = {
           ...interaction,
           user: targetUser,
           member: targetMember,
@@ -374,7 +309,6 @@ async function executePositiveEmotion(
             getString: (name: string) => (name === "emotion" ? emotionType : null),
             getUser: (name: string) => (name === "user" ? user : null),
           },
-          _isAiProxy: false,
           reply: async (options: unknown) => componentInteraction.followUp({ ...options as Record<string, unknown>, ephemeral: true }),
           editReply: async (options: unknown) => componentInteraction.followUp({ ...options as Record<string, unknown>, ephemeral: true }),
           deferReply: async () => undefined,
@@ -385,8 +319,6 @@ async function executePositiveEmotion(
           client: interaction.client,
           guild: interaction.guild,
           locale: componentInteraction.locale,
-          isCommand: () => false,
-          isChatInputCommand: () => false,
         };
 
         try {
@@ -404,8 +336,8 @@ async function executePositiveEmotion(
     collector.on("end", async (_collected: unknown, reason: string) => {
       if (reason !== "messageDelete" && message.editable && message.id && message.channel) {
         try {
-          const latestMessage = await message.channel.messages.fetch(message.id);
-          if (latestMessage.components.length > 0) {
+          const latestMessage = await message.channel.messages?.fetch(message.id);
+          if (latestMessage && latestMessage.components.length > 0) {
             await latestMessage.edit({ components: [] });
           }
         } catch (error) {

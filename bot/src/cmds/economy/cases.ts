@@ -12,23 +12,7 @@ import { CRATE_TYPES } from "../../../../hub/shared/src/domain.ts";
 import prettyMs from "pretty-ms";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
+import type { TranslatorLike, InteractionLike, MessageLike, ComponentInteractionLike } from "../../types/index.ts";
 
 type CrateTypeConfig = {
   emoji?: string;
@@ -43,41 +27,6 @@ type CrateListItem = {
   available: boolean;
   cooldown: number;
   count: number;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  edit: (payload: unknown) => Promise<unknown>;
-  createMessageComponentCollector: (options: Record<string, unknown>) => {
-    on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
-  };
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale?: string;
-  guild: GuildLike;
-  user: UserLike;
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
-
-type ComponentInteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  customId: string;
-  values: string[];
-  user: { id: string };
-  update: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
-  followUp: (payload: unknown) => Promise<unknown>;
-  deferUpdate: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
 };
 
 type CasesCommandShape = {
@@ -110,7 +59,7 @@ type CasesCommandShape = {
     i18n: TranslatorLike
   ) => Promise<ButtonBuilder>;
   handleCrateOpen: (
-    i: ComponentInteractionLike,
+    i: InteractionLike,
     cratesList: CrateListItem[],
     selectedCrate: number,
     interaction: InteractionLike,
@@ -299,7 +248,7 @@ const command: CasesCommandShape = {
     await interaction.deferReply();
 
     try {
-      const requestedCase = interaction.options.getString("case");
+      const requestedCase = interaction.options.getString!("case");
 
       if (requestedCase) {
         await this.handleDirectCaseOpen(interaction, i18n, requestedCase, builderMode);
@@ -322,7 +271,7 @@ const command: CasesCommandShape = {
     }
 
     const cooldownTimestamp = Number(
-      await (hubClient as any).getCrateCooldown(interaction.guild.id, interaction.user.id, requestedCase)
+      await (hubClient as any).getCrateCooldown(interaction.guildId!, interaction.user.id, requestedCase)
     );
 
     const now = Date.now();
@@ -352,7 +301,7 @@ const command: CasesCommandShape = {
         "DIRECT CASE OPENING"
       );
 
-      const message = await interaction.editReply(rewardMessage);
+      const message = await interaction.editReply(rewardMessage) as MessageLike;
       this.setupBackToMenuCollector(message, interaction, i18n);
     } catch (error) {
       console.error("Error opening requested case:", error);
@@ -364,15 +313,22 @@ const command: CasesCommandShape = {
   },
 
   async handleCaseMenu(interaction, i18n, builderMode): Promise<void> {
-    await (hubClient as any).ensureGuildUser(interaction.guild.id, interaction.user.id);
+    if (!interaction.guildId) {
+      await interaction.editReply({
+        content: String(await i18n.__("commands.economy.cases.error")),
+      });
+      return;
+    }
 
-    const userData = await (hubClient as any).getUser(interaction.guild.id, interaction.user.id);
+    await (hubClient as any).ensureGuildUser(interaction.guildId, interaction.user.id);
+
+    const userData = await (hubClient as any).getUser(interaction.guildId, interaction.user.id);
     const cratesList = await this.buildCratesList(interaction, i18n);
     let selectedCrate = 0;
 
     const generateCratesMessage = async (disableInteractions = false): Promise<Record<string, unknown>> => {
       const dailyStatus = await (hubClient as any).getDailyCrateStatus(
-        interaction.guild.id,
+        interaction.guildId,
         interaction.user.id
       );
       const generated = (await generateImage(
@@ -389,12 +345,12 @@ const command: CasesCommandShape = {
               }),
             },
             guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
-              iconURL: interaction.guild.iconURL({
+              id: interaction.guildId,
+              name: interaction.guild?.name ?? "Unknown Server",
+              iconURL: interaction.guild?.iconURL?.({
                 extension: "png",
                 size: 1024,
-              }),
+              }) ?? null,
             },
           },
           database: {
@@ -449,7 +405,7 @@ const command: CasesCommandShape = {
     };
 
     const initialMessage = await generateCratesMessage();
-    const message = await interaction.editReply(initialMessage);
+    const message = await interaction.editReply(initialMessage) as MessageLike;
 
     const collector = message.createMessageComponentCollector({
       filter: (componentInteraction: ComponentInteractionLike) =>
@@ -465,7 +421,7 @@ const command: CasesCommandShape = {
           await componentInteraction.editReply(await generateCratesMessage());
         } else if (componentInteraction.customId === "open_crate") {
           await this.handleCrateOpen(
-            componentInteraction,
+            componentInteraction as InteractionLike,
             cratesList,
             selectedCrate,
             interaction,
@@ -494,7 +450,7 @@ const command: CasesCommandShape = {
 
   async buildCratesList(interaction, i18n): Promise<CrateListItem[]> {
     const crates = (await (hubClient as any).getUserCrates(
-      interaction.guild.id,
+      interaction.guildId,
       interaction.user.id
     )) as Array<{ type: string; count: number }>;
 
@@ -557,7 +513,7 @@ const command: CasesCommandShape = {
 
   async getCooldownTime(interaction, crateType): Promise<number> {
     const cooldownTimestamp = Number(
-      await (hubClient as any).getCrateCooldown(interaction.guild.id, interaction.user.id, crateType)
+      await (hubClient as any).getCrateCooldown(interaction.guildId, interaction.user.id, crateType)
     );
 
     const now = Date.now();
@@ -639,7 +595,7 @@ const command: CasesCommandShape = {
     }
 
     try {
-      await i.deferUpdate();
+      await (i as any).deferUpdate();
       const rewardMessage = await this.openCaseAndCreateMessage(
         interaction,
         i18n,
@@ -660,7 +616,7 @@ const command: CasesCommandShape = {
       };
 
       if (i.deferred || i.replied) {
-        await i.followUp(errorPayload);
+        await i.followUp!(errorPayload);
       } else {
         await i.reply(errorPayload);
       }
@@ -677,7 +633,7 @@ const command: CasesCommandShape = {
     logPrefix = "CASE OPENING"
   ): Promise<Record<string, unknown>> {
     const rewards = await (hubClient as any).openCrate(
-      interaction.guild.id,
+      interaction.guildId,
       interaction.user.id,
       crateType
     );
@@ -708,7 +664,7 @@ const command: CasesCommandShape = {
     const rewardRecord = (rewards && typeof rewards === "object"
       ? (rewards as Record<string, unknown>)
       : {}) as Record<string, unknown>;
-    const userData = await (hubClient as any).getUser(interaction.guild.id, interaction.user.id);
+    const userData = await (hubClient as any).getUser(interaction.guildId, interaction.user.id);
     const cratesList = await this.buildCratesList(interaction, i18n);
     const selectedCrateIndex = Math.max(
       0,
@@ -728,12 +684,12 @@ const command: CasesCommandShape = {
             }),
           },
           guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
-            iconURL: interaction.guild.iconURL({
+            id: interaction.guildId,
+            name: interaction.guild?.name ?? "Unknown Server",
+            iconURL: interaction.guild?.iconURL?.({
               extension: "png",
               size: 1024,
-            }),
+            }) ?? null,
           },
         },
         database: {
@@ -801,7 +757,7 @@ const command: CasesCommandShape = {
         options: {
           ...interaction.options,
           getString: (name: string) =>
-            name === "case" ? null : interaction.options.getString(name),
+            name === "case" ? null : interaction.options.getString!(name),
         },
         editReply: i.editReply.bind(i),
         reply: i.reply.bind(i),
@@ -829,6 +785,7 @@ const command: CasesCommandShape = {
 
         const newInteraction = {
           ...interaction,
+          guildId: interaction.guildId,
           guild: interaction.guild,
           user: interaction.user,
           options: interaction.options,

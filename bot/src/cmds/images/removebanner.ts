@@ -1,25 +1,7 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type InteractionLike = {
-  _isAiProxy?: boolean;
-  replied?: boolean;
-  deferred?: boolean;
-  guild: {
-    id: string;
-  };
-  user: {
-    id: string;
-  };
-  deferReply: (payload?: { ephemeral?: boolean }) => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -56,7 +38,7 @@ const command = {
     },
   },
 
-  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike & { _isAiProxy?: boolean }, i18n: TranslatorLike): Promise<void> {
     const isAiContext = !!interaction._isAiProxy;
     const builderMode = isAiContext ? "v1" : "v2";
 
@@ -65,10 +47,12 @@ const command = {
     }
 
     try {
-      await (hubClient as any).ensureGuildUser(interaction.guild.id, interaction.user.id);
-      await (hubClient as any).updateUser(interaction.guild.id, interaction.user.id, {
-        bannerUrl: null,
-      });
+      const hub = hubClient as unknown as Record<string, (guildId: string, userId: string, data?: unknown) => Promise<unknown>>;
+      if (!hub.ensureGuildUser || !hub.updateUser) {
+        throw new Error("Hub client methods not available");
+      }
+      await hub.ensureGuildUser(interaction.guild.id, interaction.user.id);
+      await hub.updateUser(interaction.guild.id, interaction.user.id, { bannerUrl: null });
 
       const successComponent = new ComponentBuilder({
         mode: builderMode,

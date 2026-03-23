@@ -4,58 +4,13 @@ import {
   PermissionsBitField,
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type RoleLike = {
-  id: string;
-  name: string;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type LevelRoleLike = {
   roleId: string;
   requiredLevel: number;
   mode?: string;
   replaceLowerRoles?: boolean;
-};
-
-type GuildLike = {
-  id: string;
-  roles: {
-    fetch: (roleId: string) => Promise<RoleLike | null>;
-  };
-  members: {
-    fetchMe: () => Promise<{
-      roles: {
-        highest: {
-          comparePositionTo: (role: RoleLike) => number;
-        };
-      };
-    }>;
-  };
-};
-
-type InteractionLike = {
-  inGuild: () => boolean;
-  guild: GuildLike;
-  member: {
-    permissions: {
-      has: (permission: bigint) => boolean;
-    };
-  };
-  options: {
-    getSubcommandGroup: () => string;
-    getSubcommand: () => string;
-    getRole: (name: string) => RoleLike;
-    getInteger: (name: string) => number;
-    getString: (name: string) => string | null;
-    getBoolean: (name: string) => boolean | null;
-  };
-  reply: (payload: { content: unknown; ephemeral: boolean }) => Promise<unknown>;
-  deferReply: (payload: { ephemeral: boolean }) => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -256,19 +211,19 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void | unknown> {
-    if (!interaction.inGuild()) {
+    if (!interaction.inGuild?.()) {
       return;
     }
 
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (!interaction.member?.permissions?.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({
         content: await i18n.__("commands.settings.error_permissions"),
         ephemeral: true,
       });
     }
 
-    const subcommandGroup = interaction.options.getSubcommandGroup();
-    const subcommand = interaction.options.getSubcommand();
+    const subcommandGroup = interaction.options.getSubcommandGroup!();
+    const subcommand = interaction.options.getSubcommand!();
     const { guild } = interaction;
 
     await interaction.deferReply({ ephemeral: true });
@@ -278,12 +233,19 @@ const command = {
     try {
       if (subcommandGroup === "levelroles") {
         if (subcommand === "add") {
-          const role = interaction.options.getRole("role");
-          const level = interaction.options.getInteger("level");
-          const mode = interaction.options.getString("mode") || "text";
-          const replaceLowerRoles = interaction.options.getBoolean("replace_lower_roles") ?? true;
+          const role = interaction.options.getRole!("role")!;
+          const level = interaction.options.getInteger!("level")!;
+          const mode = interaction.options.getString!("mode") || "text";
+          const replaceLowerRoles = interaction.options.getBoolean!("replace_lower_roles") ?? true;
+
+          if (!guild.members?.fetchMe) {
+            return interaction.editReply("Unable to fetch bot member");
+          }
           const botMember = await guild.members.fetchMe();
 
+          if (!botMember?.roles?.highest) {
+            return interaction.editReply("Unable to determine bot role position");
+          }
           if (botMember.roles.highest.comparePositionTo(role) <= 0) {
             return interaction.editReply(
               await i18n.__(`${i18nBaseKey}.error_role_unmanageable`, {
@@ -308,7 +270,7 @@ const command = {
               if (typedError.message.includes("A different role")) {
                 const match = typedError.message.match(/\((.*?)\)/);
                 const existingRoleId = match?.[1] || "unknown";
-                const existingRole = await guild.roles.fetch(existingRoleId).catch(() => null);
+                const existingRole = await guild.roles?.fetch?.(existingRoleId).catch(() => null);
                 await interaction.editReply(
                   await i18n.__(`${i18nBaseKey}.error_level_exists`, {
                     existingRoleName: existingRole?.name || existingRoleId,
@@ -332,7 +294,7 @@ const command = {
             }
           }
         } else if (subcommand === "remove") {
-          const role = interaction.options.getRole("role");
+          const role = interaction.options.getRole!("role")!;
           try {
             await hubClient.removeLevelRole(guild.id, role.id);
             await interaction.editReply(

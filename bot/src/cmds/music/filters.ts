@@ -1,8 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-
-type TranslatorLike = {
-  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type FilterValue = number | string | boolean | null | undefined;
 
@@ -12,30 +9,6 @@ type PlayerLike = {
     data: Record<string, Record<string, FilterValue>>;
     applyPlayerFilters: () => Promise<void>;
   };
-};
-
-type BaseInteractionLike = {
-  client: {
-    lavalink: {
-      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
-    };
-  };
-  guild: { id: string };
-  member: { voice: { channelId?: string | null } };
-  options: {
-    getString: (name: string) => string | null;
-    getNumber: (name: string) => number | null;
-    getFocused: (required: true) => { name: string; value: string };
-  };
-};
-
-type CommandInteractionLike = BaseInteractionLike & {
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
-};
-
-type AutocompleteInteractionLike = BaseInteractionLike & {
-  respond: (options: Array<{ name: string; value: string }>) => Promise<unknown>;
 };
 
 const command = {
@@ -132,19 +105,19 @@ const command = {
     },
   },
 
-  async execute(interaction: CommandInteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const filterName = interaction.options.getString("filter");
-    const filterProperty = interaction.options.getString("property");
-    const value = interaction.options.getNumber("value");
-    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
+    const filterName = interaction.options.getString!("filter");
+    const filterProperty = interaction.options.getString!("property");
+    const value = interaction.options.getNumber!("value");
+    const player = await (interaction.client as any).lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
       await interaction.editReply(await i18n.__("commands.music.filters.noMusicPlaying"));
       return;
     }
 
-    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+    if ((interaction.member as any)?.voice?.channelId !== player.voiceChannelId) {
       await interaction.editReply({
         content: await i18n.__("commands.music.filters.notInVoiceChannel"),
         ephemeral: true,
@@ -173,33 +146,41 @@ const command = {
   },
 
   async autocomplete(
-    interaction: AutocompleteInteractionLike,
+    interaction: InteractionLike,
     i18n?: TranslatorLike
   ): Promise<void> {
-    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
+    const player = await (interaction.client as any).lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
-      await interaction.respond([
+      await (interaction as any).respond([
         {
           name: i18n
             ? await i18n.__("commands.music.filters.noMusicPlaying")
             : "No music playing",
-          value: "no music playing",
+          value: "no_music",
         },
       ]);
       return;
     }
 
-    if (interaction.member.voice.channelId !== player.voiceChannelId) {
-      await interaction.respond([]);
+    if ((interaction.member as any)?.voice?.channelId !== player.voiceChannelId) {
+      await (interaction as any).respond([
+        {
+          name: i18n
+            ? await i18n.__("commands.music.filters.notInVoiceChannel")
+            : "Not in voice channel",
+          value: "not_in_voice",
+        },
+      ]);
       return;
     }
 
-    const focusedOption = interaction.options.getFocused(true);
-    const filterName = interaction.options.getString("filter");
+    const focusedOption = interaction.options.getFocused!("filter") as any;
+    const filterName = interaction.options.getString!("filter");
+    const focusedValue = (focusedOption as any).value;
     let options: Array<{ name: string; value: string }> = [];
 
-    if (focusedOption.name === "filter") {
+    if ((focusedOption as any).name === "filter") {
       options = Object.keys(player.filterManager.data)
         .filter(
           (filter) =>
@@ -227,7 +208,7 @@ const command = {
       option.name.toLowerCase().startsWith(focusedOption.value.toLowerCase()),
     );
 
-    await interaction.respond(filteredOptions.slice(0, 25));
+    await (interaction as any).respond(filteredOptions.slice(0, 25));
   },
 };
 

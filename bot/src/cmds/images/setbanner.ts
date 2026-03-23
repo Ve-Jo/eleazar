@@ -7,19 +7,11 @@ import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import axios from "axios";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike, UserLike } from "../../types/index.ts";
 
 const BANNER_LOGS = {
   guildId: "1282078106202669148",
   channelId: "1306739210715140116",
-};
-
-type TranslatorLike = {
-  __: (
-    key: string,
-    vars?: Record<string, unknown>,
-    locale?: string
-  ) => Promise<string | unknown>;
-  getLocale?: () => string;
 };
 
 type AttachmentLike = {
@@ -29,30 +21,11 @@ type AttachmentLike = {
   name?: string | null;
 };
 
-type UserLike = {
-  id: string;
-  tag?: string;
-  username?: string;
-  displayName?: string;
-  send: (payload: unknown) => Promise<unknown>;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
-
 type StorageMessageLike = {
   attachments: {
     first: () => { url?: string } | null;
   };
   edit: (payload: unknown) => Promise<unknown>;
-};
-
-type ChannelLike = {
-  send: (payload: unknown) => Promise<StorageMessageLike>;
 };
 
 type ButtonInteractionLike = {
@@ -65,37 +38,6 @@ type ButtonInteractionLike = {
   message: {
     delete: () => Promise<unknown>;
   };
-  reply: (payload: unknown) => Promise<unknown>;
-};
-
-type InteractionLike = {
-  _isAiProxy?: boolean;
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  guild: GuildLike;
-  user: UserLike;
-  client: {
-    guilds: {
-      cache: {
-        get: (guildId: string) => {
-          channels: {
-            cache: {
-              get: (channelId: string) => ChannelLike | undefined;
-            };
-          };
-        } | undefined;
-      };
-    };
-    users: {
-      fetch: (userId: string) => Promise<UserLike | null>;
-    };
-  };
-  options: {
-    getAttachment: (name: string) => AttachmentLike | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
   reply: (payload: unknown) => Promise<unknown>;
 };
 
@@ -114,7 +56,7 @@ async function makePermanentAttachment(
       description: "User banner image",
     });
 
-    const modGuild = interaction.client.guilds.cache.get(BANNER_LOGS.guildId);
+    const modGuild = interaction.client?.guilds?.cache.get(BANNER_LOGS.guildId);
     if (!modGuild) {
       throw new Error("Mod guild not found");
     }
@@ -130,7 +72,7 @@ async function makePermanentAttachment(
       .addFields(
         {
           name: "User",
-          value: `${interaction.user.tag} (${interaction.user.id})`,
+          value: `${(interaction.user as UserLike & { tag?: string }).tag} (${interaction.user.id})`,
         },
         {
           name: "Guild",
@@ -143,10 +85,15 @@ async function makePermanentAttachment(
       )
       .setTimestamp();
 
-    const storageMessage = await modChannel.send({
+    const sendResult = modChannel?.send;
+    if (!sendResult) {
+      throw new Error("Mod channel cannot send messages");
+    }
+
+    const storageMessage = (await sendResult.call(modChannel, {
       embeds: [modEmbed],
       files: [tempAttachment],
-    });
+    })) as unknown as StorageMessageLike;
 
     const permanentUrl = storageMessage.attachments.first()?.url;
     if (!permanentUrl) {
@@ -177,8 +124,8 @@ async function handleRemoveBanner(interaction: ButtonInteractionLike): Promise<v
     await (hubClient as any).ensureGuildUser(guildId, userId);
     await (hubClient as any).updateUser(guildId, userId, { bannerUrl: null });
 
-    const user = await interaction.client.users.fetch(userId);
-    if (user) {
+    const user = await interaction.client?.users?.fetch(userId);
+    if (user && 'send' in user && typeof user.send === 'function') {
       try {
         await user.send({
           content:
@@ -272,7 +219,7 @@ const command = {
     },
   },
 
-  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike & { _isAiProxy?: boolean; locale: string }, i18n: TranslatorLike): Promise<void> {
     const isAiContext = !!interaction._isAiProxy;
     const builderMode = isAiContext ? "v1" : "v2";
 
@@ -280,7 +227,7 @@ const command = {
       await interaction.deferReply();
     }
 
-    const attachment = interaction.options.getAttachment("image");
+    const attachment = interaction.options.getAttachment?.("image");
 
     try {
       if (!attachment || !attachment.contentType?.startsWith("image/")) {
@@ -302,16 +249,14 @@ const command = {
 
       const permanentUrl = await makePermanentAttachment(interaction, attachment);
 
-      await (hubClient as any).ensureGuildUser(interaction.guild.id, interaction.user.id);
-      await (hubClient as any).updateUser(interaction.guild.id, interaction.user.id, {
-        bannerUrl: permanentUrl,
-      });
-
       try {
-        const userData = await (hubClient as any).getUser(
-          interaction.guild.id,
-          interaction.user.id
-        );
+        const hub = hubClient as unknown as Record<string, (guildId: string, userId: string, data?: unknown) => Promise<unknown>>;
+        if (!hub.ensureGuildUser || !hub.updateUser || !hub.getUser) {
+          throw new Error("Hub client methods not available");
+        }
+        await hub.ensureGuildUser(interaction.guild.id, interaction.user.id);
+        await hub.updateUser(interaction.guild.id, interaction.user.id, { bannerUrl: permanentUrl });
+        const userData = await hub.getUser(interaction.guild.id, interaction.user.id);
 
         const generated = (await generateImage(
           "Balance",
@@ -340,7 +285,7 @@ const command = {
             returnDominant: true,
           },
           { image: 2, emoji: 1 },
-          i18n as any
+          i18n as unknown as TranslatorLike
         )) as [unknown, unknown];
 
         const previewBuffer = generated?.[0];

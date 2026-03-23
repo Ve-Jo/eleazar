@@ -6,11 +6,9 @@ import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import { promisify } from "util";
 import hubClient from "../../api/hubClient.ts";
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const unlinkAsync = promisify(fs.unlink);
-type InteractionLike = any;
-type I18nLike = any;
-type ClientLike = any;
 
 async function convertAudio(inputPath: string, outputPath: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -23,7 +21,7 @@ async function convertAudio(inputPath: string, outputPath: string): Promise<void
 }
 
 export async function transcribeAudio(
-  client: ClientLike,
+  client: any,
   audioUrl: string,
   language = "auto"
 ) {
@@ -179,9 +177,9 @@ export default {
       uk: "Наданий файл має непідтримуваний формат. Підтримувані формати: {{accepted_types}}. Отримано: {{received_type}}",
     },
     file_too_large: {
-      en: "The audio file is too large (max 25MB).",
-      ru: "Аудиофайл слишком большой (максимум 25МБ).",
-      uk: "Аудіофайл занадто великий (максимум 25МБ).",
+      en: "The audio file is too large (max 50MB).",
+      ru: "Аудиофайл слишком большой (максимум 50МБ).",
+      uk: "Аудіофайл занадто великий (максимум 50МБ).",
     },
     downloading: {
       en: "Downloading audio file...",
@@ -200,13 +198,13 @@ export default {
     },
   },
 
-  async execute(interaction: InteractionLike, i18n: I18nLike) {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike) {
     await interaction.deferReply();
     const userLocale = interaction.locale || "en";
 
     // Get the file attachment
-    const attachment = interaction.options.getAttachment("audio");
-    if (!attachment) {
+    const attachment = interaction.options.getAttachment!("audio");
+    if (!attachment || !(attachment as any).contentType) {
       return interaction.editReply(
         await i18n.__("commands.ai.transcribe_audio.no_attachment")
       );
@@ -224,22 +222,18 @@ export default {
       "audio/x-mpeg-3",
       "audio/webm",
     ];
-    if (!acceptedTypes.includes(attachment.contentType)) {
+    if (!acceptedTypes.includes((attachment as any).contentType)) {
       return interaction.editReply(
-        await i18n.__(
-          "invalid_attachment_type",
-          {
-            accepted_types: acceptedTypes.join(", "),
-            received_type: attachment.contentType || "unknown",
-          },
-          userLocale
-        )
+        await i18n.__("invalid_attachment_type", {
+          accepted_types: acceptedTypes.join(", "),
+          received_type: (attachment as any).contentType || "unknown",
+        })
       );
     }
 
     // Check file size
-    if (attachment.size > 25 * 1024 * 1024) {
-      // 25 MB
+    if ((attachment as any).size > 50 * 1024 * 1024) {
+      // 50 MB
       return interaction.editReply(
         await i18n.__("commands.ai.transcribe_audio.file_too_large")
       );
@@ -251,7 +245,7 @@ export default {
         await i18n.__("commands.ai.transcribe_audio.downloading")
       );
 
-      const response = await fetch(attachment.url);
+      const response = await fetch((attachment as any).url);
       if (!response.ok) {
         throw new Error(
           `Failed to download file: ${response.status} ${response.statusText}`
@@ -266,7 +260,7 @@ export default {
       );
 
       const formData = new FormData();
-      formData.append("file", new Blob([audioData]), attachment.name);
+      formData.append("file", new Blob([audioData]), (attachment as any).name);
       formData.append("model", "whisper-1");
 
       const transcriptionResponse = await fetch(

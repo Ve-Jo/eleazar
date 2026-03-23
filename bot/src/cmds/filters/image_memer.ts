@@ -1,4 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const memerList = [
   "disability",
@@ -15,24 +16,8 @@ const memerList = [
   "youtube",
 ] as const;
 
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
 type MemerClientLike = {
   [key: string]: (...args: string[]) => Promise<unknown>;
-};
-
-type InteractionLike = {
-  client: {
-    memer: MemerClientLike;
-  };
-  options: {
-    getAttachment: (name: string) => { url: string };
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -127,16 +112,16 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
-    const image = interaction.options.getAttachment("image");
-    const filter = interaction.options.getString("filter");
+    const image = interaction.options.getAttachment!("image");
+    const filter = interaction.options.getString!("filter");
 
     await interaction.deferReply();
 
     try {
       let result: unknown;
       if (filter === "youtube") {
-        const youtubeFilterHandler = interaction.client.memer[filter];
-        const youtubeText = interaction.options.getString("youtube_text");
+        const youtubeFilterHandler = (interaction.client as any).memer[filter];
+        const youtubeText = interaction.options.getString!("youtube_text");
 
         if (!youtubeText) {
           await interaction.editReply({
@@ -167,16 +152,16 @@ const command = {
         }
 
         result = await youtubeFilterHandler(
-          image.url,
+          (image as any).url,
           username,
           allTextAfterUsername
         );
       } else if (filter) {
-        const filterHandler = interaction.client.memer[filter];
+        const filterHandler = (interaction.client as any).memer[filter];
         if (!filterHandler) {
           throw new Error(`Missing memer handler for ${filter}`);
         }
-        result = await filterHandler(image.url);
+        result = await (interaction.client as any).memer[filter]((image as any).url);
       } else {
         throw new Error("No filter provided");
       }

@@ -3,9 +3,8 @@ import fetch from "node-fetch";
 import { Client } from "@gradio/client";
 import OpenAI from "openai";
 import hubClient from "../../api/hubClient.ts";
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
-type InteractionLike = any;
-type I18nLike = any;
 type AiModelLike = { id: string };
 const hubClientAny = hubClient as any;
 
@@ -189,16 +188,16 @@ export default {
     },
   },
 
-  async execute(interaction: InteractionLike, i18n: I18nLike) {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike) {
     await interaction.deferReply();
 
-    let modelId: string = interaction.options.getString("model");
-    let prompt: string = interaction.options.getString("prompt");
-    let width = interaction.options.getInteger("width") || 1024;
-    let height = interaction.options.getInteger("height") || 1024;
+    let modelId: string = interaction.options.getString!("model") || "";
+    let prompt: string = interaction.options.getString!("prompt") || "";
+    let width = interaction.options.getInteger!("width") || 1024;
+    let height = interaction.options.getInteger!("height") || 1024;
     let interferenceSteps =
-      interaction.options.getInteger("interference_steps") || 10;
-    let seed = interaction.options.getInteger("seed") || 0;
+      interaction.options.getInteger!("interference_steps") || 10;
+    let seed = interaction.options.getInteger!("seed") || 0;
     const userId: string | undefined = interaction.user?.id;
     console.log(JSON.stringify({ modelId, prompt, width, height }, null, 2));
 
@@ -227,7 +226,7 @@ export default {
 
   async generateImage(
     interaction: InteractionLike,
-    i18n: I18nLike,
+    i18n: TranslatorLike,
     prompt: string,
     width: number,
     height: number,

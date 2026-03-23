@@ -1,6 +1,7 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import HMFull from "hmfull";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike, ImageData, ExtendedMessageLike } from "../../types/index.ts";
 
 const negativeEmotionChoices = [
   { name: "bonk", value: "bonk" },
@@ -15,54 +16,6 @@ const negativeEmotionChoices = [
   { name: "threaten", value: "threaten" },
   { name: "tickle", value: "tickle" },
 ] as const;
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  bot?: boolean;
-};
-
-type ImageData = {
-  image: string;
-  category: string;
-  emotion: unknown;
-  description: unknown;
-};
-
-type CollectorLike = {
-  on: (event: string, callback: (...args: any[]) => Promise<void> | void) => void;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  id?: string;
-  channel?: {
-    messages: {
-      fetch: (messageId: string) => Promise<{
-        components: unknown[];
-        edit: (payload: unknown) => Promise<unknown>;
-      }>;
-    };
-  };
-  createMessageComponentCollector: (options: Record<string, unknown>) => CollectorLike;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  options: {
-    getString: (name: string) => string | null;
-    getUser: (name: string) => UserLike | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -113,8 +66,8 @@ const command = {
     await interaction.deferReply();
 
     const user = interaction.user;
-    const targetUser = interaction.options.getUser("user") || user;
-    const emotionType = interaction.options.getString("emotion");
+    const targetUser = interaction.options.getUser!("user") || user;
+    const emotionType = interaction.options.getString!("emotion");
 
     if (targetUser.id === user.id) {
       await interaction.editReply({
@@ -189,7 +142,7 @@ const command = {
         .addTimestamp(interaction.locale);
 
       const replyOptions = emotionComponent.toReplyOptions();
-      const message = await interaction.editReply(replyOptions);
+      const message = await interaction.editReply(replyOptions) as ExtendedMessageLike;
 
       const collector = message.createMessageComponentCollector({
         time: 60000,

@@ -10,33 +10,7 @@ import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import ms from "ms";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildMemberLike = {
-  id: string;
-  displayName: string;
-  user: UserLike & { bot?: boolean };
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-  members: {
-    fetch: (userId: string) => Promise<GuildMemberLike>;
-  };
-};
+import type { TranslatorLike, InteractionLike, MessageLike } from "../../types/index.ts";
 
 type EconomyUserData = Record<string, any> & {
   id: string;
@@ -44,21 +18,6 @@ type EconomyUserData = Record<string, any> & {
     balance?: number;
   };
   upgrades?: Array<{ type: string; level?: number }>;
-};
-
-type MessageLike = {
-  awaitMessageComponent: (options: Record<string, unknown>) => Promise<any>;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -210,8 +169,8 @@ const command = {
       const targetOptions = await Promise.all(
         validTargets.map(async (userDataItem) => {
           try {
-            const member = await guild.members.fetch(userDataItem.id);
-            if (!member || member.user.bot) {
+            const member = await guild.members?.fetch(userDataItem.id);
+            if (!member || !member.user || member.user.bot) {
               return null;
             }
 
@@ -240,21 +199,24 @@ const command = {
         .addText(String(await i18n.__("commands.economy.crime.selectTarget")))
         .addActionRow(row);
 
-      const response = await interaction.editReply(selectTargetComponent.toReplyOptions());
+      const response = await interaction.editReply(selectTargetComponent.toReplyOptions()) as { awaitMessageComponent?: (options: Record<string, unknown>) => Promise<unknown> };
 
       try {
+        if (!response.awaitMessageComponent) {
+          throw new Error("awaitMessageComponent not available");
+        }
         const collection = await response.awaitMessageComponent({
           filter: (componentInteraction: any) => componentInteraction.user.id === user.id,
           time: 30000,
           componentType: ComponentType.StringSelect,
-        });
+        }) as { values: string[]; update: (payload: unknown) => Promise<unknown> };
 
         const targetId = collection.values[0] as string | undefined;
         if (!targetId) {
           throw new Error("Missing target selection");
         }
 
-        const target = await guild.members.fetch(targetId);
+        const target = (await guild.members?.fetch(targetId))!;
         const [freshUserData, targetData] = (await Promise.all([
           (hubClient as any).getUser(guild.id, user.id, true),
           (hubClient as any).getUser(guild.id, targetId, true),
@@ -345,7 +307,7 @@ const command = {
             victim: {
               user: {
                 id: target.id,
-                username: target.user.username,
+                username: target.user?.username || target.username,
                 displayName: target.displayName,
                 avatarURL: target.displayAvatarURL({
                   extension: "png",

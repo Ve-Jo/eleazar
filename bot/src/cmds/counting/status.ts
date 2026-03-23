@@ -1,9 +1,6 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type CountingSettings = {
   channel_id?: string;
@@ -19,19 +16,6 @@ type GuildDataLike = {
   settings?: {
     counting?: CountingSettings;
   };
-};
-
-type InteractionLike = {
-  guild: {
-    id: string;
-    channels: {
-      fetch: (channelId: string) => Promise<{ name?: string } | null>;
-    };
-    roles: {
-      fetch: (roleId: string) => Promise<{ name?: string } | null>;
-    };
-  };
-  reply: (payload: { content: unknown; ephemeral: boolean }) => Promise<unknown>;
 };
 
 const command = {
@@ -72,9 +56,11 @@ const command = {
       });
     }
 
-    const channel = await interaction.guild.channels.fetch(counting.channel_id);
+    const channel = counting.channel_id
+      ? await (interaction.guild as any).channels?.fetch(counting.channel_id)
+      : null;
     const pinnedRole = counting.pinnedrole
-      ? await interaction.guild.roles.fetch(counting.pinnedrole)
+      ? await (interaction.guild as any).roles?.fetch(counting.pinnedrole)
       : null;
 
     return interaction.reply({

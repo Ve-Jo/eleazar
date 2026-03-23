@@ -2,43 +2,12 @@ import { AttachmentBuilder, SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type EconomyUserData = {
   economy?: {
     balance?: number;
   };
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  options: {
-    getUser: (name: string) => UserLike | null;
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -129,8 +98,8 @@ const command = {
     const builderMode = "v2";
     await interaction.deferReply();
 
-    const targetUser = interaction.options.getUser("user");
-    const amount = interaction.options.getString("amount");
+    const targetUser = interaction.options.getUser!("user");
+    const amount = interaction.options.getString!("amount");
 
     if (!targetUser || !amount) {
       await interaction.editReply({

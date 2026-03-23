@@ -1,36 +1,6 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  client: {
-    users: {
-      fetch: (userId: string) => Promise<{ send: (payload: unknown) => Promise<unknown> } | null>;
-    };
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -85,8 +55,8 @@ const command = {
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
 
-    const guildId = interaction.guild.id;
-    const userId = interaction.user.id;
+    const guildId = interaction.guild?.id;
+    const userId = interaction.user?.id;
 
     try {
       await (hubClient as any).ensureGuildUser(guildId, userId);
@@ -142,10 +112,10 @@ const command = {
       // DM partner if they also got interest
       if (partnerResult && Number(partnerResult.interestAdded) > 0) {
         try {
-          const partnerDiscordUser = await interaction.client.users.fetch(
+          const partnerDiscordUser = await interaction.client?.users.fetch(
             marriageStatus.partnerId
           );
-          if (partnerDiscordUser) {
+          if (partnerDiscordUser && 'send' in partnerDiscordUser && typeof partnerDiscordUser.send === 'function') {
             await partnerDiscordUser.send({
               content: String(
                 await i18n.__("commands.economy.deposit.continue.partnerContinueDM", {

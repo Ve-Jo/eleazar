@@ -2,24 +2,7 @@ import { AttachmentBuilder, SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  tag?: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type EconomyData = {
   balance?: number;
@@ -33,25 +16,6 @@ type GenericUserData = Record<string, any> & {
   partnerData?: Record<string, unknown> | null;
   marriageStatus?: Record<string, unknown> | null;
   combinedBankBalance?: string;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: UserLike;
-  guild: GuildLike;
-  client: {
-    users: {
-      fetch: (userId: string) => Promise<{ send: (payload: unknown) => Promise<unknown> } | null>;
-    };
-  };
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -146,11 +110,11 @@ const command = {
     const builderMode = "v2";
     await interaction.deferReply();
 
-    const guildId = interaction.guild.id;
+    const guildId = interaction.guild!.id;
     const userId = interaction.user.id;
 
     try {
-      const amountStr = interaction.options.getString("amount");
+      const amountStr = interaction.options.getString!("amount");
       if (!amountStr) {
         await interaction.editReply({
           content: await i18n.__("commands.economy.deposit.invalidAmount"),
@@ -294,8 +258,8 @@ const command = {
               }),
             },
             guild: {
-              id: interaction.guild.id,
-              name: interaction.guild.name,
+              id: interaction.guild!.id,
+              name: interaction.guild!.name,
               iconURL: interaction.guild.iconURL({
                 extension: "png",
                 size: 1024,
@@ -350,7 +314,7 @@ const command = {
 
       if (partnerData?.id) {
         try {
-          const partnerDiscordUser = await interaction.client.users.fetch(partnerData.id);
+          const partnerDiscordUser = await interaction.client?.users.fetch(partnerData.id) as { send: (payload: unknown) => Promise<unknown> } | null;
           if (partnerDiscordUser) {
             await partnerDiscordUser.send({
               content: await i18n.__("commands.economy.deposit.partnerDepositDM", {

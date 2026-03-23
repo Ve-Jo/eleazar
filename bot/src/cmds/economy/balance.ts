@@ -4,48 +4,13 @@ import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import { CRATE_TYPES, UPGRADES } from "../../../../hub/shared/src/domain.ts";
 import { loadGames } from "../../utils/loadGames.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-};
+import type { TranslatorLike, InteractionLike, UserLike } from "../../types/index.ts";
 
 type GenericRecord = Record<string, any>;
 
 type UpgradeConfig = {
   basePrice: number;
   priceMultiplier: number;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  member: UserLike;
-  guild: GuildLike;
-  client: {
-    users: {
-      fetch: (userId: string) => Promise<{ username?: string; displayAvatarURL: (options?: Record<string, unknown>) => string } | null>;
-    };
-  };
-  options: {
-    getMember: (name: string) => UserLike | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -92,7 +57,7 @@ const command = {
     const builderMode = "v2";
     await interaction.deferReply();
 
-    const user = interaction.options.getMember("user") || interaction.member;
+    const user = interaction.options.getMember!("user") || interaction.member!;
 
     const marriageStatus = await (hubClient as any).getMarriageStatus(
       interaction.guild.id,
@@ -169,7 +134,7 @@ const command = {
       userData.marriageStatus = marriageStatus;
 
       try {
-        const partnerDiscordUser = await interaction.client.users.fetch(marriageStatus.partnerId);
+        const partnerDiscordUser = await interaction.client?.users.fetch(marriageStatus.partnerId) as UserLike | null;
         userData.partnerAvatarUrl = partnerDiscordUser?.displayAvatarURL({
           extension: "png",
           size: 64,
@@ -395,8 +360,8 @@ const command = {
             }),
           },
           guild: {
-            id: interaction.guild.id,
-            name: interaction.guild.name,
+            id: interaction.guild!.id,
+            name: interaction.guild!.name,
             iconURL: interaction.guild.iconURL({
               extension: "png",
               size: 1024,

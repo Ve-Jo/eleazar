@@ -2,26 +2,7 @@ import { AttachmentBuilder, SlashCommandSubcommandBuilder } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
-  roles: {
-    fetch: (roleId: string) => Promise<{ name: string; hexColor: string } | null>;
-  };
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type LevelInfo = {
   level: number;
@@ -33,20 +14,6 @@ type LevelRoleLike = {
   roleId: string;
   requiredLevel?: number;
   mode?: string;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  member: UserLike;
-  guild: GuildLike;
-  options: {
-    getMember: (name: string) => UserLike | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
-  reply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -124,7 +91,7 @@ const command = {
     await interaction.deferReply();
 
     try {
-      const user = interaction.options.getMember("user") || interaction.member;
+      const user = interaction.options.getMember!("user") || interaction.member!;
 
       await (hubClient as any).ensureGuildUser(interaction.guild.id, user.id);
 
@@ -215,7 +182,7 @@ const command = {
         const enriched = await Promise.all(
           upcoming.map(async (role) => {
             try {
-              const discordRole = await interaction.guild.roles.fetch(role.roleId).catch(() => null);
+              const discordRole = await interaction.guild.roles?.fetch(role.roleId).catch(() => null);
               return {
                 name: discordRole?.name || role.roleId,
                 color: discordRole?.hexColor || "#ffffff",
@@ -254,7 +221,7 @@ const command = {
         );
         const nextRole = nextRoleData.nextRole;
         if (nextRole) {
-          const role = await interaction.guild.roles.fetch(nextRole.roleId).catch(() => null);
+          const role = await interaction.guild.roles?.fetch(nextRole.roleId).catch(() => null);
           if (role) {
             nextLevelRoleInfo = {
               name: role.name,

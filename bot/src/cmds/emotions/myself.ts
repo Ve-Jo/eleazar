@@ -1,9 +1,9 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
 import HMFull from "hmfull";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike, ImageData, ExtendedMessageLike } from "../../types/index.ts";
 
 const selfEmotions = [
-  { name: "blush", value: "blush" },
   { name: "smug", value: "smug" },
   { name: "happy", value: "happy" },
   { name: "smile", value: "smile" },
@@ -19,47 +19,6 @@ const selfEmotions = [
   { name: "coffee", value: "coffee" },
   { name: "gah", value: "gah" },
 ] as const;
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type ImageData = {
-  image: string;
-  category: string;
-  emotion: unknown;
-};
-
-type CollectorLike = {
-  on: (event: string, callback: (...args: any[]) => Promise<void> | void) => void;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  id?: string;
-  channel?: {
-    messages: {
-      fetch: (messageId: string) => Promise<{
-        components: unknown[];
-        edit: (payload: unknown) => Promise<unknown>;
-      }>;
-    };
-  };
-  createMessageComponentCollector: (options: Record<string, unknown>) => CollectorLike;
-};
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale: string;
-  user: { id: string };
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -218,7 +177,7 @@ const command = {
     await interaction.deferReply();
 
     const user = interaction.user;
-    const emotionType = interaction.options.getString("emotion");
+    const emotionType = interaction.options.getString!("emotion");
 
     const getEmotionData = async (): Promise<ImageData | null> => {
       try {
@@ -279,7 +238,7 @@ const command = {
         .addTimestamp(interaction.locale);
 
       const replyOptions = emotionComponent.toReplyOptions();
-      const message = await interaction.editReply(replyOptions);
+      const message = await interaction.editReply(replyOptions) as ExtendedMessageLike;
 
       const collector = message.createMessageComponentCollector({
         filter: (componentInteraction: any) => componentInteraction.user.id === user.id,

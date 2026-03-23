@@ -3,26 +3,7 @@ import {
   PermissionsBitField,
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type InteractionLike = {
-  guild: { id: string };
-  member: {
-    permissions: {
-      has: (permission: bigint) => boolean;
-    };
-  };
-  options: {
-    getChannel: (name: string) => { id: string; name: string };
-    getNumber: (name: string) => number | null;
-    getRole: (name: string) => { id: string; name?: string } | null;
-    getBoolean: (name: string) => boolean | null;
-  };
-  reply: (payload: { content: unknown; ephemeral: boolean }) => Promise<unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -165,20 +146,22 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<unknown> {
-    if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+    if (!(interaction.member as any)?.permissions?.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.reply({
         content: await i18n.__("commands.counting.no_perms"),
         ephemeral: true,
       });
     }
 
-    const channel = interaction.options.getChannel("channel");
-    const startNumber = interaction.options.getNumber("start_number") || 1;
-    const pinOneEach = interaction.options.getNumber("pin_on_each") || 0;
-    const pinnedRole = interaction.options.getRole("pinned_role") || { id: "0" };
-    const onlyNumbers = interaction.options.getBoolean("only_numbers") || false;
-    const noSameUser = interaction.options.getBoolean("no_same_user") || false;
-    const noUniqueRole = interaction.options.getBoolean("no_unique_role") || false;
+    const channel = interaction.options.getChannel!("channel");
+    const startNumber = interaction.options.getNumber!("start_number") || 1;
+    const pinOneEach = interaction.options.getNumber!("pin_on_each") || 0;
+    const pinnedRole = interaction.options.getRole!("pinned_role") || { id: "0" };
+    const onlyNumbers = interaction.options.getBoolean!("only_numbers") || false;
+    const noSameUser = interaction.options.getBoolean!("no_same_user") || false;
+    const noUniqueRole = interaction.options.getBoolean!("no_unique_role") || false;
+
+    if (!channel) return;
 
     await (hubClient as any).setupCounting(
       interaction.guild.id,
@@ -193,10 +176,10 @@ const command = {
 
     return interaction.reply({
       content: await i18n.__("commands.counting.setup.success", {
-        channel: channel.name,
+        channel: (channel as any).name || "#unknown",
         number: startNumber,
         pinoneach: pinOneEach,
-        pinnedrole: pinnedRole.name || "None",
+        pinnedrole: (pinnedRole as any).name || "None",
         only_numbers: onlyNumbers,
         no_same_user: noSameUser,
         no_unique_role: noUniqueRole,

@@ -1,8 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-
-type TranslatorLike = {
-  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type TrackLike = {
   info: {
@@ -16,18 +13,6 @@ type PlayerLike = {
     current?: TrackLike | null;
     tracks: TrackLike[];
   };
-};
-
-type MusicInteractionLike = {
-  client: {
-    lavalink: {
-      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
-    };
-  };
-  guild: { id: string };
-  member: { voice: { channelId?: string | null } };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
 };
 
 const command = {
@@ -77,16 +62,16 @@ const command = {
     },
   },
 
-  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
+    const player = await (interaction.client as any).lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
       await interaction.editReply(await i18n.__("commands.music.queue.noMusicPlaying"));
       return;
     }
 
-    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+    if ((interaction.member as any)?.voice?.channelId !== player.voiceChannelId) {
       await interaction.editReply({
         content: await i18n.__("commands.music.queue.notInVoiceChannel"),
         ephemeral: true,
@@ -104,7 +89,7 @@ const command = {
     const queueString = `${await i18n.__("commands.music.queue.currentPlaying", {
       title: current.info.title,
     })}\n${await i18n.__("commands.music.queue.nextInQueue", {
-      tracks: nextTrack.map((track) => track.info.title).join(", "),
+      tracks: nextTrack.map((track: any) => `• ${track.info.title}`).join(", "),
     })}`;
 
     await interaction.editReply(

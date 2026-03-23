@@ -1,8 +1,5 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-
-type TranslatorLike = {
-  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type LavalinkTrackLike = {
   info: {
@@ -36,33 +33,6 @@ type LavalinkPlayerLike = {
   connect: () => Promise<void>;
   search: (query: { query: string }, user: SearchUserLike) => Promise<SearchResultLike>;
   play: () => Promise<void>;
-};
-
-type MusicPlayInteractionLike = {
-  locale: string;
-  channelId: string;
-  guild: { id: string };
-  member: { voice: { channelId?: string | null } };
-  user: SearchUserLike;
-  options: {
-    getString: (name: string) => string | null;
-  };
-  client: {
-    lavalink?: {
-      nodeManager: {
-        nodes: {
-          size: number;
-        };
-      };
-      createPlayer: (options: {
-        guildId: string;
-        voiceChannelId?: string | null;
-        textChannelId: string;
-      }) => Promise<LavalinkPlayerLike>;
-    };
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: string | { content: string }) => Promise<unknown>;
 };
 
 const command = {
@@ -150,12 +120,9 @@ const command = {
     },
   },
 
-  async execute(
-    interaction: MusicPlayInteractionLike,
-    i18n: TranslatorLike
-  ): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const query = interaction.options.getString("song");
+    const query = interaction.options.getString!("song");
 
     if (!query) {
       await interaction.editReply(await i18n.__("commands.music.play.noMatchesFound"));
@@ -163,8 +130,7 @@ const command = {
     }
 
     if (
-      !interaction.client.lavalink ||
-      !interaction.client.lavalink.nodeManager.nodes.size
+      !interaction.client?.lavalink?.nodeManager?.nodes?.size
     ) {
       await interaction.editReply(await i18n.__("commands.music.play.noLavalinkNode"));
       return;
@@ -173,12 +139,14 @@ const command = {
     try {
       const player = await interaction.client.lavalink.createPlayer({
         guildId: interaction.guild.id,
-        voiceChannelId: interaction.member.voice.channelId,
+        voiceChannelId: interaction.member?.voice?.channelId,
         textChannelId: interaction.channelId,
       });
 
       await player.connect();
-      interaction.user.locale = interaction.locale;
+      if (interaction.user) {
+        interaction.user.locale = interaction.locale;
+      }
 
       const result = (await Promise.race([
         player.search({ query }, interaction.user),

@@ -1,24 +1,10 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const memerList = ["humanity", "excuseme", "cry", "stonks"] as const;
 
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
 type MemerClientLike = {
   [key: string]: (...args: string[]) => Promise<unknown>;
-};
-
-type InteractionLike = {
-  client: {
-    memer: MemerClientLike;
-  };
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<unknown>;
 };
 
 const command = {
@@ -88,8 +74,8 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
-    const text = interaction.options.getString("text");
-    const filter = interaction.options.getString("filter");
+    const text = interaction.options.getString!("text");
+    const filter = interaction.options.getString!("filter");
 
     await interaction.deferReply();
 
@@ -98,7 +84,7 @@ const command = {
         throw new Error("Missing filter input");
       }
 
-      const filterHandler = interaction.client.memer[filter];
+      const filterHandler = (interaction.client as any).memer[filter];
       if (!filterHandler) {
         throw new Error(`Missing memer handler for ${filter}`);
       }

@@ -10,29 +10,12 @@ import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { getGameModule, loadGames } from "../../utils/loadGames.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-  getLocale?: () => string;
-};
-
-type UserLike = {
-  id: string;
-  username: string;
-  displayName: string;
-  displayAvatarURL: (options?: Record<string, unknown>) => string;
-};
+import type { UserLike, GuildLike, TranslatorLike, MessageLike, InteractionLike, ExtendedMessageLike } from "../../types/index.ts";
 
 type ClientLike = {
   user: {
     displayAvatarURL: (options?: Record<string, unknown>) => string;
   };
-};
-
-type GuildLike = {
-  id: string;
-  name: string;
-  iconURL: (options?: Record<string, unknown>) => string | null;
 };
 
 type GameInfo = {
@@ -49,32 +32,7 @@ type GameModuleLike = {
   execute?: (interaction: unknown, i18n: TranslatorLike) => Promise<unknown>;
 };
 
-type MessageLike = {
-  editable?: boolean;
-  edit: (payload: unknown) => Promise<unknown>;
-  createMessageComponentCollector: (options: Record<string, unknown>) => {
-    on: (event: string, handler: (...args: any[]) => void | Promise<void>) => void;
-    stop: (reason?: string) => void;
-  };
-};
-
 type CategoryGamesMap = Record<string, { avatar: string; games_list: GameInfo[] }>;
-
-type InteractionLike = {
-  replied?: boolean;
-  deferred?: boolean;
-  locale?: string;
-  guildLocale?: string;
-  user: UserLike;
-  client: ClientLike;
-  guild: GuildLike;
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<unknown>;
-};
 
 const normalizeLocale = (locale: unknown, fallback = "en"): string => {
   if (typeof locale !== "string") {
@@ -198,7 +156,7 @@ const command = {
     await interaction.deferReply();
 
     try {
-      const locale = interaction.locale || interaction.guildLocale || "en";
+      const locale = interaction.locale || "en";
       const normalizedLocale = normalizeLocale(locale);
 
       const gamesMap = await loadGames();
@@ -208,7 +166,7 @@ const command = {
         throw new Error("No games found");
       }
 
-      const requestedGame = interaction.options.getString("game");
+      const requestedGame = interaction.options.getString!("game");
       if (requestedGame) {
         if (!gamesMap.has(requestedGame)) {
           await interaction.editReply({
@@ -252,10 +210,10 @@ const command = {
 
       if (standardGamesArray.length > 0) {
         games[standardCategoryName] = {
-          avatar: interaction.client.user.displayAvatarURL({
+          avatar: interaction.client?.user?.displayAvatarURL({
             extension: "png",
             size: 1024,
-          }),
+          }) || "",
           games_list: standardGamesArray.map((game) => ({
             ...game,
             highScore: gameRecords?.[game.id]?.highScore || 0,
@@ -265,10 +223,10 @@ const command = {
 
       if (riskyGamesArray.length > 0) {
         games[riskyCategoryName] = {
-          avatar: interaction.client.user.displayAvatarURL({
+          avatar: interaction.client?.user?.displayAvatarURL({
             extension: "png",
             size: 1024,
-          }),
+          }) || "",
           games_list: riskyGamesArray.map((game) => ({
             ...game,
             highScore: gameRecords?.[game.id]?.highScore || "-",
@@ -436,7 +394,7 @@ const command = {
       };
 
       const initialMessageOptions = await generateGameMessage();
-      const message = await interaction.editReply(initialMessageOptions);
+      const message = await interaction.editReply(initialMessageOptions) as ExtendedMessageLike;
 
       const collector = message.createMessageComponentCollector({
         filter: (componentInteraction: any) => componentInteraction.user.id === interaction.user.id,
@@ -489,7 +447,7 @@ const command = {
 
           selectedGame = game.id;
           await componentInteraction.deferUpdate();
-          collector.stop("game_started");
+          collector.stop?.("game_started");
 
           try {
             const gameModule = (await getGameModule(game.id)) as GameModuleLike | null;

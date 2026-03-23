@@ -8,14 +8,11 @@ import { generateImage } from "../../utils/imageGenerator.ts";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 void __dirname;
 
-type TranslatorLike = {
-  __: (key: string, varsOrLocale?: Record<string, unknown> | string, locale?: string) => Promise<string | unknown>;
-  getLocale?: () => string;
-};
 
 type CommandLike = {
   data?: {
@@ -59,24 +56,6 @@ type ClientLike = {
     forEach: (callback: (command: CommandLike, key: string) => void) => void;
     size: number;
   };
-};
-
-type InteractionLike = {
-  locale: string;
-  user: {
-    id: string;
-    username: string;
-    displayName?: string;
-    displayAvatarURL: (options?: Record<string, unknown>) => string;
-  };
-  guild: {
-    id: string;
-    name: string;
-    iconURL: (options?: Record<string, unknown>) => string | null;
-  };
-  client: ClientLike;
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: Record<string, unknown>) => Promise<any>;
 };
 
 type CommandEntry = {
@@ -159,20 +138,20 @@ const command = {
 
     const processedCategories = new Map<string, number[]>();
 
-    interaction.client.commands.forEach((loadedCommand) => {
+    (interaction.client as any)?.commands?.forEach((loadedCommand: any) => {
       try {
         if (!loadedCommand || !loadedCommand.data) {
           return;
         }
 
         const commandName =
-          loadedCommand.data.name ||
-          loadedCommand.data.builder?.name ||
-          loadedCommand.data.localizer?.category ||
+          (loadedCommand.data as any)?.name ||
+          (loadedCommand.data as any)?.builder?.name ||
+          (loadedCommand.data as any)?.localizer?.category ||
           "unnamed";
 
         const category =
-          loadedCommand.data.category ||
+          (loadedCommand.data as any)?.category ||
           loadedCommand.data.builder?.category ||
           loadedCommand.localizer?.category ||
           loadedCommand.data.localizer?.category ||
@@ -192,48 +171,48 @@ const command = {
             }
 
             let subTitle = subName;
-            if (subcommand.data?.builder?.localizationStrings?.name) {
+            if ((subcommand as any).data?.builder?.localizationStrings?.name) {
               subTitle =
-                subcommand.data.builder.localizationStrings.name[locale] ||
-                subcommand.data.builder.localizationStrings.name.en ||
+                ((subcommand as any).data.builder.localizationStrings.name as any)?.[locale || 'en'] ||
+                ((subcommand as any).data.builder.localizationStrings.name as any)?.en ||
                 subName;
-            } else if (subcommand.data?.localizer?.localizationStrings?.name) {
+            } else if ((subcommand as any).data?.localizer?.localizationStrings?.name) {
               subTitle =
-                subcommand.data.localizer.localizationStrings.name[locale] ||
-                subcommand.data.localizer.localizationStrings.name.en ||
+                ((subcommand as any).data.localizer.localizationStrings.name as any)?.[locale || 'en'] ||
+                ((subcommand as any).data.localizer.localizationStrings.name as any)?.en ||
                 subName;
-            } else if (subcommand.data?.name_localizations?.[locale]) {
-              subTitle = subcommand.data.name_localizations[locale] || subName;
+            } else if ((subcommand as any).data?.name_localizations) {
+              subTitle = ((subcommand as any).data.name_localizations as any)?.[locale || 'en'] || subName;
             }
 
             let subDescription = "No description";
-            if (subcommand.data?.builder?.localizationStrings?.description) {
+            if ((subcommand as any).data?.builder?.localizationStrings?.description) {
               subDescription =
-                subcommand.data.builder.localizationStrings.description[locale] ||
-                subcommand.data.builder.localizationStrings.description.en ||
+                ((subcommand as any).data.builder.localizationStrings.description as any)?.[locale || 'en'] ||
+                ((subcommand as any).data.builder.localizationStrings.description as any)?.en ||
                 "No description";
-            } else if (subcommand.data?.localizer?.localizationStrings?.description) {
+            } else if ((subcommand as any).data?.localizer?.localizationStrings?.description) {
               subDescription =
-                subcommand.data.localizer.localizationStrings.description[locale] ||
-                subcommand.data.localizer.localizationStrings.description.en ||
+                ((subcommand as any).data.localizer.localizationStrings.description as any)?.[locale || 'en'] ||
+                ((subcommand as any).data.localizer.localizationStrings.description as any)?.en ||
                 "No description";
-            } else if (subcommand.data?.description) {
-              subDescription = subcommand.data.description;
-            } else if (subcommand.data?.description_localizations) {
+            } else if ((subcommand as any).data?.description) {
+              subDescription = (subcommand as any).data.description;
+            } else if ((subcommand as any).data?.description_localizations) {
               subDescription =
-                subcommand.data.description_localizations[locale] ||
-                subcommand.data.description ||
+                ((subcommand as any).data.description_localizations as any)?.[locale || 'en'] ||
+                (subcommand as any).data.description ||
                 "No description";
-            } else if (subcommand.localization_strings) {
-              if (subcommand.localization_strings.command?.description) {
+            } else if ((subcommand as any).localization_strings) {
+              if ((subcommand as any).localization_strings.command?.description) {
                 subDescription =
-                  subcommand.localization_strings.command.description[locale] ||
-                  subcommand.localization_strings.command.description.en ||
+                  ((subcommand as any).localization_strings.command.description as any)?.[locale || 'en'] ||
+                  ((subcommand as any).localization_strings.command.description as any)?.en ||
                   "No description";
-              } else if (subcommand.localization_strings.description) {
+              } else if ((subcommand as any).localization_strings.description) {
                 subDescription =
-                  subcommand.localization_strings.description[locale] ||
-                  subcommand.localization_strings.description.en ||
+                  ((subcommand as any).localization_strings.description as any)?.[locale || 'en'] ||
+                  ((subcommand as any).localization_strings.description as any)?.en ||
                   "No description";
               }
             }
@@ -262,22 +241,22 @@ const command = {
 
             const subName = subcommand.name || "unnamed-sub";
             let subTitle = subName;
-            if (subcommand.name_localizations?.[locale]) {
-              subTitle = subcommand.name_localizations[locale];
-            } else if (subcommand.localizationStrings?.name) {
+            if ((subcommand as any).name_localizations) {
+              subTitle = ((subcommand as any).name_localizations as any)?.[locale || 'en'] || subName;
+            } else if ((subcommand as any).localizationStrings?.name) {
               subTitle =
-                subcommand.localizationStrings.name[locale] ||
-                subcommand.localizationStrings.name.en ||
+                ((subcommand as any).localizationStrings.name as any)?.[locale || 'en'] ||
+                ((subcommand as any).localizationStrings.name as any)?.en ||
                 subName;
             }
 
             let subDescription = "No description";
-            if (subcommand.description_localizations?.[locale]) {
-              subDescription = subcommand.description_localizations[locale];
-            } else if (subcommand.localizationStrings?.description) {
+            if ((subcommand as any).description_localizations) {
+              subDescription = ((subcommand as any).description_localizations as any)?.[locale || 'en'] || "No description";
+            } else if ((subcommand as any).localizationStrings?.description) {
               subDescription =
-                subcommand.localizationStrings.description[locale] ||
-                subcommand.localizationStrings.description.en ||
+                ((subcommand as any).localizationStrings.description as any)?.[locale || 'en'] ||
+                ((subcommand as any).localizationStrings.description as any)?.en ||
                 subcommand.description ||
                 "No description";
             } else if (subcommand.description) {
@@ -301,10 +280,10 @@ const command = {
           categories.add(category);
         } else {
           const commandDescription =
-            loadedCommand.localization_strings?.description?.[locale] ||
-            loadedCommand.localization_strings?.command?.description?.[locale] ||
-            loadedCommand.data?.description ||
-            loadedCommand.description ||
+            ((loadedCommand as any)?.localization_strings?.description as any)?.[locale || 'en'] ||
+            ((loadedCommand as any)?.localization_strings?.command?.description as any)?.[locale || 'en'] ||
+            (loadedCommand.data as any)?.description ||
+            (loadedCommand as any)?.description ||
             "No description available";
 
           const commandIndex = commands.length;
@@ -457,7 +436,7 @@ const command = {
       return commandComponent.toReplyOptions({ files: [attachment] }) as Record<string, unknown>;
     };
 
-    const response = await interaction.editReply(await updateMessage());
+    const response = await interaction.editReply(await updateMessage()) as any;
     const collector = response.createMessageComponentCollector({
       time: 5 * 60 * 1000,
     });

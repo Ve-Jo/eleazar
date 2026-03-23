@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import HMFull from "hmfull";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import type { TranslatorLike, InteractionLike, ImageData, ExtendedMessageLike } from "../../types/index.ts";
 
 const sfwImages = [
   "neko",
@@ -22,40 +23,6 @@ const sfwImages = [
   "jahy_arts",
   "wolf_arts",
 ] as const;
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
-
-type SourceCollection = Record<string, (() => Promise<string | { url?: string }>) | undefined>;
-
-type ImageData = {
-  url: string;
-  category: string;
-};
-
-type CollectorLike = {
-  on: (event: string, callback: (...args: any[]) => Promise<void> | void) => void;
-};
-
-type MessageLike = {
-  editable?: boolean;
-  edit: (payload: unknown) => Promise<unknown>;
-  createMessageComponentCollector: (options: Record<string, unknown>) => CollectorLike;
-};
-
-type InteractionLike = {
-  _isAiProxy?: boolean;
-  locale: string;
-  guild: unknown;
-  user: { id: string };
-  options: {
-    getString: (name: string) => string | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: unknown) => Promise<MessageLike>;
-  reply: (payload: unknown) => Promise<MessageLike>;
-};
 
 const command = {
   data: (): SlashCommandSubcommandBuilder => {
@@ -107,20 +74,20 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
-    const isAiContext = !!interaction._isAiProxy;
+    const isAiContext = false;
     const builderMode = isAiContext ? "v1" : "v2";
 
     if (!isAiContext) {
       await interaction.deferReply();
     }
 
-    const category = interaction.options.getString("image");
+    const imageType = interaction.options.getString!("image");
     const user = interaction.user;
     const hmFull = HMFull as any;
 
     const getImageData = async (): Promise<ImageData | null> => {
       try {
-        const sources: SourceCollection[] = [
+        const sources: Record<string, (() => Promise<string | { url?: string }>) | undefined>[] = [
           hmFull?.HMtai?.sfw ?? {},
           hmFull?.Nekos?.sfw ?? {},
           hmFull?.NekoBot?.sfw ?? {},
@@ -129,8 +96,8 @@ const command = {
 
         for (let attempts = 0; attempts < 3; attempts += 1) {
           for (const source of sources) {
-            if (category && Object.keys(source).includes(category)) {
-              const fetcher = source[category];
+            if (imageType && Object.keys(source).includes(imageType)) {
+              const fetcher = source[imageType];
               if (!fetcher) {
                 continue;
               }
@@ -149,16 +116,16 @@ const command = {
                 imageUrl.startsWith("http")
               ) {
                 return {
-                  url: imageUrl,
-                  category,
-                };
+                  image: imageUrl,
+                  category: imageType,
+                } as ImageData;
               }
             }
           }
         }
         return null;
       } catch (error) {
-        console.error(`Error fetching ${category} image:`, error);
+        console.error(`Error fetching ${imageType} image:`, error);
         return null;
       }
     };
@@ -170,10 +137,10 @@ const command = {
     ): Promise<Record<string, unknown>> => {
       const { disableInteractions = false } = options;
 
-      if (!imageData?.url) {
-        console.warn("Invalid or missing image URL for sfw image:", category);
+      if (!imageData?.image) {
+        console.warn("Invalid or missing image URL for sfw image:", imageType);
         imageData = await getImageData();
-        if (!imageData?.url) {
+        if (!imageData?.image) {
           return {
             content: await i18n.__("commands.images.sfw.notFound"),
             components: [],
@@ -190,7 +157,7 @@ const command = {
           imageData.category || String(await i18n.__("commands.images.sfw.title")),
           "header3"
         )
-        .addImage(imageData.url)
+        .addImage(imageData.image)
         .addTimestamp(interaction.locale);
 
       const nextButton = new ButtonBuilder()
@@ -210,7 +177,7 @@ const command = {
     };
 
     const initialMessageData = await generateImageMessage();
-    if (initialMessageData.content && !imageData?.url) {
+    if (initialMessageData.content && !imageData?.image) {
       if (isAiContext) {
         throw new Error(String(initialMessageData.content));
       }
@@ -218,13 +185,13 @@ const command = {
       return;
     }
 
-    let message: MessageLike;
+    let message: ExtendedMessageLike;
     if (isAiContext) {
-      message = await interaction.reply(initialMessageData);
+      message = await interaction.editReply(initialMessageData) as ExtendedMessageLike;
       return;
     }
 
-    message = await interaction.editReply(initialMessageData);
+    message = await interaction.editReply(initialMessageData) as ExtendedMessageLike;
 
     const collector = message.createMessageComponentCollector({
       filter: (componentInteraction: any) => componentInteraction.user.id === user.id,
@@ -236,7 +203,7 @@ const command = {
         await componentInteraction.deferUpdate();
         imageData = await getImageData();
         const newMessageData = await generateImageMessage();
-        if (newMessageData.content && !imageData?.url) {
+        if (newMessageData.content && !imageData?.image) {
           await componentInteraction.followUp({
             ...newMessageData,
             ephemeral: true,

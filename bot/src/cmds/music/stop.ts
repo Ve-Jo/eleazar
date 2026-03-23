@@ -1,25 +1,9 @@
 import { SlashCommandSubcommandBuilder } from "discord.js";
-
-type TranslatorLike = {
-  __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type PlayerLike = {
   voiceChannelId?: string | null;
   destroy: (reason?: string) => Promise<void>;
-};
-
-type MusicInteractionLike = {
-  client: {
-    lavalink: {
-      getPlayer: (guildId: string) => Promise<PlayerLike | null>;
-    };
-  };
-  guild: { id: string };
-  member: { voice: { channelId?: string | null } };
-  user: { username: string };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: string | { content: string; ephemeral?: boolean }) => Promise<unknown>;
 };
 
 const command = {
@@ -59,16 +43,16 @@ const command = {
     },
   },
 
-  async execute(interaction: MusicInteractionLike, i18n: TranslatorLike): Promise<void> {
+  async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
     await interaction.deferReply();
-    const player = await interaction.client.lavalink.getPlayer(interaction.guild.id);
+    const player = await (interaction.client as any).lavalink.getPlayer(interaction.guild.id);
 
     if (!player) {
       await interaction.editReply(await i18n.__("commands.music.stop.noMusicPlaying"));
       return;
     }
 
-    if (interaction.member.voice.channelId !== player.voiceChannelId) {
+    if ((interaction.member as any)?.voice?.channelId !== player.voiceChannelId) {
       await interaction.editReply({
         content: await i18n.__("commands.music.stop.notInVoiceChannel"),
         ephemeral: true,

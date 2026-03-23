@@ -5,10 +5,7 @@ import {
   sanitizeRealName,
   sanitizeGender,
 } from "../../utils/validation.ts";
-
-type TranslatorLike = {
-  __: (key: string, vars?: Record<string, unknown>) => Promise<string | unknown>;
-};
+import type { TranslatorLike, InteractionLike } from "../../types/index.ts";
 
 type PersonalizationField = "realName" | "age" | "gender" | "all";
 
@@ -22,18 +19,6 @@ type PersonalizationInput = {
   realName?: string;
   age?: number;
   gender?: string;
-};
-
-type InteractionLike = {
-  guild: { id: string };
-  user: { id: string };
-  options: {
-    getSubcommand: () => string;
-    getString: (name: string) => string | null;
-    getInteger: (name: string) => number | null;
-  };
-  deferReply: () => Promise<unknown>;
-  editReply: (payload: { content: unknown; ephemeral?: boolean } | string) => Promise<unknown>;
 };
 
 const command = {
@@ -244,7 +229,7 @@ const command = {
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
-    const subcommand = interaction.options.getSubcommand();
+    const subcommand = interaction.options.getSubcommand!();
 
     await interaction.deferReply();
 
@@ -281,7 +266,7 @@ async function handleSetProfile(
 
   const updateData: PersonalizationInput = {};
 
-  const name = interaction.options.getString("name");
+  const name = interaction.options.getString!("name");
   if (name) {
     const sanitizedName = sanitizeRealName(name);
     if (sanitizedName !== null) {
@@ -289,19 +274,18 @@ async function handleSetProfile(
     }
   }
 
-  const age = interaction.options.getInteger("age");
+  const age = interaction.options.getInteger!("age");
   if (age) {
     updateData.age = age;
   }
 
-  const gender = interaction.options.getString("gender");
+  const gender = interaction.options.getString!("gender");
   if (gender) {
     const sanitizedGender = sanitizeGender(gender);
     if (sanitizedGender !== null) {
       updateData.gender = sanitizedGender;
     }
   }
-
 
   if (Object.keys(updateData).length === 0) {
     return interaction.editReply({
@@ -343,7 +327,7 @@ async function handleResetProfile(
   const { guild } = interaction;
   const user = interaction.user;
 
-  const field = interaction.options.getString("field") as PersonalizationField | null;
+  const field = interaction.options.getString!("field") as PersonalizationField | null;
 
   try {
     const currentProfile = ((await (hubClient as any).getUserProfile(
