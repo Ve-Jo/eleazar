@@ -3,6 +3,7 @@ import { UPGRADES } from "../constants/database.ts";
 
 // Bank constants
 const BASE_BANK_MAX_INACTIVE_MS = 2 * 60 * 60 * 1000; // 2 hours base
+const MAX_BANK_MAX_INACTIVE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days cap
 
 type EconomyMutationClient = {
   $transaction: <T>(callback: (tx: EconomyMutationTransaction) => Promise<T>) => Promise<T>;
@@ -50,12 +51,14 @@ type EconomyRecord = {
 
 type UserLevelShape = {
   xp?: unknown;
+  voiceXp?: unknown;
   gameXp?: unknown;
 };
 
 type UserEconomyShape = {
   balance: Prisma.Decimal;
   bankBalance: Prisma.Decimal;
+  bankDistributed?: Prisma.Decimal | null;
   bankRate: Prisma.Decimal;
   bankStartTime: number | bigint | string;
 };
@@ -70,7 +73,7 @@ type UpgradeRecord = {
   level?: number;
 };
 
-const MAX_EFFECTIVE_BANK_RATE = new Prisma.Decimal(45);
+const MAX_EFFECTIVE_BANK_RATE = new Prisma.Decimal(50);
 
 function clampDecimalNonNegative(value: Prisma.Decimal): Prisma.Decimal {
   return value.lessThan(0) ? new Prisma.Decimal(0) : value;
@@ -86,6 +89,46 @@ function clampBankRate(value: Prisma.Decimal): Prisma.Decimal {
   }
 
   return value;
+}
+
+function calculateCycleDurationMs(bankVaultLevel: number): number {
+  const maxInactiveMs =
+    BASE_BANK_MAX_INACTIVE_MS +
+    Math.max(0, bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
+
+  return Math.min(MAX_BANK_MAX_INACTIVE_MS, maxInactiveMs);
+}
+
+function getElapsedWithinCycle(
+  bankStartTime: number | bigint | string,
+  cycleDurationMs: number
+): number {
+  const startTimeNumber = Number(bankStartTime);
+  if (!Number.isFinite(startTimeNumber) || startTimeNumber <= 0) {
+    return 0;
+  }
+
+  const elapsed = Math.max(0, Date.now() - startTimeNumber);
+  return Math.min(elapsed, cycleDurationMs);
+}
+
+function calculateActivityBankRate(
+  calculateLevel: CalculateLevelFn,
+  levelData: UserLevelShape | null | undefined
+): Prisma.Decimal {
+  const chatLevel = levelData ? calculateLevel(levelData.xp).level : 1;
+  const voiceLevel = levelData ? calculateLevel(levelData.voiceXp).level : 1;
+  const gameLevel = levelData ? calculateLevel(levelData.gameXp).level : 1;
+
+  // 1% base + level bonuses (chat +1%, voice +1%, game +0.5% per level after level 1).
+  const rawRate = new Prisma.Decimal(
+    1 +
+      (chatLevel - 1) * 1 +
+      (voiceLevel - 1) * 1 +
+      (gameLevel - 1) * 0.5
+  );
+
+  return clampBankRate(rawRate);
 }
 
 async function addBalance(
@@ -360,6 +403,13 @@ async function deposit(
       throw new Error("Insufficient balance");
     }
 
+    const userUpgrades = (await tx.upgrade.findMany({
+      where: { guildId, userId },
+    })) as UpgradeRecord[];
+    const bankVaultLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "bank_vault")?.level || 1;
+    const cycleDurationMs = calculateCycleDurationMs(bankVaultLevel);
+
     let currentBankBalance = user.economy.bankBalance;
     console.log(`Initial bank balance: ${currentBankBalance}`);
 
@@ -367,31 +417,20 @@ async function deposit(
       Number(user.economy.bankStartTime) > 0 &&
       user.economy.bankRate.greaterThan(0)
     ) {
-      const timeElapsed = Date.now() - Number(user.economy.bankStartTime);
-      console.log(`Time elapsed since last bank update: ${timeElapsed}ms`);
+      const elapsedWithinCycle = getElapsedWithinCycle(
+        user.economy.bankStartTime,
+        cycleDurationMs
+      );
+      console.log(`Time elapsed in active cycle: ${elapsedWithinCycle}ms`);
       currentBankBalance = calculateInterestDecimal(
         currentBankBalance,
         user.economy.bankRate,
-        timeElapsed
+        elapsedWithinCycle
       );
-      console.log(`Bank balance after interest: ${currentBankBalance}`);
+      console.log(`Bank balance after cycle-capped interest: ${currentBankBalance}`);
     }
 
-    const chattingLevel = user.Level ? calculateLevel(user.Level.xp).level : 1;
-    const gamingLevel = user.Level ? calculateLevel(user.Level.gameXp).level : 1;
-    console.log(
-      `User levels - Chatting: ${chattingLevel}, Gaming: ${gamingLevel}`
-    );
-
-    const userUpgrades = (await tx.upgrade.findMany({
-      where: { guildId, userId },
-    })) as UpgradeRecord[];
-    // Bank rate is now activity-based, not upgrade-based
-    // Calculate rate from activity levels
-    const rawBankRate = new Prisma.Decimal(
-      5 * chattingLevel + 5 * gamingLevel
-    );
-    const newBankRate = clampBankRate(rawBankRate);
+    const newBankRate = calculateActivityBankRate(calculateLevel, user.Level);
     console.log(`New bank rate calculated: ${newBankRate}`);
 
     // vault_guard provides fee reduction
@@ -410,11 +449,6 @@ async function deposit(
 
     const finalBankBalance = currentBankBalance.plus(finalDepositAmount);
     console.log(`Final bank balance after deposit: ${finalBankBalance}`);
-
-    // Get bank_vault upgrade for cycle duration
-    const bankVaultLevel =
-      userUpgrades.find((upgrade) => upgrade.type === "bank_vault")?.level || 1;
-    const cycleDuration = BASE_BANK_MAX_INACTIVE_MS + (bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
 
     const updatedEconomy = await tx.economy.update({
       where: {
@@ -474,7 +508,8 @@ async function withdraw(
 ): Promise<unknown> {
   await ensureUser(guildId, userId);
 
-  let withdrawAmount = new Prisma.Decimal(amount);
+  const requestAll = typeof amount === "string" && amount.trim().toLowerCase() === "all";
+  let withdrawAmount = requestAll ? new Prisma.Decimal(0) : new Prisma.Decimal(amount);
 
   return client.$transaction(async (tx) => {
     const user = (await tx.user.findUnique({
@@ -494,12 +529,22 @@ async function withdraw(
       throw new Error("User economy data not found");
     }
 
+    const userUpgrades = (await tx.upgrade.findMany({
+      where: { guildId, userId },
+    })) as UpgradeRecord[];
+    const bankVaultLevel =
+      userUpgrades.find((upgrade) => upgrade.type === "bank_vault")?.level || 1;
+    const cycleDurationMs = calculateCycleDurationMs(bankVaultLevel);
+
     let currentBankBalance = user.economy.bankBalance;
     if (
       Number(user.economy.bankStartTime) > 0 &&
       user.economy.bankRate.greaterThan(0)
     ) {
-      const timeElapsed = Date.now() - Number(user.economy.bankStartTime);
+      const timeElapsed = getElapsedWithinCycle(
+        user.economy.bankStartTime,
+        cycleDurationMs
+      );
       currentBankBalance = calculateInterestDecimal(
         currentBankBalance,
         user.economy.bankRate,
@@ -507,16 +552,20 @@ async function withdraw(
       );
     }
 
-    const bankDistributed =
-      (user.economy as UserEconomyShape & { bankDistributed?: Prisma.Decimal | null })
-        .bankDistributed || new Prisma.Decimal(0);
+    const bankDistributed = user.economy.bankDistributed || new Prisma.Decimal(0);
     const totalBankBalance = currentBankBalance.plus(bankDistributed);
     const epsilon = new Prisma.Decimal(0.00001);
 
-    if (withdrawAmount.greaterThanOrEqualTo(totalBankBalance)) {
+    if (requestAll) {
+      withdrawAmount = totalBankBalance;
+    } else if (withdrawAmount.greaterThanOrEqualTo(totalBankBalance)) {
       withdrawAmount = totalBankBalance;
     } else if (totalBankBalance.minus(withdrawAmount).abs().lessThanOrEqualTo(epsilon)) {
       withdrawAmount = totalBankBalance;
+    }
+
+    if (withdrawAmount.lessThanOrEqualTo(0)) {
+      throw new Error("Amount must be greater than zero");
     }
 
     if (totalBankBalance.lessThan(withdrawAmount)) {
@@ -552,23 +601,14 @@ async function withdraw(
     newBankDistributed = clampDecimalNonNegative(newBankDistributed);
 
     const totalRemainingBalance = newBankBalance.plus(newBankDistributed);
-    const isWithdrawingAll = totalRemainingBalance.lessThanOrEqualTo(0);
-
-    const userUpgrades = (await tx.upgrade.findMany({
-      where: { guildId, userId },
-    })) as UpgradeRecord[];
+    const isWithdrawingAll =
+      requestAll || totalRemainingBalance.abs().lessThanOrEqualTo(epsilon);
 
     let newBankRate = new Prisma.Decimal(0);
     let newBankStartTime = 0;
 
     if (!isWithdrawingAll && newBankBalance.greaterThan(0)) {
-      const chattingLevel = user.Level ? calculateLevel(user.Level.xp).level : 1;
-      const gamingLevel = user.Level ? calculateLevel(user.Level.gameXp).level : 1;
-      // Bank rate is now activity-based, not upgrade-based
-      const rawBankRate = new Prisma.Decimal(
-        5 * chattingLevel + 5 * gamingLevel
-      );
-      newBankRate = clampBankRate(rawBankRate);
+      newBankRate = calculateActivityBankRate(calculateLevel, user.Level);
       newBankStartTime = Date.now();
     }
 

@@ -82,6 +82,11 @@ type BankResult = {
   annualRate: number;
 };
 
+type BankRateSnapshot = {
+  annualRateDecimal: number;
+  annualRatePercent: Prisma.Decimal;
+};
+
 /**
  * Calculate level from XP: level = floor(sqrt(xp/100)) + 1
  */
@@ -107,6 +112,23 @@ function calculateBankRateFromLevels(
   return Math.min(MAX_ANNUAL_RATE, rate);
 }
 
+function buildBankRateSnapshot(
+  chatLevel: number,
+  voiceLevel: number,
+  gameLevel: number
+): BankRateSnapshot {
+  const annualRateDecimal = calculateBankRateFromLevels(
+    chatLevel,
+    voiceLevel,
+    gameLevel
+  );
+
+  return {
+    annualRateDecimal,
+    annualRatePercent: new Prisma.Decimal(annualRateDecimal * 100),
+  };
+}
+
 /**
  * Calculate max inactive time (cycle duration) based on bank_vault upgrade level
  */
@@ -115,6 +137,15 @@ function calculateMaxInactiveMs(bankVaultLevel: number): number {
     BASE_BANK_MAX_INACTIVE_MS +
     (bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
   return Math.min(MAX_BANK_MAX_INACTIVE_MS, maxInactive);
+}
+
+function toSafeElapsedMs(startTime: number | bigint | string): number {
+  const start = Number(startTime);
+  if (!Number.isFinite(start) || start <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Date.now() - start);
 }
 
 /**
@@ -152,8 +183,7 @@ async function continueBankBalance(
     const chatLevel = calculateLevelFromXp(currentBank.user.Level?.xp || 0);
     const voiceLevel = calculateLevelFromXp(currentBank.user.Level?.voiceXp || 0);
     const gameLevel = calculateLevelFromXp(currentBank.user.Level?.gameXp || 0);
-    const annualRate = calculateBankRateFromLevels(chatLevel, voiceLevel, gameLevel);
-    const bankRate = new Prisma.Decimal(annualRate);
+    const rateSnapshot = buildBankRateSnapshot(chatLevel, voiceLevel, gameLevel);
 
     // Get bank_vault upgrade for cycle duration
     const upgrades = (await client.upgrade.findMany({
@@ -168,39 +198,39 @@ async function continueBankBalance(
     let interestAdded = new Prisma.Decimal(0);
     let newCycle = currentBank.bankCycle;
 
-    // If timer was running, calculate and add interest for completed cycle(s)
-    if (cycleStartTime > 0) {
-      const timeElapsed = now - cycleStartTime;
-      const completedCycles = Math.floor(timeElapsed / cycleDuration);
-      
-      if (completedCycles > 0) {
-        // Add interest for each completed cycle
-        let balance = currentBank.bankBalance;
-        for (let i = 0; i < completedCycles; i++) {
-          balance = calculateInterestDecimal(balance, bankRate, cycleDuration);
-        }
-        interestAdded = balance.minus(currentBank.bankBalance);
-        newCycle = currentBank.bankCycle + completedCycles;
-        
-        await db.economy.update({
-          where: {
-            guildId_userId: {
-              guildId,
-              userId,
-            },
+    const timeElapsed = cycleStartTime > 0 ? Math.max(0, now - cycleStartTime) : 0;
+    const cycleCompleted = cycleStartTime > 0 && timeElapsed >= cycleDuration;
+
+    if (cycleCompleted) {
+      // Credit exactly one completed cycle, then start the next cycle.
+      const balanceAfterCycle = calculateInterestDecimal(
+        currentBank.bankBalance,
+        rateSnapshot.annualRatePercent,
+        cycleDuration
+      );
+
+      interestAdded = balanceAfterCycle.minus(currentBank.bankBalance);
+      newCycle = currentBank.bankCycle + 1;
+
+      await db.economy.update({
+        where: {
+          guildId_userId: {
+            guildId,
+            userId,
           },
-          data: {
-            bankBalance: balance,
-            bankCycle: newCycle,
-            bankStartTime: now, // Start fresh cycle
-          },
-        });
-        
-        return { success: true, interestAdded, newCycle };
-      }
+        },
+        data: {
+          bankBalance: balanceAfterCycle,
+          bankRate: rateSnapshot.annualRatePercent,
+          bankCycle: newCycle,
+          bankStartTime: now,
+        },
+      });
+
+      return { success: true, interestAdded, newCycle };
     }
 
-    // No cycles completed - just reset timer to continue
+    // No completed cycle yet: just restart the timer with a fresh rate snapshot.
     await db.economy.update({
       where: {
         guildId_userId: {
@@ -209,7 +239,8 @@ async function continueBankBalance(
         },
       },
       data: {
-        bankStartTime: now, // Reset timer to start fresh cycle
+        bankRate: rateSnapshot.annualRatePercent,
+        bankStartTime: now,
       },
     });
 
@@ -247,9 +278,11 @@ async function updateBankBalance(
     let finalBalance = currentBank.bankBalance;
     let finalStartTime = currentBank.bankStartTime;
     let finalCycle = currentBank.bankCycle;
+    let finalBankRate = currentBank.bankRate;
 
     if (finalBalance.lessThanOrEqualTo(0)) {
       finalBalance = new Prisma.Decimal(0);
+      finalBankRate = new Prisma.Decimal(0);
       finalStartTime = 0;
       finalCycle = 0;
     }
@@ -259,8 +292,7 @@ async function updateBankBalance(
       const chatLevel = calculateLevelFromXp(currentBank.user.Level?.xp || 0);
       const voiceLevel = calculateLevelFromXp(currentBank.user.Level?.voiceXp || 0);
       const gameLevel = calculateLevelFromXp(currentBank.user.Level?.gameXp || 0);
-      const annualRate = calculateBankRateFromLevels(chatLevel, voiceLevel, gameLevel);
-      const bankRate = new Prisma.Decimal(annualRate);
+      const rateSnapshot = buildBankRateSnapshot(chatLevel, voiceLevel, gameLevel);
 
       // Get bank_vault upgrade for cycle duration
       const upgrades = (await client.upgrade.findMany({
@@ -270,18 +302,21 @@ async function updateBankBalance(
         upgrades.find((u) => u.type === "bank_vault")?.level || 1;
       const cycleDuration = calculateMaxInactiveMs(bankVaultLevel);
 
-      const now = Date.now();
-      const timeElapsed = now - Number(currentBank.bankStartTime);
-      const completedCycles = Math.floor(timeElapsed / cycleDuration);
+      const elapsedMs = toSafeElapsedMs(currentBank.bankStartTime);
+      const cycleCompleted = elapsedMs >= cycleDuration;
 
-      if (completedCycles > 0) {
-        // Add interest for completed cycles
-        for (let i = 0; i < completedCycles; i++) {
-          finalBalance = calculateInterestDecimal(finalBalance, bankRate, cycleDuration);
-        }
-        finalCycle = currentBank.bankCycle + completedCycles;
-        finalStartTime = now;
+      if (cycleCompleted) {
+        // Credit a single completed cycle and pause accrual until /economy continue.
+        finalBalance = calculateInterestDecimal(
+          finalBalance,
+          rateSnapshot.annualRatePercent,
+          cycleDuration
+        );
+        finalCycle = currentBank.bankCycle + 1;
+        finalStartTime = 0;
       }
+
+      finalBankRate = rateSnapshot.annualRatePercent;
     }
 
     const updated = await db.economy.update({
@@ -293,6 +328,7 @@ async function updateBankBalance(
       },
       data: {
         bankBalance: finalBalance,
+        bankRate: finalBankRate,
         bankStartTime: finalStartTime,
         bankCycle: finalCycle,
       },
@@ -369,8 +405,7 @@ async function calculateBankBalance(
   const chatLevel = calculateLevelFromXp(user.Level?.xp || 0);
   const voiceLevel = calculateLevelFromXp(user.Level?.voiceXp || 0);
   const gameLevel = calculateLevelFromXp(user.Level?.gameXp || 0);
-  const annualRate = calculateBankRateFromLevels(chatLevel, voiceLevel, gameLevel);
-  const bankRate = new Prisma.Decimal(annualRate);
+  const rateSnapshot = buildBankRateSnapshot(chatLevel, voiceLevel, gameLevel);
 
   // Get bank_vault upgrade for cycle duration
   const upgrades = (await client.upgrade.findMany({
@@ -380,56 +415,24 @@ async function calculateBankBalance(
     upgrades.find((u) => u.type === "bank_vault")?.level || 1;
   const cycleDuration = calculateMaxInactiveMs(bankVaultLevel);
 
-  const now = Date.now();
-  const timeElapsed = now - Number(currentBank.bankStartTime);
-  const completedCycles = Math.floor(timeElapsed / cycleDuration);
-  const timeIntoCycle = timeElapsed % cycleDuration;
+  const timeElapsed = toSafeElapsedMs(currentBank.bankStartTime);
+  const boundedElapsed = Math.min(timeElapsed, cycleDuration);
+  const cycleComplete = timeElapsed >= cycleDuration;
 
-  if (completedCycles > 0) {
-    // Cycle(s) completed - calculate interest
-    let finalBalance = currentBank.bankBalance;
-    for (let i = 0; i < completedCycles; i++) {
-      finalBalance = calculateInterestDecimal(finalBalance, bankRate, cycleDuration);
-    }
-
-    await dbClient.economy.update({
-      where: {
-        guildId_userId: {
-          guildId: user.guildId,
-          userId: user.id,
-        },
-      },
-      data: {
-        bankBalance: finalBalance,
-        bankCycle: currentBank.bankCycle + completedCycles,
-        bankStartTime: now,
-      },
-    });
-
-    return {
-      balance: finalBalance,
-      cycleComplete: true,
-      cycleCount: currentBank.bankCycle + completedCycles,
-      maxInactiveMs: cycleDuration,
-      timeIntoCycle: 0,
-      annualRate,
-    };
-  }
-
-  // Calculate current balance with partial interest
+  // Only one cycle can accrue before user must run /economy continue.
   const calculatedBalance = calculateInterestDecimal(
     currentBank.bankBalance,
-    bankRate,
-    timeElapsed
+    rateSnapshot.annualRatePercent,
+    boundedElapsed
   );
 
   return {
     balance: calculatedBalance,
-    cycleComplete: false,
-    cycleCount: currentBank.bankCycle,
+    cycleComplete,
+    cycleCount: currentBank.bankCycle + (cycleComplete ? 1 : 0),
     maxInactiveMs: cycleDuration,
-    timeIntoCycle,
-    annualRate,
+    timeIntoCycle: cycleComplete ? cycleDuration : boundedElapsed,
+    annualRate: rateSnapshot.annualRateDecimal,
   };
 }
 

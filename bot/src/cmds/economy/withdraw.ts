@@ -95,17 +95,19 @@ const command = {
     const builderMode = "v2";
     await interaction.deferReply();
 
-    const amount = interaction.options.getString!("amount");
+    const rawAmount = interaction.options.getString!("amount");
     const guildId = interaction.guild!.id;
     const userId = interaction.user.id;
 
-    if (!amount) {
+    if (!rawAmount) {
       await interaction.editReply({
         content: await i18n.__("commands.economy.withdraw.invalidAmount"),
         ephemeral: true,
       });
       return;
     }
+
+    const amount = rawAmount.trim().toLowerCase();
 
     try {
       const marriageStatus = await (hubClient as any).getMarriageStatus(guildId, userId);
@@ -151,10 +153,15 @@ const command = {
       }
 
       let amountToWithdraw = 0;
-      if (amount === "all") {
+      let withdrawRequestAmount: number | "all";
+      const isWithdrawAll = amount === "all";
+
+      if (isWithdrawAll) {
         amountToWithdraw = userBankBalance;
+        withdrawRequestAmount = "all";
       } else if (amount === "half") {
         amountToWithdraw = userBankBalance / 2;
+        withdrawRequestAmount = amountToWithdraw;
       } else {
         amountToWithdraw = parseFloat(amount);
         if (Number.isNaN(amountToWithdraw)) {
@@ -164,11 +171,15 @@ const command = {
           });
           return;
         }
+        withdrawRequestAmount = amountToWithdraw;
       }
 
-      amountToWithdraw = parseFloat((Number(amountToWithdraw) || 0).toFixed(5));
+      if (!isWithdrawAll) {
+        amountToWithdraw = parseFloat((Number(amountToWithdraw) || 0).toFixed(5));
+        withdrawRequestAmount = amountToWithdraw;
+      }
 
-      if (userBankBalance < amountToWithdraw) {
+      if (!isWithdrawAll && userBankBalance < amountToWithdraw) {
         await interaction.editReply({
           content: await i18n.__("commands.economy.withdraw.insufficientFunds"),
           ephemeral: true,
@@ -184,7 +195,7 @@ const command = {
         return;
       }
 
-      await (hubClient as any).withdraw(guildId, userId, amountToWithdraw);
+      await (hubClient as any).withdraw(guildId, userId, withdrawRequestAmount);
 
       const finalUserData = (await (hubClient as any).getUser(guildId, userId, true)) as GenericUserData;
 

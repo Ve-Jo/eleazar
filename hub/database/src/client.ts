@@ -117,6 +117,7 @@ import {
   registerDailyCrateOpen,
   markDailyCrateReminderSent,
   getGameDailyStatusFromDb,
+  getGameDailyResetStatusFromDb,
   awardGameDailyEarningsAtomic,
 } from "./utils/economyMeta.ts";
 import {
@@ -1315,6 +1316,63 @@ class Database {
       upgrades,
       Date.now()
     );
+  }
+
+  async getGameDailyResetStatus(guildId, userId) {
+    return getGameDailyResetStatusFromDb(
+      this.client,
+      guildId,
+      userId,
+      Date.now()
+    );
+  }
+
+  async getUserNotificationStatus(guildId, userId) {
+    await this.ensureGuildUser(guildId, userId);
+
+    const now = Date.now();
+    const user = await this.getUser(guildId, userId, true);
+    const locale = user?.locale || null;
+
+    const daily = await this.getDailyCrateStatus(guildId, userId);
+
+    const weeklyCooldownTimestamp = Number(
+      (await this.getCrateCooldown(guildId, userId, "weekly")) || 0
+    );
+    const weeklyCooldownDuration = Number(CRATE_TYPES?.weekly?.cooldown || 0);
+    const weeklyNextAvailableAt = weeklyCooldownTimestamp
+      ? weeklyCooldownTimestamp + weeklyCooldownDuration
+      : null;
+    const weeklyRemainingMs =
+      weeklyNextAvailableAt && weeklyNextAvailableAt > now
+        ? weeklyNextAvailableAt - now
+        : 0;
+    const weeklyReady = weeklyRemainingMs <= 0;
+
+    let bankCycleComplete = false;
+    let bankCycleCount = 0;
+    if (user?.economy?.bankBalance && Number(user.economy.bankBalance) > 0) {
+      const bankResult = await this.calculateBankBalance(user);
+      bankCycleComplete = Boolean(bankResult?.cycleComplete);
+      bankCycleCount = Number(bankResult?.cycleCount || 0);
+    }
+
+    const gameReset = await this.getGameDailyResetStatus(guildId, userId);
+
+    return {
+      locale,
+      daily,
+      weekly: {
+        ready: weeklyReady,
+        nextAvailableAt: weeklyNextAvailableAt,
+        readyToken: weeklyReady ? String(weeklyNextAvailableAt || 0) : null,
+      },
+      bank: {
+        cycleComplete: bankCycleComplete,
+        cycleCount: bankCycleCount,
+      },
+      gameReset,
+    };
   }
 
   async awardGameDailyEarnings(guildId, userId, gameId, amount) {

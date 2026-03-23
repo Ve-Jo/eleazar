@@ -42,6 +42,17 @@ type PrismaClientLike = {
         };
       };
     }) => Promise<{ earned: unknown } | null>;
+    findMany: (args: {
+      where: {
+        guildId: string;
+        userId: string;
+        dateKey: string;
+      };
+      select: {
+        gameId: true;
+        earned: true;
+      };
+    }) => Promise<Array<{ gameId: string; earned: unknown }>>;
   };
 };
 
@@ -130,6 +141,67 @@ async function awardGameDailyEarningsAtomic(
   };
 }
 
+async function getGameDailyResetStatusFromDb(
+  prisma: PrismaClientLike,
+  guildId: string,
+  userId: string,
+  referenceTimestamp = Date.now()
+): Promise<GameDailyResetStatus> {
+  const todayDateKey = getDateKey(referenceTimestamp);
+  const previousDateKey = addUtcDays(todayDateKey, -1);
+
+  const [previousRows, todayRows] = await Promise.all([
+    prisma.gameDailyEarnings.findMany({
+      where: {
+        guildId,
+        userId,
+        dateKey: previousDateKey,
+      },
+      select: {
+        gameId: true,
+        earned: true,
+      },
+    }),
+    prisma.gameDailyEarnings.findMany({
+      where: {
+        guildId,
+        userId,
+        dateKey: todayDateKey,
+      },
+      select: {
+        gameId: true,
+        earned: true,
+      },
+    }),
+  ]);
+
+  const previouslyCappedGames = Array.from(
+    new Set(
+      previousRows
+        .filter((row) => toFiniteNumber(row.earned, 0) > 0)
+        .map((row) => row.gameId)
+        .filter((gameId): gameId is string => Boolean(gameId))
+    )
+  );
+
+  const todayPlayedGames = new Set(
+    todayRows
+      .filter((row) => toFiniteNumber(row.earned, 0) > 0)
+      .map((row) => row.gameId)
+      .filter((gameId): gameId is string => Boolean(gameId))
+  );
+
+  const resetGames = previouslyCappedGames.filter((gameId) => !todayPlayedGames.has(gameId));
+
+  return {
+    todayDateKey,
+    previousDateKey,
+    resetGames,
+    previouslyCappedGames,
+    eligible: resetGames.length > 0,
+  };
+}
+
 type DayEntry = {
   dateKey: string;
   opened: boolean;
@@ -196,6 +268,14 @@ type GameDailyStatus = {
   cap: number;
   upgradeLevel: number;
   multiplier: number;
+};
+
+type GameDailyResetStatus = {
+  todayDateKey: string;
+  previousDateKey: string;
+  resetGames: string[];
+  previouslyCappedGames: string[];
+  eligible: boolean;
 };
 
 type GameAwardResult = GameDailyStatus & {
@@ -493,5 +573,6 @@ export {
   getGameDailyStatus,
   awardGameDailyEarnings,
   getGameDailyStatusFromDb,
+  getGameDailyResetStatusFromDb,
   awardGameDailyEarningsAtomic,
 };

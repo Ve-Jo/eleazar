@@ -113,6 +113,23 @@ router.put("/:guildId/:userId/locale", async (req: UsersRouteRequest, res: Respo
   }
 });
 
+router.get("/:guildId/:userId/notifications/status", async (req: UsersRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = req.params.userId ?? "";
+    const guildId = req.params.guildId ?? "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const status = await Database.getUserNotificationStatus(guildId, userId);
+    res.json(serializeBigInt(status));
+  } catch (error) {
+    console.error("Error getting user notification status:", error);
+    res.status(500).json({ error: "Failed to get user notification status" });
+  }
+});
+
 router.get("/:guildId/:userId/profile", async (req: UsersRouteRequest, res: ResponseLike) => {
   try {
     const userId = req.params.userId ?? "";

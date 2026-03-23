@@ -156,6 +156,7 @@ export type HubClientLike = {
   getCrateCooldown: (guildId: string, userId: string, type: string) => Promise<number | null>;
   getDailyCrateStatus: (guildId: string, userId: string) => Promise<GenericRecordResponse>;
   markDailyCrateReminderSent: (guildId: string, userId: string) => Promise<GenericRecordResponse>;
+  getUserNotificationStatus: (guildId: string, userId: string) => Promise<GenericRecordResponse>;
   deleteCooldown: (guildId: string, userId: string, type: string) => Promise<CooldownRecordResponse>;
   getAllCooldowns: (guildId: string, userId: string) => Promise<AllCooldownsResponse>;
   addXP: (guildId: string, userId: string, amount: number) => Promise<AddXpResponse>;
@@ -241,7 +242,7 @@ export type HubClientLike = {
     limit?: number
   ) => Promise<MostUsedInteraction[]>;
   deposit: (guildId: string, userId: string, amount: number) => Promise<BalanceResponse>;
-  withdraw: (guildId: string, userId: string, amount: number) => Promise<BalanceResponse>;
+  withdraw: (guildId: string, userId: string, amount: number | "all") => Promise<BalanceResponse>;
   calculateLevel: (xp: number | bigint) => LevelCalculation;
   checkLevelUp: (oldXp: number | bigint, newXp: number | bigint) => LevelUpCheck | null;
   savePlayer: (player: unknown) => Promise<GenericRecordResponse>;
@@ -1374,7 +1375,11 @@ class HubClient {
     });
   }
 
-  async withdraw(guildId: string, userId: string, amount: number): Promise<BalanceResponse> {
+  async withdraw(
+    guildId: string,
+    userId: string,
+    amount: number | "all"
+  ): Promise<BalanceResponse> {
     return await apiRequest<BalanceResponse, string>(`${this.databaseUrl}/economy/withdraw`, {
       method: "POST",
       body: JSON.stringify({ userId, guildId, amount }),
@@ -1492,6 +1497,15 @@ class HubClient {
       {
         method: "POST",
       }
+    );
+  }
+
+  async getUserNotificationStatus(
+    guildId: string,
+    userId: string
+  ): Promise<GenericRecordResponse> {
+    return await apiRequest<GenericRecordResponse>(
+      `${this.databaseUrl}/users/${guildId}/${userId}/notifications/status`
     );
   }
 
