@@ -24,5 +24,6 @@
       "path": "eleazar/bot/src/utils/",
       "color": "foldercustomization.AnsiColor32"
     }
-  ]
+  ],
+  "chatgpt.openOnStartup": true
 }
