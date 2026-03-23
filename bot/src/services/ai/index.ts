@@ -4,6 +4,12 @@ import {
   markModelAsNotSupportingTools as markModelNotSupportingTools,
   supportsReasoning as modelSupportsReasoning,
 } from "./aiService.ts";
+import {
+  setPendingInteraction as setRedisPendingInteraction,
+  getPendingInteraction as getRedisPendingInteraction,
+  deletePendingInteraction as deleteRedisPendingInteraction,
+  hasPendingInteraction as hasRedisPendingInteraction,
+} from "../runtimeRedis.ts";
 
 type MessageHistoryEntry = {
   role: string;
@@ -192,6 +198,52 @@ function addConversationToHistory(
   }
 }
 
+// Redis-backed pending interaction functions for shard-safe state
+// These replace direct access to state.pendingInteractions
+
+/**
+ * Store a pending interaction for a user (shard-safe via Redis).
+ * Also stores in local state for backward compatibility with sync code paths.
+ */
+async function setPendingInteraction(userId: string, message: unknown): Promise<void> {
+  // Store in local state for sync access
+  state.pendingInteractions[userId] = message;
+  // Store in Redis for cross-shard access
+  await setRedisPendingInteraction(userId, message);
+}
+
+/**
+ * Retrieve a pending interaction for a user (shard-safe via Redis).
+ */
+async function getPendingInteraction(userId: string): Promise<unknown | null> {
+  // Try Redis first
+  const redisValue = await getRedisPendingInteraction(userId);
+  if (redisValue !== null) {
+    // Sync local state for backward compatibility
+    state.pendingInteractions[userId] = redisValue;
+    return redisValue;
+  }
+  // Fallback to local state
+  return state.pendingInteractions[userId] || null;
+}
+
+/**
+ * Delete a pending interaction after use (shard-safe via Redis).
+ */
+async function deletePendingInteraction(userId: string): Promise<void> {
+  delete state.pendingInteractions[userId];
+  await deleteRedisPendingInteraction(userId);
+}
+
+/**
+ * Check if a pending interaction exists (shard-safe via Redis).
+ */
+async function hasPendingInteraction(userId: string): Promise<boolean> {
+  const redisExists = await hasRedisPendingInteraction(userId);
+  if (redisExists) return true;
+  return userId in state.pendingInteractions;
+}
+
 export {
   state,
   isModelRateLimited,
@@ -203,4 +255,8 @@ export {
   updateUserPreference,
   clearUserHistory,
   addConversationToHistory,
+  setPendingInteraction,
+  getPendingInteraction,
+  deletePendingInteraction,
+  hasPendingInteraction,
 };

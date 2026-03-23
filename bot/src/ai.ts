@@ -18,6 +18,10 @@ import {
   isModelWithoutTools,
   supportsReasoning,
   markModelAsNotSupportingTools,
+  setPendingInteraction,
+  getPendingInteraction,
+  deletePendingInteraction,
+  hasPendingInteraction,
 } from "./services/ai/index.ts";
 import {
   splitMessage,
@@ -69,4 +73,8 @@ export {
   updateModelCooldown,
   checkModelRateLimit,
   isModelAvailable,
+  setPendingInteraction,
+  getPendingInteraction,
+  deletePendingInteraction,
+  hasPendingInteraction,
 };
