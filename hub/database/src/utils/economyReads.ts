@@ -15,6 +15,24 @@ type GetUserFn = (
   userId: string
 ) => Promise<unknown>;
 
+function toDecimal(value: unknown): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) {
+    return value;
+  }
+
+  try {
+    if (value === null || value === undefined || value === "") {
+      return new Prisma.Decimal(0);
+    }
+    if (typeof value === "bigint") {
+      return new Prisma.Decimal(value.toString());
+    }
+    return new Prisma.Decimal(value as string | number);
+  } catch {
+    return new Prisma.Decimal(0);
+  }
+}
+
 async function getBalance(
   getUser: GetUserFn,
   guildId: string,
@@ -22,7 +40,7 @@ async function getBalance(
 ): Promise<Prisma.Decimal> {
   try {
     const user = (await getUser(guildId, userId)) as UserWithEconomy | null;
-    return user?.economy?.balance || new Prisma.Decimal(0);
+    return toDecimal(user?.economy?.balance);
   } catch (error) {
     console.error(
       `Error getting balance for user ${userId} in guild ${guildId}:`,
@@ -44,8 +62,8 @@ async function getTotalBankBalance(
       return new Prisma.Decimal(0);
     }
 
-    const bankBalance = user.economy.bankBalance || new Prisma.Decimal(0);
-    const bankDistributed = user.economy.bankDistributed || new Prisma.Decimal(0);
+    const bankBalance = toDecimal(user.economy.bankBalance);
+    const bankDistributed = toDecimal(user.economy.bankDistributed);
 
     return bankBalance.plus(bankDistributed);
   } catch (error) {

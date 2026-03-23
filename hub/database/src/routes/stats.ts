@@ -20,7 +20,7 @@ router.get("/:guildId/:userId", async (req: StatsRouteRequest, res: ResponseLike
       return res.status(400).json({ error: "guildId and userId are required" });
     }
 
-    const stats = await Database.getStatistics(guildId, userId);
+    const stats = await Database.getStatistics(userId, guildId);
     res.json(serializeBigInt(stats));
   } catch (error) {
     console.error("Error getting statistics:", error);
@@ -38,7 +38,16 @@ router.patch("/:guildId/:userId", async (req: StatsRouteRequest, res: ResponseLi
       return res.status(400).json({ error: "guildId and userId are required" });
     }
 
-    const stats = await Database.updateStatistics(guildId, userId, updateData);
+    const statType =
+      typeof updateData.statType === "string" ? updateData.statType : null;
+    const increment =
+      typeof updateData.increment === "number" && Number.isFinite(updateData.increment)
+        ? updateData.increment
+        : 1;
+
+    const stats = statType
+      ? await Database.incrementStatistic(userId, guildId, statType, increment)
+      : await Database.updateStatistics(userId, guildId, updateData);
     res.json(serializeBigInt(stats));
   } catch (error) {
     console.error("Error updating statistics:", error);
@@ -73,6 +82,7 @@ router.get(
       const guildId = req.params.guildId ?? "";
       const userId = req.params.userId ?? "";
       const limit = req.query.limit;
+      const type = req.query.type;
 
       if (!guildId || !userId) {
         return res.status(400).json({ error: "guildId and userId are required" });
@@ -83,7 +93,17 @@ router.get(
         return res.status(400).json({ error: "Invalid limit number" });
       }
 
-      const stats = await Database.getMostUsedInteractions(guildId, userId, limitNum);
+      const resolvedType =
+        type && ["commands", "buttons", "selectMenus", "modals"].includes(type)
+          ? type
+          : "commands";
+
+      const stats = await Database.getMostUsedInteractions(
+        guildId,
+        userId,
+        resolvedType,
+        limitNum
+      );
       res.json(serializeBigInt(stats));
     } catch (error) {
       console.error("Error getting most used interactions:", error);

@@ -35,6 +35,30 @@ type MetricsStore = {
   startTime: number;
 };
 
+type MetricStats = {
+  count: number;
+  errors: number;
+  avgMs: number;
+  minMs: number;
+  maxMs: number;
+  p50Ms: number;
+  p95Ms: number;
+  p99Ms: number;
+};
+
+type MetricSnapshotEntry = MetricStats & {
+  errorRatePct: number;
+};
+
+type MetricsSnapshot = {
+  generatedAt: string;
+  uptimeSec: number;
+  sampleRetentionMs: number;
+  maxSamplesPerKey: number;
+  routes: Record<string, MetricSnapshotEntry>;
+  events: Record<string, MetricSnapshotEntry>;
+};
+
 // Global metrics store
 const metrics: MetricsStore = {
   routes: new Map(),
@@ -43,8 +67,26 @@ const metrics: MetricsStore = {
 };
 
 // Configuration
-const MAX_SAMPLES_PER_KEY = 100;
-const SAMPLE_RETENTION_MS = 5 * 60 * 1000; // 5 minutes
+function readPositiveIntEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(`[metrics] Invalid ${key}=${raw}; using fallback ${fallback}`);
+    return fallback;
+  }
+
+  return parsed;
+}
+
+const MAX_SAMPLES_PER_KEY = readPositiveIntEnv("METRICS_MAX_SAMPLES_PER_KEY", 1000);
+const SAMPLE_RETENTION_MS = readPositiveIntEnv(
+  "METRICS_SAMPLE_RETENTION_MS",
+  15 * 60 * 1000
+);
 
 function getOrCreateRoute(route: string): RouteMetrics {
   let entry = metrics.routes.get(route);
@@ -215,6 +257,38 @@ function getEventStats(eventName: string): {
   };
 }
 
+function toSnapshotEntry(stats: MetricStats): MetricSnapshotEntry {
+  const errorRatePct = stats.count > 0 ? (stats.errors / stats.count) * 100 : 0;
+
+  return {
+    ...stats,
+    errorRatePct: Number(errorRatePct.toFixed(2)),
+  };
+}
+
+function toSnapshotSection(
+  values: Record<string, MetricStats | null>
+): Record<string, MetricSnapshotEntry> {
+  const entries = Object.entries(values)
+    .filter((entry): entry is [string, MetricStats] => entry[1] != null)
+    .sort((a, b) => b[1].count - a[1].count);
+
+  return Object.fromEntries(entries.map(([key, stats]) => [key, toSnapshotEntry(stats)]));
+}
+
+function getMetricsSnapshot(): MetricsSnapshot {
+  const uptimeSec = Math.round((Date.now() - metrics.startTime) / 1000);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    uptimeSec,
+    sampleRetentionMs: SAMPLE_RETENTION_MS,
+    maxSamplesPerKey: MAX_SAMPLES_PER_KEY,
+    routes: toSnapshotSection(getAllRouteMetrics()),
+    events: toSnapshotSection(getAllEventMetrics()),
+  };
+}
+
 /**
  * Get all route metrics.
  */
@@ -241,44 +315,47 @@ function getAllEventMetrics(): Record<string, ReturnType<typeof getEventStats>> 
  * Log a summary of current metrics (for debugging/monitoring).
  */
 function logMetricsSummary(): void {
-  const uptime = Math.round((Date.now() - metrics.startTime) / 1000);
-  console.log(`[metrics] Uptime: ${uptime}s`);
+  const snapshot = getMetricsSnapshot();
+  console.log(`[metrics] Uptime: ${snapshot.uptimeSec}s`);
 
   // Log top routes by call count
-  const routes = Array.from(metrics.routes.entries())
-    .filter(([, e]) => e.total > 0)
-    .sort((a, b) => b[1].total - a[1].total)
+  const routes = Object.entries(snapshot.routes)
+    .filter(([, stats]) => stats.count > 0)
+    .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 10);
 
   if (routes.length > 0) {
     console.log("[metrics] Top routes by call count:");
-    for (const [key, entry] of routes) {
-      const avg = entry.latency.count > 0
-        ? Math.round(entry.latency.sum / entry.latency.count)
-        : 0;
-      const errRate = entry.total > 0
-        ? ((entry.errors / entry.total) * 100).toFixed(1)
-        : "0";
-      console.log(`  ${key}: ${entry.total} calls, ${avg}ms avg, ${errRate}% errors`);
+    for (const [key, stats] of routes) {
+      console.log(
+        `  ${key}: ${stats.count} calls, ${Math.round(stats.avgMs)}ms avg, p95=${Math.round(
+          stats.p95Ms
+        )}ms, p99=${Math.round(stats.p99Ms)}ms, ${stats.errorRatePct.toFixed(1)}% errors`
+      );
     }
   }
 
   // Log events
-  const events = Array.from(metrics.events.entries())
-    .filter(([, e]) => e.total > 0);
+  const events = Object.entries(snapshot.events).filter(([, stats]) => stats.count > 0);
 
   if (events.length > 0) {
     console.log("[metrics] Event handlers:");
-    for (const [key, entry] of events) {
-      const avg = entry.duration.count > 0
-        ? Math.round(entry.duration.sum / entry.duration.count)
-        : 0;
-      const errRate = entry.total > 0
-        ? ((entry.errors / entry.total) * 100).toFixed(1)
-        : "0";
-      console.log(`  ${key}: ${entry.total} calls, ${avg}ms avg, ${errRate}% errors`);
+    for (const [key, stats] of events) {
+      console.log(
+        `  ${key}: ${stats.count} calls, ${Math.round(stats.avgMs)}ms avg, p95=${Math.round(
+          stats.p95Ms
+        )}ms, p99=${Math.round(stats.p99Ms)}ms, ${stats.errorRatePct.toFixed(1)}% errors`
+      );
     }
   }
+}
+
+/**
+ * Log a machine-readable snapshot that can be ingested by log tooling
+ * during baseline capture windows.
+ */
+function logMetricsSnapshot(reason = "manual"): void {
+  console.log(`[metrics] snapshot reason=${reason} ${JSON.stringify(getMetricsSnapshot())}`);
 }
 
 /**
@@ -311,6 +388,8 @@ export {
   getEventStats,
   getAllRouteMetrics,
   getAllEventMetrics,
+  getMetricsSnapshot,
   logMetricsSummary,
+  logMetricsSnapshot,
   extractRouteFromUrl,
 };

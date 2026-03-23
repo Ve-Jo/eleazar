@@ -274,10 +274,13 @@ const event = {
         const xpPerMessage = guildSettings?.settings?.xp_per_message || 15;
 
         // Parallelize independent hub calls: cooldown + statistics
-        const [cooldownTime, statsResult] = await Promise.all([
-          hubClient.getCooldown(author.id, guild.id, "message"),
-          hubClient.getStatistics(author.id, guild.id) as Promise<StatisticsLike>,
+        const [cooldownResponse, statsResult] = await Promise.all([
+          hubClient.getCooldown(guild.id, author.id, "message"),
+          hubClient.getStatistics(guild.id, author.id) as Promise<StatisticsLike>,
         ]);
+        const cooldownTime = Number(
+          typeof cooldownResponse === "number" ? cooldownResponse : cooldownResponse?.cooldown || 0
+        );
 
         if (cooldownTime === 0) {
           const stats = statsResult;
@@ -306,11 +309,11 @@ const event = {
           channelStats.chat += xpPerMessage;
           xpStats.chat = (xpStats.chat || 0) + xpPerMessage;
 
-          await hubClient.updateStats(author.id, guild.id, "messageCount", 1);
+          await hubClient.updateStats(guild.id, author.id, "messageCount", 1);
 
           const xpResult = (await hubClient.addXP(
-            author.id,
             guild.id,
+            author.id,
             xpPerMessage
           )) as XpResultLike;
 
@@ -391,7 +394,7 @@ const event = {
             );
           }
 
-          await hubClient.setCooldown(author.id, guild.id, "message", 60000);
+          await hubClient.setCooldown(guild.id, author.id, "message", 60000);
         }
       } catch (error) {
         console.error("Error handling XP gain:", error);

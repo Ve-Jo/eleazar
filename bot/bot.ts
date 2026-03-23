@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import { startResourceMonitor } from "./src/runners/resourseMonitor.ts";
 import { startDailyCrateReminders } from "./src/runners/dailyCrateReminders.ts";
 import { getShardId, isLeaderShard } from "./src/services/runtimeRedis.ts";
+import { logMetricsSnapshot } from "./src/services/metrics.ts";
 
 type CoverageMap = Record<string, unknown>;
 const globalAny = globalThis as any;
@@ -278,6 +279,11 @@ process.on("unhandledRejection", (error) => {
 
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error);
+});
+
+process.on("SIGUSR2", () => {
+  console.log("[signals] SIGUSR2 received; emitting metrics snapshot");
+  logMetricsSnapshot("SIGUSR2");
 });
 
 process.on("SIGINT", async () => {

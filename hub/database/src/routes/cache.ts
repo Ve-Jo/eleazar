@@ -41,7 +41,8 @@ router.put("/:key", async (req: CacheRouteRequest, res: ResponseLike) => {
       return res.status(400).json({ error: "value is required" });
     }
 
-    const normalizedTtl = null;
+    const normalizedTtl =
+      typeof ttl === "number" && Number.isFinite(ttl) ? Math.max(0, Math.floor(ttl)) : null;
     const result = await Database.setCache(decodedKey, value, normalizedTtl);
     res.json(serializeBigInt(result));
   } catch (error) {

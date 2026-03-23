@@ -36,6 +36,24 @@ router.post("/ensure", async (req: UsersRouteRequest, res: ResponseLike) => {
   }
 });
 
+router.post("/", async (req: UsersRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = typeof req.body.userId === "string" ? req.body.userId : "";
+    const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const { userId: _ignoredUserId, guildId: _ignoredGuildId, ...createData } = req.body;
+    const user = await Database.createUser(guildId, userId, createData);
+    res.json(serializeBigInt(user));
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
 router.get("/:guildId/:userId", async (req: UsersRouteRequest, res: ResponseLike) => {
   try {
     const userId = req.params.userId ?? "";
@@ -73,6 +91,23 @@ router.patch("/:guildId/:userId", async (req: UsersRouteRequest, res: ResponseLi
   } catch (error) {
     console.error("Error updating user:", error);
     res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+router.delete("/:guildId/:userId", async (req: UsersRouteRequest, res: ResponseLike) => {
+  try {
+    const userId = req.params.userId ?? "";
+    const guildId = req.params.guildId ?? "";
+
+    if (!userId || !guildId) {
+      return res.status(400).json({ error: "userId and guildId are required" });
+    }
+
+    const deletedUser = await Database.deleteUser(guildId, userId);
+    res.json(serializeBigInt({ success: true, user: deletedUser }));
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 

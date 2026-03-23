@@ -93,11 +93,7 @@ router.get(
       }
 
       const channelId =
-        typeof req.query?.channelId === "string" ? req.query.channelId : "";
-
-      if (!channelId) {
-        return res.status(400).json({ error: "channelId is required" });
-      }
+        typeof req.query?.channelId === "string" ? req.query.channelId : undefined;
 
       const sessions = await Database.getAllVoiceSessions(guildId, channelId);
       res.json(serializeBigInt(sessions));

@@ -10,15 +10,35 @@ function serializeBigInt<T>(obj: T): T {
 }
 
 function serializeWithBigInt(data: unknown): string {
-  return JSON.stringify(data, (_key, value) => {
+  function normalize(value: unknown): unknown {
     if (typeof value === "bigint") {
       return { type: "BigInt", value: value.toString() };
     }
+
     if (value instanceof Prisma.Decimal) {
       return { type: "Decimal", value: value.toString() };
     }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => normalize(item));
+    }
+
+    if (value && typeof value === "object") {
+      const normalizedObject: Record<string, unknown> = {};
+      for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+        normalizedObject[key] = normalize(nestedValue);
+      }
+      return normalizedObject;
+    }
+
     return value;
-  });
+  }
+
+  return JSON.stringify(normalize(data));
 }
 
 function deserializeWithBigInt(jsonString: string | null | undefined): unknown {

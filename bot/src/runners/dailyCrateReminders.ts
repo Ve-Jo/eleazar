@@ -5,6 +5,7 @@ import {
   getRuntimeRedisClient,
   buildPrefixedKey,
 } from "../services/runtimeRedis.ts";
+import { recordEventCall } from "../services/metrics.ts";
 
 type ClientLike = {
   guilds: {
@@ -465,17 +466,28 @@ async function processPlayerReminders(client: ClientLike): Promise<void> {
 
 function startDailyCrateReminders(client: ClientLike): void {
   const runPass = async (label: string): Promise<void> => {
-    const lock = await acquireDistributedLock(REMINDER_LOCK_KEY, REMINDER_LOCK_TTL_MS);
-
-    if (!lock.acquired) {
-      console.log(`[playerReminders] Skip ${label}; lock not acquired`);
-      return;
-    }
+    const startedAt = Date.now();
+    let isError = false;
 
     try {
-      await processPlayerReminders(client);
+      const lock = await acquireDistributedLock(REMINDER_LOCK_KEY, REMINDER_LOCK_TTL_MS);
+
+      if (!lock.acquired) {
+        console.log(`[playerReminders] Skip ${label}; lock not acquired`);
+        return;
+      }
+
+      try {
+        await processPlayerReminders(client);
+      } finally {
+        await releaseDistributedLock(REMINDER_LOCK_KEY, lock.token);
+      }
+    } catch (error) {
+      isError = true;
+      throw error;
     } finally {
-      await releaseDistributedLock(REMINDER_LOCK_KEY, lock.token);
+      const duration = Date.now() - startedAt;
+      recordEventCall("dailyCrateReminders", duration, isError);
     }
   };
 

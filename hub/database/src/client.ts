@@ -803,6 +803,44 @@ class Database {
     }
   }
 
+  _cacheKeyUser(guildId, userId, includeRelations = true) {
+    return `db:user:${guildId}:${userId}:${includeRelations ? "full" : "base"}`;
+  }
+
+  _cacheKeyGuild(guildId) {
+    return `db:guild:${guildId}`;
+  }
+
+  _cacheKeyGuildUsers(guildId) {
+    return `db:guild-users:${guildId}`;
+  }
+
+  _cacheKeyStats(guildId, userId) {
+    return `db:stats:${guildId}:${userId}`;
+  }
+
+  async _invalidateCacheKeys(keys = []) {
+    const uniqueKeys = [...new Set(keys.filter((key) => typeof key === "string" && key.length > 0))];
+    if (!uniqueKeys.length) {
+      return;
+    }
+
+    try {
+      await this.invalidateCache(uniqueKeys);
+    } catch (error) {
+      console.warn("[Redis] Failed to invalidate keys:", uniqueKeys, error);
+    }
+  }
+
+  async _invalidateUserRelatedCaches(guildId, userId) {
+    await this._invalidateCacheKeys([
+      this._cacheKeyUser(guildId, userId, true),
+      this._cacheKeyUser(guildId, userId, false),
+      this._cacheKeyStats(guildId, userId),
+      this._cacheKeyGuildUsers(guildId),
+    ]);
+  }
+
   async getCooldown(guildId, userId, type) {
     return getCooldownHelper(this.client, guildId, userId, type);
   }
@@ -929,13 +967,16 @@ class Database {
 
   // Update cooldown for a crate type
   async updateCrateCooldown(guildId, userId, type) {
-    return updateCrateCooldownHelper(
+    const result = await updateCrateCooldownHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       guildId,
       userId,
       type
     );
+
+    await this._invalidateCacheKeys([`db:crate-cooldown:${guildId}:${userId}:${type}`]);
+    return result;
   }
 
   // Reduce cooldown for a specific type
@@ -1001,6 +1042,7 @@ class Database {
       }
     }
 
+    await this._invalidateUserRelatedCaches(guildId, userId);
     return rewards;
   }
 
@@ -1024,17 +1066,20 @@ class Database {
   }
 
   async addBalance(guildId, userId, amount) {
-    return addBalanceHelper(
+    const result = await addBalanceHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       guildId,
       userId,
       amount
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return result;
   }
 
   async transferBalance(guildId, fromUserId, toUserId, amount) {
-    return transferBalanceHelper(
+    const result = await transferBalanceHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       guildId,
@@ -1042,6 +1087,10 @@ class Database {
       toUserId,
       amount
     );
+
+    await this._invalidateUserRelatedCaches(guildId, fromUserId);
+    await this._invalidateUserRelatedCaches(guildId, toUserId);
+    return result;
   }
 
   // === Guild Vault Methods ===
@@ -1111,7 +1160,7 @@ class Database {
   }
 
   async deposit(guildId, userId, amount) {
-    return depositHelper(
+    const result = await depositHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       (principal, annualRate, timeMs) =>
@@ -1123,10 +1172,13 @@ class Database {
       userId,
       amount
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return result;
   }
 
   async withdraw(guildId, userId, amount) {
-    return withdrawHelper(
+    const result = await withdrawHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       (principal, annualRate, timeMs) =>
@@ -1138,6 +1190,9 @@ class Database {
       userId,
       amount
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return result;
   }
 
   // Bank Operations
@@ -1180,7 +1235,25 @@ class Database {
   }
 
   async getUser(guildId, userId, includeRelations = true, tx = null) {
-    return getUserHelper(this.client, guildId, userId, includeRelations, tx);
+    const shouldUseCache = !tx;
+    const cacheKey = shouldUseCache
+      ? this._cacheKeyUser(guildId, userId, includeRelations)
+      : null;
+
+    if (cacheKey) {
+      const cachedUser = await this.getFromCache(cacheKey);
+      if (cachedUser !== null) {
+        return cachedUser;
+      }
+    }
+
+    const user = await getUserHelper(this.client, guildId, userId, includeRelations, tx);
+
+    if (cacheKey && user) {
+      void this.setCache(cacheKey, user, CACHE_TTLS.user);
+    }
+
+    return user;
   }
 
   /**
@@ -1227,7 +1300,7 @@ class Database {
   }
 
   async createUser(guildId, userId, data = {}) {
-    return createUserHelper(
+    const createdUser = await createUserHelper(
       this.client,
       (targetGuildId, targetUserId, upgrades) =>
         this.updateUpgrades(targetGuildId, targetUserId, upgrades),
@@ -1235,10 +1308,27 @@ class Database {
       userId,
       data
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return createdUser;
+  }
+
+  async deleteUser(guildId, userId) {
+    const deletedUser = await this.client.user.delete({
+      where: {
+        guildId_id: {
+          guildId,
+          id: userId,
+        },
+      },
+    });
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return deletedUser;
   }
 
   async updateUser(guildId, userId, data) {
-    return updateUserHelper(
+    const updatedUser = await updateUserHelper(
       this.client,
       (targetGuildId, targetUserId) => this.getUser(targetGuildId, targetUserId),
       (targetGuildId, targetUserId, createData) =>
@@ -1249,6 +1339,9 @@ class Database {
       userId,
       data
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return updatedUser;
   }
 
   // Helper method to ensure user exists
@@ -1273,11 +1366,26 @@ class Database {
 
   // Guild Operations
   async getGuild(guildId) {
-    return getGuildHelper(this.client, guildId);
+    const cacheKey = this._cacheKeyGuild(guildId);
+    const cachedGuild = await this.getFromCache(cacheKey);
+    if (cachedGuild !== null) {
+      return cachedGuild;
+    }
+
+    const guild = await getGuildHelper(this.client, guildId);
+    if (guild) {
+      void this.setCache(cacheKey, guild, CACHE_TTLS.guild);
+    }
+    return guild;
   }
 
   async upsertGuild(guildId, data = {}) {
-    return upsertGuildHelper(this.client, guildId, data);
+    const guild = await upsertGuildHelper(this.client, guildId, data);
+    await this._invalidateCacheKeys([
+      this._cacheKeyGuild(guildId),
+      this._cacheKeyGuildUsers(guildId),
+    ]);
+    return guild;
   }
 
   async getGameRecords(guildId, userId) {
@@ -1448,7 +1556,7 @@ class Database {
   }
 
   async addXP(guildId, userId, amount, type = "chat") {
-    return addXPHelper(
+    const result = await addXPHelper(
       this.client,
       () => this.checkAndUpdateSeason(),
       (oldXp, newXp) => this.checkLevelUp(oldXp, newXp),
@@ -1458,10 +1566,13 @@ class Database {
       amount,
       type
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return result;
   }
 
   async addGameXP(guildId, userId, gameType, amount) {
-    return addGameXPHelper(
+    const result = await addGameXPHelper(
       this.client,
       () => this.checkAndUpdateSeason(),
       (oldXp, newXp) => this.checkLevelUp(oldXp, newXp),
@@ -1471,6 +1582,9 @@ class Database {
       gameType,
       amount
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    return result;
   }
 
   async getLevel(guildId, userId, type = "activity") {
@@ -1632,7 +1746,7 @@ class Database {
     return getVoiceSessionHelper(this.client, guildId, userId);
   }
 
-  async getAllVoiceSessions(guildId, channelId) {
+  async getAllVoiceSessions(guildId, channelId: string | undefined = undefined) {
     return getAllVoiceSessionsHelper(this.client, guildId, channelId);
   }
 
@@ -1845,7 +1959,17 @@ class Database {
    * @returns {Promise<object|null>} User statistics or null if not found
    */
   async getStatistics(userId, guildId) {
-    return getStatisticsHelper(this.client, userId, guildId);
+    const cacheKey = this._cacheKeyStats(guildId, userId);
+    const cachedStats = await this.getFromCache(cacheKey);
+    if (cachedStats !== null) {
+      return cachedStats;
+    }
+
+    const stats = await getStatisticsHelper(this.client, userId, guildId);
+    if (stats) {
+      void this.setCache(cacheKey, stats, CACHE_TTLS.default);
+    }
+    return stats;
   }
 
   /**
@@ -1856,13 +1980,16 @@ class Database {
    * @returns {Promise<object>} Updated statistics
    */
   async updateStatistics(userId, guildId, updateData) {
-    return updateStatisticsHelper(
+    const updatedStats = await updateStatisticsHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureGuildUser(targetGuildId, targetUserId),
       userId,
       guildId,
       updateData
     );
+
+    await this._invalidateCacheKeys([this._cacheKeyStats(guildId, userId)]);
+    return updatedStats;
   }
 
   /**
@@ -1874,7 +2001,7 @@ class Database {
    * @returns {Promise<object>} Updated statistics
    */
   async incrementStatistic(userId, guildId, field, amount = 1) {
-    return incrementStatisticHelper(
+    const updatedStats = await incrementStatisticHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureGuildUser(targetGuildId, targetUserId),
       (targetUserId, targetGuildId, updateData) =>
@@ -1884,6 +2011,9 @@ class Database {
       field,
       amount
     );
+
+    await this._invalidateCacheKeys([this._cacheKeyStats(guildId, userId)]);
+    return updatedStats;
   }
 
   // --- End Statistics Methods ---
@@ -1931,7 +2061,15 @@ class Database {
    */
   async getGuildUsers(guildId) {
     try {
-      return await getGuildUsers(this.client, guildId);
+      const cacheKey = this._cacheKeyGuildUsers(guildId);
+      const cachedUsers = await this.getFromCache(cacheKey);
+      if (cachedUsers !== null) {
+        return cachedUsers;
+      }
+
+      const users = await getGuildUsers(this.client, guildId);
+      void this.setCache(cacheKey, users, CACHE_TTLS.default);
+      return users;
     } catch (error) {
       console.error("Error getting guild users:", error);
       throw error;
@@ -1992,7 +2130,15 @@ class Database {
    */
   async getUserCrates(guildId, userId) {
     try {
-      return await getUserCratesHelper(this.client, guildId, userId);
+      const cacheKey = `db:crates:${guildId}:${userId}`;
+      const cachedCrates = await this.getFromCache(cacheKey);
+      if (cachedCrates !== null) {
+        return cachedCrates;
+      }
+
+      const crates = await getUserCratesHelper(this.client, guildId, userId);
+      void this.setCache(cacheKey, crates, CACHE_TTLS.crates);
+      return crates;
     } catch (error) {
       console.error("Error getting user crates:", error);
       throw error;
@@ -2008,7 +2154,15 @@ class Database {
    */
   async getUserCrate(guildId, userId, crateType) {
     try {
-      return await getUserCrateHelper(this.client, guildId, userId, crateType);
+      const cacheKey = `db:crate:${guildId}:${userId}:${crateType}`;
+      const cachedCrate = await this.getFromCache(cacheKey);
+      if (cachedCrate !== null) {
+        return cachedCrate;
+      }
+
+      const crate = await getUserCrateHelper(this.client, guildId, userId, crateType);
+      void this.setCache(cacheKey, crate, CACHE_TTLS.crates);
+      return crate;
     } catch (error) {
       console.error("Error getting user crate:", error);
       throw error;
@@ -2025,7 +2179,12 @@ class Database {
    */
   async addCrate(guildId, userId, crateType, amount = 1) {
     try {
-      return await addCrateHelper(this.client, guildId, userId, crateType, amount);
+      const crate = await addCrateHelper(this.client, guildId, userId, crateType, amount);
+      await this._invalidateCacheKeys([
+        `db:crates:${guildId}:${userId}`,
+        `db:crate:${guildId}:${userId}:${crateType}`,
+      ]);
+      return crate;
     } catch (error) {
       console.error("Error adding crate:", error);
       throw error;
@@ -2042,7 +2201,12 @@ class Database {
    */
   async removeCrate(guildId, userId, crateType, amount = 1) {
     try {
-      return await removeCrateHelper(this.client, guildId, userId, crateType, amount);
+      const crate = await removeCrateHelper(this.client, guildId, userId, crateType, amount);
+      await this._invalidateCacheKeys([
+        `db:crates:${guildId}:${userId}`,
+        `db:crate:${guildId}:${userId}:${crateType}`,
+      ]);
+      return crate;
     } catch (error) {
       console.error("Error removing crate:", error);
       throw error;
@@ -2058,7 +2222,15 @@ class Database {
    */
   async getCrateCooldown(guildId, userId, crateType) {
     try {
-      return await getCrateCooldownHelper(this.client, guildId, userId, crateType);
+      const cacheKey = `db:crate-cooldown:${guildId}:${userId}:${crateType}`;
+      const cachedCooldown = await this.getFromCache(cacheKey);
+      if (cachedCooldown !== null) {
+        return cachedCooldown;
+      }
+
+      const cooldown = await getCrateCooldownHelper(this.client, guildId, userId, crateType);
+      void this.setCache(cacheKey, cooldown, CACHE_TTLS.cooldowns);
+      return cooldown;
     } catch (error) {
       console.error("Error getting crate cooldown:", error);
       throw error;
@@ -2072,6 +2244,19 @@ class Database {
    */
   async initializeRedis() {
     try {
+      if (this.redisClient && this.redisConnected) {
+        return;
+      }
+
+      if (this.redisClient && !this.redisConnected) {
+        try {
+          await this.redisClient.connect();
+          return;
+        } catch {
+          this.redisClient = null;
+        }
+      }
+
       const { createClient } = await import("redis");
       
       this.redisClient = createClient({
@@ -2108,12 +2293,16 @@ class Database {
    */
   async getFromCache(key) {
     if (!this.redisClient || !this.redisConnected) {
+      await this.initializeRedis();
+    }
+
+    if (!this.redisClient || !this.redisConnected) {
       return null;
     }
 
     try {
       const value = await this.redisClient.get(key);
-      return value ? JSON.parse(value) : null;
+      return value ? deserializeWithBigInt(value) : null;
     } catch (error) {
       console.error("[Redis] Get error:", error);
       return null;
@@ -2127,14 +2316,19 @@ class Database {
    * @param {number|null} ttl
    * @returns {Promise<boolean>}
    */
-  async setCache(key, value, ttl = null) {
+  async setCache(key, value, ttl: number | null = null) {
+    if (!this.redisClient || !this.redisConnected) {
+      await this.initializeRedis();
+    }
+
     if (!this.redisClient || !this.redisConnected) {
       return false;
     }
 
     try {
-      const serializedValue = JSON.stringify(value);
-      const cacheTtl = ttl || CACHE_TTLS.default;
+      const serializedValue = serializeWithBigInt(value);
+      const cacheTtl =
+        typeof ttl === "number" ? ttl : CACHE_TTLS.default;
       
       if (cacheTtl > 0) {
         await this.redisClient.setEx(key, cacheTtl, serializedValue);
@@ -2155,6 +2349,10 @@ class Database {
    * @returns {Promise<boolean>}
    */
   async invalidateCache(keys) {
+    if (!this.redisClient || !this.redisConnected) {
+      await this.initializeRedis();
+    }
+
     if (!this.redisClient || !this.redisConnected) {
       return false;
     }
@@ -2185,6 +2383,10 @@ class Database {
    * @returns {Promise<boolean>}
    */
   async deleteFromCache(key) {
+    if (!this.redisClient || !this.redisConnected) {
+      await this.initializeRedis();
+    }
+
     if (!this.redisClient || !this.redisConnected) {
       return false;
     }

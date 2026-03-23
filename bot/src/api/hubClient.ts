@@ -201,7 +201,7 @@ export type HubClientLike = {
   ) => Promise<VoiceSessionRecord>;
   getVoiceSession: (guildId: string, userId: string) => Promise<VoiceSessionRecord>;
   removeVoiceSession: (guildId: string, userId: string) => Promise<VoiceSessionRecord>;
-  getAllGuildVoiceSessions: (guildId: string) => Promise<VoiceSessionRecord[]>;
+  getAllGuildVoiceSessions: (guildId: string, channelId?: string) => Promise<VoiceSessionRecord[]>;
   calculateVoiceXP: (
     guildId: string,
     userId: string,
@@ -239,7 +239,8 @@ export type HubClientLike = {
   getMostUsedInteractions: (
     guildId: string,
     userId: string,
-    limit?: number
+    limit?: number,
+    type?: "commands" | "buttons" | "selectMenus" | "modals"
   ) => Promise<MostUsedInteraction[]>;
   deposit: (guildId: string, userId: string, amount: number) => Promise<BalanceResponse>;
   withdraw: (guildId: string, userId: string, amount: number | "all") => Promise<BalanceResponse>;
@@ -588,9 +589,16 @@ class HubClient {
 
   // Database API methods
   async getUser(guildId: string, userId: string): Promise<HubUserRecord | null> {
-    return await apiRequest<HubUserRecord>(
-      `${this.databaseUrl}/users/${guildId}/${userId}`
-    );
+    try {
+      return await apiRequest<HubUserRecord>(
+        `${this.databaseUrl}/users/${guildId}/${userId}`
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("404")) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async createUser(userData: unknown): Promise<HubUserRecord> {
@@ -983,7 +991,7 @@ class HubClient {
   ): Promise<VoiceSessionRecord> {
     return await apiRequest<VoiceSessionRecord, string>(`${this.databaseUrl}/voice/sessions`, {
       method: "POST",
-      body: JSON.stringify({ userId, guildId, channelId, joinTime }),
+      body: JSON.stringify({ userId, guildId, channelId, joinedAt: joinTime }),
     });
   }
 
@@ -1002,9 +1010,13 @@ class HubClient {
     );
   }
 
-  async getAllGuildVoiceSessions(guildId: string): Promise<VoiceSessionRecord[]> {
+  async getAllGuildVoiceSessions(
+    guildId: string,
+    channelId?: string
+  ): Promise<VoiceSessionRecord[]> {
+    const query = channelId ? `?channelId=${encodeURIComponent(channelId)}` : "";
     return await apiRequest<VoiceSessionRecord[]>(
-      `${this.databaseUrl}/voice/sessions/guild/${guildId}`
+      `${this.databaseUrl}/voice/sessions/guild/${guildId}${query}`
     );
   }
 
@@ -1090,7 +1102,7 @@ class HubClient {
     statType: string,
     increment: number = 1
   ): Promise<StatisticsRecordResponse> {
-    return await apiRequest<StatisticsRecordResponse, string>(`${this.databaseUrl}/stats/${userId}/${guildId}`, {
+    return await apiRequest<StatisticsRecordResponse, string>(`${this.databaseUrl}/stats/${guildId}/${userId}`, {
       method: "PATCH",
       body: JSON.stringify({ statType, increment }),
     });
@@ -1111,10 +1123,11 @@ class HubClient {
   async getMostUsedInteractions(
     guildId: string,
     userId: string,
-    limit: number = 10
+    limit: number = 10,
+    type: "commands" | "buttons" | "selectMenus" | "modals" = "commands"
   ): Promise<MostUsedInteraction[]> {
     return await apiRequest<MostUsedInteraction[]>(
-      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}/top?limit=${limit}`
+      `${this.databaseUrl}/stats/interactions/${guildId}/${userId}/top?limit=${limit}&type=${encodeURIComponent(type)}`
     );
   }
 
@@ -1570,7 +1583,7 @@ class HubClient {
 
   // Transaction methods
   async executeTransaction(operations: unknown[]): Promise<TransactionExecuteResponse> {
-    return await apiRequest<TransactionExecuteResponse, string>(`${this.databaseUrl}/transaction`, {
+    return await apiRequest<TransactionExecuteResponse, string>(`${this.databaseUrl}/transactions`, {
       method: "POST",
       body: JSON.stringify({ operations }),
     });
@@ -1600,106 +1613,6 @@ class HubClient {
       {
         method: "PUT",
         body: JSON.stringify({ value, ttl }),
-      }
-    );
-  }
-
-  // Legacy game data methods
-  async getLegacyGameData(
-    guildId: string,
-    userId: string,
-    gameId: string
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}?guildId=${guildId}`
-    );
-  }
-
-  async setLegacyGameData(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    data: unknown
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse, string>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ guildId, data }),
-      }
-    );
-  }
-
-  async getLegacyValue(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    key: string
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}?guildId=${guildId}`
-    );
-  }
-
-  async setLegacyValue(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    key: string,
-    value: unknown
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse, string>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ guildId, value }),
-      }
-    );
-  }
-
-  async incLegacyValue(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    key: string,
-    increment: number = 1
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse, string>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}/increment`,
-      {
-        method: "POST",
-        body: JSON.stringify({ guildId, increment }),
-      }
-    );
-  }
-
-  async decLegacyValue(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    key: string,
-    decrement: number = 1
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse, string>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}/decrement`,
-      {
-        method: "POST",
-        body: JSON.stringify({ guildId, decrement }),
-      }
-    );
-  }
-
-  async deleteLegacyValue(
-    guildId: string,
-    userId: string,
-    gameId: string,
-    key: string
-  ): Promise<GenericRecordResponse> {
-    return await apiRequest<GenericRecordResponse, string>(
-      `${this.databaseUrl}/legacy/games/${gameId}/${userId}/${key}`,
-      {
-        method: "DELETE",
-        body: JSON.stringify({ guildId }),
       }
     );
   }
@@ -1746,7 +1659,7 @@ class HubClient {
       return [buffer, coloring];
     }
 
-    // Check if response is JSON (legacy path) or binary (image buffer)
+    // Check if response is JSON payload or binary image buffer
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       const jsonResponse = (await response.json()) as Record<string, unknown>;

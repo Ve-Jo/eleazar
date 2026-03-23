@@ -178,7 +178,7 @@ const event = {
         return;
       }
 
-      await hubClient.ensureGuildUser(interaction.user.id, interaction.guild.id);
+      await hubClient.ensureGuildUser(interaction.guild.id, interaction.user.id);
 
       await hubClient.updateStats(interaction.guild.id, interaction.user.id, "commandCount", 1);
 

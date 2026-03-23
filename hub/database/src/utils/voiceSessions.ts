@@ -112,12 +112,12 @@ async function getVoiceSession(
 async function getAllVoiceSessions(
   client: VoiceSessionClient,
   guildId: string,
-  channelId: string
+  channelId?: string
 ): Promise<unknown> {
   return client.voiceSession.findMany({
     where: {
       guildId,
-      channelId,
+      ...(channelId ? { channelId } : {}),
     },
   });
 }

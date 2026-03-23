@@ -82,7 +82,7 @@ async function setCache(
 
   try {
     const serializedValue = JSON.stringify(value);
-    const cacheTtl = ttl || CACHE_TTLS.default;
+    const cacheTtl = typeof ttl === "number" ? ttl : CACHE_TTLS.default;
     
     if (cacheTtl > 0) {
       await redisClient.setEx(key, cacheTtl, serializedValue);
@@ -110,11 +110,16 @@ async function invalidateCache(keys: string[]): Promise<boolean> {
     if (keys.length === 0) return true;
     
     // Filter out undefined keys and ensure all keys are strings
-    const validKeys = keys.filter(key => key != null) as string[];
+    const validKeys = keys.filter(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && candidate.length > 0
+    );
     if (validKeys.length === 0) return true;
     
     if (validKeys.length === 1) {
-      await redisClient.del(validKeys[0]);
+      const singleKey = validKeys[0];
+      if (!singleKey) return true;
+      await redisClient.del(singleKey);
     } else {
       await redisClient.del(validKeys);
     }

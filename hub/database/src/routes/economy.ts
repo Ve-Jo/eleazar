@@ -23,6 +23,24 @@ type UserWithEconomy = {
   economy?: EconomyShape | null;
 };
 
+function toDecimal(value: unknown): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) {
+    return value;
+  }
+
+  try {
+    if (value === null || value === undefined || value === "") {
+      return new Prisma.Decimal(0);
+    }
+    if (typeof value === "bigint") {
+      return new Prisma.Decimal(value.toString());
+    }
+    return new Prisma.Decimal(value as string | number);
+  } catch {
+    return new Prisma.Decimal(0);
+  }
+}
+
 router.post("/balance/add", async (req: EconomyRouteRequest, res: ResponseLike) => {
   try {
     const userId = typeof req.body.userId === "string" ? req.body.userId : "";
@@ -55,17 +73,19 @@ router.get("/balance/:guildId/:userId", async (req: EconomyRouteRequest, res: Re
       return res.status(404).json({ error: "User or economy data not found" });
     }
 
-    const bankBalance = user.economy.bankBalance || new Prisma.Decimal(0);
-    const bankDistributed = user.economy.bankDistributed || new Prisma.Decimal(0);
+    const balance = toDecimal(user.economy.balance);
+    const bankBalance = toDecimal(user.economy.bankBalance);
+    const bankDistributed = toDecimal(user.economy.bankDistributed);
+    const bankRate = toDecimal(user.economy.bankRate);
     const totalBankBalance = bankBalance.plus(bankDistributed);
 
     res.json(
       serializeBigInt({
-        balance: user.economy.balance || new Prisma.Decimal(0),
+        balance,
         bankBalance,
         bankDistributed,
         totalBankBalance,
-        bankRate: user.economy.bankRate || new Prisma.Decimal(0),
+        bankRate,
         bankStartTime: user.economy.bankStartTime || 0,
       })
     );
@@ -204,13 +224,22 @@ router.post("/bank/continue", async (req: EconomyRouteRequest, res: ResponseLike
 
 router.post("/bank/interest", async (req: EconomyRouteRequest, res: ResponseLike) => {
   try {
+    const userId = typeof req.body.userId === "string" ? req.body.userId : "";
+    const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
     const bankBalance = req.body.bankBalance;
     const lastBankUpdate = req.body.lastBankUpdate;
     const interestRate = req.body.interestRate;
 
+    // Backward-compatible mode used by hubClient.calculateInterest(guildId, userId)
+    if (userId && guildId) {
+      const result = await Database.updateBankBalance(guildId, userId);
+      return res.json(serializeBigInt(result));
+    }
+
     if (bankBalance === undefined || !lastBankUpdate || interestRate === undefined) {
       return res.status(400).json({
-        error: "bankBalance, lastBankUpdate, and interestRate are required",
+        error:
+          "Provide either (userId, guildId) or (bankBalance, lastBankUpdate, interestRate)",
       });
     }
 
