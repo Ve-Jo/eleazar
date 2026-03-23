@@ -193,10 +193,111 @@ function isLeaderShard(client: unknown): boolean {
   return getShardId(client) === 0;
 }
 
+// In-memory fallback for AI pending interactions
+const pendingInteractionsMemory: Record<string, unknown> = {};
+
+/**
+ * Store a pending AI interaction for a user (used during model selection flow).
+ * In sharded mode, this is stored in Redis so any shard can retrieve it.
+ * Falls back to in-memory if Redis is unavailable.
+ */
+async function setPendingInteraction(
+  userId: string,
+  message: unknown,
+  ttlMs: number = 5 * 60 * 1000
+): Promise<void> {
+  const client = await getRuntimeRedisClient();
+  const key = buildPrefixedKey(`ai:pending:${userId}`);
+
+  if (client) {
+    try {
+      await client.set(key, JSON.stringify(message), { PX: ttlMs });
+      return;
+    } catch (error) {
+      console.error("[runtimeRedis] setPendingInteraction failed, using memory fallback:", error);
+    }
+  }
+
+  // Fallback to in-memory
+  pendingInteractionsMemory[userId] = message;
+  setTimeout(() => {
+    delete pendingInteractionsMemory[userId];
+  }, ttlMs);
+}
+
+/**
+ * Retrieve a pending AI interaction for a user.
+ * Returns null if not found or expired.
+ */
+async function getPendingInteraction(userId: string): Promise<unknown | null> {
+  const client = await getRuntimeRedisClient();
+  const key = buildPrefixedKey(`ai:pending:${userId}`);
+
+  if (client) {
+    try {
+      const data = await client.get(key);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return null;
+    } catch (error) {
+      console.error("[runtimeRedis] getPendingInteraction failed, checking memory fallback:", error);
+    }
+  }
+
+  // Fallback to in-memory
+  return pendingInteractionsMemory[userId] || null;
+}
+
+/**
+ * Delete a pending AI interaction after it's been used.
+ */
+async function deletePendingInteraction(userId: string): Promise<void> {
+  const client = await getRuntimeRedisClient();
+  const key = buildPrefixedKey(`ai:pending:${userId}`);
+
+  if (client) {
+    try {
+      await client.del(key);
+      return;
+    } catch (error) {
+      console.error("[runtimeRedis] deletePendingInteraction failed:", error);
+    }
+  }
+
+  // Also clear from memory fallback
+  delete pendingInteractionsMemory[userId];
+}
+
+/**
+ * Check if a pending interaction exists for a user.
+ */
+async function hasPendingInteraction(userId: string): Promise<boolean> {
+  const client = await getRuntimeRedisClient();
+  const key = buildPrefixedKey(`ai:pending:${userId}`);
+
+  if (client) {
+    try {
+      const exists = await client.exists(key);
+      return exists === 1;
+    } catch (error) {
+      console.error("[runtimeRedis] hasPendingInteraction failed:", error);
+    }
+  }
+
+  return userId in pendingInteractionsMemory;
+}
+
 export {
   checkAndSetCommandCooldown,
   acquireDistributedLock,
   releaseDistributedLock,
   getShardId,
   isLeaderShard,
+  setPendingInteraction,
+  getPendingInteraction,
+  deletePendingInteraction,
+  hasPendingInteraction,
+  getRuntimeRedisClient,
+  buildPrefixedKey,
 };
