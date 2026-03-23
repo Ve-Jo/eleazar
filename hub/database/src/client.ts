@@ -185,13 +185,24 @@ import {
 // Load environment variables
 dotenv.config({ path: "../.env" });
 
-// Cache TTLs removed - Redis functionality disabled
+// Cache TTLs
+const CACHE_TTLS = {
+  default: 300, // 5 minutes
+  user: 600, // 10 minutes
+  guild: 900, // 15 minutes
+  crates: 1800, // 30 minutes
+  cooldowns: 60, // 1 minute
+  economy: 300, // 5 minutes
+  leaderboard: 120, // 2 minutes
+};
 
 class Database {
   constructor() {
     this.pingInterval = null;
     this.cleanupInterval = null;
     this.retentionDays = DEFAULT_RETENTION_DAYS;
+    this.redisClient = null;
+    this.redisConnected = false;
 
     // Set up Prisma client with correct configuration
     this.client = new PrismaClient({
@@ -204,9 +215,8 @@ class Database {
       },
     });
 
-    // Redis functionality completely disabled
-    this.redisClient = null;
-    console.log("Redis caching is completely disabled.");
+    // Initialize Redis client
+    this.initializeRedis();
 
     // Log connection status in production
     if (process.env.NODE_ENV === "production") {
@@ -1998,43 +2008,136 @@ class Database {
   }
   // #endregion Crates
 
-  // #region Cache Methods (Redis disabled - stub implementations)
+  // #region Cache Methods
   /**
-   * Get value from cache (Redis disabled - always returns null)
-   * @param {string} key
-   * @returns {Promise<null>}
+   * Initialize Redis connection
    */
-  async getFromCache(key) {
-    return getFromCacheHelper(key);
+  async initializeRedis() {
+    try {
+      const { createClient } = await import("redis");
+      
+      this.redisClient = createClient({
+        url: process.env.REDIS_URL || "redis://localhost:6379",
+      });
+
+      this.redisClient.on("error", (err) => {
+        console.error("[Redis] Error:", err);
+        this.redisConnected = false;
+      });
+
+      this.redisClient.on("connect", () => {
+        console.log("[Redis] Connected successfully");
+        this.redisConnected = true;
+      });
+
+      this.redisClient.on("disconnect", () => {
+        console.log("[Redis] Disconnected");
+        this.redisConnected = false;
+      });
+
+      await this.redisClient.connect();
+    } catch (error) {
+      console.error("[Redis] Failed to initialize:", error);
+      this.redisClient = null;
+      this.redisConnected = false;
+    }
   }
 
   /**
-   * Set cache value (Redis disabled - no-op)
+   * Get value from cache
+   * @param {string} key
+   * @returns {Promise<any>}
+   */
+  async getFromCache(key) {
+    if (!this.redisClient || !this.redisConnected) {
+      return null;
+    }
+
+    try {
+      const value = await this.redisClient.get(key);
+      return value ? JSON.parse(value) : null;
+    } catch (error) {
+      console.error("[Redis] Get error:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set cache value
    * @param {string} key
    * @param {any} value
    * @param {number|null} ttl
    * @returns {Promise<boolean>}
    */
   async setCache(key, value, ttl = null) {
-    return setCacheHelper(key, value, ttl);
+    if (!this.redisClient || !this.redisConnected) {
+      return false;
+    }
+
+    try {
+      const serializedValue = JSON.stringify(value);
+      const cacheTtl = ttl || CACHE_TTLS.default;
+      
+      if (cacheTtl > 0) {
+        await this.redisClient.setEx(key, cacheTtl, serializedValue);
+      } else {
+        await this.redisClient.set(key, serializedValue);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("[Redis] Set error:", error);
+      return false;
+    }
   }
 
   /**
-   * Invalidate cache keys (Redis disabled - no-op)
+   * Invalidate cache keys
    * @param {Array<string>} keys
    * @returns {Promise<boolean>}
    */
   async invalidateCache(keys) {
-    return invalidateCacheHelper(keys);
+    if (!this.redisClient || !this.redisConnected) {
+      return false;
+    }
+
+    try {
+      if (keys.length === 0) return true;
+      
+      // Filter out undefined keys and ensure all keys are strings
+      const validKeys = keys.filter(key => key != null);
+      if (validKeys.length === 0) return true;
+      
+      if (validKeys.length === 1) {
+        await this.redisClient.del(validKeys[0]);
+      } else {
+        await this.redisClient.del(validKeys);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("[Redis] Invalidate error:", error);
+      return false;
+    }
   }
 
   /**
-   * Delete cache key (Redis disabled - no-op)
+   * Delete cache key
    * @param {string} key
    * @returns {Promise<boolean>}
    */
   async deleteFromCache(key) {
-    return deleteFromCacheHelper(key);
+    if (!this.redisClient || !this.redisConnected) {
+      return false;
+    }
+
+    try {
+      await this.redisClient.del(key);
+      return true;
+    } catch (error) {
+      console.error("[Redis] Delete error:", error);
+      return false;
+    }
   }
   // #endregion Cache Methods
 }
