@@ -1,4 +1,5 @@
 import { testServerConnection } from "./musicHelpers.ts";
+import { getFreeNodeOptions } from "./musicFreeNodes.ts";
 
 type LavalinkServerConfig = {
   id: string;
@@ -52,6 +53,26 @@ function getPlayersIterable(players: ClientLike["lavalink"]["players"]): PlayerL
   return [];
 }
 
+async function getCombinedServerList(
+  configuredServers: LavalinkServerConfig[]
+): Promise<LavalinkServerConfig[]> {
+  const freeNodesEnabled = process.env.LAVALINK_FREE_NODES_ENABLED === "true";
+  if (!freeNodesEnabled) {
+    return configuredServers;
+  }
+
+  const freeNodes = await getFreeNodeOptions("v4", 5);
+  const freeServers: LavalinkServerConfig[] = freeNodes.map((node) => ({
+    id: node.id,
+    host: node.host,
+    port: node.port,
+    authorization: node.authorization,
+    secure: node.secure,
+  }));
+
+  return [...configuredServers, ...freeServers];
+}
+
 async function migratePlayersToNode(
   players: Iterable<PlayerLike>,
   newNode: LavalinkNodeLike
@@ -89,7 +110,10 @@ async function handleNodeDisconnectCore(
       (player) => player.node.id === disconnectedNode.id
     );
 
-    for (const server of servers) {
+    // Combine configured servers with free nodes
+    const combinedServers = await getCombinedServerList(servers);
+
+    for (const server of combinedServers) {
       if (server.id === disconnectedNode.id) {
         continue;
       }
@@ -105,7 +129,7 @@ async function handleNodeDisconnectCore(
       return true;
     }
 
-    console.error("No alternative servers available!");
+    console.error("No alternative servers available (configured or free)!");
     return false;
   } catch (error) {
     console.error("Error handling node disconnect:", error);
@@ -126,7 +150,10 @@ async function handleNodeErrorCore(
   const allPlayers = getPlayersIterable(client.lavalink.players);
   const affectedPlayers = allPlayers.filter((player) => player.node.id === node.id);
 
-  for (const server of servers) {
+  // Combine configured servers with free nodes
+  const combinedServers = await getCombinedServerList(servers);
+
+  for (const server of combinedServers) {
     if (server.id === node.id) {
       continue;
     }
@@ -172,8 +199,11 @@ async function runNodeHealthCheck(
       return;
     }
 
+    // Combine configured servers with free nodes
+    const combinedServers = await getCombinedServerList(servers);
+
     const healthResults = await Promise.all(
-      servers.map(async (server) => ({
+      combinedServers.map(async (server) => ({
         server,
         isWorking: await testServerConnection(server).catch(() => false),
       }))
@@ -184,7 +214,7 @@ async function runNodeHealthCheck(
       .map((result) => result.server);
 
     if (workingServers.length === 0) {
-      console.log("No working Lavalink servers found during health check");
+      console.log("No working Lavalink servers found during health check (configured or free)");
       return;
     }
 
@@ -213,6 +243,7 @@ async function runNodeHealthCheck(
 export {
   getPlayersIterable,
   migratePlayersToNode,
+  getCombinedServerList,
   handleNodeDisconnectCore,
   handleNodeErrorCore,
   runNodeHealthCheck,

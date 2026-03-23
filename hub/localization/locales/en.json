@@ -483,7 +483,7 @@
         "too_long": "The transcription is too long to display. Here's a text file with the result:",
         "no_attachment": "Please provide an audio file to transcribe.",
         "invalid_attachment_type": "The provided file is not a supported audio format. Supported formats: {{accepted_types}}. Received: {{received_type}}",
-        "file_too_large": "The audio file is too large (max 25MB).",
+        "file_too_large": "The audio file is too large (max 50MB).",
         "downloading": "Downloading audio file...",
         "transcribing": "Transcribing audio...",
         "result": "Transcription:\n\n{{transcription}}"

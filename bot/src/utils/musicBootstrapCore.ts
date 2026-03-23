@@ -9,6 +9,7 @@ import {
   debounce,
   testServerConnection,
 } from "./musicHelpers.ts";
+import { getFreeNodeOptions } from "./musicFreeNodes.ts";
 import { loadMusicPlayersCore } from "./musicRestoreCore.ts";
 import { handlePlayerUpdateCore, handleTrackErrorCore } from "./musicEventCore.ts";
 import {
@@ -91,7 +92,29 @@ async function findWorkingServer(): Promise<LavalinkNodeOptions> {
     console.log(`Server ${server.id} is not responding`);
   }
 
-  throw new Error("No working Lavalink servers found!");
+  // Fallback to free nodes if no configured servers work
+  console.log("No configured Lavalink servers available, trying free nodes...");
+  const freeNodes = await getFreeNodeOptions("v4", 5);
+
+  for (const node of freeNodes) {
+    const server: LavalinkNodeOptions = {
+      id: node.id,
+      host: node.host,
+      port: node.port,
+      authorization: node.authorization,
+      secure: node.secure,
+    };
+
+    console.log(`Testing free node ${server.id}...`);
+    const isWorking = await testServerConnection(server);
+    if (isWorking) {
+      console.log(`Free node ${server.id} is available`);
+      return server;
+    }
+    console.log(`Free node ${server.id} is not responding`);
+  }
+
+  throw new Error("No working Lavalink servers found (configured or free)!");
 }
 
 function registerRawVoiceQueue(client: ClientLike): Map<string, any> {
