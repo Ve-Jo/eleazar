@@ -53,7 +53,7 @@ const Level2 = (props) => {
   const translations = Object.entries(Level2.localization_strings).reduce(
     (acc, [key, translations]) => ({
       ...acc,
-      [key]: translations[i18n.getLocale()] || translations.en,
+      [key]: translations[i18n?.getLocale?.()] || translations.en,
     }),
     {}
   );

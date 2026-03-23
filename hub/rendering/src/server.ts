@@ -83,7 +83,10 @@ app.post("/generate", async (req: RequestLike, res: ResponseLike) => {
 
     // Create i18n mock object
     const i18n = {
-      getLocale: () => locale || "en",
+      getLocale: () => {
+        console.log(`[Rendering] i18n.getLocale() called, returning: "${locale || "en"}"`);
+        return locale || "en";
+      },
       __: (key: string, ..._args: unknown[]) => {
         // Simple fallback - in production you might want to load actual translations
         return key;
@@ -95,6 +98,7 @@ app.post("/generate", async (req: RequestLike, res: ResponseLike) => {
       props || {},
       scaling || { image: 1, emoji: 1, debug: false },
       i18n,
+      locale,
       options || {}
     );
 

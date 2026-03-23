@@ -1374,6 +1374,7 @@ async function performActualGenerationLogic(
   props,
   scaling,
   i18n,
+  locale,
   options = {}
 ) {
   // This function contains the original core logic of generateImage
@@ -1492,12 +1493,11 @@ async function performActualGenerationLogic(
     const targetHeight = Math.round(dimensions.height * scaling.image);
     // --- End Dimension Calculation ---
 
-    const attachI18nProps = (targetProps) => {
-      if (targetProps.locale && i18n) {
-        if (typeof i18n.setLocale === "function") {
-          i18n.setLocale(targetProps.locale);
-        }
+    const attachI18nProps = (targetProps, locale) => {
+      // Always use the rendering service's i18n object if available
+      if (i18n) {
         targetProps.i18n = i18n;
+        targetProps.locale = locale; // Add locale for components that need it directly
         targetProps.t = async (key) => {
           if (typeof i18n.__ === "function") {
             return await i18n.__(`components.${component}.${key}`);
@@ -1506,7 +1506,7 @@ async function performActualGenerationLogic(
         };
         if (PERF_LOGGING) {
           console.log(
-            `Using i18n with locale ${targetProps.locale} for component ${component}`
+            `Using rendering service i18n with locale ${locale} for component ${component}`
           );
         }
       } else if (targetProps.locale) {
@@ -1523,7 +1523,7 @@ async function performActualGenerationLogic(
     if (scaling.debug) {
       takumiProps.debug = scaling.debug;
     }
-    attachI18nProps(takumiProps);
+    attachI18nProps(takumiProps, locale);
 
     // --- Image Generation (uses dimensions and formattedProps) ---
     pngBuffer = await renderWithTakumi({
@@ -1655,6 +1655,7 @@ export async function generateImage(
   props = {},
   scaling = { image: 1, emoji: 1, debug: false },
   i18n,
+  locale,
   options = {} // Add options object
 ) {
   startPerf(`[imageGenerator] total-generation`);
@@ -1676,6 +1677,7 @@ export async function generateImage(
         props,
         scaling,
         i18n,
+        locale,
         options
       );
       await cleanup(false);
@@ -1723,7 +1725,7 @@ export async function generateImage(
   const elapsed = now - state.lastExecuted;
 
   // Store the latest arguments regardless
-  state.latestArgs = { component, props, scaling, i18n, options };
+  state.latestArgs = { component, props, scaling, i18n, locale, options };
 
   // --- Can Execute Immediately? (Based on THROTTLE_INTERVAL) ---
   if (elapsed >= state.currentThrottleMs && !state.isQueued) {
@@ -1741,6 +1743,7 @@ export async function generateImage(
         state.latestArgs.props,
         state.latestArgs.scaling,
         state.latestArgs.i18n,
+        state.latestArgs.locale,
         state.latestArgs.options
       );
       state.lastExecuted = Date.now();

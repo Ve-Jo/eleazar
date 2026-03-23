@@ -35,6 +35,8 @@ const CratesDisplay = (props) => {
     {}
   );
 
+  console.log(`[CratesDisplay] Using locale: "${locale}", translations keys:`, Object.keys(translations));
+
   const formatCooldown = (ms) => {
     const totalSeconds = Math.floor(ms / 1000);
     const hours = Math.floor(totalSeconds / 3600);
