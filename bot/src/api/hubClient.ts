@@ -8,6 +8,10 @@ import {
   DEFAULT_SERVICE_PORTS,
   DEFAULT_SERVICE_URLS,
 } from "../../../hub/shared/src/serviceConfig.ts";
+import {
+  recordRouteCall,
+  extractRouteFromUrl,
+} from "../services/metrics.ts";
 import type {
   AddBalanceRequest,
   AddGameXpRequest,
@@ -428,36 +432,118 @@ function normalizeTranslationResponse(
   return { translation: typeof value === "string" ? value : "" };
 }
 
-// Helper function for API requests
+// Helper function for API requests with bounded retry/backoff
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 100;
+const MAX_DELAY_MS = 2000;
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
+
+function calculateBackoff(attempt: number): number {
+  // Exponential backoff with jitter: min(2^attempt * base, max) + random jitter
+  const exponentialDelay = Math.min(Math.pow(2, attempt) * BASE_DELAY_MS, MAX_DELAY_MS);
+  const jitter = Math.random() * 0.3 * exponentialDelay; // 0-30% jitter
+  return exponentialDelay + jitter;
+}
+
+function isRetryableError(error: unknown, statusCode?: number): boolean {
+  // Retry on specific HTTP status codes
+  if (statusCode && RETRYABLE_STATUS_CODES.has(statusCode)) {
+    return true;
+  }
+  // Retry on network errors (ECONNRESET, ETIMEDOUT, ENOTFOUND, etc.)
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("econnreset") ||
+      message.includes("etimedout") ||
+      message.includes("enotfound") ||
+      message.includes("econnrefused") ||
+      message.includes("socket hang up") ||
+      message.includes("network")
+    );
+  }
+  return false;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function apiRequest<
   TResponse,
   TBody extends NodeFetchRequestInit["body"] = NodeFetchRequestInit["body"]
 >(
   url: string,
-  options: ApiRequestOptions<TBody> = {}
+  options: ApiRequestOptions<TBody> = {},
+  retryConfig: { maxRetries?: number; isRetryable?: (error: unknown, statusCode?: number) => boolean } = {}
 ): Promise<TResponse> {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-      agent: options.agent ?? resolveFetchAgent(url),
-      ...options,
-    });
+  const maxRetries = retryConfig.maxRetries ?? MAX_RETRIES;
+  const retryableCheck = retryConfig.isRetryable ?? isRetryableError;
+  
+  let lastError: Error | null = null;
+  let lastStatusCode: number | undefined;
 
-    if (!response.ok) {
-      throw new Error(
-        `API request failed: ${response.status} ${response.statusText}`
-      );
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const startTime = Date.now();
+    const route = extractRouteFromUrl(url);
+    const method = options.method || "GET";
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        agent: options.agent ?? resolveFetchAgent(url),
+        ...options,
+      });
+
+      if (!response.ok) {
+        lastStatusCode = response.status;
+        
+        // Check if we should retry
+        if (attempt < maxRetries && retryableCheck(null, response.status)) {
+          const backoff = calculateBackoff(attempt);
+          console.warn(
+            `[hubClient] Request to ${route} failed with ${response.status}, retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})`
+          );
+          await sleep(backoff);
+          continue;
+        }
+
+        const latency = Date.now() - startTime;
+        recordRouteCall(route, method, latency, true);
+        throw new Error(
+          `API request failed: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = (await response.json()) as TResponse;
+      const latency = Date.now() - startTime;
+      recordRouteCall(route, method, latency, false);
+      return parseNumericStrings(data);
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const latency = Date.now() - startTime;
+      
+      // Check if we should retry
+      if (attempt < maxRetries && retryableCheck(error, lastStatusCode)) {
+        const backoff = calculateBackoff(attempt);
+        console.warn(
+          `[hubClient] Request to ${route} failed with error: ${lastError.message}, retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await sleep(backoff);
+        continue;
+      }
+      
+      recordRouteCall(route, method, latency, true);
+      console.error(`API request error for ${url}:`, error);
+      throw error;
     }
-
-    const data = (await response.json()) as TResponse;
-    return parseNumericStrings(data);
-  } catch (error: unknown) {
-    console.error(`API request error for ${url}:`, error);
-    throw error;
   }
+
+  // All retries exhausted
+  throw lastError || new Error(`API request failed after ${maxRetries} retries`);
 }
 
 // Hub API Client Class
@@ -531,6 +617,70 @@ class HubClient {
     return await apiRequest<HubSuccessResponse>(`${this.databaseUrl}/users/${guildId}/${userId}`, {
       method: "DELETE",
     });
+  }
+
+  // Batch API methods for high-frequency operations
+  async batchGetUsers(
+    requests: Array<{ guildId: string; userId: string }>
+  ): Promise<Array<{ guildId: string; userId: string; user: HubUserRecord | null; error?: string }>> {
+    const results = await Promise.all(
+      requests.map(async ({ guildId, userId }) => {
+        try {
+          const user = await this.getUser(guildId, userId);
+          return { guildId, userId, user };
+        } catch (error) {
+          return {
+            guildId,
+            userId,
+            user: null,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      })
+    );
+    return results;
+  }
+
+  async batchGetBalances(
+    requests: Array<{ guildId: string; userId: string }>
+  ): Promise<Array<{ guildId: string; userId: string; balance: BalanceResponse | null; error?: string }>> {
+    const results = await Promise.all(
+      requests.map(async ({ guildId, userId }) => {
+        try {
+          const balance = await this.getBalance(guildId, userId);
+          return { guildId, userId, balance };
+        } catch (error) {
+          return {
+            guildId,
+            userId,
+            balance: null,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      })
+    );
+    return results;
+  }
+
+  async batchEnsureUsers(
+    requests: Array<{ guildId: string; userId: string }>
+  ): Promise<Array<{ guildId: string; userId: string; user: HubUserRecord | null; error?: string }>> {
+    const results = await Promise.all(
+      requests.map(async ({ guildId, userId }) => {
+        try {
+          const user = await this.ensureUser(guildId, userId);
+          return { guildId, userId, user };
+        } catch (error) {
+          return {
+            guildId,
+            userId,
+            user: null,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      })
+    );
+    return results;
   }
 
   // Personalization API methods
@@ -1715,8 +1865,14 @@ class HubClient {
     category: string,
     name: string,
     localizations: LocalizationTree,
-    save = false
-  ): Promise<HubSuccessResponse> {
+    save = false,
+    isLeader = true
+  ): Promise<HubSuccessResponse | { skipped: true; reason: string }> {
+    // Skip registration on non-leader shards to reduce startup pressure
+    if (!isLeader) {
+      return { skipped: true, reason: "Localization sync skipped on non-leader shard" };
+    }
+
     // Invalidate caches for safety when registry updates
     this._translationCache.clear();
     this._translationGroupCache.clear();
