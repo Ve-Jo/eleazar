@@ -1,0 +1,29 @@
+{
+  "name": "eleazar-hub-activities",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"bun run server.ts\" \"bun run --cwd client dev\"",
+    "dev:tunnel": "bash ./scripts/dev-static-with-tunnel.sh",
+    "dev:tunnel:vite": "bash ./scripts/dev-with-tunnel.sh",
+    "start": "bun run server.ts",
+    "build": "bun run --cwd client build",
+    "install:cloudflared": "bash ./scripts/install-cloudflared.sh",
+    "tunnel": "bash ./scripts/tunnel.sh",
+    "tunnel:ngrok:standalone": "ACTIVITY_TUNNEL_PROVIDER=ngrok ACTIVITY_TUNNEL_PORT=3007 bash ./scripts/tunnel.sh",
+    "tunnel:quick:standalone": "ACTIVITY_TUNNEL_PROVIDER=cloudflared_quick ACTIVITY_TUNNEL_PORT=3007 bash ./scripts/tunnel.sh",
+    "tunnel:cloudflare:setup": "bash ./scripts/setup-cloudflare-named-tunnel.sh",
+    "tunnel:info": "bash ./scripts/print-tunnel-config.sh",
+    "typecheck": "tsc -p tsconfig.json && bun run --cwd client typecheck",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "concurrently": "^8.2.0"
+  }
+}
