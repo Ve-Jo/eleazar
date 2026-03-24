@@ -5,7 +5,7 @@ const Game2048 = (props) => {
   const isStaticLayer = renderLayer === "static";
   const isDynamicLayer = renderLayer === "dynamic";
 
-  let { grid, score, earning, interaction, i18n, database, coloring } = props;
+  let { grid, score, earning, interaction, i18n, database, coloring, gameOver = false } = props;
   const renderBackend = props.renderBackend || "satori";
 
   if (!grid) {
@@ -126,6 +126,7 @@ const Game2048 = (props) => {
           earning={earning}
           balance={database?.economy?.balance || 0}
           increaseAmount={earning}
+          addIncreaseToBalance={!gameOver}
           levelProgress={
             database?.levelProgress || {
               chat: database?.levelProgress?.chat,

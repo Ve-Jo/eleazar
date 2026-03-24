@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
+import { getEconomyTuningConfig } from "../../../../hub/shared/src/economyTuning.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import type { UserLike, GuildLike, TranslatorLike, MessageLike, InteractionLike } from "../../types/index.ts";
@@ -66,6 +67,9 @@ const normalizeLocale = (locale: unknown, fallback = "en"): string => {
 
 const upgradesConfig = UPGRADES as Record<string, UpgradeConfig>;
 const MINUTE_MS = 60 * 1000;
+const BANK_BASE_CYCLE_MINUTES = (2 * 60 * 60 * 1000) / MINUTE_MS;
+const BANK_MAX_CYCLE_MINUTES = (7 * 24 * 60 * 60 * 1000) / MINUTE_MS;
+const BANK_MAX_BONUS_MINUTES = BANK_MAX_CYCLE_MINUTES - BANK_BASE_CYCLE_MINUTES;
 
 function formatEffectNumber(value: number): string {
   if (!Number.isFinite(value)) {
@@ -107,16 +111,59 @@ function getUpgradeEffectDetails(
   config: UpgradeConfig,
   currentLevel: number
 ): Pick<UpgradeInfoEntry, "effectPerLevel" | "effectUnit" | "currentEffect" | "nextEffect" | "deltaEffect"> {
-  const nextLevel = currentLevel + 1;
+  const tuning = getEconomyTuningConfig();
+  const safeCurrentLevel = Math.max(1, Math.floor(currentLevel || 1));
+  const nextLevel = safeCurrentLevel + 1;
   const minuteKeys = new Set(["crime_mastery", "bank_vault"]);
   const usesMinutes = minuteKeys.has(key);
   const effectUnit: "%" | "m" = usesMinutes ? "m" : "%";
-  const baseEffect = usesMinutes
-    ? Number(config.effectValue || 0) / MINUTE_MS
-    : Number((config.effectMultiplier ?? config.effectValue ?? 0) * 100);
-  const effectPerLevel = Math.max(0, usesMinutes ? Math.floor(baseEffect) : Math.round(baseEffect));
-  const currentEffect = effectPerLevel * currentLevel;
-  const nextEffect = effectPerLevel * nextLevel;
+
+  if (usesMinutes) {
+    const baseEffect = Number(config.effectValue || 0) / MINUTE_MS;
+    const effectPerLevel = Math.max(0, Math.floor(baseEffect));
+
+    let currentEffect = Math.max(0, safeCurrentLevel - 1) * effectPerLevel;
+    let nextEffect = Math.max(0, nextLevel - 1) * effectPerLevel;
+
+    if (key === "bank_vault") {
+      currentEffect = Math.min(BANK_MAX_BONUS_MINUTES, currentEffect);
+      nextEffect = Math.min(BANK_MAX_BONUS_MINUTES, nextEffect);
+    } else if (key === "crime_mastery") {
+      const crimeBaseCooldownMinutes = Number((2 * 60 * 60 * 1000) / MINUTE_MS);
+      const minCrimeCooldownMinutes = Math.ceil(
+        Math.max(
+          5 * MINUTE_MS,
+          Number(tuning.guardrails.minCrimeCooldownMs || 45 * MINUTE_MS)
+        ) / MINUTE_MS
+      );
+      const maxCrimeReductionMinutes = Math.max(
+        0,
+        crimeBaseCooldownMinutes - minCrimeCooldownMinutes
+      );
+      currentEffect = Math.min(maxCrimeReductionMinutes, currentEffect);
+      nextEffect = Math.min(maxCrimeReductionMinutes, nextEffect);
+    }
+
+    const deltaEffect = Math.max(0, nextEffect - currentEffect);
+    return { effectPerLevel, effectUnit, currentEffect, nextEffect, deltaEffect };
+  }
+
+  const baseEffect = Number((config.effectMultiplier ?? config.effectValue ?? 0) * 100);
+  const effectPerLevel = Math.max(0, Math.round(baseEffect));
+  const maxTimeWizardReductionPercent = Math.round(
+    Math.max(0, Number(tuning.guardrails.maxTimeWizardReductionPercent || 0.45)) * 100
+  );
+  const capByUpgrade: Record<string, number> = {
+    time_wizard: maxTimeWizardReductionPercent,
+    vault_guard: 80,
+  };
+  const cap = capByUpgrade[key];
+  const rawCurrentEffect = Math.max(0, safeCurrentLevel - 1) * effectPerLevel;
+  const rawNextEffect = Math.max(0, nextLevel - 1) * effectPerLevel;
+  const currentEffect =
+    typeof cap === "number" ? Math.min(cap, rawCurrentEffect) : rawCurrentEffect;
+  const nextEffect =
+    typeof cap === "number" ? Math.min(cap, rawNextEffect) : rawNextEffect;
   const deltaEffect = Math.max(0, nextEffect - currentEffect);
 
   return { effectPerLevel, effectUnit, currentEffect, nextEffect, deltaEffect };
@@ -326,9 +373,9 @@ const command = {
       daily_bonus: {
         name: { en: "Daily Bonus", ru: "Ежедн. Бонус", uk: "Щоденний Бонус" },
         description: {
-          en: "Boosts your daily reward claim by {{effect}}%. Each level adds +15% to your daily coins. Works with /daily command.",
-          ru: "Увеличивает ежедневную награду на {{effect}}%. Каждый уровень добавляет +15% к ежедневным монетам. Работает с командой /daily.",
-          uk: "Збільшує щоденну нагороду на {{effect}}%. Кожен рівень додає +15% до щоденних монет. Працює з командою /daily.",
+          en: "Boosts daily crate rewards by {{effect}}%. Each level adds +15% to /economy cases daily coins.",
+          ru: "Увеличивает награды ежедневного кейса на {{effect}}%. Каждый уровень добавляет +15% к монетам из /economy cases daily.",
+          uk: "Збільшує нагороди щоденного кейса на {{effect}}%. Кожен рівень додає +15% до монет з /economy cases daily.",
         },
       },
       games_earning: {
@@ -350,9 +397,9 @@ const command = {
       time_wizard: {
         name: { en: "Time Wizard", ru: "Повелитель Времени", uk: "Чарівник Часу" },
         description: {
-          en: "Bend time for daily/weekly rewards! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /daily and /weekly.",
-          ru: "Ускоряйте время для daily/weekly наград! Снижает перезарядки на {{effect}}%. Каждый уровень = -1% времени ожидания для /daily и /weekly.",
-          uk: "Прискорюйте час для daily/weekly нагород! Знижує перезарядки на {{effect}}%. Кожен рівень = -1% часу очікування для /daily та /weekly.",
+          en: "Bend time for daily/weekly crates! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /economy cases daily and weekly (max 50%).",
+          ru: "Ускоряйте время для daily/weekly кейсов! Снижает перезарядки на {{effect}}%. Каждый уровень = -1% времени ожидания для /economy cases daily и weekly (макс. 50%).",
+          uk: "Прискорюйте час для daily/weekly кейсів! Знижує перезарядки на {{effect}}%. Кожен рівень = -1% часу очікування для /economy cases daily та weekly (макс. 50%).",
         },
       },
       vault_guard: {
@@ -594,8 +641,13 @@ const command = {
             .setLabel(String(await i18n.__("commands.economy.shop.revertButton")))
             .setDisabled(true);
         } else {
-          const currentPurchasePrice = currentUpgradeEntry?.basePrice || 0;
-          const refundAmount = Math.floor(currentPurchasePrice * 0.85);
+          const currentConfig = currentUpgradeType
+            ? getUpgradeConfig(currentUpgradeType)
+            : null;
+          const previousTierPrice = currentConfig
+            ? calculateUpgradePrice(currentConfig, Math.max(1, currentLevel - 1))
+            : 0;
+          const refundAmount = Math.floor(previousTierPrice * 0.85);
           revertButton
             .setLabel(
               String(

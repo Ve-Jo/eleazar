@@ -123,11 +123,34 @@ router.post(
         });
       }
 
-      const vault = await Database.addToGuildVault(guildId, amount, userId, "manual");
+      if (amount.lessThanOrEqualTo(0)) {
+        return res.status(400).json({ error: "amount must be greater than zero" });
+      }
+
+      const currentVault = (await Database.getOrCreateGuildVault(guildId)) as GuildVaultRecord;
+      const currentVaultBalance = new Prisma.Decimal(
+        typeof currentVault.balance === "number" || typeof currentVault.balance === "string"
+          ? currentVault.balance
+          : 0
+      );
+      if (currentVaultBalance.lessThanOrEqualTo(0)) {
+        return res.status(400).json({ error: "Guild vault has no funds to distribute" });
+      }
+
+      const distributionAmount = Prisma.Decimal.min(amount, currentVaultBalance);
+      await Database.distributeGuildVaultFunds(
+        (Database as unknown as { client: unknown }).client,
+        guildId,
+        userId,
+        distributionAmount,
+        "manual"
+      );
+      const vault = await Database.getOrCreateGuildVault(guildId);
 
       res.json({
         success: true,
         message: "Manual distribution triggered successfully",
+        distributedAmount: distributionAmount.toString(),
         vault: serializeWithBigInt(vault ?? {}),
       });
     } catch (error) {

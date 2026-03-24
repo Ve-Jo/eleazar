@@ -31,6 +31,29 @@ const game_info = {
   description: "Trade crypto futures with leverage (Demo)", // Default description
 };
 
+const MAX_CRYPTO_BALANCE_MUTATION = 1_000_000;
+
+function validateCryptoBalanceMutation(amount, context, guildId, userId) {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount)) {
+    throw new Error(`Invalid balance mutation amount in ${context}`);
+  }
+
+  if (Math.abs(numericAmount) > MAX_CRYPTO_BALANCE_MUTATION) {
+    console.warn("[Crypto2] Blocked oversized balance mutation", {
+      guildId,
+      userId,
+      context,
+      amount: numericAmount,
+      threshold: MAX_CRYPTO_BALANCE_MUTATION,
+      at: new Date().toISOString(),
+    });
+    throw new Error("Balance mutation exceeds safety threshold");
+  }
+
+  return numericAmount;
+}
+
 // --- Localization Strings ---
 const localization_strings = {
   name: {
@@ -1718,10 +1741,16 @@ function setupGameInteractionCollector(
 
                 // 6. Create Position in DB and Update Balance (Transaction)
                 // Use hub client for balance update and position creation
+                const openPositionDelta = validateCryptoBalanceMutation(
+                  -stakeDecimal.toNumber(),
+                  "open_position",
+                  guildId,
+                  userId
+                );
                 await hubClient.addBalance(
                   guildId,
                   userId,
-                  -stakeDecimal.toNumber(),
+                  openPositionDelta,
                 );
                 await hubClient.createCryptoPosition(
                   guildId,
@@ -1839,12 +1868,18 @@ function setupGameInteractionCollector(
               .dividedBy(position.leverage);
 
             const amountToAddBack = originalStake.plus(pnlAmount);
+            const closePositionDelta = validateCryptoBalanceMutation(
+              amountToAddBack.toNumber(),
+              "close_position",
+              guildId,
+              userId
+            );
 
             // Use hub client for balance update and position deletion
             await hubClient.addBalance(
               guildId,
               userId,
-              amountToAddBack.toNumber(),
+              closePositionDelta,
             );
             await hubClient.deleteCryptoPosition(positionId);
 
@@ -2560,10 +2595,16 @@ function setupGameInteractionCollector(
 
                   // 6. Create Position in DB and Update Balance (Transaction)
                   // Use hub client for balance update and position creation
+                  const openCoinSelectionDelta = validateCryptoBalanceMutation(
+                    -stakeDecimalCoin.toNumber(),
+                    "open_position_coin_selection",
+                    guildId,
+                    userId
+                  );
                   await hubClient.addBalance(
                     guildId,
                     userId,
-                    -stakeDecimalCoin.toNumber(),
+                    openCoinSelectionDelta,
                   );
                   await hubClient.createCryptoPosition(
                     guildId,

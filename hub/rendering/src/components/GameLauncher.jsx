@@ -1,6 +1,13 @@
 import InfoRectangle from "./unified/InfoRectangle.jsx";
 import Banknotes from "./unified/Banknotes.jsx";
 
+const SOFT_LIMIT_HALF_RATE_GAMES = new Set(["2048", "snake"]);
+const RISKY_HARD_LIMIT_GAMES = new Set(["coinflip", "tower"]);
+const NO_DAILY_LIMIT_GAMES = new Set(["crypto2"]);
+const MAX_VISIBLE_GAMES_PER_CATEGORY = 4;
+
+const normalizeGameId = (gameId) => String(gameId || "").trim().toLowerCase();
+
 const GameLauncher = (props) => {
   const {
     interaction,
@@ -12,7 +19,7 @@ const GameLauncher = (props) => {
     highlightedCategory = 0,
     gameDailyStatus = null,
     width = 600,
-    height = 650,
+    height = 725,
     gameStats = {
       2048: { highScore: 0 },
       snake: { highScore: 0 },
@@ -111,6 +118,10 @@ const GameLauncher = (props) => {
     Math.max(0, selectedCategoryGames.length - 1)
   );
   const selectedGameData = selectedCategoryGames[safeGameIndex] || null;
+  const selectedGameId = normalizeGameId(selectedGameData?.id);
+  const isNoDailyLimitGame = NO_DAILY_LIMIT_GAMES.has(selectedGameId);
+  const isRiskyHardLimitGame = RISKY_HARD_LIMIT_GAMES.has(selectedGameId);
+  const isSoftLimitHalfRateGame = SOFT_LIMIT_HALF_RATE_GAMES.has(selectedGameId);
   const selectedGameTitle =
     typeof selectedGameData?.title === "object"
       ? selectedGameData?.title?.translation || selectedGameData?.title?.en || selectedGameData?.id || "-"
@@ -123,8 +134,48 @@ const GameLauncher = (props) => {
   const earnedToday = Number(gameDailyStatus?.earnedToday || 0);
   const remainingToday = Number(gameDailyStatus?.remainingToday || 0);
   const upgradeLevel = Number(gameDailyStatus?.upgradeLevel || 1);
-  const capProgress = cap > 0 ? Math.min(100, Math.round((earnedToday / cap) * 100)) : 0;
   const formatAmount = (value) => (Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1));
+  const capProgress = isNoDailyLimitGame
+    ? 100
+    : cap > 0
+    ? Math.min(100, Math.round((earnedToday / cap) * 100))
+    : 0;
+  const displayCapValue = isNoDailyLimitGame ? "∞" : cap.toFixed(0);
+  const displayRemainingValue = isNoDailyLimitGame ? "∞" : formatAmount(remainingToday);
+  const capProgressLabel = isNoDailyLimitGame
+    ? translations.noDailyCapProgress || "No cap"
+    : `${capProgress}%`;
+  const capReached = !isNoDailyLimitGame && remainingToday <= 0;
+  let limitPolicyText = translations.standardCapInfo || "Standard daily cap applies.";
+  let limitPolicyColor = secondaryTextColor;
+  if (isNoDailyLimitGame) {
+    limitPolicyText = translations.noDailyLimitInfo || "No daily limit for this game.";
+    limitPolicyColor = "#6df7a7";
+  } else if (isRiskyHardLimitGame) {
+    if (capReached) {
+      limitPolicyText =
+        translations.riskyCapReachedLock ||
+        "Daily limit reached: this risky game is locked until reset.";
+      limitPolicyColor = "#ff8c8c";
+    } else {
+      limitPolicyText =
+        translations.riskyCapInfo ||
+        "Risky game: locks once remaining daily limit reaches zero.";
+      limitPolicyColor = "#ffd381";
+    }
+  } else if (isSoftLimitHalfRateGame) {
+    if (capReached) {
+      limitPolicyText =
+        translations.softCapReachedHalf ||
+        "Daily cap reached: you can still play for 50% coin payouts.";
+      limitPolicyColor = "#6df7a7";
+    } else {
+      limitPolicyText =
+        translations.softCapInfo ||
+        "After daily cap, this game keeps running with 50% coin payouts.";
+      limitPolicyColor = "#8ee7ff";
+    }
+  }
   const displayName = interaction?.user?.displayName || interaction?.user?.username || "Player";
 
   const renderGameCard = (game, gameIndex, categoryIndex) => {
@@ -204,6 +255,163 @@ const GameLauncher = (props) => {
           <div style={{ fontSize: "11px", color: secondaryTextColor, display: "flex" }}>
             {translations.highScore || "Record"}: {highScore}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const getVisibleCategoryWindow = (categoryGames, selectedIndex) => {
+    if (!Array.isArray(categoryGames) || categoryGames.length === 0) {
+      return {
+        games: [],
+        startIndex: 0,
+        endIndex: 0,
+      };
+    }
+
+    if (categoryGames.length <= MAX_VISIBLE_GAMES_PER_CATEGORY) {
+      return {
+        games: categoryGames,
+        startIndex: 0,
+        endIndex: categoryGames.length,
+      };
+    }
+
+    const windowSize = Math.min(MAX_VISIBLE_GAMES_PER_CATEGORY, categoryGames.length);
+    const maxStart = Math.max(0, categoryGames.length - windowSize);
+    const centeredStart = Math.max(0, selectedIndex - Math.floor(windowSize / 2));
+    const startIndex = Math.min(centeredStart, maxStart);
+    const endIndex = Math.min(categoryGames.length, startIndex + windowSize);
+
+    return {
+      games: categoryGames.slice(startIndex, endIndex),
+      startIndex,
+      endIndex,
+    };
+  };
+
+  const focusedCategoryWindow = getVisibleCategoryWindow(
+    selectedCategoryGames,
+    safeGameIndex
+  );
+  const focusedVisibleGames = focusedCategoryWindow.games;
+  const previousCategoryEntry =
+    safeCategoryIndex > 0 ? categoryEntries[safeCategoryIndex - 1] : null;
+  const nextCategoryEntry =
+    safeCategoryIndex < categoryEntries.length - 1
+      ? categoryEntries[safeCategoryIndex + 1]
+      : null;
+
+  const renderCategoryPreview = (entry, direction) => {
+    if (!entry) {
+      return null;
+    }
+
+    const [categoryKey, categoryValue] = entry;
+    const previewGames = Array.isArray(categoryValue?.games_list)
+      ? categoryValue.games_list.slice(0, 2)
+      : [];
+
+    return (
+      <div
+        key={`${direction}-${categoryKey}`}
+        style={{
+          width: "96px",
+          minWidth: "96px",
+          borderRadius: "18px",
+          padding: "10px",
+          backgroundColor: "rgba(255,255,255,0.035)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          opacity: 0.56,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            minWidth: 0,
+          }}
+        >
+          <img
+            src={categoryValue?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+            alt={categoryKey}
+            style={{
+              width: "20px",
+              height: "20px",
+              borderRadius: "7px",
+              display: "flex",
+              flexShrink: 0,
+            }}
+          />
+          <div
+            style={{
+              fontSize: "10px",
+              fontWeight: 700,
+              color: secondaryTextColor,
+              display: "flex",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {categoryKey}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {previewGames.map((game) => (
+            <div
+              key={`${direction}-${game.id}`}
+              style={{
+                height: "46px",
+                borderRadius: "12px",
+                padding: "8px",
+                backgroundColor: "rgba(255,255,255,0.045)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxSizing: "border-box",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: "24px",
+                  minWidth: "24px",
+                  height: "24px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                }}
+              >
+                {game?.emoji || "🎮"}
+              </div>
+              <div
+                style={{
+                  fontSize: "10px",
+                  color: tertiaryTextColor,
+                  display: "flex",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {typeof game?.title === "object"
+                  ? game?.title?.translation || game?.title?.en || game?.id
+                  : game?.title || game?.id}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -359,7 +567,7 @@ const GameLauncher = (props) => {
                     {translations.dailyCapLabel || "Daily cap"}
                   </div>
                   <div style={{ fontSize: "22px", fontWeight: 700, color: textColor, display: "flex" }}>
-                    {cap.toFixed(0)}
+                    {displayCapValue}
                   </div>
                 </div>
               </div>
@@ -399,7 +607,7 @@ const GameLauncher = (props) => {
                     {translations.dailyCapProgress || "Daily cap progress"}
                   </div>
                   <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>
-                    {capProgress}%
+                    {capProgressLabel}
                   </div>
                 </div>
 
@@ -422,6 +630,27 @@ const GameLauncher = (props) => {
                       display: "flex",
                     }}
                   />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  marginTop: "10px",
+                  padding: "8px 10px",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em", display: "flex" }}>
+                  {translations.dailyPolicyLabel || "Daily rule"}
+                </div>
+                <div style={{ fontSize: "12px", color: limitPolicyColor, display: "flex", lineHeight: 1.25 }}>
+                  {limitPolicyText}
                 </div>
               </div>
 
@@ -450,7 +679,7 @@ const GameLauncher = (props) => {
                   iconMarginRight="6px"
                   title={translations.remainingToday || "Remaining today"}
                   titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
-                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{formatAmount(remainingToday)}</div>}
+                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{displayRemainingValue}</div>}
                 />
               </div>
             </div>
@@ -491,54 +720,56 @@ const GameLauncher = (props) => {
           <div
             style={{
               display: "flex",
-              gap: "14px",
-              overflow: "hidden",
-              alignItems: "stretch",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
-            {categoryEntries.map(([categoryKey, categoryValue], categoryIndex) => {
-              const categoryGames = Array.isArray(categoryValue?.games_list) ? categoryValue.games_list : [];
-              const active = categoryIndex === safeCategoryIndex;
+            <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
+              {focusedCategoryWindow.startIndex + 1}-{focusedCategoryWindow.endIndex} / {selectedCategoryGames.length || 0}
+            </div>
 
-              return (
-                <div
-                  key={categoryKey}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    minWidth: "0px",
-                    opacity: active ? 1 : 0.58,
-                    flex: categoryGames.length > 0 ? `0 0 ${Math.max(148, categoryGames.length * 136)}px` : "0 0 148px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-                    <img
-                      src={categoryValue?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
-                      alt={categoryKey}
-                      style={{ width: "24px", height: "24px", borderRadius: "8px", display: "flex" }}
-                    />
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        color: active ? textColor : secondaryTextColor,
-                        display: "flex",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {categoryKey}
-                    </div>
-                  </div>
+            {selectedCategoryGames.length > MAX_VISIBLE_GAMES_PER_CATEGORY ? (
+              <div style={{ fontSize: "12px", color: tertiaryTextColor, display: "flex" }}>
+                {translations.focusedWindowLabel || "Selection stays in view"}
+              </div>
+            ) : (
+              <div style={{ fontSize: "12px", color: tertiaryTextColor, display: "flex" }}>
+                {translations.focusedCategoryLabel || "Focused category"}
+              </div>
+            )}
+          </div>
 
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {categoryGames.map((game, gameIndex) => renderGameCard(game, gameIndex, categoryIndex))}
-                  </div>
-                </div>
-              );
-            })}
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "stretch",
+              minHeight: "124px",
+              overflow: "hidden",
+            }}
+          >
+            {renderCategoryPreview(previousCategoryEntry, "previous")}
+
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                display: "flex",
+                gap: "8px",
+                overflow: "hidden",
+                alignItems: "stretch",
+              }}
+            >
+              {focusedVisibleGames.map((game) => {
+                const originalGameIndex = selectedCategoryGames.findIndex(
+                  (entry) => entry?.id === game?.id
+                );
+                return renderGameCard(game, originalGameIndex, safeCategoryIndex);
+              })}
+            </div>
+
+            {renderCategoryPreview(nextCategoryEntry, "next")}
           </div>
         </div>
       </div>
@@ -548,7 +779,7 @@ const GameLauncher = (props) => {
 
 GameLauncher.dimensions = {
   width: 600,
-  height: 650,
+  height: 725,
 };
 
 // Static translations object
@@ -578,6 +809,16 @@ GameLauncher.localization_strings = {
     ru: "Выбранная игра",
     uk: "Обрана гра",
   },
+  focusedCategoryLabel: {
+    en: "Focused category",
+    ru: "Выбранная категория",
+    uk: "Обрана категорія",
+  },
+  focusedWindowLabel: {
+    en: "Selection stays in view",
+    ru: "Выбор всегда в видимой зоне",
+    uk: "Вибір завжди у видимій зоні",
+  },
   categoryLabel: {
     en: "Category",
     ru: "Категория",
@@ -597,6 +838,46 @@ GameLauncher.localization_strings = {
     en: "Daily cap progress",
     ru: "Прогресс дневного лимита",
     uk: "Прогрес денного ліміту",
+  },
+  noDailyCapProgress: {
+    en: "No cap",
+    ru: "Без лимита",
+    uk: "Без ліміту",
+  },
+  dailyPolicyLabel: {
+    en: "Daily rule",
+    ru: "Правило на день",
+    uk: "Правило на день",
+  },
+  noDailyLimitInfo: {
+    en: "No daily limit for this game.",
+    ru: "Для этой игры нет дневного лимита.",
+    uk: "Для цієї гри немає денного ліміту.",
+  },
+  riskyCapInfo: {
+    en: "Risky game: locks once remaining daily limit reaches zero.",
+    ru: "Риск-игра: блокируется, когда дневной лимит становится нулевым.",
+    uk: "Ризик-гра: блокується, коли денний ліміт стає нульовим.",
+  },
+  riskyCapReachedLock: {
+    en: "Daily limit reached: this risky game is locked until reset.",
+    ru: "Дневной лимит достигнут: эта риск-игра заблокирована до сброса.",
+    uk: "Денний ліміт досягнуто: ця ризик-гра заблокована до скидання.",
+  },
+  softCapInfo: {
+    en: "After daily cap, this game keeps running with 50% coin payouts.",
+    ru: "После дневного лимита игра продолжится с выплатой 50% монет.",
+    uk: "Після денного ліміту гра триває з виплатою 50% монет.",
+  },
+  softCapReachedHalf: {
+    en: "Daily cap reached: you can still play for 50% coin payouts.",
+    ru: "Дневной лимит достигнут: играть можно дальше за 50% выплат монет.",
+    uk: "Денний ліміт досягнуто: можна далі грати за 50% виплат монет.",
+  },
+  standardCapInfo: {
+    en: "Standard daily cap applies.",
+    ru: "Действует стандартный дневной лимит.",
+    uk: "Діє стандартний денний ліміт.",
   },
   earnedToday: {
     en: "Earned today",

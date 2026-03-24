@@ -256,13 +256,17 @@ const command = {
           .map((userData) => {
             let sortValue = 0;
             let displayValue = 0;
+            const bankDistributed = Number((userData.economy as Record<string, unknown> | undefined)?.bankDistributed || 0);
             switch (category) {
               case "season":
                 sortValue = Number(userData.Level?.seasonXp || userData.seasonXp || 0);
                 displayValue = sortValue;
                 break;
               case "total":
-                sortValue = Number(userData.economy?.balance || 0) + Number(userData.economy?.bankBalance || 0);
+                sortValue =
+                  Number(userData.economy?.balance || 0) +
+                  Number(userData.economy?.bankBalance || 0) +
+                  bankDistributed;
                 displayValue = sortValue;
                 break;
               case "balance":
@@ -270,7 +274,7 @@ const command = {
                 displayValue = sortValue;
                 break;
               case "bank":
-                sortValue = Number(userData.economy?.bankBalance || 0);
+                sortValue = Number(userData.economy?.bankBalance || 0) + bankDistributed;
                 displayValue = sortValue;
                 break;
               case "chat":

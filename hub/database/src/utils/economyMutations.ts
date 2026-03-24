@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { UPGRADES } from "../constants/database.ts";
+import { getEconomyTuningConfig } from "../../../shared/src/economyTuning.ts";
 
 // Bank constants
 const BASE_BANK_MAX_INACTIVE_MS = 2 * 60 * 60 * 1000; // 2 hours base
@@ -73,30 +74,39 @@ type UpgradeRecord = {
   level?: number;
 };
 
-const MAX_EFFECTIVE_BANK_RATE = new Prisma.Decimal(50);
-
 function clampDecimalNonNegative(value: Prisma.Decimal): Prisma.Decimal {
   return value.lessThan(0) ? new Prisma.Decimal(0) : value;
 }
 
 function clampBankRate(value: Prisma.Decimal): Prisma.Decimal {
+  const tuning = getEconomyTuningConfig();
+  const maxRate = new Prisma.Decimal(
+    Math.max(1, Number(tuning.bank.maxAnnualRatePercent || 50))
+  );
+
   if (value.lessThan(0)) {
     return new Prisma.Decimal(0);
   }
 
-  if (value.greaterThan(MAX_EFFECTIVE_BANK_RATE)) {
-    return MAX_EFFECTIVE_BANK_RATE;
+  if (value.greaterThan(maxRate)) {
+    return maxRate;
   }
 
   return value;
 }
 
 function calculateCycleDurationMs(bankVaultLevel: number): number {
+  const tuning = getEconomyTuningConfig();
   const maxInactiveMs =
     BASE_BANK_MAX_INACTIVE_MS +
     Math.max(0, bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
+  const rolloutCycleCapMs = Math.max(
+    BASE_BANK_MAX_INACTIVE_MS,
+    Number(tuning.bank.maxCycleDurationMs || MAX_BANK_MAX_INACTIVE_MS)
+  );
+  const effectiveCycleCapMs = Math.min(MAX_BANK_MAX_INACTIVE_MS, rolloutCycleCapMs);
 
-  return Math.min(MAX_BANK_MAX_INACTIVE_MS, maxInactiveMs);
+  return Math.min(effectiveCycleCapMs, maxInactiveMs);
 }
 
 function getElapsedWithinCycle(
@@ -116,16 +126,20 @@ function calculateActivityBankRate(
   calculateLevel: CalculateLevelFn,
   levelData: UserLevelShape | null | undefined
 ): Prisma.Decimal {
+  const tuning = getEconomyTuningConfig();
   const chatLevel = levelData ? calculateLevel(levelData.xp).level : 1;
   const voiceLevel = levelData ? calculateLevel(levelData.voiceXp).level : 1;
   const gameLevel = levelData ? calculateLevel(levelData.gameXp).level : 1;
 
   // 1% base + level bonuses (chat +1%, voice +1%, game +0.5% per level after level 1).
-  const rawRate = new Prisma.Decimal(
+  const baseRate = new Prisma.Decimal(
     1 +
-      (chatLevel - 1) * 1 +
-      (voiceLevel - 1) * 1 +
+      (chatLevel - 1) +
+      (voiceLevel - 1) +
       (gameLevel - 1) * 0.5
+  );
+  const rawRate = baseRate.times(
+    Math.max(0.1, Number(tuning.faucets.bankInterestRateMultiplier || 1))
   );
 
   return clampBankRate(rawRate);
@@ -366,6 +380,7 @@ async function deposit(
   userId: string,
   amount: string | number | Prisma.Decimal
 ): Promise<unknown> {
+  const tuning = getEconomyTuningConfig();
   console.log(
     `Deposit initiated for user ${userId} in guild ${guildId} with amount ${amount}`
   );
@@ -440,7 +455,11 @@ async function deposit(
       0.5,
       (vaultGuardLevel - 1) * (UPGRADES.vault_guard.effectFees || 0)
     );
-    const feeRate = new Prisma.Decimal(0.05 * (1 - feeReduction));
+    const baseFeeRate = Math.min(
+      0.3,
+      Math.max(0.005, 0.05 * Number(tuning.sinks.bankFeeMultiplier || 1))
+    );
+    const feeRate = new Prisma.Decimal(baseFeeRate * (1 - feeReduction));
     const feeAmount = depositAmount.times(feeRate);
     const finalDepositAmount = depositAmount.minus(feeAmount);
     console.log(
@@ -506,6 +525,7 @@ async function withdraw(
   userId: string,
   amount: string | number | Prisma.Decimal
 ): Promise<unknown> {
+  const tuning = getEconomyTuningConfig();
   await ensureUser(guildId, userId);
 
   const requestAll = typeof amount === "string" && amount.trim().toLowerCase() === "all";
@@ -619,7 +639,11 @@ async function withdraw(
       0.5,
       (vaultGuardLevel - 1) * (UPGRADES.vault_guard.effectFees || 0)
     );
-    const feeRate = new Prisma.Decimal(0.05 * (1 - feeReduction));
+    const baseFeeRate = Math.min(
+      0.3,
+      Math.max(0.005, 0.05 * Number(tuning.sinks.bankFeeMultiplier || 1))
+    );
+    const feeRate = new Prisma.Decimal(baseFeeRate * (1 - feeReduction));
     const feeAmount = withdrawAmount.times(feeRate);
     const finalWithdrawAmount = withdrawAmount.minus(feeAmount);
     console.log(

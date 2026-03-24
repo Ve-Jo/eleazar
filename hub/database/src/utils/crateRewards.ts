@@ -11,6 +11,10 @@ type CrateReward = {
   discount: number;
 };
 
+type CrateRewardGenerationOptions = {
+  coinMultiplier?: number;
+};
+
 type CrateRewardClient = {
   crate: {
     findUnique: (args: unknown) => Promise<unknown>;
@@ -61,9 +65,15 @@ type AddUpgradeDiscountFn = (
   discount: number
 ) => Promise<unknown>;
 
+type AddSeasonXpFn = (
+  guildId: string,
+  userId: string,
+  amount: number
+) => Promise<unknown>;
+
 async function openCrate(
   client: CrateRewardClient,
-  getCrateCooldown: GetCrateCooldownFn,
+  getCooldown: GetCrateCooldownFn,
   updateCrateCooldown: UpdateCrateCooldownFn,
   removeCrate: RemoveCrateFn,
   generateCrateRewards: GenerateCrateRewardsFn,
@@ -83,13 +93,12 @@ async function openCrate(
   })) as CrateRecord | null;
 
   if (["daily", "weekly"].includes(type)) {
-    const cooldown = await getCrateCooldown(guildId, userId, type);
-    const crateConfig = CRATE_TYPES[type as keyof typeof CRATE_TYPES];
-    const cooldownDuration = crateConfig?.cooldown || 0;
-    const cooldownEndsAt = Number(cooldown || 0) + cooldownDuration;
+    const remainingCooldown = Number(
+      await getCooldown(guildId, userId, `crate_${type}`)
+    );
 
-    if (cooldown && cooldownDuration > 0 && Date.now() < cooldownEndsAt) {
-      throw new Error(`Cooldown active: ${cooldown}`);
+    if (remainingCooldown > 0) {
+      throw new Error(`Cooldown active: ${remainingCooldown}`);
     }
 
     await updateCrateCooldown(guildId, userId, type);
@@ -110,7 +119,8 @@ async function openCrate(
 async function generateCrateRewards(
   _guildId: string,
   _userId: string,
-  type: string
+  type: string,
+  options: CrateRewardGenerationOptions = {}
 ): Promise<CrateReward> {
   const crateConfig = CRATE_TYPES[type as keyof typeof CRATE_TYPES];
   if (!crateConfig) {
@@ -124,10 +134,25 @@ async function generateCrateRewards(
     discount: 0,
   };
 
+  const coinMultiplier = Math.max(
+    0.1,
+    Number.isFinite(Number(options.coinMultiplier))
+      ? Number(options.coinMultiplier)
+      : 1
+  );
+  const scaledMinCoins = Math.max(
+    1,
+    Math.floor(crateConfig.rewards.min_coins * coinMultiplier)
+  );
+  const scaledMaxCoins = Math.max(
+    scaledMinCoins,
+    Math.floor(crateConfig.rewards.max_coins * coinMultiplier)
+  );
+
   rewards.coins = Math.floor(
     Math.random() *
-      (crateConfig.rewards.max_coins - crateConfig.rewards.min_coins + 1) +
-      crateConfig.rewards.min_coins
+      (scaledMaxCoins - scaledMinCoins + 1) +
+      scaledMinCoins
   );
 
   if (Math.random() < crateConfig.rewards.seasonXp_chance) {
@@ -152,6 +177,7 @@ async function processCrateRewards(
   client: CrateRewardClient,
   addBalance: AddBalanceFn,
   addUpgradeDiscount: AddUpgradeDiscountFn,
+  addSeasonXp: AddSeasonXpFn,
   guildId: string,
   userId: string,
   rewards: CrateReward
@@ -163,6 +189,10 @@ async function processCrateRewards(
 
     if (rewards.discount > 0) {
       await addUpgradeDiscount(guildId, userId, rewards.discount);
+    }
+
+    if (rewards.seasonXp > 0) {
+      await addSeasonXp(guildId, userId, rewards.seasonXp);
     }
   });
 

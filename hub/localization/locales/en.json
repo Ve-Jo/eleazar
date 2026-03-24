@@ -95,7 +95,8 @@
         "error": "An error occurred while processing your work request",
         "gameError": "Error starting {{game}}. Please try again.",
         "noGamesAvailable": "No games are currently available.",
-        "gameNotFound": "The selected game was not found."
+        "gameNotFound": "The selected game was not found.",
+        "riskyDailyLimitReached": "{{game}} is locked for today because you reached its risky daily limit ({{earned}}/{{cap}})."
       },
       "deposit": {
         "title": "Deposit",
@@ -133,7 +134,7 @@
         "upgrades": {
           "daily_bonus": {
             "name": "Daily Bonus",
-            "description": "Boosts your daily reward claim by {{effect}}%. Each level adds +15% to your daily coins. Works with /daily command."
+            "description": "Boosts daily crate rewards by {{effect}}%. Each level adds +15% to /economy cases daily coins."
           },
           "daily_cooldown": {
             "name": "Daily Cooldown",
@@ -177,7 +178,7 @@
           },
           "time_wizard": {
             "name": "Time Wizard",
-            "description": "Bend time for daily/weekly rewards! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /daily and /weekly."
+            "description": "Bend time for daily/weekly crates! Reduces cooldowns by {{effect}}%. Each level = -1% wait time for /economy cases daily and weekly (max 50%)."
           },
           "vault_guard": {
             "name": "Vault Guard",
@@ -1265,7 +1266,8 @@
       "name": "Coinflip",
       "description": "Flip a coin to win or lose your bet.",
       "chanceButton": "{{chance}}% Chance",
-      "betSetSuccess": "Bet set to {{bet}} 💵 successfully!"
+      "betSetSuccess": "Bet set to {{bet}} 💵 successfully!",
+      "dailyLimitReached": "Daily risky limit reached ({{earned}}/{{cap}}). Coinflip is locked until reset."
     },
     "tower": {
       "alreadyRunning": "A Tower game is already running!",
@@ -1299,7 +1301,8 @@
       "restarting": "Restarting game...",
       "setupTimeout": "Tower setup timed out.",
       "betPlaceholder": "100",
-      "setupError": "An error occurred during setup."
+      "setupError": "An error occurred during setup.",
+      "dailyLimitReached": "Daily risky limit reached ({{earned}}/{{cap}}). Tower is locked until reset."
     },
     "crypto2": {
       "name": "Crypto Futures",

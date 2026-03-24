@@ -49,6 +49,8 @@ type InteractionLike = {
 type GuildSettingsLike = {
   settings?: {
     xp_per_command?: number;
+    xp_command_cooldown_ms?: number;
+    xp_command_cooldown_seconds?: number;
   };
 };
 
@@ -184,8 +186,40 @@ const event = {
 
       const guildSettings = (await hubClient.getGuild(interaction.guild.id)) as GuildSettingsLike;
       const xpPerCommand = guildSettings?.settings?.xp_per_command || 5;
+      const defaultCommandXpCooldownMs = 30_000;
+      const configuredCooldownMs = Number(guildSettings?.settings?.xp_command_cooldown_ms || 0);
+      const configuredCooldownSeconds = Number(
+        guildSettings?.settings?.xp_command_cooldown_seconds || 0
+      );
+      const commandXpCooldownMs = Math.max(
+        0,
+        Number.isFinite(configuredCooldownMs) && configuredCooldownMs > 0
+          ? configuredCooldownMs
+          : Number.isFinite(configuredCooldownSeconds) && configuredCooldownSeconds > 0
+            ? configuredCooldownSeconds * 1000
+            : defaultCommandXpCooldownMs
+      );
 
       if (xpPerCommand > 0) {
+        let canAwardCommandXp = true;
+        if (commandXpCooldownMs > 0) {
+          try {
+            const xpCooldown = await checkAndSetCommandCooldown(
+              interaction.guild.id,
+              interaction.user.id,
+              "__command_xp_gain__",
+              commandXpCooldownMs
+            );
+            canAwardCommandXp = xpCooldown.allowed;
+          } catch (cooldownError) {
+            console.error("Failed to apply command XP cooldown; awarding XP as fallback:", cooldownError);
+          }
+        }
+
+        if (!canAwardCommandXp) {
+          return;
+        }
+
         const xpResult = (await hubClient.addXP(
           interaction.guild.id,
           interaction.user.id,

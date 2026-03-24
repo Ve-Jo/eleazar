@@ -10,6 +10,7 @@ import hubClient from "../../api/hubClient.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { getGameModule, loadGames } from "../../utils/loadGames.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
+import { isRiskyHardLimitGame } from "../../../../hub/shared/src/gameDailyLimitPolicy.ts";
 import type { UserLike, GuildLike, TranslatorLike, MessageLike, InteractionLike, ExtendedMessageLike } from "../../types/index.ts";
 
 type ClientLike = {
@@ -33,6 +34,11 @@ type GameModuleLike = {
 };
 
 type CategoryGamesMap = Record<string, { avatar: string; games_list: GameInfo[] }>;
+type GameDailyStatusLike = {
+  remainingToday?: number | string;
+  earnedToday?: number | string;
+  cap?: number | string;
+};
 
 const normalizeLocale = (locale: unknown, fallback = "en"): string => {
   if (typeof locale !== "string") {
@@ -149,6 +155,11 @@ const command = {
       ru: "Выбранная игра не найдена.",
       uk: "Вибрана гра не знайдена.",
     },
+    riskyDailyLimitReached: {
+      en: "{{game}} is locked for today because you reached its risky daily limit ({{earned}}/{{cap}}).",
+      ru: "{{game}} заблокирована на сегодня, потому что вы достигли дневного лимита риск-игры ({{earned}}/{{cap}}).",
+      uk: "{{game}} заблокована на сьогодні, бо ви досягли денного ліміту ризикової гри ({{earned}}/{{cap}}).",
+    },
   },
 
   async execute(interaction: InteractionLike, i18n: TranslatorLike): Promise<void> {
@@ -162,16 +173,67 @@ const command = {
       const gamesMap = await loadGames();
       const gamesArray = Array.from(gamesMap.values()) as GameInfo[];
 
+      const getRiskyDailyLimitStatus = async (
+        gameId: string
+      ): Promise<GameDailyStatusLike | null> => {
+        if (!interaction.guildId || !isRiskyHardLimitGame(gameId)) {
+          return null;
+        }
+
+        try {
+          const status = (await (hubClient as any).getGameDailyStatus(
+            interaction.guild.id,
+            interaction.user.id,
+            gameId
+          )) as GameDailyStatusLike;
+
+          if (Number(status?.remainingToday || 0) <= 0) {
+            return status;
+          }
+        } catch (statusError) {
+          console.error(`[work] Failed to fetch daily status for ${gameId}:`, statusError);
+        }
+
+        return null;
+      };
+
+      const getRiskyLimitMessage = async (
+        gameTitle: string,
+        status: GameDailyStatusLike
+      ): Promise<string> => {
+        return String(
+          await i18n.__("commands.economy.work.riskyDailyLimitReached", {
+            game: gameTitle,
+            earned: Number(status?.earnedToday || 0).toFixed(1),
+            cap: Number(status?.cap || 0).toFixed(1),
+          })
+        );
+      };
+
       if (gamesMap.size === 0) {
         throw new Error("No games found");
       }
 
       const requestedGame = interaction.options.getString!("game");
       if (requestedGame) {
-        if (!gamesMap.has(requestedGame)) {
+        const requestedGameInfo = gamesMap.get(requestedGame) as GameInfo | undefined;
+        if (!requestedGameInfo) {
           await interaction.editReply({
             content: await i18n.__("commands.economy.work.gameNotFound"),
             ephemeral: true,
+          });
+          return;
+        }
+
+        const riskyLimitStatus = await getRiskyDailyLimitStatus(
+          requestedGameInfo.id
+        );
+        if (riskyLimitStatus) {
+          await interaction.editReply({
+            content: await getRiskyLimitMessage(
+              requestedGameInfo.title || requestedGameInfo.id,
+              riskyLimitStatus
+            ),
           });
           return;
         }
@@ -440,6 +502,18 @@ const command = {
           if (!game) {
             await componentInteraction.reply({
               content: await i18n.__("commands.economy.work.gameNotFound"),
+              ephemeral: true,
+            });
+            return;
+          }
+
+          const riskyLimitStatus = await getRiskyDailyLimitStatus(game.id);
+          if (riskyLimitStatus) {
+            await componentInteraction.reply({
+              content: await getRiskyLimitMessage(
+                game.title || game.id,
+                riskyLimitStatus
+              ),
               ephemeral: true,
             });
             return;

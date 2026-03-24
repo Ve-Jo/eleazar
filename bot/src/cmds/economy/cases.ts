@@ -270,15 +270,7 @@ const command: CasesCommandShape = {
       return;
     }
 
-    const cooldownTimestamp = Number(
-      await (hubClient as any).getCrateCooldown(interaction.guildId!, interaction.user.id, requestedCase)
-    );
-
-    const now = Date.now();
-    const remainingCooldown =
-      cooldownTimestamp > 0
-        ? Math.max(0, cooldownTimestamp + (crateTypes[requestedCase]?.cooldown || 0) - now)
-        : 0;
+    const remainingCooldown = await this.getCooldownTime(interaction, requestedCase);
 
     if (remainingCooldown > 0) {
       await interaction.editReply({
@@ -512,14 +504,17 @@ const command: CasesCommandShape = {
   },
 
   async getCooldownTime(interaction, crateType): Promise<number> {
-    const cooldownTimestamp = Number(
-      await (hubClient as any).getCrateCooldown(interaction.guildId, interaction.user.id, crateType)
+    const cooldownResponse = await (hubClient as any).getCooldown(
+      interaction.guildId,
+      interaction.user.id,
+      `crate_${crateType}`
     );
 
-    const now = Date.now();
-    return cooldownTimestamp > 0
-      ? Math.max(0, cooldownTimestamp + (crateTypes[crateType]?.cooldown || 0) - now)
-      : 0;
+    return Number(
+      typeof cooldownResponse === "number"
+        ? cooldownResponse
+        : cooldownResponse?.cooldown || 0
+    );
   },
 
   getCrateTranslation(path, defaultValue, interactionLocale): string {

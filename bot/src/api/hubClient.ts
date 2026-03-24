@@ -129,7 +129,13 @@ export type HubClientLike = {
     personalizationData: UpdateUserProfileRequest
   ) => Promise<UserProfile>;
   ensureUser: (guildId: string, userId: string) => Promise<HubUserRecord>;
-  addBalance: (guildId: string, userId: string, amount: number) => Promise<HubUserRecord>;
+  addBalance: (
+    guildId: string,
+    userId: string,
+    amount: number,
+    source?: string,
+    metadata?: Record<string, unknown> | null
+  ) => Promise<HubUserRecord>;
   getBalance: (guildId: string, userId: string) => Promise<BalanceResponse>;
   getTotalBankBalance: (guildId: string, userId: string) => Promise<number>;
   transferBalance: (
@@ -732,9 +738,11 @@ class HubClient {
   async addBalance(
     guildId: string,
     userId: string,
-    amount: number
+    amount: number,
+    source?: string,
+    metadata?: Record<string, unknown> | null
   ): Promise<HubUserRecord> {
-    const body: AddBalanceRequest = { userId, guildId, amount };
+    const body: AddBalanceRequest = { userId, guildId, amount, source, metadata };
     return await apiRequest<HubUserRecord, string>(`${this.databaseUrl}/economy/balance/add`, {
       method: "POST",
       body: JSON.stringify(body),
@@ -766,6 +774,14 @@ class HubClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  async getGuildWealthConcentrationMetrics(
+    guildId: string
+  ): Promise<Record<string, unknown>> {
+    return await apiRequest<Record<string, unknown>>(
+      `${this.databaseUrl}/economy/wealth/metrics/${guildId}`
+    );
   }
 
   async updateBankBalance(guildId: string, userId: string): Promise<BalanceResponse> {

@@ -9,6 +9,7 @@ const router = express.Router();
 type EconomyRouteRequest = RequestLike & {
   params: Record<string, string>;
   body: Record<string, unknown>;
+  query: Record<string, string | undefined>;
 };
 
 type EconomyShape = {
@@ -45,13 +46,30 @@ router.post("/balance/add", async (req: EconomyRouteRequest, res: ResponseLike) 
   try {
     const userId = typeof req.body.userId === "string" ? req.body.userId : "";
     const guildId = typeof req.body.guildId === "string" ? req.body.guildId : "";
-    const amount = req.body.amount;
+    const rawAmount = req.body.amount;
+    const source = typeof req.body.source === "string" ? req.body.source : "api_balance_adjustment";
+    const metadata =
+      req.body.metadata && typeof req.body.metadata === "object"
+        ? (req.body.metadata as Record<string, unknown>)
+        : null;
 
-    if (!userId || !guildId || amount === undefined) {
+    if (!userId || !guildId || rawAmount === undefined) {
       return res.status(400).json({ error: "userId, guildId, and amount are required" });
     }
 
-    const result = await Database.addBalance(guildId, userId, amount);
+    const amount =
+      typeof rawAmount === "string" ||
+      typeof rawAmount === "number" ||
+      typeof rawAmount === "bigint" ||
+      rawAmount instanceof Prisma.Decimal
+        ? rawAmount
+        : null;
+
+    if (amount === null) {
+      return res.status(400).json({ error: "amount must be a number-like value" });
+    }
+
+    const result = await Database.addBalance(guildId, userId, amount, source, metadata);
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding balance:", error);
@@ -184,6 +202,21 @@ router.post("/transfer", async (req: EconomyRouteRequest, res: ResponseLike) => 
   } catch (error) {
     console.error("Error transferring balance:", error);
     res.status(500).json({ error: "Failed to transfer balance" });
+  }
+});
+
+router.get("/wealth/metrics/:guildId", async (req: EconomyRouteRequest, res: ResponseLike) => {
+  try {
+    const guildId = req.params.guildId ?? "";
+    if (!guildId) {
+      return res.status(400).json({ error: "guildId is required" });
+    }
+
+    const metrics = await Database.getGuildWealthConcentrationMetrics(guildId);
+    res.json(serializeBigInt(metrics));
+  } catch (error) {
+    console.error("Error generating wealth concentration metrics:", error);
+    res.status(500).json({ error: "Failed to generate wealth concentration metrics" });
   }
 });
 

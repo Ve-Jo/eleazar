@@ -262,23 +262,22 @@ const command = {
     const workProgress = totalDailyCap > 0 ? totalEarnedToday / totalDailyCap : 0;
 
     const crateTypes = CRATE_TYPES as Record<string, { cooldown: number }>;
-    const now = Date.now();
-    const [dailyCooldownTimestamp, weeklyCooldownTimestamp, crimeCooldownResponse] = await Promise.all([
-      (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "daily"),
-      (hubClient as any).getCrateCooldown(interaction.guild.id, user.id, "weekly"),
+    const [dailyCooldownResponse, weeklyCooldownResponse, crimeCooldownResponse] = await Promise.all([
+      (hubClient as any).getCooldown(interaction.guild.id, user.id, "crate_daily"),
+      (hubClient as any).getCooldown(interaction.guild.id, user.id, "crate_weekly"),
       (hubClient as any).getCooldown(interaction.guild.id, user.id, "crime"),
     ]);
 
-    const dailyRemaining = crateTypes?.daily?.cooldown
-      ? Number(dailyCooldownTimestamp)
-        ? Math.max(0, Number(dailyCooldownTimestamp) + crateTypes.daily.cooldown - now)
-        : 0
-      : 0;
-    const weeklyRemaining = crateTypes?.weekly?.cooldown
-      ? Number(weeklyCooldownTimestamp)
-        ? Math.max(0, Number(weeklyCooldownTimestamp) + crateTypes.weekly.cooldown - now)
-        : 0
-      : 0;
+    const dailyRemaining = Number(
+      typeof dailyCooldownResponse === "number"
+        ? dailyCooldownResponse
+        : dailyCooldownResponse?.cooldown || 0
+    );
+    const weeklyRemaining = Number(
+      typeof weeklyCooldownResponse === "number"
+        ? weeklyCooldownResponse
+        : weeklyCooldownResponse?.cooldown || 0
+    );
 
     const openableCasesCount = Number(dailyRemaining <= 0) + Number(weeklyRemaining <= 0);
     const nextCaseRemainingMs = [dailyRemaining, weeklyRemaining]

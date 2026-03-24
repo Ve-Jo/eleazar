@@ -1,4 +1,5 @@
 import { COOLDOWNS, UPGRADES } from "../constants/database.ts";
+import { getEconomyTuningConfig } from "../../../shared/src/economyTuning.ts";
 
 type CooldownMap = Record<string, number>;
 
@@ -71,13 +72,24 @@ async function getCooldown(
   userId: string,
   type: string
 ): Promise<number> {
+  const tuning = getEconomyTuningConfig();
   const cooldownRecord = (await client.cooldown.findUnique({
     where: { guildId_userId: { guildId, userId } },
   })) as CooldownRecord | null;
 
   const cooldowns = parseCooldownData(cooldownRecord?.data, guildId, userId);
-  const lastUsed = cooldowns[type] || 0;
-  const baseTime = cooldownDurations[type] || 0;
+  const isCrateCooldownType = type.startsWith("crate_");
+  const normalizedType = isCrateCooldownType ? type.slice(6) : type;
+  const fallbackCrateKey =
+    !isCrateCooldownType && ["daily", "weekly"].includes(type)
+      ? `crate_${type}`
+      : null;
+
+  const lastUsed =
+    cooldowns[type] || (fallbackCrateKey ? cooldowns[fallbackCrateKey] || 0 : 0);
+  const baseTime =
+    cooldownDurations[type] ||
+    (isCrateCooldownType ? cooldownDurations[normalizedType] || 0 : 0);
   const now = Date.now();
   const isAbsoluteExpiry = lastUsed > now;
   let remaining = isAbsoluteExpiry
@@ -91,27 +103,64 @@ async function getCooldown(
   // time_wizard applies percentage reduction to daily/weekly cooldowns only
   const dailyWeeklyTypes = new Set(["daily", "weekly", "crate_daily", "crate_weekly"]);
   const appliesTimeWizard = dailyWeeklyTypes.has(type);
+  let userUpgrades: UpgradeRecord[] | null = null;
+
+  const getUserUpgrades = async (): Promise<UpgradeRecord[]> => {
+    if (!userUpgrades) {
+      userUpgrades = (await client.upgrade.findMany({
+        where: { userId, guildId },
+      })) as UpgradeRecord[];
+    }
+
+    return userUpgrades;
+  };
 
   if (appliesTimeWizard) {
-    const userUpgrades = (await client.upgrade.findMany({
-      where: { userId, guildId },
-    })) as UpgradeRecord[];
-
+    const upgrades = await getUserUpgrades();
     const timeWizardLevel =
-      userUpgrades.find((upgrade) => upgrade.type === "time_wizard")?.level || 1;
-    const reductionPercent = (timeWizardLevel - 1) * (UPGRADES.time_wizard.effectMultiplier || 0);
-    const timeWizardReduction = Math.floor(remaining * reductionPercent);
-    remaining = Math.max(0, remaining - timeWizardReduction);
+      upgrades.find((upgrade) => upgrade.type === "time_wizard")?.level || 1;
+    const rawReductionPercent =
+      (timeWizardLevel - 1) * (UPGRADES.time_wizard.effectMultiplier || 0);
+    const maxReductionPercent = Math.min(
+      0.95,
+      Math.max(0, Number(tuning.guardrails.maxTimeWizardReductionPercent || 0.5))
+    );
+    const reductionPercent = Math.min(
+      maxReductionPercent,
+      Math.max(0, rawReductionPercent)
+    );
+
+    // For timestamp-based cooldowns (daily/weekly crates), shorten the real cooldown
+    // window instead of scaling "remaining", which has no practical effect.
+    if (!isAbsoluteExpiry && baseTime > 0) {
+      const effectiveBaseTime = Math.max(
+        1,
+        Math.floor(baseTime * (1 - reductionPercent))
+      );
+      remaining = Math.max(0, lastUsed + effectiveBaseTime - now);
+    } else if (reductionPercent > 0) {
+      const timeWizardReduction = Math.floor(remaining * reductionPercent);
+      remaining = Math.max(0, remaining - timeWizardReduction);
+    }
   }
 
   // crime_mastery provides additional crime-specific cooldown reduction
   if (type === "crime") {
-    const userUpgrades = (await client.upgrade.findMany({
-      where: { userId, guildId },
-    })) as UpgradeRecord[];
-    const crimeMasteryUpgrade = userUpgrades.find((upgrade) => upgrade.type === "crime_mastery");
+    const upgrades = await getUserUpgrades();
+    const crimeMasteryUpgrade = upgrades.find((upgrade) => upgrade.type === "crime_mastery");
     const crimeMasteryLevel = crimeMasteryUpgrade?.level || 1;
-    const reduction = (crimeMasteryLevel - 1) * UPGRADES.crime_mastery.effectValue;
+    const baseCrimeCooldown = Math.max(
+      1,
+      Number(cooldownDurations.crime || 2 * 60 * 60 * 1000)
+    );
+    const minCrimeCooldownMs = Math.max(
+      5 * 60 * 1000,
+      Number(tuning.guardrails.minCrimeCooldownMs || 45 * 60 * 1000)
+    );
+    const maxCrimeReduction = Math.max(0, baseCrimeCooldown - minCrimeCooldownMs);
+    const configuredReduction =
+      (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectValue || 0);
+    const reduction = Math.min(maxCrimeReduction, Math.max(0, configuredReduction));
     return Math.max(0, remaining - reduction);
   }
 

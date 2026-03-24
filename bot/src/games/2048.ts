@@ -222,25 +222,16 @@ class GameState {
   // Simple XP calculation for display purposes only
   updateEarningGameXP(scoreDifference: number): number {
     // Calculate XP based on score difference to prevent duplication
-    console.log(`[2048] UPDATE EARNING GAME XP`);
     const xpGained = scoreDifference * 5; // 5 XP per point gained
-    console.log(`[2048] XP GAINED`, xpGained);
-    console.log(`[2048] EARNING GAME XP BEFORE`, this.state.earningGameXP);
     this.state.earningGameXP += xpGained;
-    console.log(`[2048] EARNING GAME XP aFTER`, this.state.earningGameXP);
-
-    // For visual display, we need to ensure gameLevelData exists
-    // But we don't want to modify the actual user level data
-    if (!this.state.gameLevelData) {
-      this.state.gameLevelData = {
-        level: 1,
-        currentXP: 0,
-        requiredXP: 100,
-        totalXP: 0,
-      };
-    }
-
-    this.state.gameLevelData.totalXP += xpGained;
+    const baseGameXp = Number(
+      this.state.baseGameXP ?? this.state.gameLevelData?.totalXP ?? 0
+    );
+    const projectedTotalGameXp = Math.max(
+      0,
+      baseGameXp + this.state.earningGameXP
+    );
+    this.state.gameLevelData = hubClient.calculateLevel(projectedTotalGameXp);
 
     return xpGained;
   }
@@ -334,6 +325,7 @@ export default {
           grid: state.grid,
           score: state.score,
           earning: state.earning,
+          gameOver: Boolean(state.gameOver),
           locale: userLocale,
           interaction: {
             user: {
@@ -363,11 +355,9 @@ export default {
               chat: chatLevelData,
               game: {
                 level: gameLevelData?.level || 1,
-                currentXP:
-                  (gameLevelData?.currentXP || 0) + (state.earningGameXP || 0),
+                currentXP: gameLevelData?.currentXP || 0,
                 requiredXP: gameLevelData?.requiredXP || 100,
-                totalXP:
-                  (gameLevelData?.totalXP || 0) + (state.earningGameXP || 0),
+                totalXP: gameLevelData?.totalXP || 0,
               },
             },
             // Pass earned game XP for visual progression - like in Snake.js
@@ -397,6 +387,7 @@ export default {
             grid: state.grid,
             score: state.score,
             earning: state.earning,
+            gameOver: Boolean(state.gameOver),
             locale: userLocale,
             interaction: {
               user: {
@@ -648,19 +639,11 @@ export default {
             return;
           }
           {
+            gameInstance.state.gameOver = true;
             gameInstance.state.earning = calculateEarning(gameInstance.state);
-            const finalBoard = await generateGameBoard(
-              gameInstance.state,
-              interaction.locale,
-              interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            );
 
             // Use earningGameXP for timeout case
             const earningGameXP = gameInstance.state.earningGameXP || 0;
-            const timeoutEarning = await calculateEarning(gameInstance.state); // Calculate earning for visual consistency
 
             // Only add XP and level-up if in a guild
             if (interaction.guildId && earningGameXP > 0) {
@@ -692,6 +675,8 @@ export default {
             // Only add balance if in a guild
             let timeoutAwardedAmount = gameInstance.state.earning;
             let timeoutBlockedAmount = 0;
+            let timeoutSoftLimitAwardAmount = 0;
+            let timeoutSoftLimitPayoutFactor = 0;
             if (interaction.guildId) {
               try {
                 const payoutResult = await awardGameCoins(
@@ -700,13 +685,35 @@ export default {
                   "2048",
                   gameInstance.state.earning,
                 );
-                timeoutAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                const creditedAwardAmount = Number(payoutResult.awardedAmount || 0);
+                gameInstance.state.balance = Math.max(
+                  0,
+                  Number(gameInstance.state.balance || 0) + creditedAwardAmount
+                );
+                timeoutAwardedAmount = Number(
+                  payoutResult.visualAwardedAmount ?? payoutResult.awardedAmount ?? 0
+                );
                 timeoutBlockedAmount = Number(payoutResult.blockedAmount || 0);
+                timeoutSoftLimitAwardAmount = Number(
+                  payoutResult.softLimitAwardAmount || 0
+                );
+                timeoutSoftLimitPayoutFactor = Number(
+                  payoutResult.softLimitPayoutFactor || 0
+                );
               } catch (error) {
                 console.error("Error adding balance on timeout:", error);
                 // Continue with game even if balance addition fails
               }
             }
+
+            const finalBoard = await generateGameBoard(
+              gameInstance.state,
+              interaction.locale,
+              interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            );
 
             const timeoutText = await i18n.__(`games.2048.timesOut`, {
               score: gameInstance.state.score,
@@ -715,6 +722,10 @@ export default {
               timeoutAwardedAmount,
               timeoutBlockedAmount,
               earningGameXP,
+              {
+                softLimitAwardAmount: timeoutSoftLimitAwardAmount,
+                softLimitPayoutFactor: timeoutSoftLimitPayoutFactor,
+              }
             );
             const content =
               typeof timeoutText === "string"
@@ -769,22 +780,17 @@ export default {
           state.gameOver = true; // Mark as game over immediately
           state.earning = calculateEarning(state); // Calculate final earning
 
-          const stopBoard = await generateGameBoard(
-            state,
-            interaction.locale,
-            interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
-          );
-
           // Use earningGameXP for stop case
           const earningGameXP = state.earningGameXP || 0;
           let stopAwardedAmount = state.earning;
           let stopBlockedAmount = 0;
+          let stopSoftLimitAwardAmount = 0;
+          let stopSoftLimitPayoutFactor = 0;
 
           let isNewRecordStop = false;
           // Only update database if in a guild
           if (interaction.guildId) {
             // Update high score
-            let isNewRecordStop = false;
             try {
               const stopHighScoreResult = await hubClient.updateGameHighScore(
                 interaction.guildId,
@@ -833,14 +839,33 @@ export default {
                   "2048",
                   state.earning,
                 );
-                stopAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                const creditedAwardAmount = Number(payoutResult.awardedAmount || 0);
+                state.balance = Math.max(
+                  0,
+                  Number(state.balance || 0) + creditedAwardAmount
+                );
+                stopAwardedAmount = Number(
+                  payoutResult.visualAwardedAmount ?? payoutResult.awardedAmount ?? 0
+                );
                 stopBlockedAmount = Number(payoutResult.blockedAmount || 0);
+                stopSoftLimitAwardAmount = Number(
+                  payoutResult.softLimitAwardAmount || 0
+                );
+                stopSoftLimitPayoutFactor = Number(
+                  payoutResult.softLimitPayoutFactor || 0
+                );
               } catch (error) {
                 console.error("Error adding balance on stop:", error);
                 // Continue with game even if balance addition fails
               }
             }
           }
+
+          const stopBoard = await generateGameBoard(
+            state,
+            interaction.locale,
+            interaction.user.displayAvatarURL({ extension: "png", size: 1024 }),
+          );
 
           const stoppedText = await i18n.__(`games.2048.stopped`, {
             score: state.score,
@@ -849,6 +874,10 @@ export default {
             stopAwardedAmount,
             stopBlockedAmount,
             earningGameXP,
+            {
+              softLimitAwardAmount: stopSoftLimitAwardAmount,
+              softLimitPayoutFactor: stopSoftLimitPayoutFactor,
+            }
           );
           const stoppedContent =
             typeof stoppedText === "string"
@@ -963,6 +992,8 @@ export default {
               let isNewRecord = false;
               let finalAwardedAmount = state.earning;
               let finalBlockedAmount = 0;
+              let finalSoftLimitAwardAmount = 0;
+              let finalSoftLimitPayoutFactor = 0;
               if (interaction.guildId) {
                 // Update high score
                 let isNewRecord = false;
@@ -1029,8 +1060,21 @@ export default {
                       "2048",
                       state.earning,
                     );
-                    finalAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                    const creditedAwardAmount = Number(payoutResult.awardedAmount || 0);
+                    state.balance = Math.max(
+                      0,
+                      Number(state.balance || 0) + creditedAwardAmount
+                    );
+                    finalAwardedAmount = Number(
+                      payoutResult.visualAwardedAmount ?? payoutResult.awardedAmount ?? 0
+                    );
                     finalBlockedAmount = Number(payoutResult.blockedAmount || 0);
+                    finalSoftLimitAwardAmount = Number(
+                      payoutResult.softLimitAwardAmount || 0
+                    );
+                    finalSoftLimitPayoutFactor = Number(
+                      payoutResult.softLimitPayoutFactor || 0
+                    );
                   } catch (error) {
                     console.error("Error adding balance on game over:", error);
                     // Continue with game even if balance addition fails
@@ -1055,6 +1099,10 @@ export default {
                 finalAwardedAmount,
                 finalBlockedAmount,
                 earningGameXP,
+                {
+                  softLimitAwardAmount: finalSoftLimitAwardAmount,
+                  softLimitPayoutFactor: finalSoftLimitPayoutFactor,
+                }
               );
               const gameOverContent =
                 typeof gameOverText === "string"

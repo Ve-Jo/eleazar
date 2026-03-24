@@ -64,7 +64,7 @@ const command = {
       const userData = await (hubClient as any).getUser(guildId, userId, true);
       if (!userData?.economy?.bankBalance || Number(userData.economy.bankBalance) <= 0) {
         await interaction.editReply({
-          content: String(await i18n.__("commands.economy.deposit.continue.noBankBalance")),
+          content: String(await i18n.__("commands.economy.continue.noBankBalance")),
         });
         return;
       }
@@ -87,7 +87,7 @@ const command = {
 
       if (!result.success) {
         await interaction.editReply({
-          content: String(await i18n.__("commands.economy.deposit.continue.noBankBalance")),
+          content: String(await i18n.__("commands.economy.continue.noBankBalance")),
         });
         return;
       }
@@ -98,13 +98,13 @@ const command = {
       let message: string;
       if (interestAdded > 0) {
         message = String(
-          await i18n.__("commands.economy.deposit.continue.continueSuccess", {
+          await i18n.__("commands.economy.continue.continueSuccess", {
             interest: interestAdded.toFixed(2),
             cycles: cyclesCompleted,
           })
         );
       } else {
-        message = String(await i18n.__("commands.economy.deposit.continue.continueNoCycle"));
+        message = String(await i18n.__("commands.economy.continue.continueNoCycle"));
       }
 
       await interaction.editReply({ content: message });
@@ -118,7 +118,7 @@ const command = {
           if (partnerDiscordUser && 'send' in partnerDiscordUser && typeof partnerDiscordUser.send === 'function') {
             await partnerDiscordUser.send({
               content: String(
-                await i18n.__("commands.economy.deposit.continue.partnerContinueDM", {
+                await i18n.__("commands.economy.continue.partnerContinueDM", {
                   user: interaction.user.username,
                   interest: Number(partnerResult.interestAdded).toFixed(2),
                   guild: interaction.guild.name,
@@ -133,7 +133,7 @@ const command = {
     } catch (error) {
       console.error("Error in continue command:", error);
       const errorOptions = {
-        content: String(await i18n.__("commands.economy.deposit.continue.error")),
+        content: String(await i18n.__("commands.economy.continue.error")),
         ephemeral: true,
       };
       if (interaction.replied || interaction.deferred) {

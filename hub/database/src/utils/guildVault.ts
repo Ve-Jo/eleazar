@@ -31,6 +31,7 @@ type GuildUserRecord = {
   id: string;
   economy?: {
     bankBalance?: Prisma.Decimal | number | null;
+    bankDistributed?: Prisma.Decimal | number | null;
   } | null;
 };
 
@@ -49,7 +50,8 @@ async function distributeGuildVaultFunds(
   tx: GuildVaultTransaction,
   guildId: string,
   excludedUserId: string,
-  distributionAmount: Prisma.Decimal
+  distributionAmount: Prisma.Decimal,
+  distributionSource = "automatic"
 ): Promise<void> {
   try {
     const guildUsers = (await tx.user.findMany({
@@ -112,7 +114,7 @@ async function distributeGuildVaultFunds(
             guildId,
             userId: user.id,
             amount: userShare,
-            source: "automatic",
+            source: distributionSource,
             triggeredBy: excludedUserId,
           },
         });
@@ -168,7 +170,7 @@ async function addToGuildVault(
       },
     });
 
-    await distributeGuildVaultFunds(tx, guildId, userId, distributableAmount);
+    await distributeGuildVaultFunds(tx, guildId, userId, distributableAmount, "automatic");
 
     return updatedVault;
   });

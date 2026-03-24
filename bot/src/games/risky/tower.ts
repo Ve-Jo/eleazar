@@ -13,6 +13,8 @@ import { generateImage } from "../../utils/imageGenerator.ts";
 
 import hubClient from "../../api/hubClient.ts";
 import { awardGameCoins } from "../../utils/gameDailyEarnings.ts";
+import { calculateRiskyGameXp } from "../../utils/riskyGameXp.ts";
+import { getEconomyTuningConfig } from "../../../../hub/shared/src/economyTuning.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -435,6 +437,46 @@ export default {
       });
     }
 
+    const getRiskyLimitStatus = async (): Promise<{
+      earnedToday?: number | string;
+      cap?: number | string;
+      remainingToday?: number | string;
+    } | null> => {
+      if (!guildId) {
+        return null;
+      }
+
+      try {
+        return (await hubClient.getGameDailyStatus(
+          guildId,
+          userId,
+          "tower"
+        )) as {
+          earnedToday?: number | string;
+          cap?: number | string;
+          remainingToday?: number | string;
+        };
+      } catch (statusError) {
+        console.error("[Tower] Failed to fetch daily status:", statusError);
+        return null;
+      }
+    };
+
+    const initialRiskyStatus = await getRiskyLimitStatus();
+    if (
+      guildId &&
+      initialRiskyStatus &&
+      Number(initialRiskyStatus.remainingToday || 0) <= 0
+    ) {
+      return interaction.followUp({
+        content: await getTranslation("games.tower.dailyLimitReached", {
+          earned: Number(initialRiskyStatus.earnedToday || 0).toFixed(1),
+          cap: Number(initialRiskyStatus.cap || 0).toFixed(1),
+        }),
+        ephemeral: true,
+      });
+    }
+
     // --- Initial Setup Phase ---
     let pendingBet = 0;
     let pendingDifficulty: TowerDifficulty = "easy"; // Default difficulty
@@ -821,6 +863,20 @@ export default {
             return;
           }
 
+          if (guildId) {
+            const riskyStatus = await getRiskyLimitStatus();
+            if (riskyStatus && Number(riskyStatus.remainingToday || 0) <= 0) {
+              await i.reply({
+                content: await getTranslation("games.tower.dailyLimitReached", {
+                  earned: Number(riskyStatus.earnedToday || 0).toFixed(1),
+                  cap: Number(riskyStatus.cap || 0).toFixed(1),
+                }),
+                ephemeral: true,
+              });
+              return;
+            }
+          }
+
           // Final balance check before starting
           if (guildId) {
             const userDataStart = await hubClient.getUser(guildId, userId);
@@ -874,9 +930,11 @@ export default {
                   (upgrade: { type?: string; level?: number }) =>
                     upgrade.type === "vault_guard"
                 )?.level || 1;
+              const tuning = getEconomyTuningConfig();
               gameInstance.vaultGuardReduction = Math.min(
-                0.4,
-                (vaultGuardLevel - 1) * 0.08
+                Math.max(0, Number(tuning.guardrails.towerMaxVaultRefundReduction || 0.2)),
+                Math.max(0, vaultGuardLevel - 1) *
+                  Math.max(0, Number(tuning.guardrails.towerVaultRefundPerLevel || 0.04))
               );
             } catch (error) {
               console.error("Error fetching initial balance:", error);
@@ -888,10 +946,16 @@ export default {
 
           // Deduct bet if in a guild
           if (guildId) {
+            const tuning = getEconomyTuningConfig();
             await hubClient.addBalance(
               guildId,
               userId,
               -gameInstance.betAmount,
+              "tower_bet_placed",
+              {
+                difficulty: gameInstance.difficulty,
+                tuningVersion: tuning.version,
+              }
             );
           }
 
@@ -1067,6 +1131,20 @@ export default {
               );
               gameInstance.currentPrize = Number(payoutResult.awardedAmount || 0);
               prizeTaken = gameInstance.currentPrize;
+
+              const riskyGameXp = calculateRiskyGameXp({
+                riskedAmount: gameInstance.betAmount,
+                netChange: prizeTaken - gameInstance.betAmount,
+                difficulty: gameInstance.difficulty,
+                floorsCleared: gameInstance.currentFloor,
+              });
+              if (riskyGameXp > 0) {
+                try {
+                  await hubClient.addGameXP(guildId, userId, "tower", riskyGameXp);
+                } catch (xpError) {
+                  console.error("[Tower] Failed to add game XP on take prize:", xpError);
+                }
+              }
             }
 
             // Session change is now calculated automatically based on balance difference
@@ -1152,12 +1230,40 @@ export default {
               gameInstance.gameOver = true;
               gameInstance.lastAction = "bomb";
 
+              let refundAmount = 0;
               if (guildId && gameInstance.vaultGuardReduction > 0) {
-                const refundAmount = parseFloat(
-                  (gameInstance.betAmount * gameInstance.vaultGuardReduction).toFixed(2)
+                const tuning = getEconomyTuningConfig();
+                const riskyLossMultiplier = Math.max(
+                  0.5,
+                  Number(tuning.sinks.riskyLossMultiplier || 1)
+                );
+                refundAmount = parseFloat(
+                  (
+                    (gameInstance.betAmount * gameInstance.vaultGuardReduction) /
+                    riskyLossMultiplier
+                  ).toFixed(2)
                 );
                 if (refundAmount > 0) {
-                  await hubClient.addBalance(guildId, userId, refundAmount);
+                  await hubClient.addBalance(guildId, userId, refundAmount, "tower_bomb_refund", {
+                    difficulty: gameInstance.difficulty,
+                    tuningVersion: tuning.version,
+                  });
+                }
+              }
+
+              if (guildId) {
+                const riskyGameXp = calculateRiskyGameXp({
+                  riskedAmount: gameInstance.betAmount,
+                  netChange: -gameInstance.betAmount + refundAmount,
+                  difficulty: gameInstance.difficulty,
+                  floorsCleared: gameInstance.currentFloor,
+                });
+                if (riskyGameXp > 0) {
+                  try {
+                    await hubClient.addGameXP(guildId, userId, "tower", riskyGameXp);
+                  } catch (xpError) {
+                    console.error("[Tower] Failed to add game XP on bomb:", xpError);
+                  }
                 }
               }
 
@@ -1242,6 +1348,20 @@ export default {
                   );
                   gameInstance.currentPrize = Number(payoutResult.awardedAmount || 0);
                   maxPrize = gameInstance.currentPrize;
+
+                  const riskyGameXp = calculateRiskyGameXp({
+                    riskedAmount: gameInstance.betAmount,
+                    netChange: maxPrize - gameInstance.betAmount,
+                    difficulty: gameInstance.difficulty,
+                    floorsCleared: MAX_FLOORS,
+                  });
+                  if (riskyGameXp > 0) {
+                    try {
+                      await hubClient.addGameXP(guildId, userId, "tower", riskyGameXp);
+                    } catch (xpError) {
+                      console.error("[Tower] Failed to add game XP on max floor:", xpError);
+                    }
+                  }
                 }
 
                 // Session change is now calculated automatically based on balance difference
@@ -1558,6 +1678,11 @@ export default {
       en: "Please set a bet amount first!",
       ru: "Сначала установите ставку!",
       uk: "Спочатку встановіть ставку!",
+    },
+    dailyLimitReached: {
+      en: "Daily risky limit reached ({{earned}}/{{cap}}). Tower is locked until reset.",
+      ru: "Достигнут дневной лимит риск-игры ({{earned}}/{{cap}}). Башня заблокирована до сброса.",
+      uk: "Досягнуто денний ліміт ризикової гри ({{earned}}/{{cap}}). Башту заблоковано до скидання.",
     },
     gameStartedPrompt: {
       en: "The Tower game has started! Choose a tile or take your prize.",

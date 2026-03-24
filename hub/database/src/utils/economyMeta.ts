@@ -1,4 +1,5 @@
 import { UPGRADES } from "../constants/database.ts";
+import { getEconomyTuningConfig } from "../../../shared/src/economyTuning.ts";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -12,6 +13,10 @@ type StatisticsRecord = {
 };
 
 type PrismaClientLike = {
+  $queryRawUnsafe: (
+    query: string,
+    ...params: unknown[]
+  ) => Promise<Array<{ awardedAmount?: unknown; earnedAfter?: unknown }>>;
   gameDailyEarnings: {
     upsert: (args: {
       where: {
@@ -22,7 +27,7 @@ type PrismaClientLike = {
           dateKey: string;
         };
       };
-      update: { earned: { increment: number }; lastUpdated: number };
+      update: { lastUpdated: number };
       create: {
         guildId: string;
         userId: string;
@@ -65,7 +70,12 @@ async function getGameDailyStatusFromDb(
   referenceTimestamp = Date.now()
 ): Promise<GameDailyStatus> {
   const dateKey = getDateKey(referenceTimestamp);
-  const baseCap = GAME_DAILY_CAPS[gameId] || 150;
+  const tuning = getEconomyTuningConfig();
+  const rawBaseCap = GAME_DAILY_CAPS[gameId] || 150;
+  const baseCap = Math.max(
+    1,
+    Math.floor(rawBaseCap * Math.max(0.2, Number(tuning.faucets.gameDailyCapMultiplier || 1)))
+  );
   const upgradeLevel = getUpgradeLevel(upgrades, "games_earning");
   const multiplier =
     1 + Math.max(0, upgradeLevel - 1) * Number(UPGRADES.games_earning.effectMultiplier || 0);
@@ -103,12 +113,14 @@ async function awardGameDailyEarningsAtomic(
   userId: string,
   gameId: string,
   requestedAmount: number,
+  capAmount: number,
   referenceTimestamp = Date.now()
 ): Promise<{ awardedAmount: number; earnedAfter: number }> {
   const dateKey = getDateKey(referenceTimestamp);
   const safeRequested = Math.max(0, toFiniteNumber(requestedAmount, 0));
+  const safeCap = Math.max(0, toFiniteNumber(capAmount, 0));
 
-  const result = await prisma.gameDailyEarnings.upsert({
+  const baseRecord = await prisma.gameDailyEarnings.upsert({
     where: {
       guildId_userId_gameId_dateKey: {
         guildId,
@@ -118,9 +130,7 @@ async function awardGameDailyEarningsAtomic(
       },
     },
     update: {
-      earned: {
-        increment: safeRequested,
-      },
+      // Keep this as "ensure row exists" only; award math is done atomically below.
       lastUpdated: referenceTimestamp,
     },
     create: {
@@ -128,15 +138,58 @@ async function awardGameDailyEarningsAtomic(
       userId,
       gameId,
       dateKey,
-      earned: safeRequested,
+      earned: 0,
       lastUpdated: referenceTimestamp,
     },
   });
 
-  const earnedAfter = toFiniteNumber(result.earned, 0);
+  if (safeRequested <= 0 || safeCap <= 0) {
+    return {
+      awardedAmount: 0,
+      earnedAfter: toFiniteNumber(baseRecord.earned, 0),
+    };
+  }
+
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      WITH locked AS (
+        SELECT earned
+        FROM game_daily_earnings
+        WHERE guild_id = $1 AND user_id = $2 AND game_id = $3 AND date_key = $4
+        FOR UPDATE
+      ),
+      calc AS (
+        SELECT GREATEST(
+          0::numeric,
+          LEAST($5::numeric, $6::numeric - COALESCE((SELECT earned FROM locked), 0::numeric))
+        ) AS awarded
+      ),
+      updated AS (
+        UPDATE game_daily_earnings
+        SET earned = earned + (SELECT awarded FROM calc),
+            last_updated = $7
+        WHERE guild_id = $1 AND user_id = $2 AND game_id = $3 AND date_key = $4
+        RETURNING earned
+      )
+      SELECT
+        (SELECT awarded FROM calc) AS "awardedAmount",
+        COALESCE((SELECT earned FROM updated), COALESCE((SELECT earned FROM locked), 0::numeric)) AS "earnedAfter"
+    `,
+    guildId,
+    userId,
+    gameId,
+    dateKey,
+    safeRequested,
+    safeCap,
+    referenceTimestamp
+  );
+
+  const row = rows[0] || {};
+  const awardedAmount = toFiniteNumber(row.awardedAmount, 0);
+  const earnedAfter = toFiniteNumber(row.earnedAfter, 0);
 
   return {
-    awardedAmount: safeRequested,
+    awardedAmount,
     earnedAfter,
   };
 }

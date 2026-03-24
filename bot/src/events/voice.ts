@@ -45,6 +45,7 @@ const event = {
 
       const userId = member.id;
       const guildId = guild.id;
+      const MIN_NON_BOT_MEMBERS_FOR_VOICE_XP = 2;
 
       console.log(
         `[Voice XP] Processing state update for user ${member.user.tag} in guild ${guild.name}`
@@ -52,23 +53,36 @@ const event = {
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      if (!oldState.channelId && newState.channelId) {
-        const channel = newState.channel;
+      const startSessionsForEligibleMembers = async (
+        channel: VoiceState["channel"]
+      ): Promise<void> => {
         if (!channel) {
           return;
         }
-        const nonBotMembers = channel.members.filter((m: GuildMember) => !m.user.bot);
 
+        const nonBotMembers = channel.members.filter((m: GuildMember) => !m.user.bot);
         console.log(
-          `[Voice XP] User joined channel ${channel.name} with ${nonBotMembers.size} non-bot members`
+          `[Voice XP] Channel ${channel.name} has ${nonBotMembers.size} non-bot members`
         );
 
-        if (nonBotMembers.size >= 1) {
-          console.log(`[Voice XP] Starting voice session for ${member.user.tag}`);
-          await hubClient.createVoiceSession(guildId, userId, newState.channelId);
-        } else {
-          console.log("[Voice XP] Not enough users in channel for XP tracking");
+        if (nonBotMembers.size < MIN_NON_BOT_MEMBERS_FOR_VOICE_XP) {
+          console.log(
+            `[Voice XP] Not enough users in channel for XP tracking (need ${MIN_NON_BOT_MEMBERS_FOR_VOICE_XP})`
+          );
+          return;
         }
+
+        const membersToStart = Array.from(nonBotMembers.values());
+        await Promise.allSettled(
+          membersToStart.map(async (voiceMember) => {
+            console.log(`[Voice XP] Ensuring voice session for ${voiceMember.user.tag}`);
+            await hubClient.createVoiceSession(guildId, voiceMember.id, channel.id);
+          })
+        );
+      };
+
+      if (!oldState.channelId && newState.channelId) {
+        await startSessionsForEligibleMembers(newState.channel);
         return;
       }
 
@@ -264,17 +278,7 @@ const event = {
           await hubClient.removeVoiceSession(guildId, userId);
         }
 
-        const nonBotMembers = newChannel.members.filter(
-          (m: GuildMember) => !m.user.bot
-        );
-        if (nonBotMembers.size >= 1) {
-          console.log(`[Voice XP] Starting new session in channel ${newChannel.name}`);
-          console.log(`[Voice XP] DEBUG createVoiceSession params: guildId=${guildId}, userId=${userId}, channelId=${newState.channelId}`);
-          const newSession = await hubClient.createVoiceSession(guildId, userId, newState.channelId);
-          console.log(`[Voice XP] DEBUG createVoiceSession result:`, newSession);
-        } else {
-          console.log("[Voice XP] Not enough users in new channel for XP tracking");
-        }
+        await startSessionsForEligibleMembers(newChannel);
       }
     } catch (error: unknown) {
       console.error("[Voice XP] Error in voice state update handler:", error);

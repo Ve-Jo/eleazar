@@ -10,6 +10,8 @@ import {
 import { generateImage } from "../../utils/imageGenerator.ts";
 import hubClient from "../../api/hubClient.ts";
 import { awardGameCoins } from "../../utils/gameDailyEarnings.ts";
+import { calculateRiskyGameXp } from "../../utils/riskyGameXp.ts";
+import { getEconomyTuningConfig } from "../../../../hub/shared/src/economyTuning.ts";
 
 type TranslatorLike = {
   __: (key: string, variables?: Record<string, unknown>) => Promise<string>;
@@ -265,15 +267,56 @@ export default {
       });
     }
 
+    const getRiskyLimitStatus = async (): Promise<{
+      earnedToday?: number | string;
+      cap?: number | string;
+      remainingToday?: number | string;
+    } | null> => {
+      if (!guildId) {
+        return null;
+      }
+
+      try {
+        return (await hubClient.getGameDailyStatus(
+          guildId,
+          userId,
+          "coinflip"
+        )) as {
+          earnedToday?: number | string;
+          cap?: number | string;
+          remainingToday?: number | string;
+        };
+      } catch (statusError) {
+        console.error("[Coinflip] Failed to fetch daily status:", statusError);
+        return null;
+      }
+    };
+
+    const initialRiskyStatus = await getRiskyLimitStatus();
+    if (
+      guildId &&
+      initialRiskyStatus &&
+      Number(initialRiskyStatus.remainingToday || 0) <= 0
+    ) {
+      return interaction.followUp({
+        content: await getTranslation("games.coinflip.dailyLimitReached", {
+          earned: Number(initialRiskyStatus.earnedToday || 0).toFixed(1),
+          cap: Number(initialRiskyStatus.cap || 0).toFixed(1),
+        }),
+        ephemeral: true,
+      });
+    }
+
     const gameInstance = new GameState(channelId, userId, null, guildId);
     activeGames.set(gameKey, gameInstance);
+    let riskyLimitLocked = false;
 
-    const createComponents = async (betSet = false) => {
+    const createComponents = async (betSet = false, lockFlips = false) => {
       const flipButton = new ButtonBuilder()
         .setCustomId("coinflip_flip")
         .setLabel(await getTranslation("games.coinflip.flipButton"))
         .setStyle(ButtonStyle.Success)
-        .setDisabled(!betSet || gameInstance.betAmount <= 0);
+        .setDisabled(!betSet || gameInstance.betAmount <= 0 || lockFlips);
 
       const setBetButton = new ButtonBuilder()
         .setCustomId("coinflip_set_bet")
@@ -528,7 +571,7 @@ export default {
                 );
                 await message.edit({
                   files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
-                  components: [await createComponents(true)], // Enable flip button
+                  components: [await createComponents(true, riskyLimitLocked)], // Enable flip button
                 });
               })
               .catch(console.error); // Handle modal timeout/errors
@@ -580,7 +623,9 @@ export default {
             );
             await message.edit({
               files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
-              components: [await createComponents(gameInstance.betAmount > 0)],
+              components: [
+                await createComponents(gameInstance.betAmount > 0, riskyLimitLocked),
+              ],
             });
           } else if (i.customId === "coinflip_flip") {
             await i.deferUpdate(); // Acknowledge button press
@@ -591,6 +636,28 @@ export default {
                 ephemeral: true,
               });
               return;
+            }
+
+            if (guildId) {
+              const riskyStatus = await getRiskyLimitStatus();
+              if (riskyStatus && Number(riskyStatus.remainingToday || 0) <= 0) {
+                riskyLimitLocked = true;
+                await message
+                  .edit({
+                    components: [
+                      await createComponents(gameInstance.betAmount > 0, true),
+                    ],
+                  })
+                  .catch(console.error);
+                await i.followUp({
+                  content: await getTranslation("games.coinflip.dailyLimitReached", {
+                    earned: Number(riskyStatus.earnedToday || 0).toFixed(1),
+                    cap: Number(riskyStatus.cap || 0).toFixed(1),
+                  }),
+                  ephemeral: true,
+                });
+                return;
+              }
             }
 
             // Double-check balance before proceeding
@@ -656,18 +723,45 @@ export default {
               } else {
                 gameInstance.lastResult = "lose";
                 const userDataLoss = await hubClient.getUser(guildId, userId);
+                const tuning = getEconomyTuningConfig();
                 const insuranceReduction = getVaultGuardReduction(userDataLoss);
-                const adjustedLoss = gameInstance.betAmount * (1 - insuranceReduction);
-                changeAmount = -parseFloat(adjustedLoss.toFixed(2));
+                const userBalanceLoss = parseFloat(
+                  String(userDataLoss?.economy?.balance ?? 0)
+                );
+                const adjustedLoss =
+                  gameInstance.betAmount *
+                  (1 - insuranceReduction) *
+                  Math.max(0.5, Number(tuning.sinks.riskyLossMultiplier || 1));
+                const finalLossAmount = Math.min(
+                  Math.max(0, userBalanceLoss),
+                  Math.max(0, adjustedLoss)
+                );
+                changeAmount = -parseFloat(finalLossAmount.toFixed(2));
                 gameInstance.totalLost += Math.abs(changeAmount);
                 gameInstance.sessionChange += changeAmount; // Update session change
-                await hubClient.addBalance(guildId, userId, changeAmount);
+                await hubClient.addBalance(guildId, userId, changeAmount, "coinflip_loss", {
+                  betAmount: gameInstance.betAmount,
+                  winProbability: gameInstance.winProbability,
+                  tuningVersion: tuning.version,
+                });
                 messageContent = await getTranslation(
                   "games.coinflip.loseMessage",
                   {
                     amount: Math.abs(changeAmount).toFixed(2),
                   },
                 );
+              }
+
+              const riskyGameXp = calculateRiskyGameXp({
+                riskedAmount: gameInstance.betAmount,
+                netChange: changeAmount,
+              });
+              if (riskyGameXp > 0) {
+                try {
+                  await hubClient.addGameXP(guildId, userId, "coinflip", riskyGameXp);
+                } catch (xpError) {
+                  console.error("[Coinflip] Failed to add game XP:", xpError);
+                }
               }
             } else {
               // In DM, just show the result without updating balance
@@ -746,7 +840,9 @@ export default {
             await message.edit({
               content: messageContent,
               files: [{ attachment: updatedBuffer, name: "coinflip.png" }],
-              components: [await createComponents(true)], // Keep flip button enabled
+              components: [
+                await createComponents(true, riskyLimitLocked),
+              ], // Keep flip button enabled
             });
           } else if (i.customId === "coinflip_end") {
             await i.update({
@@ -917,6 +1013,11 @@ export default {
       en: "{{chance}}% Chance",
       ru: "Шанс {{chance}}%",
       uk: "Шанс {{chance}}%",
+    },
+    dailyLimitReached: {
+      en: "Daily risky limit reached ({{earned}}/{{cap}}). Coinflip is locked until reset.",
+      ru: "Достигнут дневной лимит риск-игры ({{earned}}/{{cap}}). Монетка заблокирована до сброса.",
+      uk: "Досягнуто денний ліміт ризикової гри ({{earned}}/{{cap}}). Монетку заблоковано до скидання.",
     },
   },
 };

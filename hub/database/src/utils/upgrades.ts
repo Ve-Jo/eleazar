@@ -248,7 +248,9 @@ async function revertUpgrade(
     throw new Error("Cannot revert a level 1 upgrade");
   }
 
-  const upgradeInfo = await getUpgradeInfo(type, currentLevel);
+  // Refund is based on the most recently purchased tier price.
+  const lastPaidTierLevel = Math.max(1, currentLevel - 1);
+  const upgradeInfo = await getUpgradeInfo(type, lastPaidTierLevel);
   const refundAmount = Math.floor(upgradeInfo.price * 0.85);
 
   return client.$transaction(async (tx) => {

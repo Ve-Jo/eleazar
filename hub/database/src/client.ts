@@ -181,6 +181,14 @@ import {
   MAX_DELAY_MS,
   delay,
 } from "./constants/database.ts";
+import {
+  getEconomyTuningConfig,
+  getGameEconomyEnvelope,
+} from "../../shared/src/economyTuning.ts";
+import {
+  getSoftLimitPayoutFactor,
+  normalizeGameId,
+} from "../../shared/src/gameDailyLimitPolicy.ts";
 // Redis functionality completely disabled
 
 // Load environment variables
@@ -204,7 +212,23 @@ class Database {
     this.retentionDays = DEFAULT_RETENTION_DAYS;
     this.redisClient = null;
     this.redisConnected = false;
-
+    this.gameAwardTelemetry = new Map();
+    this.gameAwardTelemetrySweepCounter = 0;
+    this.gameAwardTelemetryWindowMs = Number(
+      process.env.GAME_AWARD_TELEMETRY_WINDOW_MS || 60_000
+    );
+    this.gameAwardHighFrequencyThreshold = Number(
+      process.env.GAME_AWARD_HIGH_FREQUENCY_THRESHOLD || 20
+    );
+    this.gameAwardLargeRequestThreshold = Number(
+      process.env.GAME_AWARD_LARGE_REQUEST_THRESHOLD || 2_000
+    );
+    this.gameAwardLargeAwardThreshold = Number(
+      process.env.GAME_AWARD_LARGE_AWARD_THRESHOLD || 2_000
+    );
+    this.balanceDeltaAlertThreshold = Number(
+      process.env.BALANCE_DELTA_ALERT_THRESHOLD || 50_000
+    );
     // Set up Prisma client with correct configuration
     this.client = new PrismaClient({
       log:
@@ -841,6 +865,198 @@ class Database {
     ]);
   }
 
+  _recordBalanceDeltaTelemetry(guildId, userId, amount, source = "unknown") {
+    const numericAmount = Number(amount) || 0;
+    if (Math.abs(numericAmount) < this.balanceDeltaAlertThreshold) {
+      return;
+    }
+
+    console.warn("[EconomyTelemetry] Large balance delta detected", {
+      guildId,
+      userId,
+      source,
+      amount: numericAmount,
+      threshold: this.balanceDeltaAlertThreshold,
+      at: new Date().toISOString(),
+    });
+  }
+
+  _recordGameAwardTelemetry(
+    guildId,
+    userId,
+    gameId,
+    requestedAmount,
+    awardedAmount,
+    blockedAmount
+  ) {
+    const now = Date.now();
+    const key = `${guildId}:${userId}:${gameId}`;
+    const existing = this.gameAwardTelemetry.get(key);
+    const windowMs = Math.max(1_000, Number(this.gameAwardTelemetryWindowMs) || 60_000);
+
+    const entry =
+      existing && now - existing.windowStart <= windowMs
+        ? existing
+        : {
+            windowStart: now,
+            count: 0,
+            requestedTotal: 0,
+            awardedTotal: 0,
+            blockedTotal: 0,
+            maxRequested: 0,
+            maxAwarded: 0,
+          };
+
+    const requested = Math.max(0, Number(requestedAmount) || 0);
+    const awarded = Math.max(0, Number(awardedAmount) || 0);
+    const blocked = Math.max(0, Number(blockedAmount) || 0);
+
+    entry.count += 1;
+    entry.requestedTotal += requested;
+    entry.awardedTotal += awarded;
+    entry.blockedTotal += blocked;
+    entry.maxRequested = Math.max(entry.maxRequested, requested);
+    entry.maxAwarded = Math.max(entry.maxAwarded, awarded);
+
+    this.gameAwardTelemetry.set(key, entry);
+    this.gameAwardTelemetrySweepCounter += 1;
+
+    if (this.gameAwardTelemetrySweepCounter % 100 === 0) {
+      for (const [entryKey, value] of this.gameAwardTelemetry.entries()) {
+        if (now - value.windowStart > windowMs * 2) {
+          this.gameAwardTelemetry.delete(entryKey);
+        }
+      }
+    }
+
+    if (requested >= this.gameAwardLargeRequestThreshold) {
+      console.warn("[EconomyTelemetry] Large game award request", {
+        guildId,
+        userId,
+        gameId,
+        requested,
+        threshold: this.gameAwardLargeRequestThreshold,
+        at: new Date(now).toISOString(),
+      });
+    }
+
+    if (awarded >= this.gameAwardLargeAwardThreshold) {
+      console.warn("[EconomyTelemetry] Large game award granted", {
+        guildId,
+        userId,
+        gameId,
+        awarded,
+        threshold: this.gameAwardLargeAwardThreshold,
+        at: new Date(now).toISOString(),
+      });
+    }
+
+    if (entry.count >= this.gameAwardHighFrequencyThreshold) {
+      console.warn("[EconomyTelemetry] High-frequency game award calls", {
+        guildId,
+        userId,
+        gameId,
+        count: entry.count,
+        windowMs,
+        requestedTotal: entry.requestedTotal,
+        awardedTotal: entry.awardedTotal,
+        blockedTotal: entry.blockedTotal,
+        at: new Date(now).toISOString(),
+      });
+    }
+  }
+
+  _toNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  _calculatePercentile(sortedValues, percentile) {
+    if (!Array.isArray(sortedValues) || sortedValues.length === 0) {
+      return 0;
+    }
+
+    const clampedPercentile = Math.min(1, Math.max(0, this._toNumber(percentile, 0)));
+    if (sortedValues.length === 1) {
+      return sortedValues[0];
+    }
+
+    const rawIndex = (sortedValues.length - 1) * clampedPercentile;
+    const lowerIndex = Math.floor(rawIndex);
+    const upperIndex = Math.ceil(rawIndex);
+    const weight = rawIndex - lowerIndex;
+
+    const lowerValue = this._toNumber(sortedValues[lowerIndex], 0);
+    const upperValue = this._toNumber(sortedValues[upperIndex], 0);
+
+    return lowerValue + (upperValue - lowerValue) * weight;
+  }
+
+  async getGuildWealthConcentrationMetrics(guildId) {
+    const targetGuildId = typeof guildId === "string" ? guildId : "";
+    if (!targetGuildId) {
+      throw new Error("guildId is required");
+    }
+
+    const rows = await this.client.economy.findMany({
+      where: {
+        guildId: targetGuildId,
+      },
+      select: {
+        userId: true,
+        balance: true,
+        bankBalance: true,
+        bankDistributed: true,
+      },
+    });
+
+    const wealthValues = rows.map((row) =>
+      Math.max(
+        0,
+        this._toNumber(row?.balance, 0) +
+          this._toNumber(row?.bankBalance, 0) +
+          this._toNumber(row?.bankDistributed, 0)
+      )
+    );
+
+    const sortedAsc = [...wealthValues].sort((a, b) => a - b);
+    const sortedDesc = [...wealthValues].sort((a, b) => b - a);
+    const userCount = sortedAsc.length;
+    const totalWealth = sortedAsc.reduce((sum, value) => sum + value, 0);
+
+    const topOnePercentCount =
+      userCount === 0 ? 0 : Math.min(userCount, Math.max(1, Math.ceil(userCount * 0.01)));
+    const topTenPercentCount =
+      userCount === 0 ? 0 : Math.min(userCount, Math.max(1, Math.ceil(userCount * 0.1)));
+
+    const topOnePercentWealth = sortedDesc
+      .slice(0, topOnePercentCount)
+      .reduce((sum, value) => sum + value, 0);
+    const topTenPercentWealth = sortedDesc
+      .slice(0, topTenPercentCount)
+      .reduce((sum, value) => sum + value, 0);
+
+    return {
+      guildId: targetGuildId,
+      generatedAt: new Date().toISOString(),
+      userCount,
+      totalWealth,
+      p50: this._calculatePercentile(sortedAsc, 0.5),
+      p90: this._calculatePercentile(sortedAsc, 0.9),
+      p99: this._calculatePercentile(sortedAsc, 0.99),
+      topOnePercent: {
+        count: topOnePercentCount,
+        wealth: topOnePercentWealth,
+        share: totalWealth > 0 ? topOnePercentWealth / totalWealth : 0,
+      },
+      topTenPercent: {
+        count: topTenPercentCount,
+        wealth: topTenPercentWealth,
+        share: totalWealth > 0 ? topTenPercentWealth / totalWealth : 0,
+      },
+    };
+  }
+
   async getCooldown(guildId, userId, type) {
     return getCooldownHelper(this.client, guildId, userId, type);
   }
@@ -1009,8 +1225,8 @@ class Database {
   async openCrate(guildId, userId, type) {
     const rewards = await openCrateHelper(
       this.client,
-      (targetGuildId, targetUserId, targetType) =>
-        this.getCrateCooldown(targetGuildId, targetUserId, targetType),
+      (targetGuildId, targetUserId, cooldownType) =>
+        this.getCooldown(targetGuildId, targetUserId, cooldownType),
       (targetGuildId, targetUserId, targetType) =>
         this.updateCrateCooldown(targetGuildId, targetUserId, targetType),
       (targetGuildId, targetUserId, targetType, amount) =>
@@ -1048,7 +1264,51 @@ class Database {
 
   // Generate rewards for a crate
   async generateCrateRewards(guildId, userId, type) {
-    return generateCrateRewardsHelper(guildId, userId, type);
+    const tuning = getEconomyTuningConfig();
+    let coinMultiplier = 1;
+
+    if (type === "daily") {
+      try {
+        const [stats, upgrades] = await Promise.all([
+          this.getStatistics(userId, guildId),
+          this.getUserUpgrades(guildId, userId),
+        ]);
+
+        const projectedDaily = registerDailyCrateOpen(stats, 0, Date.now());
+        const streakMultiplier = Number(
+          projectedDaily?.status?.rewardMultiplier || 1
+        );
+
+        const dailyBonusLevel =
+          Array.isArray(upgrades)
+            ? upgrades.find((upgrade) => upgrade?.type === "daily_bonus")
+                ?.level || 1
+            : 1;
+        const dailyBonusMultiplier =
+          1 +
+          Math.max(0, dailyBonusLevel - 1) *
+            Number(UPGRADES.daily_bonus.effectMultiplier || 0);
+
+        coinMultiplier = Number(
+          (streakMultiplier * dailyBonusMultiplier).toFixed(3)
+        );
+      } catch (error) {
+        console.warn(
+          `Failed to compute daily crate multipliers for ${userId} in ${guildId}:`,
+          error
+        );
+        coinMultiplier = 1;
+      }
+    }
+
+    coinMultiplier = Math.max(
+      0.05,
+      Number((coinMultiplier * tuning.faucets.crateCoinMultiplier).toFixed(3))
+    );
+
+    return generateCrateRewardsHelper(guildId, userId, type, {
+      coinMultiplier,
+    });
   }
 
   // Process and apply crate rewards
@@ -1056,16 +1316,45 @@ class Database {
     return processCrateRewardsHelper(
       this.client,
       (targetGuildId, targetUserId, amount) =>
-        this.addBalance(targetGuildId, targetUserId, amount),
+        this.addBalance(targetGuildId, targetUserId, amount, "crate_reward", {
+          rewardType: "crate",
+        }),
       (targetGuildId, targetUserId, discount) =>
         this.addUpgradeDiscount(targetGuildId, targetUserId, discount),
+      (targetGuildId, targetUserId, seasonXpAmount) =>
+        this.client.level.upsert({
+          where: {
+            guildId_userId: {
+              guildId: targetGuildId,
+              userId: targetUserId,
+            },
+          },
+          create: {
+            guildId: targetGuildId,
+            userId: targetUserId,
+            seasonXp: seasonXpAmount,
+          },
+          update: {
+            seasonXp: {
+              increment: seasonXpAmount,
+            },
+          },
+        }),
       guildId,
       userId,
       rewards
     );
   }
 
-  async addBalance(guildId, userId, amount) {
+  async addBalance(
+    guildId: string,
+    userId: string,
+    amount: string | number | Prisma.Decimal | bigint,
+    source = "balance_adjustment",
+    metadata: Record<string, unknown> | null = null
+  ) {
+    this._recordBalanceDeltaTelemetry(guildId, userId, amount, source);
+
     const result = await addBalanceHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
@@ -1079,17 +1368,19 @@ class Database {
   }
 
   async transferBalance(guildId, fromUserId, toUserId, amount) {
+    const transferAmount = Math.max(0, this._toNumber(amount, 0));
     const result = await transferBalanceHelper(
       this.client,
       (targetGuildId, targetUserId) => this.ensureUser(targetGuildId, targetUserId),
       guildId,
       fromUserId,
       toUserId,
-      amount
+      transferAmount
     );
 
     await this._invalidateUserRelatedCaches(guildId, fromUserId);
     await this._invalidateUserRelatedCaches(guildId, toUserId);
+
     return result;
   }
 
@@ -1128,13 +1419,15 @@ class Database {
     tx,
     guildId,
     excludedUserId,
-    distributionAmount
+    distributionAmount,
+    distributionSource = "automatic"
   ) {
     return distributeGuildVaultFundsHelper(
       tx,
       guildId,
       excludedUserId,
-      distributionAmount
+      distributionAmount,
+      distributionSource
     );
   }
 
@@ -1174,6 +1467,7 @@ class Database {
     );
 
     await this._invalidateUserRelatedCaches(guildId, userId);
+
     return result;
   }
 
@@ -1192,18 +1486,29 @@ class Database {
     );
 
     await this._invalidateUserRelatedCaches(guildId, userId);
+
     return result;
   }
 
   // Bank Operations
   async updateBankBalance(guildId, userId, tx = null) {
-    return updateBankBalanceHelper(
+    const shouldInvalidateCaches = !tx;
+    if (shouldInvalidateCaches) {
+      await this._invalidateUserRelatedCaches(guildId, userId);
+    }
+    const result = await updateBankBalanceHelper(
       tx || this.client,
       (principal, annualRate, timeMs) =>
         this.calculateInterestDecimal(principal, annualRate, timeMs),
       guildId,
       userId
     );
+
+    if (shouldInvalidateCaches) {
+      await this._invalidateUserRelatedCaches(guildId, userId);
+    }
+
+    return result;
   }
 
   calculateInterest(principal, annualRate, timeMs) {
@@ -1225,13 +1530,18 @@ class Database {
   }
 
   async continueBankBalance(guildId, userId) {
-    return continueBankBalanceHelper(
+    await this._invalidateUserRelatedCaches(guildId, userId);
+    const result = await continueBankBalanceHelper(
       this.client,
       (principal, annualRate, timeMs) =>
         this.calculateInterestDecimal(principal, annualRate, timeMs),
       guildId,
       userId
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+
+    return result;
   }
 
   async getUser(guildId, userId, includeRelations = true, tx = null) {
@@ -1398,11 +1708,16 @@ class Database {
 
   async getDailyCrateStatus(guildId, userId) {
     const stats = await this.getStatistics(userId, guildId);
-    const crateCooldownTimestamp = Number(await this.getCrateCooldown(guildId, userId, "daily") || 0);
-    const crateCooldownDuration = Number(CRATE_TYPES?.daily?.cooldown || 0);
-    const cooldownRemainingMs = crateCooldownTimestamp
-      ? Math.max(0, crateCooldownTimestamp + crateCooldownDuration - Date.now())
-      : 0;
+    const cooldownResponse = await this.getCooldown(
+      guildId,
+      userId,
+      "crate_daily"
+    );
+    const cooldownRemainingMs = Number(
+      typeof cooldownResponse === "number"
+        ? cooldownResponse
+        : cooldownResponse?.cooldown || 0
+    );
     return buildDailyCrateStatus(stats, cooldownRemainingMs, Date.now());
   }
 
@@ -1415,12 +1730,13 @@ class Database {
   }
 
   async getGameDailyStatus(guildId, userId, gameId) {
+    const normalizedGameId = normalizeGameId(gameId);
     const upgrades = await this.getUserUpgrades(guildId, userId);
     return getGameDailyStatusFromDb(
       this.client,
       guildId,
       userId,
-      gameId,
+      normalizedGameId,
       upgrades,
       Date.now()
     );
@@ -1444,17 +1760,18 @@ class Database {
 
     const daily = await this.getDailyCrateStatus(guildId, userId);
 
-    const weeklyCooldownTimestamp = Number(
-      (await this.getCrateCooldown(guildId, userId, "weekly")) || 0
+    const weeklyCooldownResponse = await this.getCooldown(
+      guildId,
+      userId,
+      "crate_weekly"
     );
-    const weeklyCooldownDuration = Number(CRATE_TYPES?.weekly?.cooldown || 0);
-    const weeklyNextAvailableAt = weeklyCooldownTimestamp
-      ? weeklyCooldownTimestamp + weeklyCooldownDuration
-      : null;
-    const weeklyRemainingMs =
-      weeklyNextAvailableAt && weeklyNextAvailableAt > now
-        ? weeklyNextAvailableAt - now
-        : 0;
+    const weeklyRemainingMs = Number(
+      typeof weeklyCooldownResponse === "number"
+        ? weeklyCooldownResponse
+        : weeklyCooldownResponse?.cooldown || 0
+    );
+    const weeklyNextAvailableAt =
+      weeklyRemainingMs > 0 ? now + weeklyRemainingMs : null;
     const weeklyReady = weeklyRemainingMs <= 0;
 
     let bankCycleComplete = false;
@@ -1484,53 +1801,219 @@ class Database {
   }
 
   async awardGameDailyEarnings(guildId, userId, gameId, amount) {
+    const normalizedGameId = normalizeGameId(gameId);
+    const tuning = getEconomyTuningConfig();
+    const gameEnvelope = getGameEconomyEnvelope(normalizedGameId);
     // First, get current status to know the cap
     const upgrades = await this.getUserUpgrades(guildId, userId);
     const status = await getGameDailyStatusFromDb(
       this.client,
       guildId,
       userId,
-      gameId,
+      normalizedGameId,
       upgrades,
       Date.now()
     );
 
-    // Cap the amount to what's remaining
-    const safeAmount = Math.max(0, Math.min(amount, status.remainingToday));
-    const blockedAmount = Math.max(0, amount - safeAmount);
+    const requestedAmount = Math.max(0, Number(amount) || 0);
+    let effectiveRequestedAmount = requestedAmount;
 
-    if (safeAmount > 0) {
-      // Atomic increment - this is the key fix for race conditions
+    if (
+      tuning.enforcement.awardEnvelopeClamps &&
+      effectiveRequestedAmount > gameEnvelope.maxCoinAward
+    ) {
+      console.warn("[EconomyTuning] Game award clamped by envelope", {
+        guildId,
+        userId,
+        gameId,
+        requestedAmount,
+        envelopeMaxAward: gameEnvelope.maxCoinAward,
+        tuningVersion: tuning.version,
+        at: new Date().toISOString(),
+      });
+      effectiveRequestedAmount = gameEnvelope.maxCoinAward;
+    }
+
+    if (requestedAmount >= this.gameAwardLargeRequestThreshold) {
+      console.warn("[EconomyTelemetry] Suspiciously large requested game payout", {
+        guildId,
+        userId,
+        gameId,
+        requestedAmount,
+        threshold: this.gameAwardLargeRequestThreshold,
+        at: new Date().toISOString(),
+      });
+    }
+
+    const gameCoinMultiplier = Math.max(
+      0,
+      Number(tuning.faucets.gameCoinMultiplier || 1)
+    );
+    const tunedRequestedAmount = Math.max(
+      0,
+      Number((effectiveRequestedAmount * gameCoinMultiplier).toFixed(4))
+    );
+    const tuningBlockedAmount = Math.max(
+      0,
+      Number((effectiveRequestedAmount - tunedRequestedAmount).toFixed(4))
+    );
+
+    if (tunedRequestedAmount > 0) {
+      // Atomic cap-aware increment prevents over-award during concurrent requests.
       const awardResult = await awardGameDailyEarningsAtomic(
         this.client,
         guildId,
         userId,
-        gameId,
-        safeAmount,
+        normalizedGameId,
+        tunedRequestedAmount,
+        status.cap,
         Date.now()
       );
 
+      const grossAwardedAmount = Math.max(
+        0,
+        Number(awardResult.awardedAmount || 0)
+      );
+      const capBlockedAmountRaw = Math.max(
+        0,
+        Number((tunedRequestedAmount - grossAwardedAmount).toFixed(4))
+      );
+      const softLimitPayoutFactor = Math.max(
+        0,
+        Math.min(1, Number(getSoftLimitPayoutFactor(normalizedGameId) || 0))
+      );
+      const softLimitAwardAmount = Math.max(
+        0,
+        Number((capBlockedAmountRaw * softLimitPayoutFactor).toFixed(4))
+      );
+      const capBlockedAmount = Math.max(
+        0,
+        Number((capBlockedAmountRaw - softLimitAwardAmount).toFixed(4))
+      );
+      const grossAwardedBeforeSink = Math.max(
+        0,
+        Number((grossAwardedAmount + softLimitAwardAmount).toFixed(4))
+      );
+      const seasonalSinkRate =
+        tuning.enforcement.longTermSinks === true
+          ? Math.max(0, Number(tuning.sinks.optionalPrestigeSinkRate || 0))
+          : 0;
+      const seasonalSinkAmount = Math.max(
+        0,
+        Number((grossAwardedBeforeSink * seasonalSinkRate).toFixed(4))
+      );
+      const awardedAmount = Math.max(
+        0,
+        Number((grossAwardedBeforeSink - seasonalSinkAmount).toFixed(4))
+      );
+      const blockedAmount = Math.max(
+        0,
+        Number(
+          (capBlockedAmount + tuningBlockedAmount + seasonalSinkAmount).toFixed(
+            4
+          )
+        )
+      );
+      const earnedToday = Math.max(0, Number(awardResult.earnedAfter || 0));
+      const remainingToday = Math.max(0, status.cap - earnedToday);
+
       // Add balance
-      await this.addBalance(guildId, userId, safeAmount);
+      if (awardedAmount > 0) {
+        await this.addBalance(guildId, userId, awardedAmount, "game_daily_award", {
+          gameId: normalizedGameId,
+          dateKey: status.dateKey,
+          requestedAmount,
+          effectiveRequestedAmount,
+          tunedRequestedAmount,
+          softLimitPayoutFactor,
+          softLimitAwardAmount,
+          grossAwardedBeforeSink,
+          grossAwardedAmount,
+          capBlockedAmountRaw,
+          capBlockedAmount,
+          tuningBlockedAmount,
+          seasonalSinkAmount,
+          blockedAmount,
+          cap: status.cap,
+          tuningVersion: tuning.version,
+        });
+      }
+
+      const seasonalXpFromSink = Math.max(
+        0,
+        Math.floor(
+          seasonalSinkAmount *
+            Math.max(0, Number(tuning.sinks.seasonXpPerSunkCoin || 0))
+        )
+      );
+      if (
+        tuning.enforcement.longTermSinks === true &&
+        seasonalXpFromSink > 0
+      ) {
+        await this.client.level.upsert({
+          where: {
+            guildId_userId: {
+              guildId,
+              userId,
+            },
+          },
+          create: {
+            guildId,
+            userId,
+            seasonXp: seasonalXpFromSink,
+          },
+          update: {
+            seasonXp: {
+              increment: seasonalXpFromSink,
+            },
+          },
+        });
+      }
+
+      this._recordGameAwardTelemetry(
+        guildId,
+        userId,
+        normalizedGameId,
+        requestedAmount,
+        awardedAmount,
+        blockedAmount
+      );
 
       return {
-        gameId,
+        gameId: normalizedGameId,
         dateKey: status.dateKey,
-        earnedToday: awardResult.earnedAfter,
-        remainingToday: status.cap - awardResult.earnedAfter,
+        earnedToday,
+        remainingToday,
         baseCap: status.baseCap,
         cap: status.cap,
         upgradeLevel: status.upgradeLevel,
         multiplier: status.multiplier,
-        requestedAmount: amount,
-        awardedAmount: safeAmount,
+        requestedAmount,
+        effectiveRequestedAmount,
+        tunedRequestedAmount,
+        softLimitPayoutFactor,
+        softLimitAwardAmount,
+        grossAwardedBeforeSink,
+        grossAwardedAmount,
+        capBlockedAmountRaw,
+        capBlockedAmount,
+        tuningBlockedAmount,
+        seasonalSinkAmount,
+        seasonalSinkRate,
+        seasonalXpFromSink,
+        awardedAmount,
         blockedAmount,
+        tuningVersion: tuning.version,
       };
     }
 
-    // No amount to award (already at cap)
+    // No amount to award after tuning multiplier.
+    const blockedAmount = Math.max(
+      0,
+      Number((effectiveRequestedAmount - tunedRequestedAmount).toFixed(4))
+    );
     return {
-      gameId,
+      gameId: normalizedGameId,
       dateKey: status.dateKey,
       earnedToday: status.earnedToday,
       remainingToday: status.remainingToday,
@@ -1538,9 +2021,22 @@ class Database {
       cap: status.cap,
       upgradeLevel: status.upgradeLevel,
       multiplier: status.multiplier,
-      requestedAmount: amount,
+      requestedAmount,
+      effectiveRequestedAmount,
+      tunedRequestedAmount,
+      softLimitPayoutFactor: 0,
+      softLimitAwardAmount: 0,
+      grossAwardedBeforeSink: 0,
+      grossAwardedAmount: 0,
+      tuningBlockedAmount: blockedAmount,
+      seasonalSinkAmount: 0,
+      seasonalSinkRate: 0,
+      seasonalXpFromSink: 0,
+      capBlockedAmountRaw: 0,
+      capBlockedAmount: 0,
       awardedAmount: 0,
-      blockedAmount: amount,
+      blockedAmount,
+      tuningVersion: tuning.version,
     };
   }
 
@@ -1572,6 +2068,13 @@ class Database {
   }
 
   async addGameXP(guildId, userId, gameType, amount) {
+    const tuning = getEconomyTuningConfig();
+    const requestedXp = Math.max(0, Number(amount) || 0);
+    const effectiveXp = Math.max(
+      0,
+      Math.floor(requestedXp * tuning.faucets.gameXpMultiplier)
+    );
+
     const result = await addGameXPHelper(
       this.client,
       () => this.checkAndUpdateSeason(),
@@ -1580,7 +2083,7 @@ class Database {
       guildId,
       userId,
       gameType,
-      amount
+      effectiveXp
     );
 
     await this._invalidateUserRelatedCaches(guildId, userId);
@@ -1688,18 +2191,33 @@ class Database {
 
   // Get info about an upgrade based on type and level
   async getUpgradeInfo(type, level) {
-    return getUpgradeInfo(type, level);
+    const baseInfo = getUpgradeInfo(type, level);
+    const tuning = getEconomyTuningConfig();
+    const priceMultiplier = Math.max(0.5, Number(tuning.sinks.upgradePriceMultiplier || 1));
+    const adjustedPrice = Math.max(1, Math.floor(baseInfo.price * priceMultiplier));
+    const adjustedBasePrice = Math.max(1, Math.floor(baseInfo.basePrice * priceMultiplier));
+
+    return {
+      ...baseInfo,
+      price: adjustedPrice,
+      basePrice: adjustedBasePrice,
+      tuningVersion: tuning.version,
+    };
   }
 
   // Purchase an upgrade
   async purchaseUpgrade(guildId, userId, type) {
-    return purchaseUpgradeHelper(
+    const result = await purchaseUpgradeHelper(
       this.client,
       (targetType, level) => this.getUpgradeInfo(targetType, level),
       guildId,
       userId,
       type
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+
+    return result;
   }
 
   // Get all upgrades for a user
@@ -1714,7 +2232,7 @@ class Database {
 
   // Revert an upgrade (decrease level by 1 and refund 85% of the price)
   async revertUpgrade(guildId, userId, type) {
-    return revertUpgradeHelper(
+    const result = await revertUpgradeHelper(
       this.client,
       (targetGuildId, targetUserId, cooldownType) =>
         this.getCooldown(targetGuildId, targetUserId, cooldownType),
@@ -1725,6 +2243,10 @@ class Database {
       userId,
       type
     );
+
+    await this._invalidateUserRelatedCaches(guildId, userId);
+
+    return result;
   }
 
   async createVoiceSession(guildId, userId, channelId, joinedAt) {

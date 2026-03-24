@@ -7,10 +7,7 @@ import { fileURLToPath } from "url";
 import fs from "fs/promises";
 import fetch from "node-fetch";
 import { getPaletteFromURL, getColorFromURL } from "color-thief-bun";
-import {
-  rasterizeSvgToPng,
-  renderWithTakumi,
-} from "./renderBackends.js";
+import { renderWithTakumi } from "./renderBackends.js";
 
 // Load environment variables
 dotenv.config({ path: "../../.env" });
@@ -65,6 +62,12 @@ const SKIP_COLOR_PROCESSING_FOR_GAMES = parseBooleanEnv(
   process.env.RENDER_SKIP_COLOR_PROCESSING_FOR_GAMES,
   false
 );
+const EMERGENCY_FALLBACK_ENABLED = parseBooleanEnv(
+  process.env.RENDER_EMERGENCY_FALLBACK_ENABLED,
+  true
+);
+const EMERGENCY_FALLBACK_COLOR =
+  process.env.RENDER_EMERGENCY_FALLBACK_COLOR || "#2B2D31";
 
 // Per-user gradient cache and in-flight deduplication
 const userGradientCache = new Map();
@@ -1284,6 +1287,54 @@ function dataUriToBuffer(dataUri) {
   }
 }
 
+function clampRenderDimension(value, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(1, Math.min(4096, Math.round(numeric)));
+}
+
+function parseHexColor(hexColor) {
+  const match =
+    typeof hexColor === "string"
+      ? hexColor.trim().match(/^#?([0-9a-f]{6})$/i)
+      : null;
+  if (!match) {
+    return { r: 43, g: 45, b: 49, alpha: 1 };
+  }
+  const hex = match[1];
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+    alpha: 1,
+  };
+}
+
+async function createEmergencyFallbackPng(width, height) {
+  const safeWidth = clampRenderDimension(width, 800);
+  const safeHeight = clampRenderDimension(height, 400);
+  const background = parseHexColor(EMERGENCY_FALLBACK_COLOR);
+
+  try {
+    return await sharp({
+      create: {
+        width: safeWidth,
+        height: safeHeight,
+        channels: 4,
+        background,
+      },
+    })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  } catch (error) {
+    console.error(
+      `[imageGenerator] Emergency fallback PNG generation failed (${safeWidth}x${safeHeight})`,
+      error
+    );
+    return null;
+  }
+}
+
 // Cleanup function for temporary files (Moved from generateImage)
 // Consider calling this periodically (e.g., using setInterval) or on application startup/shutdown
 // if temporary file accumulation becomes an issue.
@@ -1542,8 +1593,23 @@ async function performActualGenerationLogic(
       endPerf,
     });
 
+    const allowEmergencyFallback =
+      options.allowEmergencyFallback !== false && EMERGENCY_FALLBACK_ENABLED;
+    if (!pngBuffer && allowEmergencyFallback) {
+      const componentName =
+        typeof component === "string"
+          ? component
+          : Component?.name || "inline-component";
+      console.error(
+        `[imageGenerator] Takumi returned no buffer for "${componentName}". Serving emergency fallback image.`
+      );
+      pngBuffer = await createEmergencyFallbackPng(targetWidth, targetHeight);
+    }
+
     if (!pngBuffer) {
-      throw new Error("Takumi rendering failed - no fallback available");
+      throw new Error(
+        "Takumi rendering failed and emergency fallback image generation failed"
+      );
     }
 
     if (PERF_LOGGING) {

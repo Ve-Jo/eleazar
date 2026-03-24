@@ -1,7 +1,7 @@
 import UserCard from "./unified/UserCard.jsx";
 
 const Snake = (props) => {
-  let { grid, score, earning, interaction, i18n, database, coloring } = props;
+  let { grid, score, earning, interaction, i18n, database, coloring, gameOver = false } = props;
 
   const translations = Object.entries(Snake.localization_strings).reduce(
     (acc, [key, translations]) => ({
@@ -139,6 +139,7 @@ const Snake = (props) => {
         earning={earning}
         balance={database?.economy?.balance || 0} // Wallet balance only
         increaseAmount={earning}
+        addIncreaseToBalance={!gameOver}
         levelProgress={
           database?.levelProgress || {
             chat: database?.levelProgress?.chat,

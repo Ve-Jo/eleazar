@@ -177,6 +177,8 @@ export type BalanceResponse = {
 
 export type AddBalanceRequest = UserIdentifier & {
   amount: number;
+  source?: string;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type TransferBalanceRequest = {

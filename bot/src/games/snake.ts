@@ -233,9 +233,16 @@ class GameState {
     const xpGained = scoreDifference * 5; // 5 XP per point gained
     this.state.earningGameXP += xpGained;
 
-    // Update gameLevelData.currentXP for display (without affecting actual level calculation)
+    // Recalculate projected level progress from total XP so bars don't exceed 100%.
     if (this.state.gameLevelData) {
-      this.state.gameLevelData.currentXP += xpGained;
+      const baseGameXp = Number(
+        this.state.baseGameXP ?? this.state.gameLevelData.totalXP ?? 0
+      );
+      const projectedTotalGameXp = Math.max(
+        0,
+        baseGameXp + this.state.earningGameXP
+      );
+      this.state.gameLevelData = hubClient.calculateLevel(projectedTotalGameXp);
     }
 
     return xpGained;
@@ -330,6 +337,7 @@ export default {
           grid: state.grid,
           score: state.score,
           earning: state.earning,
+          gameOver: Boolean(state.gameOver),
           locale: userLocale,
           dominantColor: "user", // Use dynamic colors based on user avatar
           interaction: {
@@ -541,20 +549,15 @@ export default {
         if (inactivityTimeout) clearTimeout(inactivityTimeout);
         inactivityTimeout = setTimeout(async () => {
           if (!initialState.state.gameOver) {
+            initialState.state.gameOver = true;
             initialState.state.earning = calculateEarning(initialState.state);
-            const finalBoard = await generateGameBoard(
-              initialState.state,
-              interaction.locale,
-              interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            );
 
             // Use earningGameXP for timeout case
             const earningGameXP = initialState.state.earningGameXP || 0;
             let timeoutAwardedAmount = initialState.state.earning;
             let timeoutBlockedAmount = 0;
+            let timeoutSoftLimitAwardAmount = 0;
+            let timeoutSoftLimitPayoutFactor = 0;
 
             try {
               // Only save high score if in a guild
@@ -604,10 +607,32 @@ export default {
                     "snake",
                     initialState.state.earning,
                   );
-                  timeoutAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                  const creditedAwardAmount = Number(payoutResult.awardedAmount || 0);
+                  initialState.state.balance = Math.max(
+                    0,
+                    Number(initialState.state.balance || 0) + creditedAwardAmount
+                  );
+                  timeoutAwardedAmount = Number(
+                    payoutResult.visualAwardedAmount ?? payoutResult.awardedAmount ?? 0
+                  );
                   timeoutBlockedAmount = Number(payoutResult.blockedAmount || 0);
+                  timeoutSoftLimitAwardAmount = Number(
+                    payoutResult.softLimitAwardAmount || 0
+                  );
+                  timeoutSoftLimitPayoutFactor = Number(
+                    payoutResult.softLimitPayoutFactor || 0
+                  );
                 }
               }
+
+              const finalBoard = await generateGameBoard(
+                initialState.state,
+                interaction.locale,
+                interaction.user.displayAvatarURL({
+                  extension: "png",
+                  size: 1024,
+                }),
+              );
 
               const timeoutText = await i18n.__(`games.snake.timesOut`, {
                 score: initialState.state.score,
@@ -616,6 +641,10 @@ export default {
                 timeoutAwardedAmount,
                 timeoutBlockedAmount,
                 earningGameXP,
+                {
+                  softLimitAwardAmount: timeoutSoftLimitAwardAmount,
+                  softLimitPayoutFactor: timeoutSoftLimitPayoutFactor,
+                }
               );
               const content =
                 typeof timeoutText === "string"
@@ -784,19 +813,12 @@ export default {
           state.earning = calculateEarning(state);
           console.log("Game stopped by user, final score:", state.score);
           try {
-            const stopBoard = await generateGameBoard(
-              state,
-              interaction.locale,
-              interaction.user.displayAvatarURL({
-                extension: "png",
-                size: 1024,
-              }),
-            );
-
             // Use earningGameXP for stop case
             const earningGameXP = state.earningGameXP || 0;
             let stopAwardedAmount = state.earning;
             let stopBlockedAmount = 0;
+            let stopSoftLimitAwardAmount = 0;
+            let stopSoftLimitPayoutFactor = 0;
 
             let isNewRecordStop = false;
             if (interaction.guildId) {
@@ -845,10 +867,32 @@ export default {
                   "snake",
                   state.earning,
                 );
-                stopAwardedAmount = Number(payoutResult.awardedAmount || 0);
+                const creditedAwardAmount = Number(payoutResult.awardedAmount || 0);
+                state.balance = Math.max(
+                  0,
+                  Number(state.balance || 0) + creditedAwardAmount
+                );
+                stopAwardedAmount = Number(
+                  payoutResult.visualAwardedAmount ?? payoutResult.awardedAmount ?? 0
+                );
                 stopBlockedAmount = Number(payoutResult.blockedAmount || 0);
+                stopSoftLimitAwardAmount = Number(
+                  payoutResult.softLimitAwardAmount || 0
+                );
+                stopSoftLimitPayoutFactor = Number(
+                  payoutResult.softLimitPayoutFactor || 0
+                );
               }
             }
+
+            const stopBoard = await generateGameBoard(
+              state,
+              interaction.locale,
+              interaction.user.displayAvatarURL({
+                extension: "png",
+                size: 1024,
+              }),
+            );
 
             const stoppedText = await i18n.__(`games.snake.stopped`, {
               score: state.score,
@@ -857,6 +901,10 @@ export default {
               stopAwardedAmount,
               stopBlockedAmount,
               earningGameXP,
+              {
+                softLimitAwardAmount: stopSoftLimitAwardAmount,
+                softLimitPayoutFactor: stopSoftLimitPayoutFactor,
+              }
             );
             const content =
               typeof stoppedText === "string"

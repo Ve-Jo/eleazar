@@ -113,6 +113,19 @@ const command = {
       const marriageStatus = await (hubClient as any).getMarriageStatus(guildId, userId);
       let partnerData: GenericUserData | null = null;
       let userBankBalance = 0;
+      let partnerContributionAmount = 0;
+      let initialPartnerBankBalance = 0;
+
+      const getActiveBankBalance = (bankResult: unknown): number => {
+        if (
+          bankResult &&
+          typeof bankResult === "object" &&
+          "balance" in (bankResult as Record<string, unknown>)
+        ) {
+          return Number((bankResult as { balance?: unknown }).balance || 0);
+        }
+        return Number(bankResult || 0);
+      };
 
       await (hubClient as any).ensureGuildUser(guildId, userId);
 
@@ -129,10 +142,7 @@ const command = {
       const activeBankResult = await (hubClient as any).calculateBankBalance(initialUserData);
       const balanceData = await (hubClient as any).getBalance(guildId, userId);
       const distributedBalance = Number(balanceData?.bankDistributed || 0);
-      // Handle new BankResult format
-      const activeBankBalance = activeBankResult && typeof activeBankResult === "object" && "balance" in activeBankResult
-        ? Number(activeBankResult.balance)
-        : Number(activeBankResult || 0);
+      const activeBankBalance = getActiveBankBalance(activeBankResult);
       userBankBalance = activeBankBalance + distributedBalance;
 
       if (marriageStatus && marriageStatus.status === "MARRIED") {
@@ -142,6 +152,17 @@ const command = {
           marriageStatus.partnerId,
           true
         )) as GenericUserData;
+
+        const initialPartnerResult = await (hubClient as any).calculateBankBalance(partnerData);
+        const initialPartnerBalanceData = await (hubClient as any).getBalance(
+          guildId,
+          marriageStatus.partnerId
+        );
+        const initialPartnerDistributedBalance = Number(
+          initialPartnerBalanceData?.bankDistributed || 0
+        );
+        initialPartnerBankBalance =
+          getActiveBankBalance(initialPartnerResult) + initialPartnerDistributedBalance;
       }
 
       if (userBankBalance === 0) {
@@ -224,10 +245,7 @@ const command = {
         const refreshedUserDistributedBalance = Number(
           refreshedUserBalanceData?.bankDistributed || 0
         );
-        // Handle new BankResult format
-        const refreshedUserActiveBalance = refreshedUserResult && typeof refreshedUserResult === "object" && "balance" in refreshedUserResult
-          ? Number(refreshedUserResult.balance)
-          : Number(refreshedUserResult || 0);
+        const refreshedUserActiveBalance = getActiveBankBalance(refreshedUserResult);
         const refreshedUserBankBalance = refreshedUserActiveBalance + refreshedUserDistributedBalance;
 
         const partnerResult = await (hubClient as any).calculateBankBalance(updatedPartner);
@@ -236,11 +254,9 @@ const command = {
           marriageStatus.partnerId
         );
         const partnerDistributedBalance = Number(partnerBalanceData?.bankDistributed || 0);
-        // Handle new BankResult format
-        const partnerActiveBalance = partnerResult && typeof partnerResult === "object" && "balance" in partnerResult
-          ? Number(partnerResult.balance)
-          : Number(partnerResult || 0);
+        const partnerActiveBalance = getActiveBankBalance(partnerResult);
         const partnerBankBalance = partnerActiveBalance + partnerDistributedBalance;
+        partnerContributionAmount = Math.max(0, initialPartnerBankBalance - partnerBankBalance);
         const combinedBankBalance = refreshedUserBankBalance + partnerBankBalance;
 
         finalUserData.partnerData = updatedPartner;
@@ -253,10 +269,7 @@ const command = {
         const refreshedUserDistributedBalance = Number(
           refreshedUserBalanceData?.bankDistributed || 0
         );
-        // Handle new BankResult format
-        const refreshedUserActiveBalance = refreshedUserResult && typeof refreshedUserResult === "object" && "balance" in refreshedUserResult
-          ? Number(refreshedUserResult.balance)
-          : Number(refreshedUserResult || 0);
+        const refreshedUserActiveBalance = getActiveBankBalance(refreshedUserResult);
         const refreshedUserBankBalance = refreshedUserActiveBalance + refreshedUserDistributedBalance;
         finalUserData.combinedBankBalance = Number(refreshedUserBankBalance).toFixed(5);
       }
@@ -328,7 +341,7 @@ const command = {
               content: await i18n.__("commands.economy.withdraw.partnerWithdrawDM", {
                 user: interaction.user.tag,
                 amount: amountToWithdraw.toFixed(2),
-                partnerAmount: "0.00",
+                partnerAmount: partnerContributionAmount.toFixed(2),
                 guild: interaction.guild.name,
               }),
             });

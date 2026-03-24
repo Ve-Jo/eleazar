@@ -1,11 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { UPGRADES } from "../constants/database.ts";
+import { getEconomyTuningConfig } from "../../../shared/src/economyTuning.ts";
 
 // Bank constants
 const BASE_BANK_MAX_INACTIVE_MS = 2 * 60 * 60 * 1000; // 2 hours base
 const MAX_BANK_MAX_INACTIVE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days cap
 const BASE_ANNUAL_RATE = 0.01; // 1% base annual rate
-const MAX_ANNUAL_RATE = 0.50; // 50% cap
+const MAX_ANNUAL_RATE = 0.50; // legacy hard cap safety net
 const CHAT_LEVEL_RATE_BONUS = 0.01; // +1% per chat level
 const VOICE_LEVEL_RATE_BONUS = 0.01; // +1% per voice level
 const GAME_LEVEL_RATE_BONUS = 0.005; // +0.5% per game level
@@ -104,12 +105,19 @@ function calculateBankRateFromLevels(
   voiceLevel: number,
   gameLevel: number
 ): number {
+  const tuning = getEconomyTuningConfig();
   const rate =
     BASE_ANNUAL_RATE +
     (chatLevel - 1) * CHAT_LEVEL_RATE_BONUS +
     (voiceLevel - 1) * VOICE_LEVEL_RATE_BONUS +
     (gameLevel - 1) * GAME_LEVEL_RATE_BONUS;
-  return Math.min(MAX_ANNUAL_RATE, rate);
+  const scaledRate = rate * Math.max(0.1, Number(tuning.faucets.bankInterestRateMultiplier || 1));
+  const rolloutMaxRate = Math.max(
+    BASE_ANNUAL_RATE,
+    Number(tuning.bank.maxAnnualRatePercent || 50) / 100
+  );
+  const effectiveMaxRate = Math.min(MAX_ANNUAL_RATE, rolloutMaxRate);
+  return Math.min(effectiveMaxRate, scaledRate);
 }
 
 function buildBankRateSnapshot(
@@ -133,10 +141,16 @@ function buildBankRateSnapshot(
  * Calculate max inactive time (cycle duration) based on bank_vault upgrade level
  */
 function calculateMaxInactiveMs(bankVaultLevel: number): number {
+  const tuning = getEconomyTuningConfig();
   const maxInactive =
     BASE_BANK_MAX_INACTIVE_MS +
     (bankVaultLevel - 1) * UPGRADES.bank_vault.effectValue;
-  return Math.min(MAX_BANK_MAX_INACTIVE_MS, maxInactive);
+  const rolloutCap = Math.max(
+    BASE_BANK_MAX_INACTIVE_MS,
+    Number(tuning.bank.maxCycleDurationMs || MAX_BANK_MAX_INACTIVE_MS)
+  );
+  const effectiveCap = Math.min(MAX_BANK_MAX_INACTIVE_MS, rolloutCap);
+  return Math.min(effectiveCap, maxInactive);
 }
 
 function toSafeElapsedMs(startTime: number | bigint | string): number {

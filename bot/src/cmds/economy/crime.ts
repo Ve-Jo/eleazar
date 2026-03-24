@@ -7,6 +7,7 @@ import {
 } from "discord.js";
 import hubClient from "../../api/hubClient.ts";
 import { UPGRADES } from "../../../../hub/shared/src/domain.ts";
+import { getEconomyTuningConfig } from "../../../../hub/shared/src/economyTuning.ts";
 import { generateImage } from "../../utils/imageGenerator.ts";
 import { ComponentBuilder } from "../../utils/componentConverter.ts";
 import ms from "ms";
@@ -225,7 +226,11 @@ const command = {
         // crime_mastery combines crime cooldown, success chance, and fine reduction
         const crimeMasteryUpgrade = freshUserData.upgrades?.find((upgrade) => upgrade.type === "crime_mastery");
         const crimeMasteryLevel = crimeMasteryUpgrade?.level || 1;
-        const successChance = Math.min(0.55, 0.3 + (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectSuccess || 0));
+        const tuning = getEconomyTuningConfig();
+        const successChance = Math.min(
+          tuning.guardrails.maxCrimeSuccessChance,
+          0.3 + (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectSuccess || 0)
+        );
         const success = Math.random() < successChance;
 
         // vault_guard provides theft defense for the target
@@ -238,12 +243,18 @@ const command = {
           (targetVaultGuardLevel - 1) * (UPGRADES.vault_guard.effectMultiplier || 0)
         );
 
-        const baseMaxStealPercent = Math.min(0.15, 0.08 + (crimeMasteryLevel - 1) * 0.01);
-        const maxStealPercent = Math.max(0.02, baseMaxStealPercent * (1 - targetShieldReduction));
+        const baseMaxStealPercent = Math.min(
+          tuning.guardrails.maxCrimeStealPercent,
+          0.08 + (crimeMasteryLevel - 1) * 0.01
+        );
+        const maxStealPercent = Math.max(
+          0.02,
+          baseMaxStealPercent * (1 - targetShieldReduction)
+        );
 
         // crime_mastery also provides fine reduction
         const fraudReduction = Math.min(
-          0.3,
+          tuning.guardrails.maxCrimeFineReduction,
           (crimeMasteryLevel - 1) * (UPGRADES.crime_mastery.effectMultiplier || 0)
         );
 
@@ -255,22 +266,45 @@ const command = {
           const rolledAmount = Math.floor(
             minStealAmount + Math.random() * Math.max(1, maxStealAmount - minStealAmount + 1)
           );
-          amount = Math.min(targetBalance, Math.max(1, rolledAmount));
+          const tunedRolledAmount = Math.floor(
+            rolledAmount * Math.max(0.1, Number(tuning.faucets.crimeStealMultiplier || 1))
+          );
+          amount = Math.min(targetBalance, Math.max(1, tunedRolledAmount));
         } else {
           const robberBalance = Number(freshUserData.economy?.balance || 0);
-          const minFine = Math.floor(robberBalance * (0.02 * (1 - fraudReduction)));
-          const maxFine = Math.floor(robberBalance * (0.06 * (1 - fraudReduction)));
+          const crimeFineMultiplier = Math.max(
+            0.5,
+            Number(tuning.sinks.crimeFineMultiplier || 1)
+          );
+          const minFine = Math.floor(
+            robberBalance * (0.02 * (1 - fraudReduction) * crimeFineMultiplier)
+          );
+          const maxFine = Math.floor(
+            robberBalance * (0.06 * (1 - fraudReduction) * crimeFineMultiplier)
+          );
           const rolledFine = Math.floor(minFine + Math.random() * Math.max(1, maxFine - minFine + 1));
           amount = Math.min(robberBalance, Math.max(1, rolledFine));
         }
 
         if (amount > 0) {
           if (success) {
-            await (hubClient as any).addBalance(guild.id, targetId, -amount);
-            await (hubClient as any).addBalance(guild.id, user.id, amount);
+            await (hubClient as any).addBalance(guild.id, targetId, -amount, "crime_loss", {
+              counterpartyUserId: user.id,
+              tuningVersion: tuning.version,
+            });
+            await (hubClient as any).addBalance(guild.id, user.id, amount, "crime_gain", {
+              counterpartyUserId: targetId,
+              tuningVersion: tuning.version,
+            });
           } else {
-            await (hubClient as any).addBalance(guild.id, user.id, -amount);
-            await (hubClient as any).addBalance(guild.id, targetId, amount);
+            await (hubClient as any).addBalance(guild.id, user.id, -amount, "crime_fine", {
+              counterpartyUserId: targetId,
+              tuningVersion: tuning.version,
+            });
+            await (hubClient as any).addBalance(guild.id, targetId, amount, "crime_compensation", {
+              counterpartyUserId: user.id,
+              tuningVersion: tuning.version,
+            });
           }
         }
 
