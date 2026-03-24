@@ -11,4 +11,5 @@ temp/*
 **/logs
 
 **/temp/emoji/*
+**/dist/
 NodeLink
