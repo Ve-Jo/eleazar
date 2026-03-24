@@ -150,6 +150,11 @@ const command = {
       ru: "В данный момент игры недоступны.",
       uk: "На даний момент ігри недоступні.",
     },
+    activityMigrationNotice: {
+      en: "New Activity launcher is live in Discord App Launcher. In-chat games will migrate there soon.",
+      ru: "Новый лаунчер Activity уже доступен в Discord App Launcher. Игры в чате скоро переедут туда.",
+      uk: "Новий лаунчер Activity уже доступний в Discord App Launcher. Ігри в чаті скоро переїдуть туди.",
+    },
     gameNotFound: {
       en: "The selected game was not found.",
       ru: "Выбранная игра не найдена.",
@@ -423,6 +428,10 @@ const command = {
         })
           .setColor(dominantColor?.embedColor)
           .addText(String(await i18n.__("commands.economy.work.title")), "header3")
+          .addText(
+            String(await i18n.__("commands.economy.work.activityMigrationNotice")),
+            "italic"
+          )
           .addImage("attachment://work_games.png");
 
         const selectMenu = new StringSelectMenuBuilder()

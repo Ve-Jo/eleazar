@@ -3,7 +3,8 @@ export type ServiceName =
   | "rendering"
   | "localization"
   | "ai"
-  | "client";
+  | "client"
+  | "activities";
 
 export const SERVICE_NAMES = {
   DATABASE: "database",
@@ -11,6 +12,7 @@ export const SERVICE_NAMES = {
   LOCALIZATION: "localization",
   AI: "ai",
   CLIENT: "client",
+  ACTIVITIES: "activities",
 } as const;
 
 export const DEFAULT_SERVICE_PORTS: Record<ServiceName, number> = {
@@ -19,6 +21,7 @@ export const DEFAULT_SERVICE_PORTS: Record<ServiceName, number> = {
   localization: 3005,
   ai: 8080,
   client: 3006,
+  activities: 3007,
 };
 
 export const DEFAULT_SERVICE_URLS: Record<ServiceName, string> = {
@@ -27,6 +30,7 @@ export const DEFAULT_SERVICE_URLS: Record<ServiceName, string> = {
   localization: `http://localhost:${DEFAULT_SERVICE_PORTS.localization}`,
   ai: `http://localhost:${DEFAULT_SERVICE_PORTS.ai}`,
   client: `http://localhost:${DEFAULT_SERVICE_PORTS.client}`,
+  activities: `http://localhost:${DEFAULT_SERVICE_PORTS.activities}`,
 };
 
 export function buildServiceUrl(

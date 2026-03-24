@@ -1,5 +1,8 @@
 const ACTIVITY_API_KEY =
-  process.env.VITE_DISCORD_CLIENT_SECRET || "activity_secret_key";
+  process.env.ACTIVITY_SHARED_KEY ||
+  process.env.ELEAZAR_ACTIVITIES_SHARED_KEY ||
+  process.env.VITE_DISCORD_CLIENT_SECRET ||
+  "activity_secret_key";
 
 // Enhanced API Key Authentication Middleware
 export const authenticateApiKey = (req: any, res: any, next: any) => {

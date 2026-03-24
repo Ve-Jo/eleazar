@@ -96,7 +96,8 @@
         "gameError": "Error starting {{game}}. Please try again.",
         "noGamesAvailable": "No games are currently available.",
         "gameNotFound": "The selected game was not found.",
-        "riskyDailyLimitReached": "{{game}} is locked for today because you reached its risky daily limit ({{earned}}/{{cap}})."
+        "riskyDailyLimitReached": "{{game}} is locked for today because you reached its risky daily limit ({{earned}}/{{cap}}).",
+        "activityMigrationNotice": "New Activity launcher is live in Discord App Launcher. In-chat games will migrate there soon."
       },
       "deposit": {
         "title": "Deposit",

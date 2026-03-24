@@ -128,7 +128,8 @@
         "gameError": "Помилка при запуску {{game}}. Будь ласка, спробуйте знову.",
         "noGamesAvailable": "На даний момент ігри недоступні.",
         "gameNotFound": "Вибрана гра не знайдена.",
-        "riskyDailyLimitReached": "{{game}} заблокована на сьогодні, бо ви досягли денного ліміту ризикової гри ({{earned}}/{{cap}})."
+        "riskyDailyLimitReached": "{{game}} заблокована на сьогодні, бо ви досягли денного ліміту ризикової гри ({{earned}}/{{cap}}).",
+        "activityMigrationNotice": "Новий лаунчер Activity уже доступний в Discord App Launcher. Ігри в чаті скоро переїдуть туди."
       },
       "deposit": {
         "command": {

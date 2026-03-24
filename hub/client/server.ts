@@ -20,6 +20,9 @@ const DATABASE_SERVICE_URL = (
 const RENDERING_SERVICE_URL = (
   process.env.RENDERING_SERVICE_URL || DEFAULT_SERVICE_URLS.rendering
 ).replace(/\/$/, "");
+const ACTIVITIES_SERVICE_URL = (
+  process.env.ACTIVITIES_SERVICE_URL || DEFAULT_SERVICE_URLS.activities
+).replace(/\/$/, "");
 const WEB_APP_URL = (process.env.WEB_APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || "";
 const DISCORD_CLIENT_SECRET =
@@ -1125,7 +1128,7 @@ function setupDualRoutes(appInstance: any, router: any) {
           : req.originalUrl.replace("/api", "/.proxy/api");
 
         const forwardResponse = await fetch(
-          `${DATABASE_SERVICE_URL}${targetPath}`,
+          `${ACTIVITIES_SERVICE_URL}${targetPath}`,
           {
             method: req.method,
             headers,
@@ -1175,8 +1178,7 @@ app.post(
       // Instead of handling the token exchange ourselves, forward the request to the activities server
       console.log("[API Server] Forwarding token request to activities server");
 
-      // Forward to the activities server at port 3001
-      const forwardResponse = await fetch(`${DATABASE_SERVICE_URL}/api/token`, {
+      const forwardResponse = await fetch(`${ACTIVITIES_SERVICE_URL}/api/token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1203,9 +1205,8 @@ app.post(
 // Add config endpoint to provide client ID
 app.get(["/api/config", "/.proxy/api/config"], async (req: any, res: any) => {
   try {
-    // Forward to the activities server at port 3001
     console.log("[API Server] Forwarding config request to activities server");
-    const forwardResponse = await fetch(`${DATABASE_SERVICE_URL}/api/config`);
+    const forwardResponse = await fetch(`${ACTIVITIES_SERVICE_URL}/api/config`);
 
     const responseData = await forwardResponse.text();
     console.log(
@@ -1227,7 +1228,6 @@ app.get(
   ["/api/launcher-data", "/.proxy/api/launcher-data"],
   async (req: any, res: any) => {
     try {
-      // Forward to the activities server at port 3001
       console.log(
         "[API Server] Forwarding launcher-data request to activities server"
       );
@@ -1242,7 +1242,7 @@ app.get(
       }
 
       const forwardResponse = await fetch(
-        `${DATABASE_SERVICE_URL}/api/launcher-data`,
+        `${ACTIVITIES_SERVICE_URL}/api/launcher-data`,
         {
           headers,
         }
@@ -1263,6 +1263,39 @@ app.get(
       return res
         .status(500)
         .json({ error: "Internal server error", message: error.message });
+    }
+  }
+);
+
+// Forward 2048 completion endpoint to activities service.
+app.post(
+  ["/api/games/2048/complete", "/.proxy/api/games/2048/complete"],
+  express.json(),
+  async (req: any, res: any) => {
+    try {
+      const headers: Record<string, any> = { "Content-Type": "application/json" };
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (key.toLowerCase() !== "host" && key.toLowerCase() !== "content-length") {
+          headers[key] = value as string;
+        }
+      }
+
+      const forwardResponse = await fetch(
+        `${ACTIVITIES_SERVICE_URL}/api/games/2048/complete`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(req.body || {}),
+        }
+      );
+
+      const responseData = await forwardResponse.text();
+      return res.status(forwardResponse.status).send(responseData);
+    } catch (error: any) {
+      return res.status(500).json({
+        error: "Internal server error",
+        message: error.message,
+      });
     }
   }
 );

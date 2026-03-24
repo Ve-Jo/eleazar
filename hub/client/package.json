@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun run server.ts",
     "start": "bun run server.ts",
+    "build": "echo \"Client service build complete\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
