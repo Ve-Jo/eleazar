@@ -1,62 +1,86 @@
-export default function FeaturesPage() {
-  const pillars = [
-    {
-      label: "Command Surface",
-      title: "Guild controls with role-safe workflows",
-      body: "Moderation-adjacent settings, role progression, and voice-room flows designed for real operators.",
-    },
-    {
-      label: "Unified Signals",
-      title: "Dashboard metrics linked to bot systems",
-      body: "Guild context, settings summary, and account data stay connected to the live Discord experience.",
-    },
-    {
-      label: "Localization Ready",
-      title: "English, Russian, and Ukrainian support",
-      body: "Core interface flows are locale-aware and aligned with the bot's multilingual ecosystem.",
-    },
-    {
-      label: "Scalable Core",
-      title: "Architecture prepared for premium modules",
-      body: "The web layer is structured to grow into automation, subscriptions, and advanced governance.",
-    },
-  ];
+import { useRef } from "react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { getSiteCopy } from "../content/siteContent";
+import { useI18n } from "../state/i18n";
 
-  const tracks = [
-    "AI workflows and media tooling",
-    "Economy and progression control panels",
-    "Voice-room orchestration and waiting flows",
-    "Guild-level policy and permission guardrails",
-  ];
+const reveal = {
+  hidden: { opacity: 0, y: 22 },
+  show: { opacity: 1, y: 0 },
+};
+
+export default function FeaturesPage() {
+  const { locale } = useI18n();
+  const siteCopy = getSiteCopy(locale);
+  const copy = siteCopy.features;
+  const headerRef = useRef<HTMLElement | null>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: headerRef, offset: ["start end", "end start"] });
+  const headerY = useTransform(scrollYProgress, [0, 1], [reduceMotion ? 0 : 18, reduceMotion ? 0 : -18]);
 
   return (
-    <section className="container page prestige-page-shell">
-      <article className="card prestige-content-hero">
-        <span className="badge">Feature Atlas</span>
-        <h1>Built as a bot-first control layer</h1>
-        <p>
-          The web app extends Eleazar with focused management workflows while the primary community experience stays
-          in Discord.
-        </p>
+    <section className="features-page">
+      <motion.header
+        ref={headerRef}
+        className="section-head"
+        style={{ y: headerY }}
+        initial="hidden"
+        animate="show"
+        variants={reveal}
+        transition={{ duration: 0.55 }}
+      >
+        <span className="label-kicker">{copy.kicker}</span>
+        <h1>{copy.title}</h1>
+        <p>{copy.subtitle}</p>
+      </motion.header>
 
-        <div className="prestige-chip-strip">
-          {tracks.map((track) => (
-            <span key={track} className="prestige-chip">
-              {track}
-            </span>
+      <motion.section
+        className="track-grid"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+      >
+        <h2>{copy.trackTitle}</h2>
+        {copy.tracks.map((item) => (
+          <motion.article key={item.title} className="track-item" variants={reveal} transition={{ duration: 0.45 }}>
+            <strong>{item.title}</strong>
+            <p>{item.body}</p>
+          </motion.article>
+        ))}
+      </motion.section>
+
+      <motion.section
+        className="section-head"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.3 }}
+        variants={reveal}
+        transition={{ duration: 0.45 }}
+      >
+        <h2>{copy.outcomesTitle}</h2>
+        <div className="outcomes-row">
+          {copy.outcomes.map((item) => (
+            <span key={item}>{item}</span>
           ))}
         </div>
-      </article>
+      </motion.section>
 
-      <div className="grid cols-2 prestige-grid-gap">
-        {pillars.map((item) => (
-          <article key={item.title} className="card prestige-info-card">
-            <span className="prestige-section-label">{item.label}</span>
-            <h3>{item.title}</h3>
-            <p>{item.body}</p>
-          </article>
-        ))}
-      </div>
+      <motion.section
+        className="final-cta"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.4 }}
+        variants={reveal}
+        transition={{ duration: 0.45 }}
+      >
+        <div className="section-head">
+          <h2>{copy.ctaTitle}</h2>
+          <p>{copy.ctaBody}</p>
+        </div>
+        <motion.a href="/api/auth/discord/login" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} className="ui-btn ui-btn-primary">
+          {siteCopy.shared.oauthCta}
+        </motion.a>
+      </motion.section>
     </section>
   );
 }

@@ -1,34 +1,48 @@
+import { motion } from "framer-motion";
+import { getSiteCopy } from "../content/siteContent";
 import { useI18n } from "../state/i18n";
 
-export default function LoginPage() {
-  const { t } = useI18n();
+const reveal = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0 },
+};
 
-  const authNotes = [
-    "Discord OAuth with secure callback flow",
-    "Session-aware dashboard and guild controls",
-    "Localized interface after sign-in",
-  ];
+export default function LoginPage() {
+  const { locale } = useI18n();
+  const copy = getSiteCopy(locale);
 
   return (
-    <section className="container page prestige-page-shell">
-      <div className="card prestige-auth-card">
-        <span className="badge">Secure Access</span>
-        <h1>{t("login.title")}</h1>
-        <p>{t("login.subtitle")}</p>
+    <section className="auth-page">
+      <motion.div
+        className="auth-shell"
+        initial="hidden"
+        animate="show"
+        variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+      >
+        <motion.span variants={reveal} className="label-kicker">
+          {copy.login.kicker}
+        </motion.span>
+        <motion.h1 variants={reveal}>{copy.login.title}</motion.h1>
+        <motion.p variants={reveal}>{copy.login.subtitle}</motion.p>
 
-        <a href="/api/auth/discord/login" className="prestige-button-link btn-primary prestige-auth-button">
-          Continue with Discord
-        </a>
+        <motion.a
+          variants={reveal}
+          href="/api/auth/discord/login"
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.98 }}
+          className="ui-btn ui-btn-primary"
+        >
+          {copy.shared.oauthCta}
+        </motion.a>
 
-        <div className="prestige-auth-notes">
-          {authNotes.map((note) => (
-            <div key={note} className="prestige-auth-note">
+        <motion.div variants={reveal} className="auth-notes">
+          {copy.login.notes.map((note) => (
+            <div key={note} className="auth-note">
               {note}
             </div>
           ))}
-        </div>
-
-      </div>
+        </motion.div>
+      </motion.div>
     </section>
   );
 }

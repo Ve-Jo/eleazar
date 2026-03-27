@@ -1,13 +1,16 @@
+import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
+import { getSiteCopy } from "../content/siteContent";
 import { useAuth } from "../state/auth";
 import { useI18n } from "../state/i18n";
 
 export default function AccountPage() {
   const { session, loading } = useAuth();
   const { locale } = useI18n();
+  const copy = getSiteCopy(locale).account;
 
   if (loading) {
-    return <section className="container page">Loading...</section>;
+    return <section className="app-page">Loading...</section>;
   }
 
   if (!session.authenticated) {
@@ -15,29 +18,34 @@ export default function AccountPage() {
   }
 
   return (
-    <section className="container page prestige-page-shell">
-      <article className="card prestige-content-hero">
-        <span className="badge">Profile</span>
-        <h1>Account</h1>
-        <p>Session identity and interface preferences currently active in the dashboard.</p>
-      </article>
+    <section className="app-page">
+      <motion.header
+        className="app-page-header"
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <span className="label-kicker">{copy.kicker}</span>
+        <h1>{copy.title}</h1>
+        <p>{copy.subtitle}</p>
+      </motion.header>
 
-      <div className="grid cols-2 prestige-grid-gap">
-        <article className="card prestige-info-card">
-          <span className="prestige-section-label">Identity</span>
-          <h3>Connected user</h3>
-          <p className="prestige-inline-field">
-            User ID <strong>{session.user?.id ?? "unknown"}</strong>
+      <div className="app-grid app-grid-2">
+        <motion.article className="app-panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.35 }}>
+          <span className="badge-soft">{copy.identityLabel}</span>
+          <h3>{copy.identityTitle}</h3>
+          <p>
+            {copy.userId} <strong>{session.user?.id ?? "unknown"}</strong>
           </p>
-        </article>
+        </motion.article>
 
-        <article className="card prestige-info-card">
-          <span className="prestige-section-label">Locale</span>
-          <h3>Current web language</h3>
-          <p className="prestige-inline-field">
-            Active locale <strong>{locale.toUpperCase()}</strong>
+        <motion.article className="app-panel" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.35 }}>
+          <span className="badge-soft">{copy.localeLabel}</span>
+          <h3>{copy.localeTitle}</h3>
+          <p>
+            {copy.activeLocale} <strong>{locale.toUpperCase()}</strong>
           </p>
-        </article>
+        </motion.article>
       </div>
     </section>
   );

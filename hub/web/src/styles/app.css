@@ -1,0 +1,71 @@
+.auth-page {
+  width: var(--content-width);
+  margin: 0 auto;
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-6);
+}
+
+.auth-shell {
+  max-width: 680px;
+  padding: clamp(1rem, 2vw, 1.4rem);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(150deg, rgba(33, 230, 193, 0.12), rgba(140, 255, 101, 0.08)),
+    var(--bg-panel-strong);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.auth-notes {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-note {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.65rem;
+  color: var(--text-1);
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.loading-dots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+
+.metric-row {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.metric-row strong {
+  color: var(--text-0);
+}
+
+.badge-soft {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: rgba(8, 13, 30, 0.55);
+  color: var(--text-2);
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .auth-page {
+    padding-top: var(--space-4);
+  }
+}

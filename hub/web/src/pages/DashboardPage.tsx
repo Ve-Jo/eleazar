@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Link, Navigate } from "react-router-dom";
+import { getSiteCopy } from "../content/siteContent";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useI18n } from "../state/i18n";
-import type { GuildListResponse, ManageableGuild } from "../types/guild";
+import type { ManageableGuild, GuildListResponse } from "../types/guild";
 import type { GuildOverviewResponse } from "../types/guildSettings";
 
 export default function DashboardPage() {
   const { session, loading } = useAuth();
-  const { t } = useI18n();
+  const { locale } = useI18n();
+  const copy = getSiteCopy(locale).dashboard;
   const [guilds, setGuilds] = useState<ManageableGuild[]>([]);
   const [guildsLoading, setGuildsLoading] = useState(true);
   const [overview, setOverview] = useState<GuildOverviewResponse | null>(null);
@@ -30,9 +33,7 @@ export default function DashboardPage() {
         if (manageableGuilds.length > 0) {
           const firstGuildId = manageableGuilds[0]?.id;
           if (firstGuildId) {
-            const overviewResponse = await apiRequest<GuildOverviewResponse>(
-              `/api/guilds/${firstGuildId}/overview`
-            );
+            const overviewResponse = await apiRequest<GuildOverviewResponse>(`/api/guilds/${firstGuildId}/overview`);
             setOverview(overviewResponse);
           }
         } else {
@@ -48,7 +49,7 @@ export default function DashboardPage() {
   }, [session.authenticated]);
 
   if (loading) {
-    return <section className="container page">Loading...</section>;
+    return <section className="app-page">Loading...</section>;
   }
 
   if (!session.authenticated) {
@@ -56,61 +57,84 @@ export default function DashboardPage() {
   }
 
   return (
-    <section className="container page prestige-page-shell">
-      <article className="card prestige-content-hero">
-        <span className="badge">Operations</span>
-        <h1>{t("dashboard.title")}</h1>
-        <p>{t("dashboard.subtitle")}</p>
-      </article>
+    <section className="app-page">
+      <motion.header
+        className="app-page-header"
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <span className="label-kicker">{copy.kicker}</span>
+        <h1>{copy.title}</h1>
+        <p>{copy.subtitle}</p>
+      </motion.header>
 
-      <div className="grid cols-3 prestige-grid-gap">
-        <article className="card prestige-info-card">
-          <span className="prestige-section-label">Guilds</span>
-          <h3>Manageable servers</h3>
+      <div className="app-grid app-grid-3">
+        <motion.article
+          className="app-panel"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06, duration: 0.35 }}
+          whileHover={{ y: -2 }}
+        >
+          <span className="badge-soft">{copy.guildsLabel}</span>
+          <h3>{copy.guildsTitle}</h3>
           {guildsLoading ? (
-            <p>Loading manageable guilds...</p>
+            <p>{copy.guildsLoading}</p>
           ) : guilds.length > 0 ? (
-            <div className="prestige-list-stack">
+            <div className="stack">
               {guilds.slice(0, 6).map((guild) => (
-                <Link key={guild.id} to={`/app/guild/${guild.id}`}>
-                  <div className="list-link prestige-list-link">
-                    <strong>{guild.name}</strong>
-                    <small>{guild.id}</small>
-                  </div>
+                <Link key={guild.id} to={`/app/guild/${guild.id}`} className="stack-link">
+                  <strong>{guild.name}</strong>
+                  <small>{guild.id}</small>
                 </Link>
               ))}
             </div>
           ) : (
-            <p>No manageable guilds found for this account.</p>
+            <p>{copy.guildsEmpty}</p>
           )}
-        </article>
-        <article className="card prestige-info-card">
-          <span className="prestige-section-label">Stats</span>
-          <h3>Guild snapshot</h3>
+        </motion.article>
+
+        <motion.article
+          className="app-panel"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.35 }}
+          whileHover={{ y: -2 }}
+        >
+          <span className="badge-soft">{copy.statsLabel}</span>
+          <h3>{copy.statsTitle}</h3>
           {overview ? (
-            <>
-              <p className="prestige-inline-field">
-                Active guild: <strong>{overview.guild.name}</strong>
+            <div className="metric-row">
+              <p>
+                {copy.activeGuild}: <strong>{overview.guild.name}</strong>
               </p>
-              <p className="prestige-inline-field">
-                Level roles: <strong>{overview.levelRolesCount}</strong>
+              <p>
+                {copy.levelRoles}: <strong>{overview.levelRolesCount}</strong>
               </p>
-            </>
+            </div>
           ) : (
-            <p>No guild overview data available yet.</p>
+            <p>{copy.statsEmpty}</p>
           )}
-        </article>
-        <article className="card prestige-info-card">
-          <span className="prestige-section-label">Settings</span>
-          <h3>Voice room status</h3>
+        </motion.article>
+
+        <motion.article
+          className="app-panel"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.35 }}
+          whileHover={{ y: -2 }}
+        >
+          <span className="badge-soft">{copy.settingsLabel}</span>
+          <h3>{copy.settingsTitle}</h3>
           {overview ? (
-            <p className="prestige-inline-field">
-              Voice rooms waiting mode: <strong>{overview.voiceRoomsEnabled ? "enabled" : "disabled"}</strong>
+            <p>
+              {copy.voiceMode}: <strong>{overview.voiceRoomsEnabled ? copy.enabled : copy.disabled}</strong>
             </p>
           ) : (
-            <p>Settings summary unavailable.</p>
+            <p>{copy.settingsEmpty}</p>
           )}
-        </article>
+        </motion.article>
       </div>
     </section>
   );
