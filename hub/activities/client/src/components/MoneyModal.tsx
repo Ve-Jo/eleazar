@@ -1,8 +1,13 @@
+import { motion, useReducedMotion } from "motion/react";
 import type { ActivityLauncherPayload } from "../../../../shared/src/contracts/hub.ts";
 
 import { parsePositiveAmount, resolveMoveAmount, getMoveSourceAvailable } from "../lib/activityMath.ts";
 import { formatNumber } from "../lib/activityView.ts";
 import type { MoneyModalState } from "../types/activityUi.ts";
+import {
+  LAUNCHER_MODAL_SCRIM_TRANSITION,
+  LAUNCHER_MODAL_SHEET_TRANSITION,
+} from "../features/launcher/lib/launcherMotion.ts";
 import MetricPill from "./MetricPill.tsx";
 
 type MoneyModalProps = {
@@ -22,6 +27,7 @@ export default function MoneyModal({
   onPresetSelect,
   onSubmit,
 }: MoneyModalProps) {
+  const prefersReducedMotion = useReducedMotion();
   const locale = launcherData.locale;
   const sourceAvailable = getMoveSourceAvailable(launcherData.balance, state.direction);
   const previewAmount =
@@ -38,12 +44,25 @@ export default function MoneyModal({
       : launcherData.strings.common.wallet;
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div
+    <motion.div
+      className="modal-backdrop"
+      role="presentation"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={prefersReducedMotion ? { duration: 0.01 } : LAUNCHER_MODAL_SCRIM_TRANSITION}
+      data-launcher-page-zone="blocked"
+    >
+      <motion.div
         className="modal-shell"
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.985 }}
+        transition={prefersReducedMotion ? { duration: 0.01 } : LAUNCHER_MODAL_SHEET_TRANSITION}
       >
         <div className="modal-header">
           <div>
@@ -115,7 +134,7 @@ export default function MoneyModal({
               : launcherData.strings.modal.confirmWithdraw}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -636,7 +636,7 @@ const CasesSectionView = (props) => {
             border: "1px solid rgba(255,255,255,0.10)",
           }}
         >
-          {cases.map((item) => renderCaseCard(item, colors))}
+          {cases.map((item) => renderCaseCard(item, colors, compact))}
         </div>
 
         {detailPanel ? (

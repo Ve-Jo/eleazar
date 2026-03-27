@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_ACTIVITY_CLIENT_ID?: string;
   readonly VITE_DISCORD_CLIENT_ID?: string;
+  readonly VITE_COLYSEUS_URL?: string;
 }
 
 interface ImportMeta {

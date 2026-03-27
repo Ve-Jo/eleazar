@@ -1,5 +1,19 @@
 import type { Board } from "../lib/game2048.ts";
 import type { MoneyMoveDirection } from "../lib/activityMath.ts";
+import type { ActivitySection } from "../lib/activityConstants.ts";
+
+export type ActivityScene = "launcher" | "2048";
+export type LauncherMotionPhase = "idle" | "wheelActive" | "dragActive" | "settling" | "blocked";
+export type LauncherPagingZone = "chrome" | "content" | "interactive" | "blocked" | "unknown";
+export type LauncherSnapDecisionReason = "threshold" | "velocity" | "return" | "edge" | "nav";
+
+export type LauncherSnapDecision = {
+  fromSection: ActivitySection;
+  toSection: ActivitySection;
+  direction: -1 | 0 | 1;
+  progress: number;
+  reason: LauncherSnapDecisionReason;
+};
 
 export type AuthState = {
   accessToken: string;
@@ -47,6 +61,8 @@ export type SetupDiagnostics = {
   errorStep?: string;
   currentStep: string;
   lastError?: string;
+  multiplayerStatus?: "disabled" | "ready" | "error";
+  colyseusUrl?: string;
 };
 
 export type SetupState = {
@@ -79,6 +95,41 @@ export type CrateRevealState = {
 export type ViewportState = {
   width: number;
   height: number;
+};
+
+export type LayoutDebugSnapshot = {
+  windowWidth: number;
+  windowHeight: number;
+  visualViewportWidth: number;
+  visualViewportHeight: number;
+  devicePixelRatio: number;
+  baselineWidthDelta: number;
+  baselineHeightDelta: number;
+  launcherHeightScale: number;
+  sectionScale: number;
+  sectionScaleBase: number;
+  launcherBottomClearance: number;
+  sectionCardPaddingBottom: number;
+  carouselGap: number;
+  carouselPeek: number;
+  carouselWidth: number;
+  carouselScrollWidth: number;
+  carouselMaxScrollLeft: number;
+  screenHeight: number;
+  carouselHeight: number;
+  navHeight: number;
+  navBottom: number;
+  navReservedHeight: number;
+  contentHeightBudget: number;
+  activeCardClientHeight: number;
+  activeCardScrollHeight: number;
+  activeCardOverflow: number;
+  motionPhase: LauncherMotionPhase;
+  motionTargetSection: ActivitySection | null;
+  motionProgress: number;
+  motionReleaseVelocity: number;
+  motionPagingZone: LauncherPagingZone;
+  motionScrollLeft: number;
 };
 
 export type ViewportTier = "regular" | "compact" | "dense" | "micro";
