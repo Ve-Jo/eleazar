@@ -1,5 +1,4 @@
-import InfoRectangle from "./unified/InfoRectangle.jsx";
-import Banknotes from "./unified/Banknotes.jsx";
+import GamesSectionView from "../../../shared/src/ui/GamesSectionView.jsx";
 
 const SOFT_LIMIT_HALF_RATE_GAMES = new Set(["2048", "snake"]);
 const RISKY_HARD_LIMIT_GAMES = new Set(["coinflip", "tower"]);
@@ -433,346 +432,104 @@ const GameLauncher = (props) => {
         boxSizing: "border-box",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "14px",
-          marginBottom: "14px",
+      <GamesSectionView
+        eyebrow={translations.commandLabel || "/work"}
+        title={translations.gameSelection || "Game Selection"}
+        subtitle={`${displayName} · ${selectedCategoryKey || "-"}`}
+        coloring={{
+          textColor,
+          secondaryTextColor,
+          tertiaryTextColor,
+          overlayBackground,
+          accentColor: "#ffb648",
+          dominantColor: "#42c1ff",
         }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-          <img
-            src={interaction?.user?.avatarURL || "https://cdn.discordapp.com/embed/avatars/0.png"}
-            style={{
-              width: "62px",
-              height: "62px",
-              borderRadius: "18px",
-              backgroundColor: overlayBackground,
-              border: "1px solid rgba(255,255,255,0.18)",
-              display: "flex",
-            }}
-            alt={translations.userAvatarAlt || "User Avatar"}
-          />
+        summaryCards={[
+          {
+            label: translations.balance || "Balance",
+            value: Number(database?.economy?.balance ?? 0).toFixed(1),
+          },
+          {
+            label: translations.gamesLabel || "games",
+            value: String(allGames.length),
+          },
+        ]}
+        featuredGame={
+          selectedGameData
+            ? {
+                kicker: translations.focusedGame || "Focused game",
+                title: selectedGameTitle,
+                subtitle: `${translations.categoryLabel || "Category"}: ${selectedCategoryKey || "-"}`,
+                emoji: selectedGameEmoji,
+                thumbnail: selectedGameData.thumbnail,
+                statusLabel: translations.dailyCapLabel || "Daily cap",
+                statusValue: displayCapValue,
+                statCards: [
+                  {
+                    icon: "🏆",
+                    label: translations.highScore || "Record",
+                    value: String(selectedHighScore),
+                  },
+                  {
+                    icon: "⬆️",
+                    label: translations.upgradeLevel || "Upgrade lvl",
+                    value: `L${upgradeLevel}`,
+                  },
+                ],
+                progress: {
+                  label: translations.dailyCapProgress || "Daily cap progress",
+                  value: capProgressLabel,
+                  percent: capProgress,
+                },
+                note: {
+                  label: translations.dailyPolicyLabel || "Daily rule",
+                  text: limitPolicyText,
+                  color: limitPolicyColor,
+                },
+                footerCards: [
+                  {
+                    icon: "💸",
+                    label: translations.earnedToday || "Earned today",
+                    value: formatAmount(earnedToday),
+                  },
+                  {
+                    icon: "🪙",
+                    label: translations.remainingToday || "Remaining today",
+                    value: displayRemainingValue,
+                  },
+                ],
+              }
+            : null
+        }
+        collectionTitle={selectedCategoryKey || "-"}
+        collectionCountText={`${focusedCategoryWindow.startIndex + 1}-${focusedCategoryWindow.endIndex} / ${selectedCategoryGames.length || 0}`}
+        collectionHintText={
+          selectedCategoryGames.length > MAX_VISIBLE_GAMES_PER_CATEGORY
+            ? translations.focusedWindowLabel || "Selection stays in view"
+            : translations.focusedCategoryLabel || "Focused category"
+        }
+        collectionLeading={renderCategoryPreview(previousCategoryEntry, "previous")}
+        collectionTrailing={renderCategoryPreview(nextCategoryEntry, "next")}
+        games={focusedVisibleGames.map((game) => {
+          const originalGameIndex = selectedCategoryGames.findIndex(
+            (entry) => entry?.id === game?.id
+          );
+          const title =
+            typeof game?.title === "object"
+              ? game?.title?.translation || game?.title?.en || game?.id
+              : game?.title || game?.id;
+          const highScore = Number(gameStats?.[game?.id]?.highScore || game?.highScore || 0);
 
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <div style={{ fontSize: "12px", letterSpacing: "0.16em", color: tertiaryTextColor, display: "flex" }}>
-              {translations.commandLabel || "/WORK"}
-            </div>
-            <div style={{ fontSize: "34px", fontWeight: "bold", lineHeight: 1.04, display: "flex" }}>
-              {translations.gameSelection || "Game Selection"}
-            </div>
-            <div style={{ fontSize: "13px", color: secondaryTextColor, display: "flex" }}>
-              {displayName} · {selectedCategoryKey || "-"}
-            </div>
-          </div>
-        </div>
-
-        <InfoRectangle
-          icon="💵"
-          background={overlayBackground}
-          borderRadius="16px"
-          padding="7px 10px"
-          minWidth="0px"
-          maxWidth="190px"
-          iconSize="16px"
-          iconMarginRight="8px"
-          title={translations.balance || "BALANCE"}
-          titleStyle={{ fontSize: "11px", color: tertiaryTextColor, letterSpacing: "0.08em" }}
-          value={
-            <div style={{ display: "flex", fontSize: "18px", fontWeight: "bold", color: textColor }}>
-              {Number(database?.economy?.balance ?? 0).toFixed(1)}
-            </div>
-          }
-          style={{ position: "relative", flexShrink: 0 }}
-        >
-          <Banknotes
-            amount={Number(database?.economy?.balance || 0)}
-            style="banknotes"
-            division={50}
-            xspacing={18}
-            styleOverrides={{
-              container: {
-                position: "absolute",
-                inset: 0,
-                pointerEvents: "none",
-                overflow: "hidden",
-                zIndex: 0,
-              },
-              banknote: {
-                width: "10px",
-                height: "3px",
-              },
-            }}
-          />
-        </InfoRectangle>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "14px", flex: 1, overflow: "hidden" }}>
-        <div style={{ display: "flex", gap: "14px", minHeight: "212px" }}>
-          <div
-            style={{
-              flex: 1,
-              borderRadius: "24px",
-              padding: "16px",
-              background: "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              display: "flex",
-              gap: "16px",
-              boxSizing: "border-box",
-              minHeight: "212px",
-            }}
-          >
-            <div
-              style={{
-                width: "152px",
-                minWidth: "152px",
-                borderRadius: "22px",
-                background: "linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "68px",
-                overflow: "hidden",
-              }}
-            >
-              {selectedGameData?.thumbnail ? (
-                <img
-                  src={selectedGameData.thumbnail}
-                  alt={selectedGameTitle}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "flex" }}
-                />
-              ) : (
-                <div style={{ display: "flex" }}>{selectedGameEmoji}</div>
-              )}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <div style={{ fontSize: "12px", color: tertiaryTextColor, letterSpacing: "0.10em", display: "flex" }}>
-                    {translations.focusedGame || "Focused game"}
-                  </div>
-                  <div style={{ fontSize: "28px", fontWeight: "bold", lineHeight: 1.02, display: "flex" }}>
-                    {selectedGameTitle}
-                  </div>
-                  <div style={{ fontSize: "13px", color: secondaryTextColor, display: "flex", marginTop: "6px" }}>
-                    {translations.categoryLabel || "Category"}: {selectedCategoryKey || "-"}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
-                  <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>
-                    {translations.dailyCapLabel || "Daily cap"}
-                  </div>
-                  <div style={{ fontSize: "22px", fontWeight: 700, color: textColor, display: "flex" }}>
-                    {displayCapValue}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                <InfoRectangle
-                  icon="🏆"
-                  background={overlayBackground}
-                  borderRadius="12px"
-                  padding="8px 10px"
-                  minWidth="0px"
-                  maxWidth="144px"
-                  iconSize="14px"
-                  iconMarginRight="6px"
-                  title={translations.highScore || "Record"}
-                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
-                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{selectedHighScore}</div>}
-                />
-                <InfoRectangle
-                  icon="⬆️"
-                  background={overlayBackground}
-                  borderRadius="12px"
-                  padding="8px 10px"
-                  minWidth="0px"
-                  maxWidth="144px"
-                  iconSize="14px"
-                  iconMarginRight="6px"
-                  title={translations.upgradeLevel || "Upgrade lvl"}
-                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
-                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>L{upgradeLevel}</div>}
-                />
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginTop: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: "11px", color: secondaryTextColor, display: "flex" }}>
-                    {translations.dailyCapProgress || "Daily cap progress"}
-                  </div>
-                  <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>
-                    {capProgressLabel}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    height: "12px",
-                    width: "100%",
-                    borderRadius: "999px",
-                    backgroundColor: "rgba(255,255,255,0.08)",
-                    overflow: "hidden",
-                    display: "flex",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${capProgress}%`,
-                      height: "100%",
-                      background: "linear-gradient(90deg, #6df7a7 0%, #42c1ff 100%)",
-                      borderRadius: "999px",
-                      display: "flex",
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "4px",
-                  marginTop: "10px",
-                  padding: "8px 10px",
-                  borderRadius: "10px",
-                  backgroundColor: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div style={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em", display: "flex" }}>
-                  {translations.dailyPolicyLabel || "Daily rule"}
-                </div>
-                <div style={{ fontSize: "12px", color: limitPolicyColor, display: "flex", lineHeight: 1.25 }}>
-                  {limitPolicyText}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                <InfoRectangle
-                  icon="💸"
-                  background={overlayBackground}
-                  borderRadius="12px"
-                  padding="8px 10px"
-                  minWidth="0px"
-                  maxWidth="144px"
-                  iconSize="14px"
-                  iconMarginRight="6px"
-                  title={translations.earnedToday || "Earned today"}
-                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
-                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{formatAmount(earnedToday)}</div>}
-                />
-                <InfoRectangle
-                  icon="🪙"
-                  background={overlayBackground}
-                  borderRadius="12px"
-                  padding="8px 10px"
-                  minWidth="0px"
-                  maxWidth="144px"
-                  iconSize="14px"
-                  iconMarginRight="6px"
-                  title={translations.remainingToday || "Remaining today"}
-                  titleStyle={{ fontSize: "10px", color: tertiaryTextColor, letterSpacing: "0.06em" }}
-                  value={<div style={{ display: "flex", fontSize: "16px", fontWeight: "bold", color: textColor }}>{displayRemainingValue}</div>}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            borderRadius: "24px",
-            padding: "14px",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.10)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            overflow: "hidden",
-            boxSizing: "border-box",
-            flex: 1,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <img
-                src={selectedCategoryValue?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
-                alt={selectedCategoryKey}
-                style={{ width: "30px", height: "30px", borderRadius: "10px", backgroundColor: overlayBackground, display: "flex" }}
-              />
-              <div style={{ fontSize: "16px", fontWeight: 700, color: textColor, display: "flex" }}>
-                {selectedCategoryKey || "-"}
-              </div>
-            </div>
-
-            <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
-              {allGames.length} {translations.gamesLabel || "games"}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
-              {focusedCategoryWindow.startIndex + 1}-{focusedCategoryWindow.endIndex} / {selectedCategoryGames.length || 0}
-            </div>
-
-            {selectedCategoryGames.length > MAX_VISIBLE_GAMES_PER_CATEGORY ? (
-              <div style={{ fontSize: "12px", color: tertiaryTextColor, display: "flex" }}>
-                {translations.focusedWindowLabel || "Selection stays in view"}
-              </div>
-            ) : (
-              <div style={{ fontSize: "12px", color: tertiaryTextColor, display: "flex" }}>
-                {translations.focusedCategoryLabel || "Focused category"}
-              </div>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "stretch",
-              minHeight: "124px",
-              overflow: "hidden",
-            }}
-          >
-            {renderCategoryPreview(previousCategoryEntry, "previous")}
-
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                display: "flex",
-                gap: "8px",
-                overflow: "hidden",
-                alignItems: "stretch",
-              }}
-            >
-              {focusedVisibleGames.map((game) => {
-                const originalGameIndex = selectedCategoryGames.findIndex(
-                  (entry) => entry?.id === game?.id
-                );
-                return renderGameCard(game, originalGameIndex, safeCategoryIndex);
-              })}
-            </div>
-
-            {renderCategoryPreview(nextCategoryEntry, "next")}
-          </div>
-        </div>
-      </div>
+          return {
+            id: game?.id || title,
+            title,
+            emoji: game?.emoji || "🎮",
+            meta: `${translations.highScore || "Record"}: ${highScore}`,
+            isActive: originalGameIndex === safeGameIndex,
+            isMuted: false,
+          };
+        })}
+      />
     </div>
   );
 };

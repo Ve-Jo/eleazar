@@ -40,6 +40,34 @@ LOCALTUNNEL_HOST="${CLI_LOCALTUNNEL_HOST:-${ACTIVITY_TUNNEL_HOST:-https://localt
 CF_EDGE_IP_VERSION="${ACTIVITY_CLOUDFLARED_EDGE_IP_VERSION:-4}"
 NGROK_DOMAIN="${CLI_NGROK_DOMAIN:-${ACTIVITY_NGROK_DOMAIN:-}}"
 NGROK_AUTHTOKEN="${CLI_NGROK_AUTHTOKEN:-${ACTIVITY_NGROK_AUTHTOKEN:-}}"
+FALLBACK_STATIC_PORT="${ACTIVITY_SERVER_PORT:-3007}"
+
+is_local_port_open() {
+  local port="$1"
+  (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+}
+
+resolve_origin_port() {
+  if is_local_port_open "${PORT}"; then
+    return
+  fi
+
+  if [[ "${PORT}" != "${FALLBACK_STATIC_PORT}" ]] && is_local_port_open "${FALLBACK_STATIC_PORT}"; then
+    echo "[tunnel] Port ${PORT} is not reachable on localhost."
+    echo "[tunnel] Falling back to the activities server on port ${FALLBACK_STATIC_PORT}."
+    echo "[tunnel] Start \`bun run dev:tunnel:vite\` if you want the Vite client on port ${PORT}."
+    PORT="${FALLBACK_STATIC_PORT}"
+    return
+  fi
+
+  echo "[tunnel] Port ${PORT} is not reachable on localhost."
+  echo "[tunnel] Start the activity app first:"
+  echo "[tunnel] - \`bun run dev:tunnel:vite\` for Vite on port ${PORT}"
+  echo "[tunnel] - \`bun run dev:tunnel\` for the static build on port ${FALLBACK_STATIC_PORT}"
+  exit 1
+}
+
+resolve_origin_port
 
 run_ngrok_loop() {
   if ! command -v ngrok >/dev/null 2>&1; then

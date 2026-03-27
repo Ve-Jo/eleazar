@@ -175,6 +175,154 @@ export type BalanceResponse = {
   [key: string]: unknown;
 };
 
+export type ActivitySupportedLocale = "en" | "ru" | "uk";
+
+export type ActivityPalette = {
+  textColor: string;
+  secondaryTextColor: string;
+  tertiaryTextColor: string;
+  overlayBackground: string;
+  backgroundGradient: string;
+  accentColor: string;
+  dominantColor?: string;
+  isDarkText: boolean;
+};
+
+export type ActivityLauncherStrings = {
+  nav: Record<string, string>;
+  common: Record<string, string>;
+  balance: Record<string, string>;
+  cases: Record<string, string>;
+  upgrades: Record<string, string>;
+  games: Record<string, string>;
+  modal: Record<string, string>;
+};
+
+export type ActivityUserSummary = {
+  id?: string;
+  username?: string;
+  displayName?: string;
+  avatar?: string | null;
+  avatarUrl?: string | null;
+  locale?: ActivitySupportedLocale;
+};
+
+export type ActivityGuildSummary = {
+  id?: string;
+  name?: string;
+};
+
+export type ActivityBalanceSnapshot = {
+  walletBalance: number;
+  bankBalance: number;
+  bankDistributed: number;
+  totalBankBalance: number;
+  projectedBankBalance: number;
+  projectedTotalBankBalance: number;
+  annualRate: number;
+  annualRatePercent: number;
+  cycleStartTime: number;
+  maxInactiveMs: number;
+  timeIntoCycleMs: number;
+  cycleProgress: number;
+  cycleComplete: boolean;
+  upgradeDiscount: number;
+  updatedAt: number;
+};
+
+export type ActivityCrateCard = {
+  type: string;
+  name: string;
+  description: string;
+  emoji: string;
+  count: number;
+  available: boolean;
+  cooldownRemainingMs: number;
+  cooldownDurationMs: number;
+  nextAvailableAt: number | null;
+  statusLabel: string;
+  rewardPreview: Record<string, number>;
+  dailyStatus?: Record<string, unknown> | null;
+};
+
+export type ActivityCasesState = {
+  totalCount: number;
+  availableCount: number;
+  dailyStatus?: Record<string, unknown> | null;
+  cards: ActivityCrateCard[];
+};
+
+export type ActivityUpgradeCard = {
+  type: string;
+  category: string;
+  emoji: string;
+  name: string;
+  description: string;
+  impactLabel: string;
+  currentLevel: number;
+  nextLevel: number;
+  currentEffect: number;
+  nextEffect: number;
+  deltaEffect: number;
+  effectUnit: string;
+  currentEffectLabel: string;
+  nextEffectLabel: string;
+  deltaEffectLabel: string;
+  price: number;
+  originalPrice: number;
+  discountPercent: number;
+  isAffordable: boolean;
+  coinsNeeded: number;
+};
+
+export type ActivityUpgradeGroup = {
+  key: string;
+  title: string;
+  items: ActivityUpgradeCard[];
+};
+
+export type ActivityUpgradesState = {
+  totalCount: number;
+  discountPercent: number;
+  groups: ActivityUpgradeGroup[];
+};
+
+export type ActivityGameCard = {
+  id: string;
+  title: string;
+  emoji: string;
+  status: "playable" | "coming_soon";
+  playable: boolean;
+  highScore?: number;
+  dailyStatus?: Record<string, unknown> | null;
+};
+
+export type ActivityGamesState = {
+  items: ActivityGameCard[];
+  playableGameId?: string | null;
+};
+
+export type ActivityLauncherPayload = {
+  locale: ActivitySupportedLocale;
+  strings: ActivityLauncherStrings;
+  palette: ActivityPalette;
+  user: ActivityUserSummary;
+  guild: ActivityGuildSummary | null;
+  readOnly: boolean;
+  unsupportedReason?: string;
+  balance: ActivityBalanceSnapshot;
+  cases: ActivityCasesState;
+  upgrades: ActivityUpgradesState;
+  games: ActivityGamesState;
+  refreshedAt: number;
+};
+
+export type ActivityMutationEnvelope<TAction = Record<string, unknown>> = {
+  success: boolean;
+  action?: TAction;
+  launcher: ActivityLauncherPayload;
+};
+
 export type AddBalanceRequest = UserIdentifier & {
   amount: number;
   source?: string;

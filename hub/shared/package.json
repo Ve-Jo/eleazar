@@ -9,6 +9,7 @@
     "./contracts": "./src/contracts/index.ts",
     "./domain": "./src/domain.ts",
     "./serviceConfig": "./src/serviceConfig.ts",
+    "./ui": "./src/ui/index.ts",
     "./utils": "./src/utils.ts"
   },
   "scripts": {

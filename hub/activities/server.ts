@@ -9,9 +9,26 @@ import {
   DEFAULT_SERVICE_PORTS,
   DEFAULT_SERVICE_URLS,
 } from "../shared/src/serviceConfig.ts";
+import { CRATE_TYPES, UPGRADES } from "../shared/src/domain.ts";
 import { createHealthResponse } from "../shared/src/utils.ts";
+import type {
+  ActivityBalanceSnapshot,
+  ActivityCasesState,
+  ActivityGameCard,
+  ActivityLauncherPayload,
+  ActivityMutationEnvelope,
+  ActivityPalette,
+  ActivitySupportedLocale,
+  ActivityUpgradeCard,
+  ActivityUpgradesState,
+} from "../shared/src/contracts/hub.ts";
 
 import { ACTIVITY_GAME_CATALOG } from "./src/lib/gameCatalog.ts";
+import {
+  buildActivityStrings,
+  getActivityLocaleValue,
+  normalizeActivityLocale,
+} from "./src/lib/activityI18n.ts";
 import { IdempotencyStore } from "./src/lib/idempotencyStore.ts";
 import {
   compute2048SessionReward,
@@ -32,6 +49,9 @@ const ACTIVITIES_SERVICE_PORT = Number(
 const DATABASE_SERVICE_URL = (
   process.env.DATABASE_SERVICE_URL || DEFAULT_SERVICE_URLS.database
 ).replace(/\/$/, "");
+const RENDERING_SERVICE_URL = (
+  process.env.RENDERING_SERVICE_URL || DEFAULT_SERVICE_URLS.rendering
+).replace(/\/$/, "");
 
 const ACTIVITY_CLIENT_ID =
   process.env.ACTIVITY_CLIENT_ID || process.env.DISCORD_CLIENT_ID || "";
@@ -50,6 +70,7 @@ const ACTIVITY_SHARED_KEY =
   process.env.ACTIVITY_SHARED_KEY || process.env.ELEAZAR_ACTIVITIES_SHARED_KEY || "";
 
 const TOKEN_CACHE_TTL_MS = 60 * 1000;
+const PALETTE_CACHE_TTL_MS = 15 * 60 * 1000;
 const tokenUserCache = new Map<
   string,
   {
@@ -63,11 +84,12 @@ const tokenUserCache = new Map<
     };
   }
 >();
+const paletteCache = new Map<string, { expiresAt: number; palette: ActivityPalette }>();
 
 type JsonResult = {
   ok: boolean;
   status: number;
-  data: any;
+  data: unknown;
 };
 
 type AuthenticatedRequest = express.Request & {
@@ -79,6 +101,17 @@ type AuthenticatedRequest = express.Request & {
     avatar?: string | null;
     locale?: string;
   };
+};
+
+type ActivityUserRecord = {
+  id?: string;
+  guildId?: string;
+  locale?: string | null;
+  economy?: Record<string, unknown> | null;
+  crates?: Array<Record<string, unknown>> | null;
+  upgrades?: Array<Record<string, unknown>> | null;
+  stats?: Record<string, unknown> | null;
+  Level?: Record<string, unknown> | null;
 };
 
 const completionStore = new IdempotencyStore<Record<string, unknown>>();
@@ -152,16 +185,22 @@ async function resolveDiscordUser(accessToken: string) {
   });
 
   const parsed = await parseJsonResponse(response);
-  if (!parsed.ok || !parsed.data?.id) {
+  const parsedData = asObject(parsed.data);
+  if (!parsed.ok || !parsedData.id) {
     throw new Error("Failed to resolve Discord user");
   }
 
   const user = {
-    id: String(parsed.data.id),
-    username: parsed.data.username,
-    global_name: parsed.data.global_name,
-    avatar: parsed.data.avatar,
-    locale: parsed.data.locale,
+    id: String(parsedData.id),
+    username:
+      typeof parsedData.username === "string" ? parsedData.username : undefined,
+    global_name:
+      typeof parsedData.global_name === "string"
+        ? parsedData.global_name
+        : null,
+    avatar:
+      typeof parsedData.avatar === "string" ? parsedData.avatar : null,
+    locale: typeof parsedData.locale === "string" ? parsedData.locale : undefined,
   };
 
   tokenUserCache.set(accessToken, {
@@ -257,6 +296,697 @@ function getUpgradeLevel(upgrades: any[], type: string): number {
     (item) => String(item?.type || "").toLowerCase() === String(type).toLowerCase()
   );
   return Math.max(1, toNumber(upgrade?.level, 1));
+}
+
+const DEFAULT_ACTIVITY_PALETTE: ActivityPalette = {
+  textColor: "#f8fbff",
+  secondaryTextColor: "rgba(248,251,255,0.78)",
+  tertiaryTextColor: "rgba(248,251,255,0.56)",
+  overlayBackground: "rgba(255,255,255,0.08)",
+  backgroundGradient: "linear-gradient(145deg, #0f4a68 0%, #173e78 45%, #2f215f 100%)",
+  accentColor: "#ffb648",
+  dominantColor: "rgb(70, 143, 201)",
+  isDarkText: false,
+};
+
+const UPGRADE_CATEGORY_ORDER = [
+  "economy",
+  "activity",
+  "cooldowns",
+  "defense",
+  "banking",
+] as const;
+
+const UPGRADE_IMPACT_KEYS: Record<string, string> = {
+  daily_bonus: "impact_daily_rewards",
+  games_earning: "impact_game_payouts",
+  crime_mastery: "impact_crime_mastery",
+  time_wizard: "impact_daily_weekly",
+  vault_guard: "impact_defense",
+  bank_vault: "impact_bank_max_time",
+};
+
+const UNIT_LABELS: Record<ActivitySupportedLocale, Record<string, string>> = {
+  en: {
+    percent: "%",
+    minutes: "min",
+    hours: "h",
+  },
+  ru: {
+    percent: "%",
+    minutes: "мин",
+    hours: "ч",
+  },
+  uk: {
+    percent: "%",
+    minutes: "хв",
+    hours: "год",
+  },
+};
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry) => entry && typeof entry === "object") as Array<
+    Record<string, unknown>
+  >;
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true";
+  }
+  if (typeof value === "number") {
+    return value > 0;
+  }
+  return false;
+}
+
+function roundMoney(value: number): number {
+  return Number(value.toFixed(5));
+}
+
+function formatCompactNumber(value: number, locale: ActivitySupportedLocale): string {
+  return value.toLocaleString(locale === "uk" ? "uk-UA" : locale === "ru" ? "ru-RU" : "en-US", {
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+    minimumFractionDigits: 0,
+  });
+}
+
+function formatDurationCompact(valueMs: number, locale: ActivitySupportedLocale): string {
+  const totalSeconds = Math.max(0, Math.floor(valueMs / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const labels =
+    locale === "ru"
+      ? { d: "д", h: "ч", m: "м" }
+      : locale === "uk"
+      ? { d: "д", h: "г", m: "хв" }
+      : { d: "d", h: "h", m: "m" };
+
+  if (days > 0) {
+    return `${days}${labels.d} ${hours}${labels.h}`;
+  }
+  if (hours > 0) {
+    return `${hours}${labels.h} ${minutes}${labels.m}`;
+  }
+  return `${Math.max(1, minutes)}${labels.m}`;
+}
+
+function interpolateTemplate(
+  template: string,
+  variables: Record<string, string | number>
+): string {
+  return Object.entries(variables).reduce(
+    (result, [key, value]) =>
+      result.replaceAll(`{{${key}}}`, String(value)).replaceAll(`{{ ${key} }}`, String(value)),
+    template
+  );
+}
+
+function getAvatarUrl(userId?: string, avatarHash?: string | null): string {
+  if (!userId || !avatarHash) {
+    return "https://cdn.discordapp.com/embed/avatars/0.png";
+  }
+
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png?size=128`;
+}
+
+async function fetchRenderingPalette(imageUrl?: string | null): Promise<ActivityPalette> {
+  if (!imageUrl) {
+    return DEFAULT_ACTIVITY_PALETTE;
+  }
+
+  const cached = paletteCache.get(imageUrl);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.palette;
+  }
+
+  try {
+    const response = await fetch(`${RENDERING_SERVICE_URL}/colors`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ imageUrl }),
+    });
+
+    const parsed = await parseJsonResponse(response);
+    const candidate = asObject(parsed.data);
+    const palette: ActivityPalette = {
+      textColor:
+        typeof candidate.textColor === "string"
+          ? candidate.textColor
+          : DEFAULT_ACTIVITY_PALETTE.textColor,
+      secondaryTextColor:
+        typeof candidate.secondaryTextColor === "string"
+          ? candidate.secondaryTextColor
+          : DEFAULT_ACTIVITY_PALETTE.secondaryTextColor,
+      tertiaryTextColor:
+        typeof candidate.tertiaryTextColor === "string"
+          ? candidate.tertiaryTextColor
+          : DEFAULT_ACTIVITY_PALETTE.tertiaryTextColor,
+      overlayBackground:
+        typeof candidate.overlayBackground === "string"
+          ? candidate.overlayBackground
+          : DEFAULT_ACTIVITY_PALETTE.overlayBackground,
+      backgroundGradient:
+        typeof candidate.backgroundGradient === "string"
+          ? candidate.backgroundGradient
+          : DEFAULT_ACTIVITY_PALETTE.backgroundGradient,
+      accentColor:
+        typeof candidate.accentColor === "string"
+          ? candidate.accentColor
+          : DEFAULT_ACTIVITY_PALETTE.accentColor,
+      dominantColor:
+        typeof candidate.dominantColor === "string"
+          ? candidate.dominantColor
+          : DEFAULT_ACTIVITY_PALETTE.dominantColor,
+      isDarkText:
+        typeof candidate.isDarkText === "boolean"
+          ? candidate.isDarkText
+          : DEFAULT_ACTIVITY_PALETTE.isDarkText,
+    };
+
+    paletteCache.set(imageUrl, {
+      palette,
+      expiresAt: Date.now() + PALETTE_CACHE_TTL_MS,
+    });
+
+    return palette;
+  } catch (error) {
+    console.warn("[activities] failed to fetch palette from rendering service", error);
+    return DEFAULT_ACTIVITY_PALETTE;
+  }
+}
+
+function buildEmptyBalanceSnapshot(): ActivityBalanceSnapshot {
+  return {
+    walletBalance: 0,
+    bankBalance: 0,
+    bankDistributed: 0,
+    totalBankBalance: 0,
+    projectedBankBalance: 0,
+    projectedTotalBankBalance: 0,
+    annualRate: 0,
+    annualRatePercent: 0,
+    cycleStartTime: 0,
+    maxInactiveMs: 0,
+    timeIntoCycleMs: 0,
+    cycleProgress: 0,
+    cycleComplete: false,
+    upgradeDiscount: 0,
+    updatedAt: Date.now(),
+  };
+}
+
+function getUpgradePrice(type: string, level: number): number {
+  const config = UPGRADES[type as keyof typeof UPGRADES];
+  if (!config) {
+    return 0;
+  }
+
+  return Math.floor(config.basePrice * Math.pow(config.priceMultiplier, Math.max(0, level - 1)));
+}
+
+function getUpgradeEffectUnit(type: string): "percent" | "minutes" | "hours" {
+  if (type === "crime_mastery") {
+    return "minutes";
+  }
+  if (type === "bank_vault") {
+    return "hours";
+  }
+  return "percent";
+}
+
+function getUpgradeEffectValue(type: string, level: number): number {
+  const safeLevel = Math.max(1, Math.floor(level));
+  const config = UPGRADES[type as keyof typeof UPGRADES];
+  const configRecord = config as {
+    effectMultiplier?: number;
+    effectValue?: number;
+  };
+  if (!config) {
+    return 0;
+  }
+
+  if (type === "bank_vault") {
+    return Math.max(0, safeLevel - 1) * Number(configRecord.effectValue || 0) / 3600000;
+  }
+
+  if (type === "crime_mastery") {
+    return Math.max(0, safeLevel - 1) * Number(configRecord.effectValue || 0) / 60000;
+  }
+
+  if (typeof configRecord.effectMultiplier === "number") {
+    return Math.max(0, safeLevel - 1) * Number(configRecord.effectMultiplier) * 100;
+  }
+
+  if (typeof configRecord.effectValue === "number") {
+    return Math.max(0, safeLevel - 1) * Number(configRecord.effectValue);
+  }
+
+  return Math.max(0, safeLevel - 1);
+}
+
+function formatUpgradeEffectLabel(
+  locale: ActivitySupportedLocale,
+  type: string,
+  effectValue: number
+): string {
+  const unit = getUpgradeEffectUnit(type);
+  const unitLabel = UNIT_LABELS[locale][unit];
+  const formatted = effectValue.toLocaleString(
+    locale === "uk" ? "uk-UA" : locale === "ru" ? "ru-RU" : "en-US",
+    {
+      maximumFractionDigits: effectValue >= 10 ? 0 : 2,
+      minimumFractionDigits: 0,
+    }
+  );
+
+  return unit === "percent" ? `${formatted}%` : `${formatted} ${unitLabel}`;
+}
+
+function getFallbackImpactLabel(type: string): string {
+  switch (type) {
+    case "daily_bonus":
+      return "Daily rewards";
+    case "games_earning":
+      return "Game payouts";
+    case "crime_mastery":
+      return "Crime success & fines";
+    case "time_wizard":
+      return "Daily/Weekly cooldowns";
+    case "vault_guard":
+      return "Defense & fees";
+    case "bank_vault":
+      return "Bank max time";
+    default:
+      return "Upgrade";
+  }
+}
+
+function buildBalanceSnapshot(
+  user: ActivityUserRecord,
+  bankProjection: unknown
+): ActivityBalanceSnapshot {
+  const economy = asObject(user.economy);
+  const projection = asObject(bankProjection);
+  const walletBalance = toNumber(economy.balance, 0);
+  const bankBalance = toNumber(economy.bankBalance, 0);
+  const bankDistributed = toNumber(economy.bankDistributed, 0);
+  const totalBankBalance = bankBalance + bankDistributed;
+  const projectedBankBalance = Math.max(
+    bankBalance,
+    toNumber(projection.balance, bankBalance)
+  );
+  const annualRate = toNumber(projection.annualRate, 0);
+  const maxInactiveMs = Math.max(0, toNumber(projection.maxInactiveMs, 0));
+  const timeIntoCycleMs = Math.max(0, toNumber(projection.timeIntoCycle, 0));
+
+  return {
+    walletBalance,
+    bankBalance,
+    bankDistributed,
+    totalBankBalance,
+    projectedBankBalance,
+    projectedTotalBankBalance: projectedBankBalance + bankDistributed,
+    annualRate,
+    annualRatePercent: annualRate * 100,
+    cycleStartTime: toNumber(economy.bankStartTime, 0),
+    maxInactiveMs,
+    timeIntoCycleMs,
+    cycleProgress: maxInactiveMs > 0 ? clamp(0, timeIntoCycleMs / maxInactiveMs, 1) : 0,
+    cycleComplete: toBoolean(projection.cycleComplete),
+    upgradeDiscount: clamp(0, toNumber(economy.upgradeDiscount, 0), 95),
+    updatedAt: Date.now(),
+  };
+}
+
+function buildCasesState(
+  locale: ActivitySupportedLocale,
+  strings: ReturnType<typeof buildActivityStrings>,
+  crates: Array<Record<string, unknown>>,
+  dailyStatusInput: unknown,
+  weeklyCooldownValue: unknown
+): ActivityCasesState {
+  const dailyStatus = asObject(dailyStatusInput);
+  const counts = crates.reduce<Record<string, number>>((acc, crate) => {
+    const type = String(crate.type || "").trim().toLowerCase();
+    if (!type) {
+      return acc;
+    }
+
+    acc[type] = Math.max(0, toNumber(crate.count, 0));
+    return acc;
+  }, {});
+
+  const dailyCount = counts.daily || 0;
+  const weeklyCount = counts.weekly || 0;
+  const dailyCooldownRemainingMs = Math.max(0, toNumber(dailyStatus.cooldownRemainingMs, 0));
+  const weeklyCooldownRemainingMs = Math.max(0, toNumber(weeklyCooldownValue, 0));
+  const dailyAvailable = dailyCount > 0 && toBoolean(dailyStatus.available);
+  const weeklyAvailable = weeklyCount > 0 && weeklyCooldownRemainingMs <= 0;
+  const now = Date.now();
+
+  return {
+    totalCount: dailyCount + weeklyCount,
+    availableCount: Number(dailyAvailable) + Number(weeklyAvailable),
+    dailyStatus: Object.keys(dailyStatus).length > 0 ? dailyStatus : null,
+    cards: [
+      {
+        type: "daily",
+        name: strings.cases.dailyName || strings.cases.dailyTitle || "Daily Case",
+        description:
+          strings.cases.dailyDescription ||
+          strings.cases.dailyTitle ||
+          "Daily Case",
+        emoji: CRATE_TYPES.daily.emoji,
+        count: dailyCount,
+        available: dailyAvailable,
+        cooldownRemainingMs: dailyCooldownRemainingMs,
+        cooldownDurationMs: CRATE_TYPES.daily.cooldown,
+        nextAvailableAt:
+          dailyCooldownRemainingMs > 0 ? now + dailyCooldownRemainingMs : null,
+        statusLabel: dailyAvailable
+          ? strings.cases.readyNow || "Ready"
+          : formatDurationCompact(dailyCooldownRemainingMs, locale),
+        rewardPreview: {
+          minCoins: CRATE_TYPES.daily.rewards.min_coins,
+          maxCoins: CRATE_TYPES.daily.rewards.max_coins,
+          seasonXpAmount: CRATE_TYPES.daily.rewards.seasonXp_amount,
+          discountAmount: CRATE_TYPES.daily.rewards.discount_amount,
+        },
+        dailyStatus: Object.keys(dailyStatus).length > 0 ? dailyStatus : null,
+      },
+      {
+        type: "weekly",
+        name: strings.cases.weeklyName || strings.cases.weeklyTitle || "Weekly Case",
+        description:
+          strings.cases.weeklyDescription ||
+          strings.cases.weeklyTitle ||
+          "Weekly Case",
+        emoji: CRATE_TYPES.weekly.emoji,
+        count: weeklyCount,
+        available: weeklyAvailable,
+        cooldownRemainingMs: weeklyCooldownRemainingMs,
+        cooldownDurationMs: CRATE_TYPES.weekly.cooldown,
+        nextAvailableAt:
+          weeklyCooldownRemainingMs > 0 ? now + weeklyCooldownRemainingMs : null,
+        statusLabel: weeklyAvailable
+          ? strings.cases.readyNow || "Ready"
+          : formatDurationCompact(weeklyCooldownRemainingMs, locale),
+        rewardPreview: {
+          minCoins: CRATE_TYPES.weekly.rewards.min_coins,
+          maxCoins: CRATE_TYPES.weekly.rewards.max_coins,
+          seasonXpAmount: CRATE_TYPES.weekly.rewards.seasonXp_amount,
+          discountAmount: CRATE_TYPES.weekly.rewards.discount_amount,
+        },
+        dailyStatus: null,
+      },
+    ],
+  };
+}
+
+function buildUpgradesState(
+  locale: ActivitySupportedLocale,
+  upgrades: Array<Record<string, unknown>>,
+  walletBalance: number,
+  discountPercent: number
+): ActivityUpgradesState {
+  const allCards: ActivityUpgradeCard[] = Object.entries(UPGRADES).map(([type, config]) => {
+    const currentLevel = getUpgradeLevel(upgrades, type);
+    const nextLevel = currentLevel + 1;
+    const currentEffect = getUpgradeEffectValue(type, currentLevel);
+    const nextEffect = getUpgradeEffectValue(type, nextLevel);
+    const deltaEffect = Math.max(0, nextEffect - currentEffect);
+    const originalPrice = getUpgradePrice(type, currentLevel);
+    const discountedPrice =
+      discountPercent > 0
+        ? Math.max(1, Math.floor(originalPrice * (1 - discountPercent / 100)))
+        : originalPrice;
+    const name = getActivityLocaleValue(
+      locale,
+      `commands.economy.shop.upgrades.${type}.name`,
+      type
+    );
+    const descriptionTemplate = getActivityLocaleValue(
+      locale,
+      `commands.economy.shop.upgrades.${type}.description`,
+      name
+    );
+    const impactLabel = getActivityLocaleValue(
+      locale,
+      `commands.economy.shop.${UPGRADE_IMPACT_KEYS[type] || ""}`,
+      getFallbackImpactLabel(type)
+    );
+
+    return {
+      type,
+      category: config.category,
+      emoji: config.emoji,
+      name,
+      description: interpolateTemplate(descriptionTemplate, {
+        effect: formatCompactNumber(currentEffect, locale),
+        increasePerLevel: formatCompactNumber(deltaEffect, locale),
+        increasePerLevelMinutes: formatCompactNumber(deltaEffect, locale),
+      }),
+      impactLabel,
+      currentLevel,
+      nextLevel,
+      currentEffect,
+      nextEffect,
+      deltaEffect,
+      effectUnit: getUpgradeEffectUnit(type),
+      currentEffectLabel: formatUpgradeEffectLabel(locale, type, currentEffect),
+      nextEffectLabel: formatUpgradeEffectLabel(locale, type, nextEffect),
+      deltaEffectLabel: formatUpgradeEffectLabel(locale, type, deltaEffect),
+      price: discountedPrice,
+      originalPrice,
+      discountPercent,
+      isAffordable: walletBalance >= discountedPrice,
+      coinsNeeded: Math.max(0, discountedPrice - walletBalance),
+    };
+  });
+
+  return {
+    totalCount: allCards.length,
+    discountPercent,
+    groups: UPGRADE_CATEGORY_ORDER.map((category) => {
+      const items = allCards.filter((card) => card.category === category);
+      return {
+        key: category,
+        title: getActivityLocaleValue(
+          locale,
+          `commands.economy.shop.category_${category}`,
+          category
+        ),
+        items,
+      };
+    }).filter((group) => group.items.length > 0),
+  };
+}
+
+function buildGamesState(
+  readOnly: boolean,
+  recordsInput: unknown,
+  dailyStatusResults: JsonResult[]
+): {
+  items: ActivityGameCard[];
+  playableGameId: string;
+} {
+  const records = asObject(recordsInput);
+
+  return {
+    items: ACTIVITY_GAME_CATALOG.map((game, index) => ({
+      id: game.id,
+      title: game.title,
+      emoji: game.emoji,
+      status: game.status,
+      playable: !readOnly && game.id === "2048" && game.status === "playable",
+      highScore: toNumber(asObject(records[game.id]).highScore, 0),
+      dailyStatus: dailyStatusResults[index]?.ok
+        ? asObject(dailyStatusResults[index]?.data)
+        : null,
+    })),
+    playableGameId: "2048",
+  };
+}
+
+async function buildReadOnlyLauncherPayload(
+  guildId: string,
+  authUser: AuthenticatedRequest["authUser"] | undefined,
+  unsupportedReason: string
+): Promise<ActivityLauncherPayload> {
+  const locale = normalizeActivityLocale(authUser?.locale);
+  const avatarUrl = getAvatarUrl(authUser?.id, authUser?.avatar || null);
+  const strings = buildActivityStrings(locale);
+
+  return {
+    locale,
+    strings,
+    palette: await fetchRenderingPalette(avatarUrl),
+    user: {
+      id: authUser?.id || "guest",
+      username: authUser?.username || "Guest",
+      displayName:
+        authUser?.global_name || authUser?.username || authUser?.id || "Guest",
+      avatar: authUser?.avatar || null,
+      avatarUrl,
+      locale,
+    },
+    guild: guildId ? { id: guildId, name: `Guild ${guildId}` } : null,
+    readOnly: true,
+    unsupportedReason,
+    balance: buildEmptyBalanceSnapshot(),
+    cases: buildCasesState(locale, strings, [], null, 0),
+    upgrades: buildUpgradesState(locale, [], 0, 0),
+    games: buildGamesState(true, {}, ACTIVITY_GAME_CATALOG.map(() => ({
+      ok: true,
+      status: 200,
+      data: null,
+    }))),
+    refreshedAt: Date.now(),
+  };
+}
+
+async function buildActivityLauncherPayload(
+  guildId: string,
+  authUser: NonNullable<AuthenticatedRequest["authUser"]>
+): Promise<ActivityLauncherPayload> {
+  await ensureGuildUser(guildId, authUser.id);
+
+  const [
+    userResult,
+    guildResult,
+    recordsResult,
+    dailyCaseStatusResult,
+    weeklyCooldownResult,
+    ...dailyStatusResults
+  ] = await Promise.all([
+    fetchDatabase(`/users/${guildId}/${authUser.id}`),
+    fetchDatabase(`/guilds/${guildId}`),
+    fetchDatabase(`/games/records/${guildId}/${authUser.id}`),
+    fetchDatabase(`/crates/status/${guildId}/${authUser.id}/daily`),
+    fetchDatabase(`/cooldowns/crate/${guildId}/${authUser.id}/weekly`),
+    ...ACTIVITY_GAME_CATALOG.map((game) =>
+      fetchDatabase(`/games/earnings/${guildId}/${authUser.id}/${normalizeGameId(game.id)}`)
+    ),
+  ]);
+
+  if (!userResult.ok) {
+    throw new Error(`Failed to load user activity data: ${userResult.status}`);
+  }
+
+  const user = asObject(userResult.data) as ActivityUserRecord;
+  const locale = normalizeActivityLocale(user.locale || authUser.locale);
+  const strings = buildActivityStrings(locale);
+  const avatarUrl = getAvatarUrl(authUser.id, authUser.avatar || null);
+
+  const [palette, bankProjectionResult] = await Promise.all([
+    fetchRenderingPalette(avatarUrl),
+    fetchDatabase("/economy/bank/calculate", {
+      method: "POST",
+      body: JSON.stringify({ user: userResult.data }),
+    }),
+  ]);
+
+  const balance = buildBalanceSnapshot(
+    user,
+    bankProjectionResult.ok ? bankProjectionResult.data : null
+  );
+
+  return {
+    locale,
+    strings,
+    palette,
+    user: {
+      id: authUser.id,
+      username: authUser.username,
+      displayName: authUser.global_name || authUser.username || authUser.id,
+      avatar: authUser.avatar || null,
+      avatarUrl,
+      locale,
+    },
+    guild: guildResult.ok
+      ? {
+          id: guildId,
+          name:
+            typeof asObject(guildResult.data).name === "string"
+              ? String(asObject(guildResult.data).name)
+              : `Guild ${guildId}`,
+        }
+      : { id: guildId, name: `Guild ${guildId}` },
+    readOnly: false,
+    balance,
+    cases: buildCasesState(
+      locale,
+      strings,
+      asArray(user.crates),
+      dailyCaseStatusResult.ok ? dailyCaseStatusResult.data : null,
+      weeklyCooldownResult.data
+    ),
+    upgrades: buildUpgradesState(
+      locale,
+      asArray(user.upgrades),
+      balance.walletBalance,
+      balance.upgradeDiscount
+    ),
+    games: buildGamesState(false, recordsResult.data, dailyStatusResults),
+    refreshedAt: Date.now(),
+  };
+}
+
+async function buildLauncherResponse(
+  guildId: string,
+  authUser: AuthenticatedRequest["authUser"]
+): Promise<ActivityLauncherPayload> {
+  if (!authUser?.id) {
+    return buildReadOnlyLauncherPayload(
+      guildId,
+      authUser,
+      "Discord authorization is unavailable for this launch. Reopen the activity after checking OAuth settings."
+    );
+  }
+
+  if (!guildId) {
+    return buildReadOnlyLauncherPayload(
+      guildId,
+      authUser,
+      "Guild context is required for rewards."
+    );
+  }
+
+  return buildActivityLauncherPayload(guildId, authUser);
+}
+
+function resolveMoveAmount(
+  balance: ActivityBalanceSnapshot,
+  direction: "deposit" | "withdraw",
+  amountMode: "fixed" | "percent",
+  rawAmount: unknown
+): number {
+  const sourceAvailable =
+    direction === "deposit" ? balance.walletBalance : balance.totalBankBalance;
+
+  if (amountMode === "percent") {
+    const percent = clamp(0, toNumber(rawAmount, 0), 100);
+    return roundMoney(sourceAvailable * (percent / 100));
+  }
+
+  return roundMoney(clamp(0, toNumber(rawAmount, 0), sourceAvailable));
 }
 
 export function createActivitiesApp() {
@@ -366,10 +1096,13 @@ export function createActivitiesApp() {
 
       const parsed = await parseJsonResponse(tokenResponse);
       if (!parsed.ok) {
+        const parsedData = asObject(parsed.data);
         return res.status(parsed.status).json({
-          ...(parsed.data && typeof parsed.data === "object" ? parsed.data : {}),
+          ...parsedData,
           error:
-            typeof parsed.data?.error === "string" ? parsed.data.error : "oauth_token_exchange_failed",
+            typeof parsedData.error === "string"
+              ? parsedData.error
+              : "oauth_token_exchange_failed",
           message: getDiscordOAuthErrorMessage(parsed.data),
         });
       }
@@ -390,127 +1123,209 @@ export function createActivitiesApp() {
     async (req: AuthenticatedRequest, res) => {
       try {
         const guildId = String(req.query.guildId || req.headers["x-guild-id"] || "").trim();
-        const authUser = req.authUser;
-        const baseGames = ACTIVITY_GAME_CATALOG.map((game) => ({
-          ...game,
-          dailyStatus: null,
-          highScore: 0,
-        }));
-
-        if (!authUser?.id) {
-          return res.json({
-            user: {
-              id: "guest",
-              username: "Guest",
-              displayName: "Guest",
-            },
-            guild: guildId ? { id: guildId, name: `Guild ${guildId}` } : null,
-            readOnly: true,
-            unsupportedReason:
-              "Discord authorization is unavailable for this launch. Reopen the activity after checking OAuth settings.",
-            economy: null,
-            crates: [],
-            crateSummary: { total: 0 },
-            upgrades: [],
-            stats: null,
-            levels: null,
-            records: {},
-            games: baseGames,
-          });
-        }
-
-        if (!guildId) {
-          return res.json({
-            user: authUser,
-            guild: null,
-            readOnly: true,
-            unsupportedReason: "Guild context is required for rewards.",
-            economy: null,
-            crates: [],
-            crateSummary: { total: 0 },
-            upgrades: [],
-            stats: null,
-            levels: null,
-            records: {},
-            games: baseGames,
-          });
-        }
-
-        await ensureGuildUser(guildId, authUser.id);
-
-        const [
-          userResult,
-          guildResult,
-          recordsResult,
-          ...dailyStatusResults
-        ] = await Promise.all([
-          fetchDatabase(`/users/${guildId}/${authUser.id}`),
-          fetchDatabase(`/guilds/${guildId}`),
-          fetchDatabase(`/games/records/${guildId}/${authUser.id}`),
-          ...ACTIVITY_GAME_CATALOG.map((game) =>
-            fetchDatabase(`/games/earnings/${guildId}/${authUser.id}/${normalizeGameId(game.id)}`)
-          ),
-        ]);
-
-        const user = userResult.data || {};
-        const economy = user?.economy || {};
-        const crates = Array.isArray(user?.crates) ? user.crates : [];
-        const upgrades = Array.isArray(user?.upgrades) ? user.upgrades : [];
-        const stats = user?.stats || null;
-        const levels = user?.Level || null;
-
-        const crateSummary = crates.reduce(
-          (acc: Record<string, number>, crate: any) => {
-            const type = String(crate?.type || "unknown");
-            const count = Math.max(0, toNumber(crate?.count, 0));
-            acc[type] = (acc[type] || 0) + count;
-            acc.total = (acc.total || 0) + count;
-            return acc;
-          },
-          { total: 0 }
-        );
-
-        const recordMap = recordsResult.ok && recordsResult.data ? recordsResult.data : {};
-        const games = ACTIVITY_GAME_CATALOG.map((game, index) => ({
-          ...game,
-          highScore: toNumber(recordMap?.[game.id]?.highScore || 0),
-          dailyStatus: dailyStatusResults[index]?.ok ? dailyStatusResults[index]?.data || null : null,
-        }));
-
-        return res.json({
-          user: {
-            ...authUser,
-            displayName: authUser.global_name || authUser.username || authUser.id,
-          },
-          guild: guildResult.ok
-            ? {
-                id: guildId,
-                name: guildResult.data?.id === guildId
-                  ? guildResult.data?.name || `Guild ${guildId}`
-                  : `Guild ${guildId}`,
-              }
-            : { id: guildId, name: `Guild ${guildId}` },
-          readOnly: false,
-          economy: {
-            balance: toNumber(economy?.balance),
-            bankBalance: toNumber(economy?.bankBalance),
-            bankDistributed: toNumber(economy?.bankDistributed),
-            totalBankBalance:
-              toNumber(economy?.bankBalance) + toNumber(economy?.bankDistributed),
-            bankRate: toNumber(economy?.bankRate),
-          },
-          crates,
-          crateSummary,
-          upgrades,
-          stats,
-          levels,
-          records: recordMap,
-          games,
-        });
+        const launcher = await buildLauncherResponse(guildId, req.authUser);
+        return res.json(launcher);
       } catch (error: any) {
         console.error("[activities] launcher-data failed", error);
         return res.status(500).json({
           error: "Failed to load launcher data",
+          message: error?.message || "Unknown error",
+        });
+      }
+    }
+  );
+
+  app.post(
+    ["/api/economy/move", "/.proxy/api/economy/move"],
+    requireActivityAuth,
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const authUser = req.authUser;
+        if (!authUser?.id) {
+          return res.status(401).json({ error: "Unauthorized: missing resolved user" });
+        }
+
+        const guildId = String(req.body?.guildId || req.headers["x-guild-id"] || "").trim();
+        const direction =
+          String(req.body?.direction || "").trim().toLowerCase() === "withdraw"
+            ? "withdraw"
+            : String(req.body?.direction || "").trim().toLowerCase() === "deposit"
+            ? "deposit"
+            : "";
+        const amountMode =
+          String(req.body?.amountMode || "").trim().toLowerCase() === "percent"
+            ? "percent"
+            : "fixed";
+
+        if (!guildId) {
+          return res.status(400).json({ error: "guildId is required" });
+        }
+
+        if (direction !== "deposit" && direction !== "withdraw") {
+          return res.status(400).json({ error: "direction must be deposit or withdraw" });
+        }
+
+        const currentLauncher = await buildActivityLauncherPayload(guildId, authUser);
+        const amount = resolveMoveAmount(
+          currentLauncher.balance,
+          direction,
+          amountMode,
+          req.body?.amount
+        );
+
+        if (amount <= 0) {
+          return res.status(400).json({ error: "Amount must be greater than zero" });
+        }
+
+        const result = await fetchDatabase(`/economy/${direction}`, {
+          method: "POST",
+          body: JSON.stringify({
+            guildId,
+            userId: authUser.id,
+            amount,
+          }),
+        });
+
+        if (!result.ok) {
+          return res.status(result.status).json({
+            error:
+              typeof asObject(result.data).error === "string"
+                ? asObject(result.data).error
+                : `Failed to ${direction} funds`,
+          });
+        }
+
+        const launcher = await buildActivityLauncherPayload(guildId, authUser);
+        const response: ActivityMutationEnvelope<{
+          direction: "deposit" | "withdraw";
+          amount: number;
+          amountMode: "fixed" | "percent";
+        }> = {
+          success: true,
+          action: {
+            direction,
+            amount,
+            amountMode,
+          },
+          launcher,
+        };
+
+        return res.json(response);
+      } catch (error: any) {
+        console.error("[activities] economy move failed", error);
+        return res.status(500).json({
+          error: "Failed to move funds",
+          message: error?.message || "Unknown error",
+        });
+      }
+    }
+  );
+
+  app.post(
+    ["/api/crates/open", "/.proxy/api/crates/open"],
+    requireActivityAuth,
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const authUser = req.authUser;
+        if (!authUser?.id) {
+          return res.status(401).json({ error: "Unauthorized: missing resolved user" });
+        }
+
+        const guildId = String(req.body?.guildId || req.headers["x-guild-id"] || "").trim();
+        const type = String(req.body?.type || "").trim().toLowerCase();
+
+        if (!guildId || !type) {
+          return res.status(400).json({ error: "guildId and type are required" });
+        }
+
+        const result = await fetchDatabase("/crates/open", {
+          method: "POST",
+          body: JSON.stringify({
+            guildId,
+            userId: authUser.id,
+            type,
+          }),
+        });
+
+        if (!result.ok) {
+          return res.status(result.status).json({
+            error:
+              typeof asObject(result.data).error === "string"
+                ? asObject(result.data).error
+                : "Failed to open crate",
+          });
+        }
+
+        const launcher = await buildActivityLauncherPayload(guildId, authUser);
+        const response: ActivityMutationEnvelope<{ type: string; reward: unknown }> = {
+          success: true,
+          action: {
+            type,
+            reward: result.data,
+          },
+          launcher,
+        };
+
+        return res.json(response);
+      } catch (error: any) {
+        console.error("[activities] crate open failed", error);
+        return res.status(500).json({
+          error: "Failed to open crate",
+          message: error?.message || "Unknown error",
+        });
+      }
+    }
+  );
+
+  app.post(
+    ["/api/upgrades/purchase", "/.proxy/api/upgrades/purchase"],
+    requireActivityAuth,
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const authUser = req.authUser;
+        if (!authUser?.id) {
+          return res.status(401).json({ error: "Unauthorized: missing resolved user" });
+        }
+
+        const guildId = String(req.body?.guildId || req.headers["x-guild-id"] || "").trim();
+        const upgradeType = String(req.body?.upgradeType || "").trim();
+
+        if (!guildId || !upgradeType) {
+          return res.status(400).json({ error: "guildId and upgradeType are required" });
+        }
+
+        const result = await fetchDatabase("/economy/upgrades/purchase", {
+          method: "POST",
+          body: JSON.stringify({
+            guildId,
+            userId: authUser.id,
+            upgradeType,
+          }),
+        });
+
+        if (!result.ok) {
+          return res.status(result.status).json({
+            error:
+              typeof asObject(result.data).error === "string"
+                ? asObject(result.data).error
+                : "Failed to purchase upgrade",
+          });
+        }
+
+        const launcher = await buildActivityLauncherPayload(guildId, authUser);
+        const response: ActivityMutationEnvelope<{ upgradeType: string }> = {
+          success: true,
+          action: {
+            upgradeType,
+          },
+          launcher,
+        };
+
+        return res.json(response);
+      } catch (error: any) {
+        console.error("[activities] upgrade purchase failed", error);
+        return res.status(500).json({
+          error: "Failed to purchase upgrade",
           message: error?.message || "Unknown error",
         });
       }
@@ -558,9 +1373,8 @@ export function createActivitiesApp() {
 
         await ensureGuildUser(guildId, authUser.id);
         const userResult = await fetchDatabase(`/users/${guildId}/${authUser.id}`);
-        const upgrades = Array.isArray(userResult.data?.upgrades)
-          ? userResult.data.upgrades
-          : [];
+        const userData = asObject(userResult.data);
+        const upgrades = asArray(userData.upgrades);
         const gamesEarningLevel = getUpgradeLevel(upgrades, "games_earning");
 
         const reward = compute2048SessionReward({
@@ -613,7 +1427,10 @@ export function createActivitiesApp() {
         );
         const balanceResult = await fetchDatabase(`/economy/balance/${guildId}/${authUser.id}`);
 
-        const payout = payoutResult.data || {};
+        const payout = asObject(payoutResult.data);
+        const highScoreData = asObject(highScoreResult.data);
+        const xpData = asObject(xpResult.data);
+        const balanceData = asObject(balanceResult.data);
         const totalBlockedAmount = Math.max(0, toNumber(payout?.blockedAmount));
         const capBlockedAmount = Math.max(
           0,
@@ -650,15 +1467,15 @@ export function createActivitiesApp() {
             gameXp,
           },
           progression: {
-            highScore: highScoreResult.data?.highScore || score,
-            isNewRecord: Boolean(highScoreResult.data?.isNewRecord),
-            levelUp: xpResult.data?.levelUp || null,
-            type: xpResult.data?.type || null,
+            highScore: toNumber(highScoreData.highScore, score) || score,
+            isNewRecord: Boolean(highScoreData.isNewRecord),
+            levelUp: xpData.levelUp || null,
+            type: xpData.type || null,
           },
           dailyStatus: dailyStatusResult.data || null,
           economy: {
-            balance: toNumber(balanceResult.data?.balance, 0),
-            totalBankBalance: toNumber(balanceResult.data?.totalBankBalance, 0),
+            balance: toNumber(balanceData.balance, 0),
+            totalBankBalance: toNumber(balanceData.totalBankBalance, 0),
           },
         };
 

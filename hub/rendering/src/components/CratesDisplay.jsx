@@ -1,5 +1,4 @@
-import InfoRectangle from "./unified/InfoRectangle.jsx";
-import Banknotes from "./unified/Banknotes.jsx";
+import CasesSectionView from "../../../shared/src/ui/CasesSectionView.jsx";
 
 const CratesDisplay = (props) => {
   const {
@@ -200,6 +199,8 @@ const CratesDisplay = (props) => {
       value: `-${minutes}m ${cooldownType}`,
     });
   });
+  const displayName =
+    interaction?.user?.displayName || interaction?.user?.username || "Player";
 
   const renderCrateCard = (crate, index) => {
     const isSelected = index === selectedCrate;
@@ -303,395 +304,110 @@ const CratesDisplay = (props) => {
         overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "16px",
-          marginBottom: "14px",
+      <CasesSectionView
+        eyebrow={translations.commandLabel || "/cases"}
+        title={translations.cratesTitle}
+        subtitle={displayName}
+        coloring={{
+          textColor,
+          secondaryTextColor,
+          tertiaryTextColor,
+          overlayBackground,
+          accentColor: "#ffb648",
+          dominantColor: "#42c1ff",
         }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-          <img
-            src={interaction.user.avatarURL}
-            style={{
-              width: "62px",
-              height: "62px",
-              borderRadius: "18px",
-              backgroundColor: overlayBackground,
-              border: "1px solid rgba(255,255,255,0.18)",
-              display: "flex",
-            }}
-            alt={translations.userAvatarAlt}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              minWidth: 0,
-            }}
-          >
-            <div style={{ fontSize: "12px", letterSpacing: "0.16em", color: tertiaryTextColor, display: "flex" }}>
-              {translations.commandLabel || "/cases"}
-            </div>
-          <div
-            style={{
-              fontSize: "34px",
-              fontWeight: "bold",
-              display: "flex",
-              lineHeight: 1.04,
-            }}
-          >
-            {translations.cratesTitle}
-          </div>
-          <div
-            style={{
-              fontSize: "13px",
-              color: secondaryTextColor,
-              display: "flex",
-            }}
-          >
-            {interaction.user.displayName}
-          </div>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-          <InfoRectangle
-            icon="💵"
-            background={overlayBackground}
-            borderRadius="16px"
-            padding="7px 10px"
-            minWidth="0px"
-            maxWidth="170px"
-            iconSize="16px"
-            iconMarginRight="8px"
-            title={translations.balance}
-            titleStyle={{ fontSize: "11px", color: tertiaryTextColor, letterSpacing: "0.08em" }}
-            value={
-              <div style={{ display: "flex", fontSize: "18px", fontWeight: 700, color: textColor }}>
-                {Number(database.balance || 0).toFixed(2)}
-              </div>
-            }
-            style={{ position: "relative" }}
-          >
-            <Banknotes
-              amount={Math.max(Number(database.balance || 0), 0)}
-              style="banknotes"
-              division={50}
-              xspacing={18}
-              styleOverrides={{
-                container: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 },
-                banknote: { width: "10px", height: "3px" },
-              }}
-            />
-          </InfoRectangle>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", flex: 1, minHeight: 0 }}>
-        <div
-          style={{
-            borderRadius: "24px",
-            padding: "12px 14px",
-            backgroundColor: overlayBackground,
-            border: "1px solid rgba(255,255,255,0.12)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "flex-start",
-            gap: "6px",
-            boxSizing: "border-box",
-            height: "188px",
-            minHeight: "188px",
-            maxHeight: "188px",
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
-            <div style={{ fontSize: "12px", color: tertiaryTextColor, letterSpacing: "0.10em", display: "flex" }}>
-              {translations.monthStatus}
-            </div>
-            <div style={{ fontSize: "11px", color: secondaryTextColor, display: "flex" }}>{monthLabel}</div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: "20px", fontWeight: 700, color: textColor, display: "flex" }}>
-                {translations.streak}: {streak}
-              </div>
-              <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
-                {translations.rewardMultiplier}: x{rewardMultiplier.toFixed(2)}
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "7px 9px",
-                borderRadius: "999px",
-                backgroundColor: dailyStatusRecord?.available
-                  ? "rgba(109,247,167,0.18)"
-                  : "rgba(255,255,255,0.10)",
-                color: dailyStatusRecord?.available ? "#6df7a7" : textColor,
-                fontSize: "11px",
-                fontWeight: 700,
-              }}
-            >
-              <span>{dailyStatusRecord?.available ? "✅" : "⏳"}</span>
-              <span>
-                {dailyStatusRecord?.available
-                  ? translations.dailyReady
-                  : formatCooldown(Number(dailyStatusRecord?.cooldownRemainingMs || 0))}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "3px" }}>
-            {weekdayLabels.map((label) => (
-              <div
-                key={`weekday-${label}`}
-                style={{
-                  width: "13.5%",
-                  fontSize: "8px",
-                  color: tertiaryTextColor,
-                  display: "flex",
-                  justifyContent: "center",
-                }}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ position: "relative", borderRadius: "10px", overflow: "hidden" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-              {visibleCalendarWeeks.map((week, weekIndex) => (
-                <div
-                  key={`week-${visibleCalendarStart + weekIndex}`}
-                  style={{ display: "flex", justifyContent: "space-between", gap: "3px" }}
-                >
-                  {week.map((entry) => {
-                    const opened = openedHistorySet.has(entry.dateKey);
-                    const isToday = entry.dateKey === todayKey;
-                    const isFuture = entry.dateKey > todayKey;
-                    const openedBackground = isToday
-                      ? "rgba(109,247,167,0.34)"
-                      : "rgba(109,247,167,0.22)";
-
-                    return (
-                      <div
-                        key={entry.dateKey}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "13.5%",
-                          height: "20px",
-                          borderRadius: "7px",
-                          backgroundColor: opened
-                            ? openedBackground
-                            : isToday
-                            ? "rgba(255,255,255,0.16)"
-                            : "rgba(255,255,255,0.08)",
-                          border: opened
-                            ? "1px solid rgba(109,247,167,0.82)"
-                            : "1px solid rgba(255,255,255,0.08)",
-                          color: opened
-                            ? "#6df7a7"
-                            : entry.inCurrentMonth
-                            ? isFuture
-                              ? tertiaryTextColor
-                              : textColor
-                            : "rgba(248,251,255,0.38)",
-                        }}
-                      >
-                        <div style={{ fontSize: "9px", fontWeight: 700, display: "flex" }}>
-                          {opened ? "✓" : entry.dayNumber}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            {hasCalendarWeeksBefore ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: "12px",
-                  background:
-                    "linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 100%)",
-                  pointerEvents: "none",
-                }}
-              />
-            ) : null}
-            {hasCalendarWeeksAfter ? (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: "12px",
-                  background:
-                    "linear-gradient(0deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 100%)",
-                  pointerEvents: "none",
-                }}
-              />
-            ) : null}
-          </div>
-        </div>
-
-        <div
-          style={{
-            borderRadius: "24px",
-            padding: "14px",
-            background: "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%)",
-            border: "1px solid rgba(255,255,255,0.14)",
-            display: "flex",
-            gap: "14px",
-            boxSizing: "border-box",
-            height: "154px",
-            minHeight: "154px",
-            maxHeight: "154px",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: "92px",
-              minWidth: "92px",
-              borderRadius: "22px",
-              background: "linear-gradient(145deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 100%)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              fontSize: "42px",
-            }}
-          >
-            {selectedCrateData?.emoji || "🎁"}
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "14px", minWidth: 0 }}>
-              <div style={{ fontSize: "12px", color: tertiaryTextColor, letterSpacing: "0.10em", minWidth: 0, width: "100%" }}>
-                {translations.selectedCrateLabel}
-              </div>
-            </div>
-
-            <div style={{ fontSize: "18px", fontWeight: "bold", lineHeight: 1.08, width: "100%", maxWidth: "100%", marginTop: "2px", maxHeight: "40px", overflow: "hidden", whiteSpace: "normal" }}>
-              {selectedCrateData?.name || translations.noCratesAvailable}
-            </div>
-            <div style={{ fontSize: "10px", lineHeight: 1.2, color: secondaryTextColor, marginTop: "3px", width: "100%", maxWidth: "100%", maxHeight: "26px", overflow: "hidden", wordBreak: "break-word", whiteSpace: "normal" }}>
-              {selectedCrateData?.description || translations.emptyCrateDescription}
-            </div>
-          </div>
-        </div>
-      
-      {hasRewardsView ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: textColor, display: "flex" }}>
-              {translations.rewardsReceived}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              padding: "10px",
-              borderRadius: "18px",
-              backgroundColor: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              minHeight: 0,
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ fontSize: "11px", color: tertiaryTextColor, letterSpacing: "0.08em", display: "flex" }}>
-              {translations.fromCrate}: {openedCrate?.name || selectedCrateData?.name || "-"}
-            </div>
-
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", overflow: "hidden" }}>
-            {rewardItems.length > 0 ? rewardItems.map((item, index) => (
-              <div
-                key={`reward-${index}`}
-                style={{
-                  width: "calc(50% - 4px)",
-                  minHeight: "50px",
-                  borderRadius: "14px",
-                  padding: "8px 10px",
-                  backgroundColor: "rgba(255,255,255,0.10)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div style={{ fontSize: "22px", display: "flex" }}>{item.emoji}</div>
-                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <div style={{ fontSize: "11px", color: tertiaryTextColor, display: "flex" }}>{item.label}</div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: textColor, display: "flex" }}>{item.value}</div>
-                </div>
-              </div>
-            )) : (
-              <div
-                style={{
-                  width: "100%",
-                  minHeight: "64px",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  backgroundColor: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.10)",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  color: secondaryTextColor,
-                  fontSize: "14px",
-                }}
-              >
-                {translations.noRewards}
-              </div>
-            )}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: textColor, display: "flex" }}>
-              {translations.availableCrates}
-            </div>
-            <div style={{ fontSize: "12px", color: secondaryTextColor, display: "flex" }}>
-              {translations.totalCrates}: {totalCrates}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              overflow: "hidden",
-              padding: "10px",
-              borderRadius: "18px",
-              backgroundColor: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.10)",
-            }}
-          >
-            {visibleCrates.map((crate, index) => renderCrateCard(crate, index))}
-          </div>
-        </div>
-      )}
-      </div>
+        summaryCards={[
+          {
+            label: translations.balance,
+            value: Number(database.balance || 0).toFixed(2),
+          },
+          {
+            label: translations.totalCrates,
+            value: String(totalCrates),
+          },
+        ]}
+        calendar={{
+          label: translations.monthStatus,
+          value: monthLabel,
+          headline: `${translations.streak}: ${streak}`,
+          subline: `${translations.rewardMultiplier}: x${rewardMultiplier.toFixed(2)}`,
+          badgeIcon: dailyStatusRecord?.available ? "✅" : "⏳",
+          badgeText: dailyStatusRecord?.available
+            ? translations.dailyReady
+            : formatCooldown(Number(dailyStatusRecord?.cooldownRemainingMs || 0)),
+          badgeTone: dailyStatusRecord?.available ? "ready" : "cooldown",
+          weekdays: weekdayLabels,
+          weeks: visibleCalendarWeeks.map((week) =>
+            week.map((entry) => {
+              const opened = openedHistorySet.has(entry.dateKey);
+              return {
+                id: entry.dateKey,
+                display: opened ? "✓" : String(entry.dayNumber),
+                opened,
+                isCurrent: entry.dateKey === todayKey,
+                isFuture: entry.dateKey > todayKey,
+                isMuted: !entry.inCurrentMonth,
+              };
+            })
+          ),
+          showTopFade: hasCalendarWeeksBefore,
+          showBottomFade: hasCalendarWeeksAfter,
+        }}
+        featuredCase={{
+          kicker: translations.selectedCrateLabel,
+          title: selectedCrateData?.name || translations.noCratesAvailable,
+          description:
+            selectedCrateData?.description || translations.emptyCrateDescription,
+          emoji: selectedCrateData?.emoji || "🎁",
+          countLabel: translations.quantityAvailable,
+          countValue: String(selectedCrateData?.count || 0),
+          statusLabel: translations.cooldown,
+          statusValue: selectedCrateData?.available
+            ? translations.readyToOpen
+            : formatCooldown(Number(selectedCrateData?.cooldown || 0)),
+          statusTone: selectedCrateData?.available ? "ready" : "cooldown",
+          infoCards: [
+            {
+              icon: "💵",
+              label: translations.rewardCoinsLabel,
+              value: selectedCrateData
+                ? `${Number(selectedCrateData?.rewards?.min_coins || selectedCrateData?.minCoins || 0)} - ${Number(selectedCrateData?.rewards?.max_coins || selectedCrateData?.maxCoins || 0)}`
+                : "0",
+            },
+            {
+              icon: "✨",
+              label: translations.rewardSeasonXpLabel,
+              value: rewardItems[1]?.value || `+${Number(selectedCrateData?.rewards?.seasonXp_amount || 0)}`,
+            },
+          ],
+        }}
+        collectionTitle={translations.availableCrates}
+        collectionCountText={`${translations.totalCrates}: ${totalCrates}`}
+        cases={visibleCrates.map((crate, index) => ({
+          id: `crate-${index}`,
+          title: crate.name,
+          subtitle: crate.available
+            ? translations.readyToOpen
+            : formatCooldown(Number(crate.cooldown || 0)),
+          emoji: crate.emoji,
+          countLabel: crate.count > 0 ? String(crate.count) : "",
+          isActive: index === selectedCrate,
+        }))}
+        detailPanel={
+          hasRewardsView
+            ? {
+                title: translations.rewardsReceived,
+                subtitle: `${translations.fromCrate}: ${openedCrate?.name || selectedCrateData?.name || "-"}`,
+                items: rewardItems.map((item) => ({
+                  icon: item.emoji,
+                  label: item.label,
+                  value: item.value,
+                })),
+                emptyText: translations.noRewards,
+              }
+            : null
+        }
+      />
     </div>
   );
 };

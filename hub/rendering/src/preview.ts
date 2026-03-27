@@ -12,6 +12,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const COMPONENTS_DIR = path.join(__dirname, "components");
 const PUBLIC_DIR = path.join(__dirname, "public");
+const SHARED_UI_DIR = path.resolve(__dirname, "..", "..", "shared", "src", "ui");
+const COMPONENTS_ROOT = path.resolve(COMPONENTS_DIR);
+const SHARED_UI_ROOT = path.resolve(SHARED_UI_DIR);
+const SHARED_COMPONENT_PREFIX = "shared~";
+const SHARED_PREVIEW_COMPONENT_SPECS = {
+  BalanceSectionView: { width: 1080, height: 640 },
+  CasesSectionView: { width: 1080, height: 680 },
+  UpgradesSectionView: { width: 1080, height: 680 },
+  GamesSectionView: { width: 1080, height: 725 },
+};
+const SHARED_PREVIEW_COMPONENTS = new Set(
+  Object.keys(SHARED_PREVIEW_COMPONENT_SPECS)
+);
+const WATCH_ROOTS = [COMPONENTS_ROOT, SHARED_UI_ROOT];
 
 const app = express();
 
@@ -23,44 +37,167 @@ const wss = new WebSocketServer({ noServer: true });
 // Track active WebSocket connections and their settings
 const clients = new Map();
 
+function isSharedPreviewComponentName(componentName) {
+  return String(componentName || "").startsWith(SHARED_COMPONENT_PREFIX);
+}
+
+function getSharedPreviewRelativeName(componentName) {
+  return String(componentName || "").slice(SHARED_COMPONENT_PREFIX.length);
+}
+
+function toSharedPreviewComponentName(relativeName) {
+  const normalized = String(relativeName || "")
+    .replace(/\\/g, "/")
+    .replace(/\.jsx$/, "");
+  return `${SHARED_COMPONENT_PREFIX}${normalized}`;
+}
+
+function getPreviewComponentBaseName(componentName) {
+  return isSharedPreviewComponentName(componentName)
+    ? getSharedPreviewRelativeName(componentName)
+    : componentName;
+}
+
+function isDirectSharedPreviewComponent(componentName) {
+  return SHARED_PREVIEW_COMPONENTS.has(
+    getPreviewComponentBaseName(componentName)
+  );
+}
+
+function getPreviewDisplayName(componentName) {
+  return isSharedPreviewComponentName(componentName)
+    ? `shared/${getSharedPreviewRelativeName(componentName)}`
+    : componentName;
+}
+
+function getPreviewComponentPath(componentName) {
+  if (isSharedPreviewComponentName(componentName)) {
+    return path.join(
+      SHARED_UI_ROOT,
+      `${getSharedPreviewRelativeName(componentName)}.jsx`
+    );
+  }
+
+  return path.join(COMPONENTS_ROOT, `${componentName}.jsx`);
+}
+
+function resolveAbsolutePathToComponentName(filePath) {
+  if (!filePath) {
+    return null;
+  }
+
+  const absolutePath = path.resolve(filePath);
+
+  if (
+    absolutePath.startsWith(COMPONENTS_ROOT) &&
+    absolutePath.endsWith(".jsx")
+  ) {
+    return path
+      .relative(COMPONENTS_ROOT, absolutePath)
+      .replace(/\\/g, "/")
+      .replace(/\.jsx$/, "");
+  }
+
+  if (
+    absolutePath.startsWith(SHARED_UI_ROOT) &&
+    absolutePath.endsWith(".jsx")
+  ) {
+    const relativeName = path
+      .relative(SHARED_UI_ROOT, absolutePath)
+      .replace(/\\/g, "/")
+      .replace(/\.jsx$/, "");
+    return toSharedPreviewComponentName(relativeName);
+  }
+
+  return null;
+}
+
+function createSharedPreviewWrapper(componentName, RawComponent) {
+  const baseName = getPreviewComponentBaseName(componentName);
+  const dimensions =
+    SHARED_PREVIEW_COMPONENT_SPECS[baseName] || { width: 1080, height: 680 };
+
+  const SharedPreviewWrapper = (props) =>
+    React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          padding: baseName === "BalanceSectionView" ? "24px" : "28px",
+          boxSizing: "border-box",
+          background:
+            props.coloring?.backgroundGradient ||
+            "linear-gradient(145deg, #1f3048 0%, #243f63 45%, #2f5a76 100%)",
+          color: props.coloring?.textColor || "#f8fbff",
+          fontFamily: "Inter",
+          overflow: "hidden",
+        },
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+          },
+        },
+        React.createElement(RawComponent, props)
+      )
+    );
+
+  SharedPreviewWrapper.dimensions = dimensions;
+  SharedPreviewWrapper.previewSourceName = baseName;
+
+  return SharedPreviewWrapper;
+}
+
+async function loadPreviewComponent(componentName, cacheKey = Date.now()) {
+  const componentPath = getPreviewComponentPath(componentName);
+  const imported = await import(
+    `file://${componentPath}?t=${cacheKey}&cache=${cacheKey}`
+  );
+  const RawComponent = imported.default;
+
+  if (!RawComponent) {
+    throw new Error(`Component not found in ${componentPath}`);
+  }
+
+  return {
+    componentPath,
+    RawComponent,
+    Component: isDirectSharedPreviewComponent(componentName)
+      ? createSharedPreviewWrapper(componentName, RawComponent)
+      : RawComponent,
+  };
+}
+
 // Watch for component file changes
 async function watchComponents() {
-  console.log(`Watching for changes in: ${COMPONENTS_DIR}`);
+  console.log(`Watching for changes in: ${WATCH_ROOTS.join(", ")}`);
 
   try {
-    // Verify directory exists and is accessible
-    await fs.access(COMPONENTS_DIR);
-
-    // Use absolute path for more reliable watching
-    const absolutePath = path.resolve(COMPONENTS_DIR);
-    console.log(`Using absolute path: ${absolutePath}`);
-
-    const watcher = watch(absolutePath, { recursive: true });
+    for (const watchRoot of WATCH_ROOTS) {
+      await fs.access(watchRoot);
+      console.log(`Using watch root: ${watchRoot}`);
+    }
 
     // Helper function to resolve import path to component name
     const resolveImportToComponent = (importPath, currentComponentDir) => {
       // Handle relative imports
       if (importPath.startsWith("./") || importPath.startsWith("../")) {
-        const currentDir = currentComponentDir || COMPONENTS_DIR;
+        const currentDir = currentComponentDir || COMPONENTS_ROOT;
         const resolvedPath = path.resolve(currentDir, importPath);
+        const directMatch = resolveAbsolutePathToComponentName(resolvedPath);
 
-        // Check if it's a JSX file in our components directory
-        if (
-          resolvedPath.startsWith(absolutePath) &&
-          resolvedPath.endsWith(".jsx")
-        ) {
-          // Return relative path from components directory, not just basename
-          const relativePath = path.relative(COMPONENTS_DIR, resolvedPath);
-          return relativePath.replace(".jsx", "");
+        if (directMatch) {
+          return directMatch;
         }
 
-        // Try adding .jsx extension if not present
         if (!resolvedPath.endsWith(".jsx")) {
           const jsxPath = resolvedPath + ".jsx";
-          if (jsxPath.startsWith(absolutePath)) {
-            const relativePath = path.relative(COMPONENTS_DIR, jsxPath);
-            return relativePath.replace(".jsx", "");
-          }
+          return resolveAbsolutePathToComponentName(jsxPath);
         }
       }
 
@@ -73,12 +210,7 @@ async function watchComponents() {
 
       try {
         // Handle components in subdirectories (e.g., "unified/UserCard")
-        let componentPath;
-        if (componentName.includes("/")) {
-          componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
-        } else {
-          componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
-        }
+        const componentPath = getPreviewComponentPath(componentName);
 
         const currentComponentDir = path.dirname(componentPath);
         const content = await fs.readFile(componentPath, "utf-8");
@@ -112,20 +244,17 @@ async function watchComponents() {
       return dependencies;
     };
 
-    watcher.on("change", async (eventType, filename) => {
+    const handleChange = async (watchRoot, filename) => {
       console.log(`File change detected: ${filename}`);
       if (filename && filename.endsWith(".jsx")) {
-        // Handle both absolute and relative paths
-        let changedComponentName;
+        const changedAbsolutePath = path.isAbsolute(filename)
+          ? filename
+          : path.join(watchRoot, filename);
+        const changedComponentName =
+          resolveAbsolutePathToComponentName(changedAbsolutePath);
 
-        if (filename.includes("/")) {
-          // Handle relative paths like "unified/UserCard.jsx"
-          const relativePath = filename.replace(/^.*components[/\\]/, "");
-          changedComponentName = relativePath.replace(".jsx", "");
-        } else {
-          // Handle simple filenames
-          const baseName = path.basename(filename);
-          changedComponentName = baseName.replace(".jsx", "");
+        if (!changedComponentName) {
+          return;
         }
 
         console.log(
@@ -178,13 +307,24 @@ async function watchComponents() {
           ).join(", ")}`
         );
       }
+    };
+
+    const watchers = WATCH_ROOTS.map((watchRoot) => {
+      const watcher = watch(watchRoot, { recursive: true });
+      watcher.on("change", async (eventType, filename) => {
+        await handleChange(watchRoot, filename);
+      });
+      watcher.on("error", (error) => {
+        console.error(`Watcher error in ${watchRoot}:`, error);
+      });
+      return watcher;
     });
 
-    watcher.on("error", (error) => {
-      console.error("Watcher error:", error);
-    });
-
-    return watcher;
+    return {
+      close() {
+        watchers.forEach((watcher) => watcher.close());
+      },
+    };
   } catch (error) {
     console.error("Failed to set up file watcher:", error);
     throw error;
@@ -353,12 +493,16 @@ function applyReplacements(text, replacements) {
 }
 
 // Function to create mockData with specified language
-async function createMockData(lang = "en", Component = null) {
+async function createMockData(lang = "en", Component = null, previewName = null) {
   // Create i18n mock for this component
   const i18nMock = createI18nMock(lang, Component);
+  const previewComponentName =
+    previewName || Component?.previewSourceName || Component?.name || "";
+  const previewComponentBaseName =
+    getPreviewComponentBaseName(previewComponentName);
 
   // Mock data for Leaderboard component
-  if (Component?.name === "Leaderboard") {
+  if (previewComponentBaseName === "Leaderboard") {
     const usernames = [
       "DragonSlayer",
       "StarLight",
@@ -450,7 +594,7 @@ async function createMockData(lang = "en", Component = null) {
   }
 
   // Mock data for LevelUp component
-  if (Component?.name === "LevelUp") {
+  if (previewComponentBaseName === "LevelUp") {
     return {
       locale: lang,
       i18n: i18nMock,
@@ -478,7 +622,7 @@ async function createMockData(lang = "en", Component = null) {
   }
 
   // Mock data for CratesDisplay component
-  if (Component?.name === "CratesDisplay") {
+  if (previewComponentBaseName === "CratesDisplay") {
     return {
       locale: lang,
       i18n: i18nMock,
@@ -544,7 +688,7 @@ async function createMockData(lang = "en", Component = null) {
   }
 
   // Mock data for CrateRewards component
-  if (Component?.name === "CrateRewards") {
+  if (previewComponentBaseName === "CrateRewards") {
     return {
       locale: lang,
       i18n: i18nMock,
@@ -574,7 +718,7 @@ async function createMockData(lang = "en", Component = null) {
   }
 
   // Mock data for Transfer component with user-to-user transfer support
-  if (Component?.name === "Transfer") {
+  if (previewComponentBaseName === "Transfer") {
     // Create a recipient user for transfer visualization
     const recipientUser = {
       id: "987654321",
@@ -637,33 +781,76 @@ async function createMockData(lang = "en", Component = null) {
   }
 
   // Mock data for Balance component with distributed funds support
-  if (Component?.name === "Balance") {
+  if (previewComponentBaseName === "Balance") {
     return {
       locale: lang,
       i18n: i18nMock,
       interaction: {
         user: {
-          id: "123456789",
-          username: "Test User",
-          displayName: "Test User",
+          id: "287275956744355841",
+          username: "vejoy_",
+          displayName: "vejoy_",
           avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
         guild: {
-          id: "987654321",
-          name: "Test Guild",
+          id: "1282078106202669148",
+          name: "Eleazar",
           iconURL: "https://cdn.discordapp.com/embed/avatars/0.png",
         },
       },
       database: {
+        locale: "uk",
+        realName: "Jacob",
+        age: 19,
+        gender: "male",
         economy: {
-          balance: 1000.5,
-          bankBalance: 5000.75,
+          balance: 0,
+          bankBalance: 345.49331,
           bankDistributed: 1250.25,
-          bankRate: 25,
-          bankStartTime: Date.now() - 86400000, // 1 day ago in milliseconds
+          bankRate: 9.5,
+          bankStartTime: Date.now() - 6 * 60 * 60 * 1000,
         },
-        individualBankBalance: 6251.0,
-        combinedBankBalance: 7500.75,
+        individualBankBalance: 345.49,
+        combinedBankBalance: 345.49,
+        marriageStatus: {
+          status: "MARRIED",
+          createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000 - 23 * 60 * 60 * 1000 - 48 * 60 * 1000).toISOString(),
+        },
+        partnerUsername: "Jacob",
+        partnerAvatarUrl: "https://cdn.discordapp.com/embed/avatars/3.png",
+        levelProgress: {
+          chat: {
+            level: 5,
+            currentXP: 250,
+            requiredXP: 500,
+            rank: 1,
+          },
+          voice: {
+            level: 1,
+            currentXP: 45,
+            requiredXP: 250,
+            rank: 1,
+          },
+          game: {
+            level: 10,
+            currentXP: 780,
+            requiredXP: 1200,
+            rank: 1,
+          },
+        },
+        hints: {
+          dailyAvailable: false,
+          dailyRemainingMs: 13 * 60 * 60 * 1000,
+          upgradesAffordable: 0,
+          workEarnings: {
+            progress: 0.0078,
+            totalCap: 1,
+          },
+          crimeAvailable: 1,
+          casesCooldowns: {
+            closestRemainingMs: 13 * 60 * 60 * 1000,
+          },
+        },
         guildVault: {
           id: "vault123",
           guildId: "1282078106202669148",
@@ -703,8 +890,315 @@ async function createMockData(lang = "en", Component = null) {
             triggeredBy: "287275956744355841",
           },
         ], // ← Последние 3 операции распределения с реальной структурой данных
+        bankCycle: {
+          annualRate: 0.095,
+          maxInactiveMs: 4 * 60 * 60 * 1000,
+          timeIntoCycle: 2 * 60 * 60 * 1000 + 59 * 60 * 1000,
+          cycleComplete: false,
+        },
       },
-      dominantColor: "user",
+      dominantColor: [139, 124, 108],
+    };
+  }
+
+  if (previewComponentBaseName === "BalanceSectionView") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      dominantColor: [139, 124, 108],
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "vejoy_",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      eyebrow: lang === "ru" ? "Баланс" : lang === "uk" ? "Баланс" : "Balance",
+      layout: "classic",
+      title: lang === "ru" ? "Баланс" : lang === "uk" ? "Баланс" : "Balance",
+      titleMeta: "vejoy_",
+      subtitle: null,
+      profilePanel: {
+        avatarUrl: "https://cdn.discordapp.com/embed/avatars/0.png",
+        userId: "831217341454090272",
+        displayName: "vejoy_",
+        meta:
+          lang === "ru"
+            ? "Guild 1282078106202669148"
+            : lang === "uk"
+            ? "Guild 1282078106202669148"
+            : "Guild 1282078106202669148",
+        guildIconUrl: "https://cdn.discordapp.com/embed/avatars/1.png",
+        guildName: "Eleazar",
+      },
+      summaryCards: [],
+      primaryCards: [
+        {
+          key: "wallet-card",
+          icon: "💵",
+          label: lang === "ru" ? "Кошелёк" : lang === "uk" ? "Гаманець" : "Wallet",
+          value: "193",
+          description:
+            lang === "ru"
+              ? "Доступный баланс для кейсов, игр и улучшений."
+              : lang === "uk"
+              ? "Доступний баланс для кейсів, ігор та поліпшень."
+              : "Spendable balance for cases, games, and upgrades.",
+          action: { label: "+" },
+        },
+        {
+          key: "bank-card",
+          icon: "🏦",
+          label: lang === "ru" ? "Банк" : lang === "uk" ? "Банк" : "Bank",
+          value: "146.6",
+          description:
+            lang === "ru"
+              ? "Банк растёт в реальном времени, пока цикл активен."
+              : lang === "uk"
+              ? "Банк зростає в реальному часі, поки цикл активний."
+              : "Bank grows in real time while the cycle stays active.",
+          action: { label: "+" },
+          supportingItems: [
+            {
+              key: "rate",
+              icon: "↗",
+              label: lang === "ru" ? "Ставка" : lang === "uk" ? "Ставка" : "Rate",
+              value: "5.40%",
+            },
+          ],
+        },
+      ],
+      metricCards: [
+        { key: "annual", label: "Annual Rate", value: "5.40%", icon: "📈" },
+        { key: "projected", label: "Projected Total", value: "146.6", icon: "✨" },
+        { key: "discount", label: "Upgrade Discount", value: "18%", icon: "🛍️" },
+      ],
+      progress: {
+        label: lang === "ru" ? "Цикл банка" : lang === "uk" ? "Цикл банку" : "Bank Cycle",
+        value: "82m / 180m",
+        subtitle:
+          lang === "ru"
+            ? "Рост банка в реальном времени"
+            : lang === "uk"
+            ? "Зростання банку в реальному часі"
+            : "Live bank growth",
+        progress: 0.46,
+      },
+      footerCards: [
+        { key: "streak", label: "Streak", value: "12", icon: "🔥" },
+        { key: "multiplier", label: "Reward Multiplier", value: "1.60x", icon: "✨" },
+      ],
+      classicBanner: {
+        icon: "🏦",
+        dotColor: "rgba(24, 22, 20, 0.82)",
+        label:
+          lang === "ru"
+            ? "Рост банка в реальном времени"
+            : lang === "uk"
+            ? "Зростання банку в реальному часі"
+            : "Live bank growth",
+        value: "1:58:00",
+        background:
+          "linear-gradient(90deg, rgba(216, 65, 55, 0.94), rgba(181, 42, 37, 0.82))",
+        captionTone: "rgba(255,255,255,0.54)",
+      },
+    };
+  }
+
+  if (previewComponentBaseName === "CasesSectionView") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      dominantColor: [48, 82, 126],
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "vejoy_",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      eyebrow: "/cases",
+      title: lang === "ru" ? "Кейсы" : lang === "uk" ? "Кейси" : "Cases",
+      subtitle:
+        lang === "ru"
+          ? "Ежедневные и недельные награды с фокусом на одном кейсе."
+          : lang === "uk"
+          ? "Щоденні та тижневі нагороди з фокусом на одному кейсі."
+          : "Daily and weekly rewards with one focused crate.",
+      summaryCards: [
+        { label: "Available", value: "3", icon: "📦" },
+        { label: "Streak", value: "12", icon: "🔥" },
+      ],
+      calendar: {
+        label: "Month",
+        value: "03.2026",
+        headline: "Streak: 12",
+        subline: "Reward Multiplier: x1.60",
+        badgeIcon: "✅",
+        badgeText: "Ready now",
+        badgeTone: "ready",
+        weekdays: lang === "uk" ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        weeks: [
+          [
+            { id: "1", display: "✓", opened: true, isCurrent: false, isFuture: false, isMuted: false },
+            { id: "2", display: "✓", opened: true, isCurrent: false, isFuture: false, isMuted: false },
+            { id: "3", display: "✓", opened: true, isCurrent: false, isFuture: false, isMuted: false },
+            { id: "4", display: "14", opened: false, isCurrent: true, isFuture: false, isMuted: false },
+            { id: "5", display: "15", opened: false, isCurrent: false, isFuture: true, isMuted: false },
+            { id: "6", display: "16", opened: false, isCurrent: false, isFuture: true, isMuted: false },
+            { id: "7", display: "17", opened: false, isCurrent: false, isFuture: true, isMuted: false },
+          ],
+        ],
+      },
+      featuredCase: {
+        kicker: "Focused Crate",
+        title: "Daily Crate",
+        description: "Coins, XP, and discount bonuses.",
+        emoji: "🎁",
+        countLabel: "Available",
+        countValue: "2",
+        statusLabel: "Status",
+        statusValue: "Ready now",
+        statusTone: "ready",
+        infoCards: [
+          { icon: "💵", label: "Coins", value: "30 - 120" },
+          { icon: "✨", label: "XP / Discount", value: "50 / 8%" },
+        ],
+        action: { label: "Open Case" },
+      },
+      collectionTitle: "Available Cases",
+      collectionCountText: "4 total",
+      cases: [
+        { id: "daily", title: "Daily", subtitle: "Ready now", emoji: "🎁", countLabel: "2", isActive: true },
+        { id: "weekly", title: "Weekly", subtitle: "6:12:30", emoji: "📦", countLabel: "1" },
+        { id: "rare", title: "Rare", subtitle: "Ready now", emoji: "🧰", countLabel: "1" },
+      ],
+      detailPanel: {
+        title: "Rewards",
+        subtitle: "Daily Crate",
+        items: [
+          { icon: "💵", label: "Coins", value: "+85" },
+          { icon: "✨", label: "XP", value: "+50" },
+          { icon: "🏷️", label: "Discount", value: "+8%" },
+          { icon: "⏱️", label: "Cooldown", value: "-15m" },
+        ],
+      },
+    };
+  }
+
+  if (previewComponentBaseName === "UpgradesSectionView") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      dominantColor: [78, 86, 112],
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "vejoy_",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      eyebrow: "/shop",
+      title: lang === "ru" ? "Улучшения" : lang === "uk" ? "Поліпшення" : "Upgrades",
+      subtitle:
+        lang === "ru"
+          ? "Премиальные апгрейды с фокусом на текущем выборе."
+          : lang === "uk"
+          ? "Преміальні апгрейди з фокусом на поточному виборі."
+          : "Premium upgrades focused around the current pick.",
+      summaryCards: [
+        { label: "Balance", value: "193", icon: "💵" },
+        { label: "Discount", value: "18%", icon: "🏷️" },
+      ],
+      featuredUpgrade: {
+        kicker: "Focused Upgrade",
+        title: "Bank Rate",
+        subtitle: "Economy",
+        emoji: "🏦",
+        description: "Increase annual bank growth and improve passive savings.",
+        effectLabel: "Current → Next",
+        currentValue: "5.40%",
+        nextValue: "5.85%",
+        gainLabel: "Gain",
+        gainValue: "+0.45%",
+        gainTone: "positive",
+        levelLabel: "Level",
+        levelValue: "4",
+        levelHint: "Next 5",
+        priceValue: "160 💵",
+        progressPercent: 100,
+        progressText: "Ready to buy",
+        progressTone: "positive",
+        action: { label: "Buy Now" },
+      },
+      categoriesTitle: "Categories",
+      categoriesHint: "Focus a lane to compare upgrades.",
+      categories: [
+        { id: "economy", label: "Economy", isActive: true },
+        { id: "cooldown", label: "Cooldown" },
+        { id: "cases", label: "Cases" },
+      ],
+      upgrades: [
+        { id: "bank_rate", title: "Bank Rate", emoji: "🏦", levelLabel: "LVL 4", priceLabel: "160 💵", statusLabel: "Buy now", statusTone: "#8ff0b7", isActive: true },
+        { id: "daily_bonus", title: "Daily Bonus", emoji: "🎁", levelLabel: "LVL 2", priceLabel: "120 💵", statusLabel: "Affordable", statusTone: "#8ff0b7" },
+        { id: "crime_cd", title: "Crime Cooldown", emoji: "⏱️", levelLabel: "LVL 1", priceLabel: "240 💵", statusLabel: "Need more" },
+      ],
+    };
+  }
+
+  if (previewComponentBaseName === "GamesSectionView") {
+    return {
+      locale: lang,
+      i18n: i18nMock,
+      dominantColor: [43, 94, 112],
+      interaction: {
+        user: {
+          id: "123456789",
+          username: "Test User",
+          displayName: "vejoy_",
+          avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
+        },
+      },
+      eyebrow: "/work",
+      title: lang === "ru" ? "Игры" : lang === "uk" ? "Ігри" : "Games",
+      subtitle:
+        lang === "ru"
+          ? "Лаунчер мини-игр в общем визуальном стиле."
+          : lang === "uk"
+          ? "Лаунчер міні-ігор у спільному візуальному стилі."
+          : "Mini-game launcher in the shared visual system.",
+      summaryCards: [
+        { label: "Playable", value: "1", icon: "🎮" },
+        { label: "Best Score", value: "4096", icon: "🏆" },
+      ],
+      featuredGame: {
+        kicker: "Focused Game",
+        title: "2048",
+        subtitle: "Playable now",
+        emoji: "🎲",
+        statusLabel: "Daily Cap",
+        statusValue: "1 / 5",
+        statCards: [
+          { icon: "🏆", label: "Record", value: "4096" },
+          { icon: "💵", label: "Reward", value: "60" },
+        ],
+        footerCards: [
+          { icon: "🎯", label: "Daily Left", value: "4" },
+          { icon: "⚡", label: "Mode", value: "Arcade" },
+        ],
+        action: { label: "Play" },
+      },
+      collectionTitle: "Game Shelf",
+      collectionCountText: "3 games",
+      collectionHintText: "Slide focus between playable and upcoming titles.",
+      games: [
+        { id: "2048", title: "2048", meta: "Best 4096", emoji: "🎲", statusLabel: "Live", isActive: true },
+        { id: "snake", title: "Snake", meta: "Soon", emoji: "🐍", statusLabel: "Soon", isMuted: true },
+        { id: "tower", title: "Tower", meta: "Soon", emoji: "🗼", statusLabel: "Soon", isMuted: true },
+      ],
     };
   }
 
@@ -831,7 +1325,7 @@ async function createMockData(lang = "en", Component = null) {
     },
     // Add upgrades data for UpgradesDisplay component
     upgrades:
-      Component?.name === "UpgradesDisplay"
+      previewComponentBaseName === "UpgradesDisplay"
         ? [
             {
               emoji: "🎁",
@@ -987,15 +1481,26 @@ async function createMockData(lang = "en", Component = null) {
 
 // Helper to get all component names
 async function getAvailableComponents() {
-  const files = await fs.readdir(COMPONENTS_DIR);
-  return files
+  const files = await fs.readdir(COMPONENTS_ROOT);
+  const renderComponents = files
     .filter((f) => f.endsWith(".jsx"))
     .map((f) => f.replace(".jsx", ""));
+  const sharedComponents = Array.from(SHARED_PREVIEW_COMPONENTS)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => toSharedPreviewComponentName(name));
+
+  return [...renderComponents, ...sharedComponents];
 }
 
 // Create index page that lists all components with links
 app.get("/", async (req, res) => {
   const components = await getAvailableComponents();
+  const renderComponents = components.filter(
+    (componentName) => !isSharedPreviewComponentName(componentName)
+  );
+  const sharedComponents = components.filter((componentName) =>
+    isSharedPreviewComponentName(componentName)
+  );
 
   const html = `
     <!DOCTYPE html>
@@ -1011,6 +1516,7 @@ app.get("/", async (req, res) => {
           line-height: 1.6;
         }
         h1 { color: #333; }
+        h2 { color: #555; margin-top: 32px; }
         .components {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1035,11 +1541,22 @@ app.get("/", async (req, res) => {
     </head>
     <body>
       <h1>Available Components</h1>
+      <h2>Rendering Components</h2>
       <div class="components">
-        ${components
+        ${renderComponents
           .map(
             (name) => `
-          <a href="/${name}" class="component-link">${name}</a>
+          <a href="/${encodeURIComponent(name)}" class="component-link">${getPreviewDisplayName(name)}</a>
+        `
+          )
+          .join("")}
+      </div>
+      <h2>Shared UI Views</h2>
+      <div class="components">
+        ${sharedComponents
+          .map(
+            (name) => `
+          <a href="/${encodeURIComponent(name)}" class="component-link">${getPreviewDisplayName(name)}</a>
         `
           )
           .join("")}
@@ -1055,7 +1572,8 @@ app.get("/", async (req, res) => {
 app.get("/:componentName", async (req, res) => {
   try {
     const { componentName } = req.params;
-    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+    const componentPath = getPreviewComponentPath(componentName);
+    const previewDisplayName = getPreviewDisplayName(componentName);
 
     try {
       await fs.access(componentPath);
@@ -1065,6 +1583,7 @@ app.get("/:componentName", async (req, res) => {
 
     // --- Import component with aggressive cache clearing ---
     let ReactComponent = null;
+    let RawComponent = null;
     try {
       // Clear require cache for the component
       delete require.cache[componentPath];
@@ -1072,17 +1591,19 @@ app.get("/:componentName", async (req, res) => {
       // Clear all related module caches to prevent stale dependencies
       const moduleKeys = Object.keys(require.cache);
       for (const key of moduleKeys) {
-        if (key.includes("components") && key.endsWith(".jsx")) {
+        if (
+          (key.includes("components") || key.includes("/shared/src/ui/")) &&
+          key.endsWith(".jsx")
+        ) {
           delete require.cache[key];
         }
       }
 
       // Use a more aggressive cache-busting approach with unique identifier
       const uniqueId = Date.now() + Math.random();
-      const imported = await import(
-        `file://${componentPath}?t=${uniqueId}&cache=${uniqueId}`
-      );
-      ReactComponent = imported.default;
+      const loaded = await loadPreviewComponent(componentName, uniqueId);
+      ReactComponent = loaded.Component;
+      RawComponent = loaded.RawComponent;
 
       // Force garbage collection if available (optional)
       if (global.gc) {
@@ -1094,7 +1615,11 @@ app.get("/:componentName", async (req, res) => {
     // --- End Component Import ---
     // Generate initial mock data for client fallback
     const lang = "en";
-    const initialMockData = await createMockData(lang, ReactComponent);
+    const initialMockData = await createMockData(
+      lang,
+      RawComponent || ReactComponent,
+      componentName
+    );
     const fallbackMockDataString = JSON.stringify(initialMockData, null, 2);
 
     // Add specific controls for Transfer and LevelUp (keep existing logic)
@@ -1140,7 +1665,7 @@ app.get("/:componentName", async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${componentName} Preview</title>
+        <title>${previewDisplayName} Preview</title>
         <script>
           const ws = new WebSocket('ws://' + window.location.host);
 
@@ -1154,8 +1679,10 @@ app.get("/:componentName", async (req, res) => {
           let doublePassEnabled = localStorage.getItem('doublePass:${componentName}') !== 'false';
           let currentBackend = 'takumi';
 
+          const mockDataStorageKey = 'mockDataJson:${componentName}';
+
           // Get mock data from localStorage or use initial data from server
-          let mockDataJson = localStorage.getItem('mockDataJson');
+          let mockDataJson = localStorage.getItem(mockDataStorageKey);
           if (mockDataJson === null) {
               mockDataJson = fallbackMockDataString;
           }
@@ -1234,7 +1761,7 @@ app.get("/:componentName", async (req, res) => {
               JSON.parse(editor.value);
               // Update the mockDataJson variable with the editor content
               mockDataJson = editor.value;
-              localStorage.setItem('mockDataJson', mockDataJson);
+              localStorage.setItem(mockDataStorageKey, mockDataJson);
               console.log('Mock data updated, refreshing image with:', mockDataJson);
               refreshImage();
             } catch (error) {
@@ -1424,7 +1951,7 @@ app.get("/:componentName", async (req, res) => {
                 const editor = document.getElementById('mockDataEditor');
                 if (editor && data) {
                   mockDataJson = data;
-                  localStorage.setItem('mockDataJson', data);
+                  localStorage.setItem(mockDataStorageKey, data);
                   editor.value = data;
                   refreshImage();
                 }
@@ -1733,7 +2260,7 @@ app.get("/:componentName", async (req, res) => {
         </style>
       </head>
       <body>
-        <h1>${componentName} Preview</h1>
+        <h1>${previewDisplayName} Preview</h1>
         <div class="controls">
            <!-- Standard Controls -->
            <a href="/" class="back">← Back</a> <button onclick="refreshImage()">Reload Img</button>
@@ -1781,6 +2308,7 @@ app.get("/:componentName", async (req, res) => {
 app.get("/:componentName/image", async (req, res) => {
   try {
     const { componentName } = req.params;
+    const previewDisplayName = getPreviewDisplayName(componentName);
     // --- Log Received Query Parameters ---
     console.log("Received query parameters:", req.query);
     const forceInit = req.query.forceInit === "true";
@@ -1794,7 +2322,7 @@ app.get("/:componentName/image", async (req, res) => {
     const isDarkTheme = theme === "dark";
     const renderLayer = req.query.renderLayer || "full";
     const doublePass = req.query.doublePass !== "false";
-    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+    const componentPath = getPreviewComponentPath(componentName);
 
     // --- Import Component with aggressive cache clearing ---
     // Clear require cache for the component
@@ -1803,14 +2331,17 @@ app.get("/:componentName/image", async (req, res) => {
     // Clear all related module caches to prevent stale dependencies
     const moduleKeys = Object.keys(require.cache);
     for (const key of moduleKeys) {
-      if (key.includes("components") && key.endsWith(".jsx")) {
+      if (
+        (key.includes("components") || key.includes("/shared/src/ui/")) &&
+        key.endsWith(".jsx")
+      ) {
         delete require.cache[key];
       }
     }
 
-    // Also clear ES module cache by using dynamic import with timestamp
-    const imported = await import(`file://${componentPath}?t=${Date.now()}`);
-    const Component = imported.default;
+    const loaded = await loadPreviewComponent(componentName, Date.now());
+    const Component = loaded.Component;
+    const RawComponent = loaded.RawComponent;
     if (!Component) throw new Error(`Component not found in ${componentPath}`);
 
     // --- Parse Mock Data from Query ---
@@ -1825,7 +2356,7 @@ app.get("/:componentName/image", async (req, res) => {
     }
 
     console.log(
-      `Rendering ${componentName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}, backend: takumi`
+      `Rendering ${previewDisplayName} with locale: ${lang}, mode: ${mode}, type: ${type}, debug: ${debug}, theme: ${theme}, backend: takumi`
     );
 
     // Use custom mock data if provided, otherwise generate default
@@ -1889,12 +2420,16 @@ app.get("/:componentName/image", async (req, res) => {
 
       // Ensure i18n is properly set for custom data
       if (!mockData.i18n || typeof mockData.i18n.__ !== "function") {
-        mockData.i18n = createI18nMock(lang, Component);
+        mockData.i18n = createI18nMock(lang, RawComponent || Component);
       }
       if (mockData.i18n) mockData.i18n.initialized = true;
     } else {
       console.log("Using generated mock data as base");
-      mockData = await createMockData(lang, Component);
+      mockData = await createMockData(
+        lang,
+        RawComponent || Component,
+        componentName
+      );
 
       // Apply mode/type/theme/debug settings to mockData
       if (componentName === "Transfer" && mockData) {
@@ -2033,8 +2568,12 @@ app.get("/:componentName/image", async (req, res) => {
 
     // Validate i18n
     if (!mockData.i18n || typeof mockData.i18n.__ !== "function")
-      mockData.i18n = createI18nMock(lang, Component);
+      mockData.i18n = createI18nMock(lang, RawComponent || Component);
     if (mockData.i18n) mockData.i18n.initialized = true;
+
+    // Always bust the image generator cache for preview renders so component
+    // edits are reflected immediately, especially for shared section views.
+    mockData.__previewNonce = Date.now();
 
     // Generate final image via external rendering service
     let buffer;
@@ -2078,6 +2617,12 @@ app.get("/:componentName/image", async (req, res) => {
     // Send response
     const isGif =
       buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.setHeader("Content-Type", isGif ? "image/gif" : "image/png");
     res.send(buffer);
   } catch (error) {
@@ -2097,12 +2642,13 @@ app.get("/:componentName/mockData", async (req, res) => {
     const debug = req.query.debug === "true";
     const theme = req.query.theme || "dark";
     const isDarkTheme = theme === "dark";
-    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+    const componentPath = getPreviewComponentPath(componentName);
 
     // Import component
     delete require.cache[componentPath];
-    const imported = await import(`file://${componentPath}?t=${Date.now()}`);
-    const Component = imported.default;
+    const loaded = await loadPreviewComponent(componentName, Date.now());
+    const Component = loaded.Component;
+    const RawComponent = loaded.RawComponent;
     if (!Component) throw new Error(`Component not found in ${componentPath}`);
 
     // Parse Mock Data from Query
@@ -2123,7 +2669,11 @@ app.get("/:componentName/mockData", async (req, res) => {
       mockData = customMockData;
     } else {
       console.log("Using generated mock data as base");
-      mockData = await createMockData(lang, Component);
+      mockData = await createMockData(
+        lang,
+        RawComponent || Component,
+        componentName
+      );
     }
 
     // Apply mode/type/theme/debug settings to mockData
@@ -2152,18 +2702,16 @@ app.get("/components/config", async (req, res) => {
     const configs = {};
 
     for (const componentName of components) {
-      const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+      const componentPath = getPreviewComponentPath(componentName);
 
       try {
         delete require.cache[componentPath];
-        const imported = await import(
-          `file://${componentPath}?t=${Date.now()}`
-        );
-        const Component = imported.default;
+        const loaded = await loadPreviewComponent(componentName, Date.now());
+        const Component = loaded.RawComponent || loaded.Component;
 
         if (Component && Component.previewControls) {
           configs[componentName] = {
-            name: componentName,
+            name: getPreviewDisplayName(componentName),
             previewControls: Component.previewControls,
           };
         }
@@ -2189,7 +2737,7 @@ app.get("/components/config", async (req, res) => {
 app.get("/components/:componentName/config", async (req, res) => {
   try {
     const { componentName } = req.params;
-    const componentPath = path.join(COMPONENTS_DIR, `${componentName}.jsx`);
+    const componentPath = getPreviewComponentPath(componentName);
 
     try {
       await fs.access(componentPath);
@@ -2202,8 +2750,8 @@ app.get("/components/:componentName/config", async (req, res) => {
     let Component = null;
     try {
       delete require.cache[componentPath];
-      const imported = await import(`file://${componentPath}?t=${Date.now()}`);
-      Component = imported.default;
+      const loaded = await loadPreviewComponent(componentName, Date.now());
+      Component = loaded.RawComponent || loaded.Component;
     } catch (importError) {
       return res
         .status(500)
@@ -2217,7 +2765,7 @@ app.get("/components/:componentName/config", async (req, res) => {
     }
 
     const config = {
-      name: componentName,
+      name: getPreviewDisplayName(componentName),
       previewControls: Component.previewControls || [],
     };
 
