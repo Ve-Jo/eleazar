@@ -14,6 +14,7 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
   en: {
     nav: {
       balance: "Balance",
+      level: "Level",
       cases: "Cases",
       upgrades: "Upgrades",
       games: "Games",
@@ -78,6 +79,18 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
       submitting: "Submitting run...",
       runSubmitted: "Run Submitted",
     },
+    level: {
+      title: "Level",
+      season: "Season",
+      chat: "Chat",
+      voice: "Voice",
+      games: "Games",
+      nextRole: "Next Role",
+      level: "Level",
+      xp: "XP",
+      lvlSuffix: "lvl",
+      noNextRole: "No upcoming role",
+    },
     modal: {
       amountLabel: "Amount",
       amountPlaceholder: "Enter amount",
@@ -94,6 +107,7 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
   ru: {
     nav: {
       balance: "Баланс",
+      level: "Уровень",
       cases: "Кейсы",
       upgrades: "Улучшения",
       games: "Игры",
@@ -158,6 +172,18 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
       submitting: "Отправляем результат...",
       runSubmitted: "Результат отправлен",
     },
+    level: {
+      title: "Уровень",
+      season: "Сезон",
+      chat: "Чат",
+      voice: "Голос",
+      games: "Игры",
+      nextRole: "След. роль",
+      level: "Уровень",
+      xp: "XP",
+      lvlSuffix: "ур.",
+      noNextRole: "Нет ближайшей роли",
+    },
     modal: {
       amountLabel: "Сумма",
       amountPlaceholder: "Введите сумму",
@@ -174,6 +200,7 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
   uk: {
     nav: {
       balance: "Баланс",
+      level: "Рівень",
       cases: "Кейси",
       upgrades: "Покращення",
       games: "Ігри",
@@ -237,6 +264,18 @@ const ACTIVITY_STRINGS: Record<ActivitySupportedLocale, ActivityLauncherStrings>
       best: "Кращий",
       submitting: "Надсилаємо результат...",
       runSubmitted: "Результат надіслано",
+    },
+    level: {
+      title: "Рівень",
+      season: "Сезон",
+      chat: "Чат",
+      voice: "Голос",
+      games: "Ігри",
+      nextRole: "Наст. роль",
+      level: "Рівень",
+      xp: "XP",
+      lvlSuffix: "рів.",
+      noNextRole: "Немає найближчої ролі",
     },
     modal: {
       amountLabel: "Сума",
@@ -304,6 +343,7 @@ export function buildActivityStrings(locale: ActivitySupportedLocale): ActivityL
     nav: {
       ...base.nav,
       balance: getActivityLocaleValue(locale, "commands.economy.balance.title", base.nav.balance),
+      level: getActivityLocaleValue(locale, "commands.economy.level.title", base.nav.level),
       cases: getActivityLocaleValue(locale, "commands.economy.cases.title", base.nav.cases),
       upgrades: getActivityLocaleValue(locale, "commands.economy.shop.title", base.nav.upgrades),
     },
@@ -347,6 +387,13 @@ export function buildActivityStrings(locale: ActivitySupportedLocale): ActivityL
       ),
     },
     games: base.games,
+    level: {
+      ...base.level,
+      title: getActivityLocaleValue(locale, "commands.economy.level.title", base.level.title),
+      level: getActivityLocaleValue(locale, "commands.economy.level.level", base.level.level),
+      xp: getActivityLocaleValue(locale, "commands.economy.level.xp", base.level.xp),
+      nextRole: getActivityLocaleValue(locale, "commands.economy.level.nextLevel", base.level.nextRole),
+    },
     modal: base.modal,
   };
 }

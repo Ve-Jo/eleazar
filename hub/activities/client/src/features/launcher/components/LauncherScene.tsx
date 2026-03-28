@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/r
 
 import type { ActivityLauncherPayload } from "../../../../../../shared/src/contracts/hub.ts";
 import MoneyModal from "../../../components/MoneyModal.tsx";
+import UiIcon from "../../../components/UiIcon.tsx";
 import type { ActivitySection } from "../../../lib/activityConstants.ts";
 import type {
   LayoutDebugSnapshot,
@@ -15,6 +16,7 @@ import {
   type BalanceSectionModel,
   type CasesSectionModel,
   type GamesSectionModel,
+  type LevelSectionModel,
   type UpgradesSectionModel,
 } from "../lib/buildLauncherViewModels.ts";
 import {
@@ -26,6 +28,7 @@ import {
 import BalanceLauncherSection from "../sections/BalanceLauncherSection.tsx";
 import CasesLauncherSection from "../sections/CasesLauncherSection.tsx";
 import GamesLauncherSection from "../sections/GamesLauncherSection.tsx";
+import LevelLauncherSection from "../sections/LevelLauncherSection.tsx";
 import UpgradesLauncherSection from "../sections/UpgradesLauncherSection.tsx";
 import type { LauncherMotionState } from "../hooks/useLauncherCarousel.ts";
 
@@ -34,6 +37,7 @@ type LauncherSceneProps = {
   activeSection: ActivitySection;
   adaptiveFitProgress: number;
   balanceSection: BalanceSectionModel;
+  levelSection: LevelSectionModel;
   carouselRef: RefObject<HTMLDivElement | null>;
   casesSection: CasesSectionModel;
   collapseNavDock: () => void;
@@ -102,11 +106,20 @@ function SectionCard({
   );
 }
 
+const SECTION_ICON_BY_ID: Record<ActivitySection, "wallet" | "level" | "gift" | "spark" | "gamepad"> = {
+  balance: "wallet",
+  level: "level",
+  cases: "gift",
+  upgrades: "spark",
+  games: "gamepad",
+};
+
 export default function LauncherScene({
   activeDiagnostics,
   activeSection,
   adaptiveFitProgress,
   balanceSection,
+  levelSection,
   carouselRef,
   casesSection,
   collapseNavDock,
@@ -137,7 +150,7 @@ export default function LauncherScene({
   upgradesSection,
 }: LauncherSceneProps) {
   const prefersReducedMotion = useReducedMotion();
-  const navSections = ["balance", "cases", "upgrades", "games"] as ActivitySection[];
+  const navSections = ["balance", "level", "cases", "upgrades", "games"] as ActivitySection[];
   const activeSectionLabel = launcherData.strings.nav[activeSection] || activeSection;
   const shellTransition = prefersReducedMotion
     ? { duration: 0.01 }
@@ -154,7 +167,6 @@ export default function LauncherScene({
 
   return (
     <motion.div
-      ref={launcherShellRef}
       className="screen launcher-shell"
       style={launcherStyle}
       initial={{ opacity: 0, y: 12 }}
@@ -162,143 +174,159 @@ export default function LauncherScene({
       transition={shellTransition}
     >
       <div className="ambient-layer" />
-
-      <LayoutGroup id="launcher-section-dock">
-        <motion.nav
-          ref={navRef}
-          className={`section-nav ${isNavExpanded ? "is-expanded" : "is-collapsed"} ${motionState.phase !== "idle" ? "is-engaged" : ""}`}
-          onPointerEnter={() => openNavDock()}
-          onPointerLeave={() => scheduleNavDockCollapse(280)}
-          onFocusCapture={() => openNavDock()}
-          onBlurCapture={(event) => {
-            const nextTarget = event.relatedTarget as Node | null;
-            if (nextTarget && (event.currentTarget as HTMLElement).contains(nextTarget)) {
-              return;
-            }
-
-            scheduleNavDockCollapse(220);
-          }}
-          transition={dockTransition}
-          data-launcher-page-zone="chrome"
-        >
-          <button
-            type="button"
-            className={`section-nav-summary ${isNavExpanded ? "is-expanded" : "is-collapsed"}`}
-            aria-expanded={isNavExpanded}
-            aria-label={isNavExpanded ? "Collapse navigation" : "Expand navigation"}
-            onClick={() => {
-              if (isNavExpanded) {
-                collapseNavDock();
-              } else {
-                openNavDock();
+      <div ref={launcherShellRef} className="launcher-frame" data-launcher-page-zone="chrome">
+        <LayoutGroup id="launcher-section-dock">
+          <motion.nav
+            ref={navRef}
+            className={`section-nav ${isNavExpanded ? "is-expanded" : "is-collapsed"} ${motionState.phase !== "idle" ? "is-engaged" : ""}`}
+            onPointerEnter={() => openNavDock()}
+            onPointerLeave={() => scheduleNavDockCollapse(280)}
+            onFocusCapture={() => openNavDock()}
+            onBlurCapture={(event) => {
+              const nextTarget = event.relatedTarget as Node | null;
+              if (nextTarget && (event.currentTarget as HTMLElement).contains(nextTarget)) {
+                return;
               }
+
+              scheduleNavDockCollapse(220);
             }}
-            data-launcher-page-zone="interactive"
+            transition={dockTransition}
+            data-launcher-page-zone="chrome"
           >
-            {!isNavExpanded ? (
-              <motion.span
-                layoutId="section-nav-active-indicator"
-                className="section-nav-active-indicator section-nav-active-indicator-summary"
-                transition={indicatorTransition}
-              />
-            ) : null}
-            <span className="section-nav-summary-text">{activeSectionLabel}</span>
-            <span
-              className={`section-nav-summary-chevron ${isNavExpanded ? "is-expanded" : ""}`}
-              aria-hidden="true"
-            />
-          </button>
+            <button
+              type="button"
+              className={`section-nav-summary ${isNavExpanded ? "is-expanded" : "is-collapsed"}`}
+              aria-expanded={isNavExpanded}
+              aria-label={isNavExpanded ? "Collapse navigation" : "Expand navigation"}
+              onClick={() => {
+                if (isNavExpanded) {
+                  collapseNavDock();
+                } else {
+                  openNavDock();
+                }
+              }}
+              data-launcher-page-zone="interactive"
+            >
+              {!isNavExpanded ? (
+                <motion.span
+                  layoutId="section-nav-active-indicator"
+                  className="section-nav-active-indicator section-nav-active-indicator-summary"
+                  transition={indicatorTransition}
+                />
+              ) : null}
+              <span className="section-nav-summary-icon" aria-hidden="true">
+                <UiIcon name={SECTION_ICON_BY_ID[activeSection]} size={14} />
+              </span>
+              <span className="section-nav-summary-text">{activeSectionLabel}</span>
+              <span className="section-nav-summary-chevron" aria-hidden="true">
+                <UiIcon name={isNavExpanded ? "chevron-up" : "chevron-down"} size={14} />
+              </span>
+            </button>
 
-          <div className="section-nav-track-shell">
-            <div className="section-nav-track">
-              {navSections.map((section) => {
-                const label = launcherData.strings.nav[section] || section;
-                const isActive = activeSection === section;
+            <div className="section-nav-track-shell">
+              <div className="section-nav-track">
+                {navSections.map((section) => {
+                  const label = launcherData.strings.nav[section] || section;
+                  const isActive = activeSection === section;
 
-                return (
-                  <button
-                    key={section}
-                    type="button"
-                    className={`section-chip ${isActive ? "is-active" : ""}`}
-                    onClick={() => jumpToSection(section)}
-                    data-launcher-page-zone="interactive"
-                  >
-                    {isNavExpanded && isActive ? (
-                      <motion.span
-                        layoutId="section-nav-active-indicator"
-                        className="section-nav-active-indicator"
-                        transition={indicatorTransition}
-                      />
-                    ) : null}
-                    <span className="section-chip-label">{label}</span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={section}
+                      type="button"
+                      className={`section-chip ${isActive ? "is-active" : ""}`}
+                      onClick={() => jumpToSection(section)}
+                      data-launcher-page-zone="interactive"
+                    >
+                      {isNavExpanded && isActive ? (
+                        <motion.span
+                          layoutId="section-nav-active-indicator"
+                          className="section-nav-active-indicator"
+                          transition={indicatorTransition}
+                        />
+                      ) : null}
+                      <span className="section-chip-icon" aria-hidden="true">
+                        <UiIcon name={SECTION_ICON_BY_ID[section]} size={13} />
+                      </span>
+                      <span className="section-chip-label">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </motion.nav>
-      </LayoutGroup>
+          </motion.nav>
+        </LayoutGroup>
 
-      {setupError ? <div className="notice warning">{setupError}</div> : null}
-      {launcherData.unsupportedReason ? (
-        <div className="notice warning">{launcherData.unsupportedReason}</div>
-      ) : null}
-
-      <AnimatePresence mode="wait">
-        {notice ? (
-          <motion.div
-            key={`${notice.kind}:${notice.message}`}
-            className={`notice ${notice.kind}`}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={noticeTransition}
-          >
-            {notice.message}
-          </motion.div>
+        {setupError ? <div className="notice warning">{setupError}</div> : null}
+        {launcherData.unsupportedReason ? (
+          <div className="notice warning">{launcherData.unsupportedReason}</div>
         ) : null}
-      </AnimatePresence>
 
-      <div className="carousel-shell" ref={carouselRef}>
-        <SectionCard
-          activeSection={activeSection}
-          isCarouselSettled={isCarouselSettled}
-          section="balance"
-          sectionFocus={motionState.sectionFocus.balance}
-          sectionRefs={sectionRefs}
-        >
-          <BalanceLauncherSection model={balanceSection} />
-        </SectionCard>
+        <AnimatePresence mode="wait">
+          {notice ? (
+            <motion.div
+              key={`${notice.kind}:${notice.message}`}
+              className={`notice ${notice.kind}`}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={noticeTransition}
+            >
+              {notice.message}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-        <SectionCard
-          activeSection={activeSection}
-          isCarouselSettled={isCarouselSettled}
-          section="cases"
-          sectionFocus={motionState.sectionFocus.cases}
-          sectionRefs={sectionRefs}
-        >
-          <CasesLauncherSection model={casesSection} />
-        </SectionCard>
+        <div className="carousel-shell" ref={carouselRef}>
+          <SectionCard
+            activeSection={activeSection}
+            isCarouselSettled={isCarouselSettled}
+            section="balance"
+            sectionFocus={motionState.sectionFocus.balance}
+            sectionRefs={sectionRefs}
+          >
+            <BalanceLauncherSection model={balanceSection} />
+          </SectionCard>
 
-        <SectionCard
-          activeSection={activeSection}
-          isCarouselSettled={isCarouselSettled}
-          section="upgrades"
-          sectionFocus={motionState.sectionFocus.upgrades}
-          sectionRefs={sectionRefs}
-        >
-          <UpgradesLauncherSection model={upgradesSection} />
-        </SectionCard>
+          <SectionCard
+            activeSection={activeSection}
+            isCarouselSettled={isCarouselSettled}
+            section="level"
+            sectionFocus={motionState.sectionFocus.level}
+            sectionRefs={sectionRefs}
+          >
+            <LevelLauncherSection model={levelSection} />
+          </SectionCard>
 
-        <SectionCard
-          activeSection={activeSection}
-          isCarouselSettled={isCarouselSettled}
-          section="games"
-          sectionFocus={motionState.sectionFocus.games}
-          sectionRefs={sectionRefs}
-        >
-          <GamesLauncherSection model={gamesSection} />
-        </SectionCard>
+          <SectionCard
+            activeSection={activeSection}
+            isCarouselSettled={isCarouselSettled}
+            section="cases"
+            sectionFocus={motionState.sectionFocus.cases}
+            sectionRefs={sectionRefs}
+          >
+            <CasesLauncherSection model={casesSection} />
+          </SectionCard>
+
+          <SectionCard
+            activeSection={activeSection}
+            isCarouselSettled={isCarouselSettled}
+            section="upgrades"
+            sectionFocus={motionState.sectionFocus.upgrades}
+            sectionRefs={sectionRefs}
+          >
+            <UpgradesLauncherSection model={upgradesSection} />
+          </SectionCard>
+
+          <SectionCard
+            activeSection={activeSection}
+            isCarouselSettled={isCarouselSettled}
+            section="games"
+            sectionFocus={motionState.sectionFocus.games}
+            sectionRefs={sectionRefs}
+          >
+            <GamesLauncherSection model={gamesSection} />
+          </SectionCard>
+        </div>
       </div>
 
       <AnimatePresence>

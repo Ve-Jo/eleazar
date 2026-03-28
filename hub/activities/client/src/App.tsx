@@ -50,9 +50,13 @@ export function App() {
     activeScene,
     activeSection: carousel.activeSection,
     isNavExpanded: carousel.isNavExpanded,
+    launcherActualHeight: viewport.launcherActualHeight,
     launcherHeightScale: viewport.launcherHeightScale,
+    launcherHeightGap: viewport.launcherHeightGap,
+    launcherTargetHeight: viewport.launcherTargetHeight,
     notice: launcherActions.notice,
     setupError: setup.error,
+    viewportTier: viewport.viewportTier,
     viewport: viewport.viewport,
     showDebugPanel,
     launcherShellRef: carousel.launcherShellRef,
@@ -146,6 +150,7 @@ export function App() {
       activeSection={carousel.activeSection}
       adaptiveFitProgress={viewport.adaptiveFitProgress}
       balanceSection={viewModels.balance.section}
+      levelSection={viewModels.level.section}
       carouselRef={carousel.carouselRef}
       casesSection={viewModels.cases.section}
       collapseNavDock={carousel.collapseNavDock}

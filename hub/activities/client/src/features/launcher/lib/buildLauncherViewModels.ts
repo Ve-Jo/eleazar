@@ -4,6 +4,7 @@ import type { CrateRevealState } from "../../../types/activityUi.ts";
 import { buildCasesSectionProps } from "../../cases/buildCasesSectionProps.ts";
 import { buildBalanceSectionProps } from "../../economy/buildBalanceSectionProps.ts";
 import { buildGamesSectionProps } from "../../games/buildGamesSectionProps.ts";
+import { buildLevelSectionProps } from "../../level/buildLevelSectionProps.ts";
 import { buildUpgradesSectionProps } from "../../upgrades/buildUpgradesSectionProps.ts";
 import type { MoneyMoveDirection } from "../../../lib/activityMath.ts";
 
@@ -46,11 +47,42 @@ export type BalancePrimaryCardModel = LauncherStatModel & {
 };
 
 export type BalanceSectionModel = {
+  classicBanner?: LauncherBannerModel | null;
+  classicMarriageBanner?: LauncherBannerModel | null;
+  classicQuickChips?: Array<{
+    key?: string;
+    icon?: string;
+    value: string;
+    label: string;
+    size?: "full" | "half";
+    variant?: "icon";
+    background?: string;
+    valueTone?: string;
+  }>;
+  classicTopCards?: Array<
+    LauncherStatModel & {
+      suffix?: string;
+      rank?: string;
+      progress?: number;
+      accentColor?: string;
+      valueTone?: string;
+    }
+  >;
+  layout?: "classic" | "default";
+  compact?: boolean;
+  coloring?: {
+    textColor: string;
+    secondaryTextColor: string;
+    tertiaryTextColor: string;
+    overlayBackground: string;
+    accentColor: string;
+    dominantColor: string;
+  };
   eyebrow: string;
   title: string;
   titleMeta: string | null;
   profilePanel: LauncherProfileModel;
-  banner: LauncherBannerModel;
+  banner: LauncherBannerModel | null;
   primaryCards: BalancePrimaryCardModel[];
   metricCards: LauncherStatModel[];
   progress: {
@@ -97,6 +129,15 @@ export type CasesCollectionCardModel = {
 };
 
 export type CasesSectionModel = {
+  compact?: boolean;
+  coloring?: {
+    textColor: string;
+    secondaryTextColor: string;
+    tertiaryTextColor: string;
+    overlayBackground: string;
+    accentColor: string;
+    dominantColor: string;
+  };
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -146,6 +187,15 @@ export type UpgradesListItemModel = {
 };
 
 export type UpgradesSectionModel = {
+  compact?: boolean;
+  coloring?: {
+    textColor: string;
+    secondaryTextColor: string;
+    tertiaryTextColor: string;
+    overlayBackground: string;
+    accentColor: string;
+    dominantColor: string;
+  };
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -189,6 +239,15 @@ export type GamesCollectionCardModel = {
 };
 
 export type GamesSectionModel = {
+  compact?: boolean;
+  coloring?: {
+    textColor: string;
+    secondaryTextColor: string;
+    tertiaryTextColor: string;
+    overlayBackground: string;
+    accentColor: string;
+    dominantColor: string;
+  };
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -219,9 +278,60 @@ export type GamesSectionModel = {
   games: GamesCollectionCardModel[];
 };
 
+export type LevelSectionModel = {
+  compact?: boolean;
+  coloring?: {
+    textColor: string;
+    secondaryTextColor: string;
+    tertiaryTextColor: string;
+    overlayBackground: string;
+    accentColor: string;
+    dominantColor: string;
+  };
+  eyebrow: string;
+  title: string;
+  titleMeta: string | null;
+  subtitle: string | null;
+  profilePanel: LauncherProfileModel | null;
+  seasonCard: {
+    title: string;
+    xpValue: string;
+    countdownLabel: string;
+  } | null;
+  levelCards: Array<{
+    key: string;
+    icon: string;
+    label: string;
+    value: string;
+    suffix: string;
+    xpLabel: string;
+    rank: string | null;
+    progress: number;
+    accentColor: string;
+    background: string;
+  }>;
+  rolesTitle: string;
+  rolesEmptyText: string;
+  upcomingRoles: Array<{
+    key: string;
+    roleId: string;
+    roleName: string;
+    mode: string;
+    modeLabel: string;
+    requiredLevel: number;
+    requiredLabel: string;
+    progress: number;
+    color: string;
+  }>;
+};
+
 export type BalanceLauncherViewModel = {
   paletteStyle: CSSProperties;
   section: BalanceSectionModel;
+};
+
+export type LevelLauncherViewModel = {
+  section: LevelSectionModel;
 };
 
 export type CasesLauncherViewModel = {
@@ -294,7 +404,14 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
     shouldCompactPanels: options.shouldCompactPanels,
     onPlay2048: options.onPlay2048,
   });
+  const levelSource = buildLevelSectionProps({
+    launcherData: options.launcherData,
+    now: options.now,
+    shouldCompactPanels: options.shouldCompactPanels,
+    isReadOnly: options.isReadOnly,
+  });
   const balanceProps = balanceSource.sectionProps;
+  const levelProps = levelSource.sectionProps;
   const casesProps = casesSource.sectionProps;
   const upgradesProps = upgradesSource.sectionProps;
   const gamesProps = gamesSource.sectionProps;
@@ -302,6 +419,13 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
   const balance: BalanceLauncherViewModel = {
     paletteStyle: balanceSource.paletteStyle,
     section: {
+      layout: balanceProps.layout === "classic" ? "classic" : "default",
+      compact: balanceProps.compact,
+      coloring: balanceProps.coloring,
+      classicTopCards: balanceProps.classicTopCards,
+      classicQuickChips: balanceProps.classicQuickChips,
+      classicBanner: balanceProps.classicBanner,
+      classicMarriageBanner: balanceProps.classicMarriageBanner,
       eyebrow: balanceProps.eyebrow ?? "",
       title: balanceProps.title ?? "",
       titleMeta: balanceProps.titleMeta ?? null,
@@ -321,6 +445,8 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
   const cases: CasesLauncherViewModel = {
     focusedCrate: casesSource.focusedCrate,
     section: {
+      compact: casesProps.compact,
+      coloring: casesProps.coloring,
       eyebrow: casesProps.eyebrow ?? "",
       title: casesProps.title ?? "",
       subtitle: casesProps.subtitle ?? "",
@@ -341,8 +467,29 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
       },
     },
   };
+  const level: LevelLauncherViewModel = {
+    section: {
+      compact: levelProps.compact,
+      coloring: levelProps.coloring,
+      eyebrow: levelProps.eyebrow ?? "",
+      title: levelProps.title ?? "",
+      titleMeta: levelProps.titleMeta ?? null,
+      subtitle: levelProps.subtitle ?? null,
+      profilePanel: levelProps.profilePanel ?? null,
+      seasonCard: levelProps.seasonCard ?? null,
+      levelCards: levelProps.levelCards || [],
+      rolesTitle: levelProps.rolesTitle ?? "",
+      rolesEmptyText: levelProps.rolesEmptyText ?? "",
+      upcomingRoles: (levelProps.upcomingRoles || []).map((role) => ({
+        ...role,
+        roleName: role.roleName || role.roleId,
+      })),
+    },
+  };
   const upgrades: UpgradesLauncherViewModel = {
     section: {
+      compact: upgradesProps.compact,
+      coloring: upgradesProps.coloring,
       eyebrow: upgradesProps.eyebrow ?? "",
       title: upgradesProps.title ?? "",
       subtitle: upgradesProps.subtitle ?? "",
@@ -362,6 +509,8 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
   const games: GamesLauncherViewModel = {
     highScore: gamesSource.highScore,
     section: {
+      compact: gamesProps.compact,
+      coloring: gamesProps.coloring,
       eyebrow: gamesProps.eyebrow ?? "",
       title: gamesProps.title ?? "",
       subtitle: gamesProps.subtitle ?? "",
@@ -388,6 +537,7 @@ export function buildLauncherViewModels(options: BuildLauncherViewModelsOptions)
     balance,
     cases,
     games,
+    level,
     upgrades,
   };
 }
