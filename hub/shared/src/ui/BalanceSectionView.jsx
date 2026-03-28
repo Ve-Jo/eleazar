@@ -412,9 +412,15 @@ function renderPrimaryCard(card, colors, compact, variant, options = {}) {
   const isBank = variant === "bank";
   const badgeValue = card.badgeValue || null;
   const dense = Boolean(options.dense);
+  const attachBottom = Boolean(options.attachBottom);
   const footerSegments = Array.isArray(card.footerSegments)
     ? card.footerSegments.filter(Boolean)
     : [];
+  const baseRadius = compact ? (dense ? 20 : 24) : 30;
+  const cardRadius =
+    attachBottom && isBank
+      ? `${baseRadius}px ${baseRadius}px 0px 0px`
+      : `${baseRadius}px`;
 
   return (
     <div
@@ -423,7 +429,7 @@ function renderPrimaryCard(card, colors, compact, variant, options = {}) {
         position: "relative",
         flex: isBank ? "1.25 1 0" : "0.82 1 0",
         minWidth: "0px",
-        borderRadius: compact ? (dense ? "20px" : "24px") : "30px",
+        borderRadius: cardRadius,
         padding: compact ? (dense ? "12px" : "16px") : "22px",
         background:
           card.background ||
@@ -1050,21 +1056,28 @@ function renderCompactStatCard(item, colors, compact = true) {
     return null;
   }
 
+  const cardSize = item.size === "half" ? "half" : "full";
+  const hasProgressFill = typeof item.progress === "number";
+  const progressValue = hasProgressFill
+    ? Math.max(0, Math.min(1, Number(item.progress)))
+    : 0;
   const accentWidth = compact ? "40px" : "52px";
+  const accentFillWidth = hasProgressFill ? `${Math.round(progressValue * 100)}%` : accentWidth;
   const iconSize = compact ? "14px" : "17px";
-  const cardMinHeight = compact ? "44px" : "68px";
+  const cardMinHeight = compact ? "52px" : "68px";
   const cardRadius = compact ? "16px" : "22px";
-  const cardPadding = compact ? "6px 9px" : "10px 14px";
-  const labelSize = compact ? "8px" : "9px";
-  const valueSize = compact ? "16px" : "20px";
+  const cardPadding = compact ? "8px 10px" : "10px 14px";
+  const labelSize = compact ? "9px" : "9px";
+  const valueSize = compact ? "17px" : "20px";
   const suffixSize = compact ? "10px" : "11px";
 
   return (
     <div
       key={item.key || item.label || String(item.value)}
       style={{
-        flex: "1 1 0",
-        minWidth: "0px",
+        flex: cardSize === "half" ? "1 1 0" : "0 0 auto",
+        width: cardSize === "half" ? "auto" : "100%",
+        minWidth: cardSize === "half" ? "0px" : "100%",
         minHeight: cardMinHeight,
         borderRadius: cardRadius,
         border: "1px solid rgba(255,255,255,0.10)",
@@ -1080,9 +1093,10 @@ function renderCompactStatCard(item, colors, compact = true) {
         style={{
           position: "absolute",
           inset: "0 auto 0 0",
-          width: accentWidth,
+          width: accentFillWidth,
           backgroundColor: item.accentColor || colors.dominantColor,
           opacity: 0.75,
+          transition: "width 220ms ease",
         }}
       />
       <div
@@ -1194,13 +1208,74 @@ function renderCompactQuickChip(item, colors, compact = true) {
     return null;
   }
 
+  const isIconHint = item.variant === "icon";
+
+  if (isIconHint) {
+    return (
+      <div
+        key={item.key || item.label || String(item.value)}
+        className="launcher-mini-hint"
+        title={item.label}
+        style={{
+          width: compact ? "38px" : "44px",
+          height: compact ? "38px" : "44px",
+          borderRadius: compact ? "11px" : "13px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background:
+            item.background ||
+            "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          boxSizing: "border-box",
+          cursor: "pointer",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            fontSize: compact ? "16px" : "18px",
+            lineHeight: 1,
+          }}
+        >
+          {item.icon}
+        </div>
+        {item.value ? (
+          <div
+            className="launcher-mini-hint-badge"
+            style={{
+              position: "absolute",
+              right: "-5px",
+              top: "-5px",
+              minHeight: compact ? "14px" : "16px",
+              minWidth: compact ? "14px" : "16px",
+              padding: compact ? "0 4px" : "0 5px",
+              borderRadius: "999px",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(10, 16, 24, 0.82)",
+              color: colors.textColor,
+              fontSize: compact ? "8px" : "9px",
+              fontWeight: 700,
+              lineHeight: compact ? "14px" : "16px",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {item.value}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div
       key={item.key || item.label || String(item.value)}
       style={{
         flex: item.size === "full" ? "1 1 100%" : "1 1 0",
         minWidth: item.size === "full" ? "100%" : "0px",
-        minHeight: compact ? "30px" : "38px",
+        minHeight: compact ? "36px" : "38px",
         borderRadius: compact ? "16px" : "19px",
         border: "1px solid rgba(255,255,255,0.10)",
         background:
@@ -1209,7 +1284,7 @@ function renderCompactQuickChip(item, colors, compact = true) {
         display: "flex",
         alignItems: "center",
         gap: compact ? "6px" : "8px",
-        padding: compact ? "4px 8px" : "7px 12px",
+        padding: compact ? "6px 10px" : "7px 12px",
         boxSizing: "border-box",
         overflow: "hidden",
       }}
@@ -1240,7 +1315,7 @@ function renderCompactQuickChip(item, colors, compact = true) {
           style={{
             display: "flex",
             fontSize: compact
-              ? (item.size === "full" ? "13px" : "12px")
+              ? (item.size === "full" ? "14px" : "13px")
               : (item.size === "full" ? "15px" : "14px"),
             fontWeight: 800,
             lineHeight: 1,
@@ -1276,8 +1351,8 @@ function renderCompactBanner(item, colors, compact = true) {
         display: "flex",
         alignItems: "center",
         gap: compact ? "10px" : "12px",
-        minHeight: compact ? "32px" : "46px",
-        padding: compact ? "5px 9px" : "10px 14px",
+        minHeight: compact ? "40px" : "46px",
+        padding: compact ? "7px 11px" : "10px 14px",
         borderRadius: compact ? "16px" : "20px",
         background:
           item.background ||
@@ -1321,7 +1396,7 @@ function renderCompactBanner(item, colors, compact = true) {
         <div
           style={{
             display: "flex",
-            fontSize: compact ? "14px" : "18px",
+            fontSize: compact ? "16px" : "18px",
             fontWeight: 800,
             lineHeight: 1,
             color: item.valueTone || colors.textColor,
@@ -1379,6 +1454,10 @@ const BalanceSectionView = (props) => {
     ? props.classicQuickChips
     : [];
   const classicBannerInput = props.classicBanner || null;
+  const classicMarriageBannerInput = props.classicMarriageBanner || null;
+  const hasClassicBannerOverride =
+    Object.prototype.hasOwnProperty.call(props, "classicBanner") &&
+    props.classicBanner !== undefined;
 
   const colors = {
     ...DEFAULT_COLORING,
@@ -1409,6 +1488,7 @@ const BalanceSectionView = (props) => {
         : metricCards.length > 0
         ? metricCards.map((item, index) => ({
             ...item,
+            size: index < 2 ? "half" : "full",
             accentColor:
               item.accentColor ||
               (index === 0
@@ -1419,6 +1499,7 @@ const BalanceSectionView = (props) => {
           }))
         : summaryCards.map((item, index) => ({
             ...item,
+            size: index < 2 ? "half" : "full",
             accentColor:
               item.accentColor ||
               (index % 2 === 0 ? colors.dominantColor : colors.accentColor),
@@ -1435,34 +1516,46 @@ const BalanceSectionView = (props) => {
           }))
     ).filter(Boolean);
     const classicBanner =
-      classicBannerInput ||
-      compactBanner ||
-      (progress
-        ? {
-            icon: progress.progress >= 1 ? "✅" : "🏦",
-            label: progress.subtitle || progress.label,
-            value: progress.value,
-            background:
-              progress.progress >= 1
-                ? "linear-gradient(90deg, rgba(104, 130, 115, 0.94), rgba(74, 98, 84, 0.82))"
-                : "linear-gradient(90deg, rgba(216, 65, 55, 0.94), rgba(181, 42, 37, 0.82))",
-            captionTone: "rgba(255,255,255,0.54)",
-            dotColor: "rgba(24, 22, 20, 0.82)",
-          }
-        : null);
+      hasClassicBannerOverride
+        ? classicBannerInput
+        : compactBanner ||
+          (progress
+            ? {
+                icon: progress.progress >= 1 ? "✅" : "🏦",
+                label: progress.subtitle || progress.label,
+                value: progress.value,
+                background:
+                  progress.progress >= 1
+                    ? "linear-gradient(90deg, rgba(104, 130, 115, 0.94), rgba(74, 98, 84, 0.82))"
+                    : "linear-gradient(90deg, rgba(216, 65, 55, 0.94), rgba(181, 42, 37, 0.82))",
+                captionTone: "rgba(255,255,255,0.54)",
+                dotColor: "rgba(24, 22, 20, 0.82)",
+              }
+            : null);
+    const classicMarriageBanner = classicMarriageBannerInput;
     const topClassicCards = classicFeatureCards.slice(0, 2);
     const lowerClassicCards = classicFeatureCards.slice(2);
-    const halfQuickChips = classicQuickChips.filter(
+    const iconQuickChips = classicQuickChips.filter(
+      (item) => item?.variant === "icon"
+    );
+    const textQuickChips = classicQuickChips.filter(
+      (item) => item?.variant !== "icon"
+    );
+    const halfQuickChips = textQuickChips.filter(
       (item) => item?.size !== "full"
     );
-    const fullQuickChips = classicQuickChips.filter(
+    const fullQuickChips = textQuickChips.filter(
       (item) => item?.size === "full"
     );
     const profileRailWidth = compact ? "122px" : "154px";
-    const rightRailFlex = compact ? "0.92 1 0" : "0.98 1 0";
-    const leftRailFlex = compact ? "1.16 1 0" : "1.08 1 0";
+    const rightRailFlex = compact ? "0.84 1 0" : "0.9 1 0";
+    const leftRailFlex = compact ? "1.24 1 0" : "1.16 1 0";
     const layoutGap = compact ? "8px" : "14px";
     const railGap = compact ? "6px" : "10px";
+    const useDenseClassicCards =
+      compact &&
+      !classicMarriageBanner &&
+      classicQuickChips.length >= 6;
 
     return (
       <div
@@ -1531,7 +1624,7 @@ const BalanceSectionView = (props) => {
               <div
                 style={{
                   display: "flex",
-                  fontSize: compact ? "26px" : "42px",
+                  fontSize: compact ? "30px" : "42px",
                   fontWeight: 800,
                   lineHeight: 1,
                   color: colors.textColor,
@@ -1543,7 +1636,7 @@ const BalanceSectionView = (props) => {
                 <div
                   style={{
                     display: "flex",
-                    fontSize: compact ? "14px" : "20px",
+                    fontSize: compact ? "16px" : "20px",
                     fontWeight: 700,
                     lineHeight: 1,
                     color: colors.secondaryTextColor,
@@ -1589,7 +1682,7 @@ const BalanceSectionView = (props) => {
             >
               {walletCard
                 ? renderPrimaryCard(walletCard, colors, compact, "wallet", {
-                    dense: compact,
+                    dense: useDenseClassicCards,
                   })
                 : null}
               {bankCard ? (
@@ -1602,7 +1695,8 @@ const BalanceSectionView = (props) => {
                   }}
                 >
                   {renderPrimaryCard(bankCard, colors, compact, "bank", {
-                    dense: compact,
+                    dense: useDenseClassicCards,
+                    attachBottom: Boolean(progress),
                   })}
                   {progress ? (
                     <div
@@ -1613,10 +1707,22 @@ const BalanceSectionView = (props) => {
                       }}
                     >
                       {renderProgressStrip(progress, colors, compact, false, {
-                        dense: compact,
+                        dense: useDenseClassicCards,
                       })}
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+              {classicMarriageBanner ? (
+                <div
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    maxWidth: compact ? "78%" : "74%",
+                    marginTop: compact ? "2px" : "8px",
+                  }}
+                >
+                  {renderCompactBanner(classicMarriageBanner, colors, compact)}
                 </div>
               ) : null}
             </div>
@@ -1667,6 +1773,21 @@ const BalanceSectionView = (props) => {
                 {fullQuickChips.map((item) =>
                   renderCompactQuickChip(item, colors, compact)
                 )}
+
+                {iconQuickChips.length > 0 ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: railGap,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    {iconQuickChips.map((item) =>
+                      renderCompactQuickChip(item, colors, compact)
+                    )}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1676,10 +1797,10 @@ const BalanceSectionView = (props) => {
               style={{
                 display: "flex",
                 width: "100%",
-                maxWidth: compact ? "68%" : "72%",
+                maxWidth: compact ? "74%" : "78%",
               }}
             >
-              {renderCompactBanner(classicBanner, colors, compact)}
+              {classicBanner ? renderCompactBanner(classicBanner, colors, compact) : null}
             </div>
           ) : null}
         </div>

@@ -9,6 +9,7 @@ import {
   LAUNCHER_MODAL_SHEET_TRANSITION,
 } from "../features/launcher/lib/launcherMotion.ts";
 import MetricPill from "./MetricPill.tsx";
+import UiIcon from "./UiIcon.tsx";
 
 type MoneyModalProps = {
   launcherData: ActivityLauncherPayload;
@@ -77,8 +78,8 @@ export default function MoneyModal({
                 : launcherData.strings.modal.confirmWithdraw}
             </h3>
           </div>
-          <button className="icon-button" onClick={onClose}>
-            x
+          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
+            <UiIcon name="close" size={16} />
           </button>
         </div>
 
@@ -107,6 +108,7 @@ export default function MoneyModal({
         <div className="preset-row">
           {[25, 50, 100].map((preset) => (
             <button
+              type="button"
               key={preset}
               className={`preset-chip ${state.selectedPreset === preset ? "is-active" : ""}`}
               onClick={() => onPresetSelect(preset)}
@@ -116,13 +118,18 @@ export default function MoneyModal({
           ))}
         </div>
 
-        {state.error ? <p className="inline-error">{state.error}</p> : null}
+        {state.error ? (
+          <p className="inline-error" role="alert" aria-live="assertive">
+            {state.error}
+          </p>
+        ) : null}
 
         <div className="modal-actions">
-          <button className="ghost-button" onClick={onClose}>
+          <button type="button" className="ghost-button" onClick={onClose}>
             {launcherData.strings.modal.cancel}
           </button>
           <button
+            type="button"
             className="action-button"
             disabled={state.submitting || previewAmount <= 0}
             onClick={onSubmit}

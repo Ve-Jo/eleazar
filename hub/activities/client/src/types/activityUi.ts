@@ -105,6 +105,16 @@ export type LayoutDebugSnapshot = {
   devicePixelRatio: number;
   baselineWidthDelta: number;
   baselineHeightDelta: number;
+  viewportTier: ViewportTier;
+  launcherTargetHeight: number;
+  launcherActualHeight: number;
+  launcherHeightGap: number;
+  launcherTargetMinHeight: number;
+  launcherTargetMaxHeight: number;
+  launcherTargetCssHeight: number;
+  launcherActualCssHeight: number;
+  heightFitGap: number;
+  isTargetHeightSatisfied: boolean;
   launcherHeightScale: number;
   sectionScale: number;
   sectionScaleBase: number;
@@ -115,8 +125,10 @@ export type LayoutDebugSnapshot = {
   carouselWidth: number;
   carouselScrollWidth: number;
   carouselMaxScrollLeft: number;
+  carouselHorizontalOverflow: number;
   screenHeight: number;
   carouselHeight: number;
+  shellScrollOverflow: number;
   navHeight: number;
   navBottom: number;
   navReservedHeight: number;

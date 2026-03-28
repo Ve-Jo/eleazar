@@ -78,6 +78,7 @@ export default function ActivityDebugPanel({
               <span className="debug-key">window</span>
               <span className="debug-value">
                 {`${Math.round(layoutDebug.windowWidth)}x${Math.round(layoutDebug.windowHeight)} @${layoutDebug.devicePixelRatio.toFixed(2)}`}
+                <span className="debug-badge">{layoutDebug.viewportTier}</span>
               </span>
             </div>
             <div className="debug-row">
@@ -97,6 +98,15 @@ export default function ActivityDebugPanel({
               </span>
             </div>
             <div className="debug-row">
+              <span className="debug-key">target h</span>
+              <span className="debug-value">
+                {`${formatDebugPx(layoutDebug.launcherTargetMinHeight)} - ${formatDebugPx(layoutDebug.launcherTargetMaxHeight)} | target ${formatDebugPx(layoutDebug.launcherTargetHeight)} | actual ${formatDebugPx(layoutDebug.launcherActualHeight)} | gap ${formatDebugPx(layoutDebug.launcherHeightGap)}`}
+                <span className={`debug-badge ${layoutDebug.isTargetHeightSatisfied ? "" : "warn"}`}>
+                  {layoutDebug.isTargetHeightSatisfied ? "within range" : "out of range"}
+                </span>
+              </span>
+            </div>
+            <div className="debug-row">
               <span className="debug-key">spacing</span>
               <span className="debug-value">
                 {`peek ${formatDebugPx(layoutDebug.carouselPeek)} | gap ${formatDebugPx(layoutDebug.carouselGap)} | clear ${formatDebugPx(layoutDebug.launcherBottomClearance)} | card pb ${formatDebugPx(layoutDebug.sectionCardPaddingBottom)}`}
@@ -105,13 +115,22 @@ export default function ActivityDebugPanel({
             <div className="debug-row">
               <span className="debug-key">heights</span>
               <span className="debug-value">
-                {`screen ${formatDebugPx(layoutDebug.screenHeight)} | carousel ${formatDebugPx(layoutDebug.carouselHeight)}`}
+                {`frame ${formatDebugPx(layoutDebug.screenHeight)} | carousel ${formatDebugPx(layoutDebug.carouselHeight)} | css target ${formatDebugPx(layoutDebug.launcherTargetCssHeight)} | css actual ${formatDebugPx(layoutDebug.launcherActualCssHeight)} | fit delta ${formatDebugPx(layoutDebug.heightFitGap)}`}
               </span>
             </div>
             <div className="debug-row">
               <span className="debug-key">carousel x</span>
               <span className="debug-value">
-                {`client ${formatDebugPx(layoutDebug.carouselWidth)} | scroll ${formatDebugPx(layoutDebug.carouselScrollWidth)} | max ${formatDebugPx(layoutDebug.carouselMaxScrollLeft)}`}
+                {`client ${formatDebugPx(layoutDebug.carouselWidth)} | scroll ${formatDebugPx(layoutDebug.carouselScrollWidth)} | max ${formatDebugPx(layoutDebug.carouselMaxScrollLeft)} | overflow ${formatDebugPx(layoutDebug.carouselHorizontalOverflow)}`}
+              </span>
+            </div>
+            <div className="debug-row">
+              <span className="debug-key">frame y</span>
+              <span className="debug-value">
+                {`scroll overflow ${formatDebugPx(layoutDebug.shellScrollOverflow)}`}
+                <span className={`debug-badge ${layoutDebug.shellScrollOverflow > 1 ? "warn" : ""}`}>
+                  {layoutDebug.shellScrollOverflow > 1 ? "clipped" : "stable"}
+                </span>
               </span>
             </div>
             <div className="debug-row">

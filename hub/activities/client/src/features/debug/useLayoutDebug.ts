@@ -1,22 +1,27 @@
 import { useEffect, useState, type RefObject } from "react";
 
-import { parseNumericCssValue } from "../launcher/lib/layoutMath.ts";
-import type { LauncherMotionState } from "../launcher/hooks/useLauncherCarousel.ts";
+import type { ActivitySection } from "../../lib/activityConstants.ts";
 import type {
   ActivityScene,
   LayoutDebugSnapshot,
   NoticeState,
   ViewportState,
+  ViewportTier,
 } from "../../types/activityUi.ts";
-import type { ActivitySection } from "../../lib/activityConstants.ts";
+import type { LauncherMotionState } from "../launcher/hooks/useLauncherCarousel.ts";
+import { parseNumericCssValue } from "../launcher/lib/layoutMath.ts";
 
 type UseLayoutDebugOptions = {
   activeScene: ActivityScene;
   activeSection: ActivitySection;
   isNavExpanded: boolean;
+  launcherActualHeight: number;
   launcherHeightScale: number;
+  launcherHeightGap: number;
+  launcherTargetHeight: number;
   notice: NoticeState;
   setupError: string | null;
+  viewportTier: ViewportTier;
   viewport: ViewportState;
   showDebugPanel: boolean;
   launcherShellRef: RefObject<HTMLDivElement | null>;
@@ -30,9 +35,13 @@ export function useLayoutDebug({
   activeScene,
   activeSection,
   isNavExpanded,
+  launcherActualHeight,
   launcherHeightScale,
+  launcherHeightGap,
+  launcherTargetHeight,
   notice,
   setupError,
+  viewportTier,
   viewport,
   showDebugPanel,
   launcherShellRef,
@@ -76,10 +85,29 @@ export function useLayoutDebug({
       const launcherBottomClearance = parseNumericCssValue(
         shellStyle.getPropertyValue("--launcher-bottom-clearance")
       );
+      const launcherTargetMinHeight = parseNumericCssValue(
+        shellStyle.getPropertyValue("--launcher-target-min-height")
+      );
+      const launcherTargetMaxHeight = parseNumericCssValue(
+        shellStyle.getPropertyValue("--launcher-target-max-height")
+      );
+      const launcherTargetCssHeight = parseNumericCssValue(
+        shellStyle.getPropertyValue("--launcher-target-height")
+      );
+      const launcherActualCssHeight = parseNumericCssValue(
+        shellStyle.getPropertyValue("--launcher-actual-height")
+      );
 
       const activeCardClientHeight = activeCard.clientHeight;
       const activeCardScrollHeight = activeCard.scrollHeight;
       const activeCardOverflow = Math.max(0, activeCardScrollHeight - activeCardClientHeight);
+      const shellScrollOverflow = Math.max(0, shell.scrollHeight - shell.clientHeight);
+      const carouselHorizontalOverflow = Math.max(0, carousel.scrollWidth - carousel.clientWidth);
+      const heightFitGap = shell.clientHeight - launcherTargetCssHeight;
+      const isTargetHeightSatisfied =
+        shell.clientHeight <= launcherTargetMaxHeight + 1 &&
+        (shell.clientHeight >= launcherTargetMinHeight - 1 ||
+          viewport.height < launcherTargetMinHeight);
 
       setLayoutDebug({
         windowWidth: window.innerWidth,
@@ -89,6 +117,16 @@ export function useLayoutDebug({
         devicePixelRatio: window.devicePixelRatio || 1,
         baselineWidthDelta: window.innerWidth - 1280,
         baselineHeightDelta: window.innerHeight - 720,
+        viewportTier,
+        launcherTargetHeight,
+        launcherActualHeight,
+        launcherHeightGap,
+        launcherTargetMinHeight,
+        launcherTargetMaxHeight,
+        launcherTargetCssHeight,
+        launcherActualCssHeight,
+        heightFitGap,
+        isTargetHeightSatisfied,
         launcherHeightScale,
         sectionScale,
         sectionScaleBase,
@@ -99,8 +137,10 @@ export function useLayoutDebug({
         carouselWidth: carousel.clientWidth,
         carouselScrollWidth: carousel.scrollWidth,
         carouselMaxScrollLeft: Math.max(0, carousel.scrollWidth - carousel.clientWidth),
+        carouselHorizontalOverflow,
         screenHeight: shell.clientHeight,
         carouselHeight: carousel.clientHeight,
+        shellScrollOverflow,
         navHeight,
         navBottom,
         navReservedHeight,
@@ -145,7 +185,10 @@ export function useLayoutDebug({
     activeScene,
     activeSection,
     isNavExpanded,
+    launcherActualHeight,
+    launcherHeightGap,
     launcherHeightScale,
+    launcherTargetHeight,
     notice,
     setupError,
     motionState.pagingZone,
@@ -156,6 +199,7 @@ export function useLayoutDebug({
     motionState.targetSection,
     viewport.height,
     viewport.width,
+    viewportTier,
     showDebugPanel,
   ]);
 

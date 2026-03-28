@@ -25,25 +25,25 @@ export const LAUNCHER_SETTLE_MAX_MS = 360;
 export const LAUNCHER_SETTLE_DISTANCE_FACTOR = 0.18;
 
 export const LAUNCHER_SCENE_TRANSITION: Transition = {
-  duration: 0.24,
-  ease: [0.22, 1, 0.36, 1],
+  duration: 0.3,
+  ease: [0.2, 0.88, 0.32, 1],
 };
 
 export const LAUNCHER_DOCK_TRANSITION: Transition = {
-  duration: 0.2,
-  ease: [0.2, 0.9, 0.2, 1],
+  duration: 0.24,
+  ease: [0.2, 0.82, 0.26, 1],
 };
 
 export const LAUNCHER_INDICATOR_TRANSITION: Transition = {
   type: "spring",
-  stiffness: 380,
-  damping: 32,
-  mass: 0.82,
+  stiffness: 340,
+  damping: 30,
+  mass: 0.9,
 };
 
 export const LAUNCHER_NOTICE_TRANSITION: Transition = {
-  duration: 0.2,
-  ease: [0.16, 1, 0.3, 1],
+  duration: 0.24,
+  ease: [0.2, 0.82, 0.26, 1],
 };
 
 export const LAUNCHER_MODAL_SCRIM_TRANSITION: Transition = {
@@ -53,9 +53,9 @@ export const LAUNCHER_MODAL_SCRIM_TRANSITION: Transition = {
 
 export const LAUNCHER_MODAL_SHEET_TRANSITION: Transition = {
   type: "spring",
-  stiffness: 340,
-  damping: 30,
-  mass: 0.88,
+  stiffness: 300,
+  damping: 28,
+  mass: 0.92,
 };
 
 export function clamp(value: number, min: number, max: number) {
@@ -176,6 +176,19 @@ export function resolveSnapDecision(options: {
 export function resolvePagingZone(target: EventTarget | null): LauncherPagingZone {
   if (!(target instanceof Element)) {
     return "unknown";
+  }
+
+  // Shared launcher views use clickable <div> elements with cursor:pointer.
+  // Treat those as interactive so drag/paging does not hijack taps.
+  let node: Element | null = target;
+  let depth = 0;
+  while (node && depth < 8) {
+    const cursor = window.getComputedStyle(node).cursor;
+    if (cursor === "pointer") {
+      return "interactive";
+    }
+    node = node.parentElement;
+    depth += 1;
   }
 
   if (target.closest("[data-launcher-page-zone='blocked']")) {
