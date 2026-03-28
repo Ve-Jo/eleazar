@@ -92,12 +92,15 @@ export function buildCasesCalendarPresentation(
     return null;
   }
 
-  const weekdayLabels =
-    locale === "ru"
-      ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-      : locale === "uk"
-      ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
-      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekdayFormatter = new Intl.DateTimeFormat(getLocaleTag(locale), {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  const mondayAnchor = new Date(Date.UTC(2024, 0, 1));
+  const weekdayLabels = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(mondayAnchor.getTime() + index * 24 * 60 * 60 * 1000);
+    return weekdayFormatter.format(date);
+  });
   const streak = Number(dailyStatus.streak || 0);
   const rewardMultiplier = Number(dailyStatus.rewardMultiplier || 1);
   const cooldownRemainingMs = Math.max(0, Number(dailyStatus.cooldownRemainingMs || 0));
@@ -238,7 +241,7 @@ export function getRewardEntries(
   launcherData: ActivityLauncherPayload
 ) {
   const entries: Array<{ emoji: string; label: string; value: string }> = [];
-  const commonCoins = launcherData.strings.common.coins || "coins";
+  const commonCoins = launcherData.strings.common.coins;
 
   if (Number(reward.coins || 0) > 0) {
     entries.push({
@@ -250,14 +253,14 @@ export function getRewardEntries(
   if (Number(reward.seasonXp || 0) > 0) {
     entries.push({
       emoji: "✨",
-      label: "XP",
+      label: launcherData.strings.common.xp,
       value: `+${formatNumber(reward.seasonXp, locale, 0)}`,
     });
   }
   if (Number(reward.discount || 0) > 0) {
     entries.push({
       emoji: "🏷️",
-      label: launcherData.balance.upgradeDiscount > 0 ? "Discount" : "Discount",
+      label: launcherData.strings.common.discount,
       value: `${formatNumber(reward.discount, locale, 0)}%`,
     });
   }
@@ -274,7 +277,7 @@ export function getRewardEntries(
         entries.push({
           emoji: "⏱️",
           label: key,
-          value: `-${minutes}m`,
+          value: `-${minutes}${launcherData.strings.common.unitMinuteShort}`,
         });
       }
     });

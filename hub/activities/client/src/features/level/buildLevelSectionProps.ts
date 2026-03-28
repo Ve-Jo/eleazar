@@ -13,7 +13,10 @@ function pad2(value: number): string {
   return String(Math.max(0, Math.floor(value))).padStart(2, "0");
 }
 
-function formatSeasonCountdown(ms: number): string {
+function formatSeasonCountdown(
+  ms: number,
+  labels: { day: string; hour: string; minute: string; second: string }
+): string {
   const safeMs = Math.max(0, Math.floor(ms));
   const totalSeconds = Math.floor(safeMs / 1000);
   const seconds = totalSeconds % 60;
@@ -24,29 +27,29 @@ function formatSeasonCountdown(ms: number): string {
   const days = Math.floor(totalHours / 24);
 
   if (days > 0) {
-    return `${days}d ${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+    return `${days}${labels.day} ${pad2(hours)}${labels.hour} ${pad2(minutes)}${labels.minute} ${pad2(seconds)}${labels.second}`;
   }
 
-  return `${pad2(totalHours)}:${pad2(minutes)}:${pad2(seconds)}`;
+  return `${pad2(totalHours)}${labels.hour} ${pad2(minutes)}${labels.minute} ${pad2(seconds)}${labels.second}`;
 }
 
 function getModeLabel(mode: string, launcherData: ActivityLauncherPayload): string {
   const normalized = String(mode || "text").trim().toLowerCase();
-  const levelStrings = launcherData.strings.level || {};
+  const levelStrings = launcherData.strings.level;
 
   if (normalized === "voice") {
-    return levelStrings.voice || "Voice";
+    return levelStrings.voice;
   }
   if (normalized === "gaming") {
-    return levelStrings.games || "Games";
+    return levelStrings.games;
   }
   if (normalized === "combined_activity") {
-    return `${levelStrings.chat || "Chat"}+${levelStrings.voice || "Voice"}`;
+    return `${levelStrings.chat}+${levelStrings.voice}`;
   }
   if (normalized === "combined_all") {
-    return "All";
+    return levelStrings.all;
   }
-  return levelStrings.chat || "Chat";
+  return levelStrings.chat;
 }
 
 function toProgress(currentXP: number, requiredXP: number): number {
@@ -61,7 +64,14 @@ export function buildLevelSectionProps({
 }: BuildLevelSectionPropsOptions) {
   const locale = launcherData.locale;
   const progression = launcherData.progression || null;
-  const levelStrings = launcherData.strings.level || {};
+  const levelStrings = launcherData.strings.level;
+  const commonStrings = launcherData.strings.common;
+  const durationLabels = {
+    day: commonStrings.unitDayShort,
+    hour: commonStrings.unitHourShort,
+    minute: commonStrings.unitMinuteShort,
+    second: commonStrings.unitSecondShort,
+  };
   const chat = progression?.chat || launcherData.levelProgress?.chat || null;
   const voice = progression?.voice || launcherData.levelProgress?.voice || null;
   const game = progression?.game || launcherData.levelProgress?.game || null;
@@ -75,14 +85,14 @@ export function buildLevelSectionProps({
     {
       key: "chat",
       icon: "💬",
-      label: levelStrings.chat || "Chat",
+      label: levelStrings.chat,
       value: formatNumber(chat?.level || 1, locale, 0),
-      suffix: levelStrings.lvlSuffix || "lvl",
+      suffix: levelStrings.lvlSuffix,
       xpLabel: `${formatNumber(chat?.currentXP || 0, locale, 0)} / ${formatNumber(
         chat?.requiredXP || 1,
         locale,
         0
-      )} ${levelStrings.xp || "XP"}`,
+      )} ${levelStrings.xp}`,
       progress: toProgress(Number(chat?.currentXP || 0), Number(chat?.requiredXP || 1)),
       rank: chat?.rank ? `#${chat.rank}` : null,
       accentColor: "rgba(67, 157, 242, 0.82)",
@@ -92,14 +102,14 @@ export function buildLevelSectionProps({
     {
       key: "games",
       icon: "🎮",
-      label: levelStrings.games || "Games",
+      label: levelStrings.games,
       value: formatNumber(game?.level || 1, locale, 0),
-      suffix: levelStrings.lvlSuffix || "lvl",
+      suffix: levelStrings.lvlSuffix,
       xpLabel: `${formatNumber(game?.currentXP || 0, locale, 0)} / ${formatNumber(
         game?.requiredXP || 1,
         locale,
         0
-      )} ${levelStrings.xp || "XP"}`,
+      )} ${levelStrings.xp}`,
       progress: toProgress(Number(game?.currentXP || 0), Number(game?.requiredXP || 1)),
       rank: game?.rank ? `#${game.rank}` : null,
       accentColor: "rgba(99, 190, 92, 0.84)",
@@ -109,14 +119,14 @@ export function buildLevelSectionProps({
     {
       key: "voice",
       icon: "🎤",
-      label: levelStrings.voice || "Voice",
+      label: levelStrings.voice,
       value: formatNumber(voice?.level || 1, locale, 0),
-      suffix: levelStrings.lvlSuffix || "lvl",
+      suffix: levelStrings.lvlSuffix,
       xpLabel: `${formatNumber(voice?.currentXP || 0, locale, 0)} / ${formatNumber(
         voice?.requiredXP || 1,
         locale,
         0
-      )} ${levelStrings.xp || "XP"}`,
+      )} ${levelStrings.xp}`,
       progress: toProgress(Number(voice?.currentXP || 0), Number(voice?.requiredXP || 1)),
       rank: voice?.rank ? `#${voice.rank}` : null,
       accentColor: "rgba(88, 198, 214, 0.84)",
@@ -146,7 +156,7 @@ export function buildLevelSectionProps({
       mode: normalizedMode,
       modeLabel: getModeLabel(normalizedMode, launcherData),
       requiredLevel,
-      requiredLabel: `${levelStrings.level || "Level"} ${formatNumber(requiredLevel, locale, 0)}`,
+      requiredLabel: `${levelStrings.level} ${formatNumber(requiredLevel, locale, 0)}`,
       progress: Math.max(0, Math.min(1, currentLevel / Math.max(1, requiredLevel))),
       color: role.color,
     };
@@ -156,11 +166,11 @@ export function buildLevelSectionProps({
     sectionProps: {
       compact: shouldCompactPanels,
       coloring: createSectionColoring(launcherData),
-      eyebrow: launcherData.strings.nav.level || levelStrings.title || "Level",
-      title: levelStrings.title || launcherData.strings.nav.level || "Level",
+      eyebrow: launcherData.strings.nav.level,
+      title: levelStrings.title,
       titleMeta: launcherData.user.displayName || launcherData.user.username || null,
       subtitle: isReadOnly
-        ? launcherData.strings.common.readOnly || "Read-only preview"
+        ? launcherData.strings.nav.readOnly
         : getLocaleTag(locale),
       profilePanel: {
         avatarUrl: launcherData.user.avatarUrl || launcherData.user.avatar || undefined,
@@ -169,13 +179,13 @@ export function buildLevelSectionProps({
         meta: launcherData.guild?.name || undefined,
       },
       seasonCard: {
-        title: `${levelStrings.season || "Season"} ${seasonNumber}`,
-        xpValue: `${formatNumber(seasonXp, locale, 0)} ${levelStrings.xp || "XP"}`,
-        countdownLabel: seasonEnds > 0 ? formatSeasonCountdown(seasonRemainingMs) : "00:00:00",
+        title: `${levelStrings.season} ${seasonNumber}`,
+        xpValue: `${formatNumber(seasonXp, locale, 0)} ${levelStrings.xp}`,
+        countdownLabel: seasonEnds > 0 ? formatSeasonCountdown(seasonRemainingMs, durationLabels) : "00:00:00",
       },
       levelCards,
-      rolesTitle: levelStrings.nextRole || "Next Role",
-      rolesEmptyText: levelStrings.noNextRole || "No upcoming role",
+      rolesTitle: levelStrings.nextRole,
+      rolesEmptyText: levelStrings.noNextRole,
       upcomingRoles,
     },
   };

@@ -87,7 +87,7 @@ export function useMoneyModalController({
     if (parsedAmount <= 0) {
       setMoneyModal((previous) => ({
         ...previous,
-        error: "Enter a valid amount.",
+        error: launcherData.strings.modal.enterValidAmount,
       }));
       return;
     }
@@ -129,14 +129,14 @@ export function useMoneyModalController({
         kind: "success",
         message:
           payload.action?.direction === "deposit"
-            ? launcherData.strings.balance.depositTitle || "Deposit"
-            : launcherData.strings.balance.withdrawTitle || "Withdraw",
+            ? launcherData.strings.balance.depositTitle
+            : launcherData.strings.balance.withdrawTitle,
       });
     } catch (error: any) {
       setMoneyModal((previous) => ({
         ...previous,
         submitting: false,
-        error: error?.message || "Failed to move funds.",
+        error: error?.message || launcherData.strings.modal.moveFailed,
       }));
     }
   };

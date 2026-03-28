@@ -41,21 +41,21 @@ export default function Game2048Scene({
           <h1>{launcherData.strings.games.sceneTitle}</h1>
         </div>
         <button className="ghost-button" onClick={onBack}>
-          {launcherData.strings.nav.backToLauncher || "Back To Launcher"}
+          {launcherData.strings.nav.backToLauncher}
         </button>
       </header>
 
       <div className="scene-stats">
         <MetricPill
-          label={launcherData.strings.games.score || "Score"}
+          label={launcherData.strings.games.score}
           value={formatNumber(gameState.score, locale, 0)}
         />
         <MetricPill
-          label={launcherData.strings.games.moves || "Moves"}
+          label={launcherData.strings.games.moves}
           value={formatNumber(gameState.moves, locale, 0)}
         />
         <MetricPill
-          label={launcherData.strings.games.best || "Best"}
+          label={launcherData.strings.games.best}
           value={formatNumber(highScore || 0, locale, 0)}
         />
       </div>
@@ -74,17 +74,17 @@ export default function Game2048Scene({
 
       <div className="controls">
         <button className="action-button" onClick={() => onMove("up")}>
-          Up
+          {launcherData.strings.games.controlUp}
         </button>
         <div className="control-row">
           <button className="action-button" onClick={() => onMove("left")}>
-            Left
+            {launcherData.strings.games.controlLeft}
           </button>
           <button className="action-button" onClick={() => onMove("down")}>
-            Down
+            {launcherData.strings.games.controlDown}
           </button>
           <button className="action-button" onClick={() => onMove("right")}>
-            Right
+            {launcherData.strings.games.controlRight}
           </button>
         </div>
         <button className="ghost-button danger" onClick={onStopAndSubmit}>
@@ -104,12 +104,14 @@ export default function Game2048Scene({
             {formatNumber(gameState.submission.reward?.visualAwardedAmount || 0, locale)}{" "}
             {launcherData.strings.common.coins}
             {" · "}
-            XP {formatNumber(gameState.submission.reward?.gameXp || 0, locale, 0)}
+            {launcherData.strings.common.xp} {formatNumber(gameState.submission.reward?.gameXp || 0, locale, 0)}
           </p>
           <p>
             {launcherData.strings.games.best}:{" "}
             {formatNumber(gameState.submission.progression?.highScore || 0, locale, 0)}
-            {gameState.submission.progression?.isNewRecord ? " • NEW" : ""}
+            {gameState.submission.progression?.isNewRecord
+              ? ` • ${launcherData.strings.common.newRecord}`
+              : ""}
           </p>
         </div>
       ) : null}

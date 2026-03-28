@@ -78,7 +78,12 @@ export default function MoneyModal({
                 : launcherData.strings.modal.confirmWithdraw}
             </h3>
           </div>
-          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={launcherData.strings.common.close}
+            onClick={onClose}
+          >
             <UiIcon name="close" size={16} />
           </button>
         </div>
@@ -106,14 +111,18 @@ export default function MoneyModal({
         </label>
 
         <div className="preset-row">
-          {[25, 50, 100].map((preset) => (
+          {[
+            { value: 25, label: launcherData.strings.modal.preset25 },
+            { value: 50, label: launcherData.strings.modal.preset50 },
+            { value: 100, label: launcherData.strings.modal.preset100 },
+          ].map((preset) => (
             <button
               type="button"
-              key={preset}
-              className={`preset-chip ${state.selectedPreset === preset ? "is-active" : ""}`}
-              onClick={() => onPresetSelect(preset)}
+              key={preset.value}
+              className={`preset-chip ${state.selectedPreset === preset.value ? "is-active" : ""}`}
+              onClick={() => onPresetSelect(preset.value)}
             >
-              {preset}%
+              {preset.label}
             </button>
           ))}
         </div>

@@ -21,6 +21,7 @@ import { ACTIVITY_GAME_CATALOG } from "../../lib/gameCatalog.ts";
 import {
   buildActivityStrings,
   getActivityLocaleValue,
+  getUpgradeCategoryTitle,
   normalizeActivityLocale,
 } from "../../lib/activityI18n.ts";
 import {
@@ -57,24 +58,6 @@ const UPGRADE_IMPACT_KEYS: Record<string, string> = {
   time_wizard: "impact_daily_weekly",
   vault_guard: "impact_defense",
   bank_vault: "impact_bank_max_time",
-};
-
-const UNIT_LABELS: Record<ActivitySupportedLocale, Record<string, string>> = {
-  en: {
-    percent: "%",
-    minutes: "min",
-    hours: "h",
-  },
-  ru: {
-    percent: "%",
-    minutes: "мин",
-    hours: "ч",
-  },
-  uk: {
-    percent: "%",
-    minutes: "хв",
-    hours: "год",
-  },
 };
 
 const CRIME_COOLDOWN_MS = 2 * 60 * 60 * 1000;
@@ -171,11 +154,17 @@ function getUpgradeEffectValue(type: string, level: number): number {
 
 function formatUpgradeEffectLabel(
   locale: ActivitySupportedLocale,
+  strings: ReturnType<typeof buildActivityStrings>,
   type: string,
   effectValue: number
 ): string {
   const unit = getUpgradeEffectUnit(type);
-  const unitLabel = UNIT_LABELS[locale][unit];
+  const unitLabel =
+    unit === "minutes"
+      ? strings.common.unitMinuteShort
+      : unit === "hours"
+      ? strings.common.unitHourShort
+      : "%";
   const formatted = effectValue.toLocaleString(
     locale === "uk" ? "uk-UA" : locale === "ru" ? "ru-RU" : "en-US",
     {
@@ -187,22 +176,25 @@ function formatUpgradeEffectLabel(
   return unit === "percent" ? `${formatted}%` : `${formatted} ${unitLabel}`;
 }
 
-function getFallbackImpactLabel(type: string): string {
+function getFallbackImpactLabel(
+  type: string,
+  strings: ReturnType<typeof buildActivityStrings>
+): string {
   switch (type) {
     case "daily_bonus":
-      return "Daily rewards";
+      return strings.upgrades.impactDailyRewards;
     case "games_earning":
-      return "Game payouts";
+      return strings.upgrades.impactGamePayouts;
     case "crime_mastery":
-      return "Crime success & fines";
+      return strings.upgrades.impactCrimeMastery;
     case "time_wizard":
-      return "Daily/Weekly cooldowns";
+      return strings.upgrades.impactDailyWeekly;
     case "vault_guard":
-      return "Defense & fees";
+      return strings.upgrades.impactDefense;
     case "bank_vault":
-      return "Bank max time";
+      return strings.upgrades.impactBankMaxTime;
     default:
-      return "Upgrade";
+      return strings.nav.upgrades;
   }
 }
 
@@ -265,6 +257,11 @@ function buildCasesState(
   const dailyAvailable = dailyCount > 0 && toBoolean(dailyStatus.available);
   const weeklyAvailable = weeklyCount > 0 && weeklyCooldownRemainingMs <= 0;
   const now = Date.now();
+  const durationLabels = {
+    day: strings.common.unitDayShort,
+    hour: strings.common.unitHourShort,
+    minute: strings.common.unitMinuteShort,
+  };
 
   return {
     totalCount: dailyCount + weeklyCount,
@@ -273,8 +270,8 @@ function buildCasesState(
     cards: [
       {
         type: "daily",
-        name: strings.cases.dailyName || strings.cases.dailyTitle || "Daily Case",
-        description: strings.cases.dailyDescription || strings.cases.dailyTitle || "Daily Case",
+        name: strings.cases.dailyName,
+        description: strings.cases.dailyDescription,
         emoji: CRATE_TYPES.daily.emoji,
         count: dailyCount,
         available: dailyAvailable,
@@ -282,8 +279,8 @@ function buildCasesState(
         cooldownDurationMs: CRATE_TYPES.daily.cooldown,
         nextAvailableAt: dailyCooldownRemainingMs > 0 ? now + dailyCooldownRemainingMs : null,
         statusLabel: dailyAvailable
-          ? strings.cases.readyNow || "Ready"
-          : formatDurationCompact(dailyCooldownRemainingMs, locale),
+          ? strings.cases.readyNow
+          : formatDurationCompact(dailyCooldownRemainingMs, locale, durationLabels),
         rewardPreview: {
           minCoins: CRATE_TYPES.daily.rewards.min_coins,
           maxCoins: CRATE_TYPES.daily.rewards.max_coins,
@@ -294,9 +291,8 @@ function buildCasesState(
       },
       {
         type: "weekly",
-        name: strings.cases.weeklyName || strings.cases.weeklyTitle || "Weekly Case",
-        description:
-          strings.cases.weeklyDescription || strings.cases.weeklyTitle || "Weekly Case",
+        name: strings.cases.weeklyName,
+        description: strings.cases.weeklyDescription,
         emoji: CRATE_TYPES.weekly.emoji,
         count: weeklyCount,
         available: weeklyAvailable,
@@ -304,8 +300,8 @@ function buildCasesState(
         cooldownDurationMs: CRATE_TYPES.weekly.cooldown,
         nextAvailableAt: weeklyCooldownRemainingMs > 0 ? now + weeklyCooldownRemainingMs : null,
         statusLabel: weeklyAvailable
-          ? strings.cases.readyNow || "Ready"
-          : formatDurationCompact(weeklyCooldownRemainingMs, locale),
+          ? strings.cases.readyNow
+          : formatDurationCompact(weeklyCooldownRemainingMs, locale, durationLabels),
         rewardPreview: {
           minCoins: CRATE_TYPES.weekly.rewards.min_coins,
           maxCoins: CRATE_TYPES.weekly.rewards.max_coins,
@@ -320,6 +316,7 @@ function buildCasesState(
 
 function buildUpgradesState(
   locale: ActivitySupportedLocale,
+  strings: ReturnType<typeof buildActivityStrings>,
   upgrades: Array<Record<string, unknown>>,
   walletBalance: number,
   discountPercent: number
@@ -348,7 +345,7 @@ function buildUpgradesState(
     const impactLabel = getActivityLocaleValue(
       locale,
       `commands.economy.shop.${UPGRADE_IMPACT_KEYS[type] || ""}`,
-      getFallbackImpactLabel(type)
+      getFallbackImpactLabel(type, strings)
     );
 
     return {
@@ -368,9 +365,9 @@ function buildUpgradesState(
       nextEffect,
       deltaEffect,
       effectUnit: getUpgradeEffectUnit(type),
-      currentEffectLabel: formatUpgradeEffectLabel(locale, type, currentEffect),
-      nextEffectLabel: formatUpgradeEffectLabel(locale, type, nextEffect),
-      deltaEffectLabel: formatUpgradeEffectLabel(locale, type, deltaEffect),
+      currentEffectLabel: formatUpgradeEffectLabel(locale, strings, type, currentEffect),
+      nextEffectLabel: formatUpgradeEffectLabel(locale, strings, type, nextEffect),
+      deltaEffectLabel: formatUpgradeEffectLabel(locale, strings, type, deltaEffect),
       price: discountedPrice,
       originalPrice,
       discountPercent,
@@ -386,7 +383,7 @@ function buildUpgradesState(
       const items = allCards.filter((card) => card.category === category);
       return {
         key: category,
-        title: getActivityLocaleValue(locale, `commands.economy.shop.category_${category}`, category),
+        title: getUpgradeCategoryTitle(locale, strings, category),
         items,
       };
     }).filter((group) => group.items.length > 0),
@@ -755,7 +752,7 @@ export async function buildReadOnlyLauncherPayload(
     unsupportedReason,
     balance: buildEmptyBalanceSnapshot(),
     cases: buildCasesState(locale, strings, [], null, 0),
-    upgrades: buildUpgradesState(locale, [], 0, 0),
+    upgrades: buildUpgradesState(locale, strings, [], 0, 0),
     games: buildGamesState(
       true,
       {},
@@ -834,6 +831,7 @@ export async function buildActivityLauncherPayload(
   );
   const upgrades = buildUpgradesState(
     locale,
+    strings,
     asArray(user.upgrades),
     balance.walletBalance,
     balance.upgradeDiscount

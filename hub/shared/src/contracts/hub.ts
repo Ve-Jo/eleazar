@@ -188,15 +188,172 @@ export type ActivityPalette = {
   isDarkText: boolean;
 };
 
+export type ActivityNavStrings = {
+  balance: string;
+  level: string;
+  cases: string;
+  upgrades: string;
+  games: string;
+  launcher: string;
+  readOnly: string;
+  playable: string;
+  comingSoon: string;
+  backToLauncher: string;
+  expandNavigation: string;
+  collapseNavigation: string;
+};
+
+export type ActivityCommonStrings = {
+  loading: string;
+  close: string;
+  coins: string;
+  wallet: string;
+  bank: string;
+  total: string;
+  totalSuffix: string;
+  available: string;
+  highScore: string;
+  dailyLeft: string;
+  annualRate: string;
+  liveGrowth: string;
+  streak: string;
+  rewardMultiplier: string;
+  unavailableInPreview: string;
+  submit: string;
+  refresh: string;
+  married: string;
+  crime: string;
+  xp: string;
+  discount: string;
+  seasonXp: string;
+  xpDiscount: string;
+  newRecord: string;
+  items: string;
+  effectSummary: string;
+  levelShort: string;
+  unitDayShort: string;
+  unitHourShort: string;
+  unitMinuteShort: string;
+  unitSecondShort: string;
+};
+
+export type ActivityBalanceStrings = {
+  walletTitle: string;
+  bankTitle: string;
+  projectedTitle: string;
+  cycleTitle: string;
+  discountTitle: string;
+  depositHint: string;
+  withdrawHint: string;
+  title: string;
+  depositTitle: string;
+  withdrawTitle: string;
+};
+
+export type ActivityCasesStrings = {
+  rewardTitle: string;
+  dailyTitle: string;
+  weeklyTitle: string;
+  readyNow: string;
+  openSuccess: string;
+  title: string;
+  openButton: string;
+  noCratesAvailable: string;
+  dailyName: string;
+  dailyDescription: string;
+  weeklyName: string;
+  weeklyDescription: string;
+  monthlyCalendar: string;
+};
+
+export type ActivityUpgradesStrings = {
+  focusTitle: string;
+  buyNow: string;
+  boughtSuccess: string;
+  needMore: string;
+  impact: string;
+  current: string;
+  next: string;
+  gain: string;
+  title: string;
+  purchaseButton: string;
+  insufficientFunds: string;
+  impactDailyRewards: string;
+  impactGamePayouts: string;
+  impactCrimeMastery: string;
+  impactDailyWeekly: string;
+  impactDefense: string;
+  impactBankMaxTime: string;
+  categoryEconomy: string;
+  categoryActivity: string;
+  categoryCooldowns: string;
+  categoryDefense: string;
+  categoryBanking: string;
+};
+
+export type ActivityGamesStrings = {
+  title: string;
+  subtitle: string;
+  play2048: string;
+  stopAndSubmit: string;
+  sceneTitle: string;
+  score: string;
+  moves: string;
+  best: string;
+  submitting: string;
+  runSubmitted: string;
+  controlUp: string;
+  controlDown: string;
+  controlLeft: string;
+  controlRight: string;
+};
+
+export type ActivityLevelStrings = {
+  title: string;
+  season: string;
+  chat: string;
+  voice: string;
+  games: string;
+  nextRole: string;
+  level: string;
+  xp: string;
+  lvlSuffix: string;
+  noNextRole: string;
+  all: string;
+};
+
+export type ActivityModalStrings = {
+  amountLabel: string;
+  amountPlaceholder: string;
+  source: string;
+  destination: string;
+  cancel: string;
+  confirmDeposit: string;
+  confirmWithdraw: string;
+  preset25: string;
+  preset50: string;
+  preset100: string;
+  enterValidAmount: string;
+  moveFailed: string;
+};
+
+export type ActivityErrorStrings = {
+  failedLoadLauncher: string;
+  failedOpenCase: string;
+  failedPurchaseUpgrade: string;
+  failedCompleteGame: string;
+};
+
 export type ActivityLauncherStrings = {
-  nav: Record<string, string>;
-  common: Record<string, string>;
-  balance: Record<string, string>;
-  cases: Record<string, string>;
-  upgrades: Record<string, string>;
-  games: Record<string, string>;
-  level: Record<string, string>;
-  modal: Record<string, string>;
+  nav: ActivityNavStrings;
+  common: ActivityCommonStrings;
+  balance: ActivityBalanceStrings;
+  cases: ActivityCasesStrings;
+  upgrades: ActivityUpgradesStrings;
+  games: ActivityGamesStrings;
+  level: ActivityLevelStrings;
+  modal: ActivityModalStrings;
+  errors: ActivityErrorStrings;
 };
 
 export type ActivityUserSummary = {

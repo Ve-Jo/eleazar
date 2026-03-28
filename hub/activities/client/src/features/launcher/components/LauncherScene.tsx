@@ -151,7 +151,7 @@ export default function LauncherScene({
 }: LauncherSceneProps) {
   const prefersReducedMotion = useReducedMotion();
   const navSections = ["balance", "level", "cases", "upgrades", "games"] as ActivitySection[];
-  const activeSectionLabel = launcherData.strings.nav[activeSection] || activeSection;
+  const activeSectionLabel = launcherData.strings.nav[activeSection];
   const shellTransition = prefersReducedMotion
     ? { duration: 0.01 }
     : LAUNCHER_SCENE_TRANSITION;
@@ -197,7 +197,11 @@ export default function LauncherScene({
               type="button"
               className={`section-nav-summary ${isNavExpanded ? "is-expanded" : "is-collapsed"}`}
               aria-expanded={isNavExpanded}
-              aria-label={isNavExpanded ? "Collapse navigation" : "Expand navigation"}
+              aria-label={
+                isNavExpanded
+                  ? launcherData.strings.nav.collapseNavigation
+                  : launcherData.strings.nav.expandNavigation
+              }
               onClick={() => {
                 if (isNavExpanded) {
                   collapseNavDock();
@@ -226,7 +230,7 @@ export default function LauncherScene({
             <div className="section-nav-track-shell">
               <div className="section-nav-track">
                 {navSections.map((section) => {
-                  const label = launcherData.strings.nav[section] || section;
+                  const label = launcherData.strings.nav[section];
                   const isActive = activeSection === section;
 
                   return (

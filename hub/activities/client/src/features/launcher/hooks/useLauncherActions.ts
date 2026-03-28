@@ -63,12 +63,12 @@ export function useLauncherActions({
       });
       setNotice({
         kind: "success",
-        message: launcherData.strings.cases.openSuccess || "Case opened",
+        message: launcherData.strings.cases.openSuccess,
       });
     } catch (error: any) {
       setNotice({
         kind: "error",
-        message: error?.message || "Failed to open case.",
+        message: error?.message || launcherData.strings.errors.failedOpenCase,
       });
     } finally {
       setPendingCrateType(null);
@@ -94,12 +94,12 @@ export function useLauncherActions({
       );
       setNotice({
         kind: "success",
-        message: launcherData.strings.upgrades.boughtSuccess || "Upgrade purchased",
+        message: launcherData.strings.upgrades.boughtSuccess,
       });
     } catch (error: any) {
       setNotice({
         kind: "error",
-        message: error?.message || "Failed to purchase upgrade.",
+        message: error?.message || launcherData.strings.errors.failedPurchaseUpgrade,
       });
     } finally {
       setPendingUpgradeType(null);

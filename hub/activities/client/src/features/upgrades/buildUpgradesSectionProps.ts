@@ -33,37 +33,35 @@ export function buildUpgradesSectionProps({
     sectionProps: {
       compact: shouldCompactPanels,
       eyebrow: launcherData.strings.nav.upgrades,
-      title: launcherData.strings.upgrades.title || launcherData.strings.nav.upgrades,
-      subtitle: launcherData.strings.upgrades.focusTitle || launcherData.strings.nav.upgrades,
+      title: launcherData.strings.upgrades.title,
+      subtitle: launcherData.strings.upgrades.focusTitle,
       coloring: createSectionColoring(launcherData),
       summaryCards: [
         {
-          label: launcherData.strings.common.wallet || "Wallet",
+          label: launcherData.strings.common.wallet,
           value: formatNumber(launcherData.balance.walletBalance, locale, 0),
         },
         {
-          label: launcherData.strings.balance.discountTitle || "Upgrade Discount",
+          label: launcherData.strings.balance.discountTitle,
           value: `${formatNumber(launcherData.upgrades.discountPercent, locale, 0)}%`,
         },
       ],
       featuredUpgrade: focusedUpgrade
         ? {
-            kicker:
-              launcherData.strings.upgrades.focusTitle ||
-              launcherData.strings.nav.upgrades,
+            kicker: launcherData.strings.upgrades.focusTitle,
             title: focusedUpgrade.name,
             subtitle: `${focusedUpgrade.impactLabel} · ${activeUpgradeGroup?.title || ""}`,
             emoji: focusedUpgrade.emoji,
             description: focusedUpgrade.description,
-            effectLabel: "Effect summary",
+            effectLabel: launcherData.strings.common.effectSummary,
             currentValue: focusedUpgrade.currentEffectLabel,
             nextValue: focusedUpgrade.nextEffectLabel,
-            gainLabel: launcherData.strings.upgrades.gain || "Gain",
+            gainLabel: launcherData.strings.upgrades.gain,
             gainValue: `+${focusedUpgrade.deltaEffectLabel}`,
             gainTone: focusedUpgrade.isAffordable ? "positive" : "warning",
-            levelLabel: launcherData.strings.upgrades.current || "Current",
-            levelValue: `L${focusedUpgrade.currentLevel} → L${focusedUpgrade.nextLevel}`,
-            levelHint: launcherData.strings.upgrades.next || "Next",
+            levelLabel: launcherData.strings.upgrades.current,
+            levelValue: `${launcherData.strings.common.levelShort} ${focusedUpgrade.currentLevel} → ${launcherData.strings.common.levelShort} ${focusedUpgrade.nextLevel}`,
+            levelHint: launcherData.strings.upgrades.next,
             priceValue: `${formatNumber(focusedUpgrade.price, locale, 0)} 💵`,
             progressPercent: Math.max(
               0,
@@ -75,8 +73,8 @@ export function buildUpgradesSectionProps({
               )
             ),
             progressText: focusedUpgrade.isAffordable
-              ? launcherData.strings.upgrades.buyNow || "Buy now"
-              : `${launcherData.strings.upgrades.needMore || "Need"} ${formatNumber(
+              ? launcherData.strings.upgrades.buyNow
+              : `${launcherData.strings.upgrades.needMore} ${formatNumber(
                   focusedUpgrade.coinsNeeded,
                   locale,
                   0
@@ -86,9 +84,7 @@ export function buildUpgradesSectionProps({
               label:
                 pendingUpgradeType === focusedUpgrade.type
                   ? "..."
-                  : launcherData.strings.upgrades.purchaseButton ||
-                    launcherData.strings.upgrades.buyNow ||
-                    "Purchase",
+                  : launcherData.strings.upgrades.purchaseButton || launcherData.strings.upgrades.buyNow,
               disabled:
                 isReadOnly ||
                 !focusedUpgrade.isAffordable ||
@@ -98,7 +94,7 @@ export function buildUpgradesSectionProps({
           }
         : null,
       categoriesTitle: activeUpgradeGroup?.title || launcherData.strings.nav.upgrades,
-      categoriesHint: `${formatNumber(activeUpgradeGroup?.items.length || 0, locale, 0)} items`,
+      categoriesHint: `${formatNumber(activeUpgradeGroup?.items.length || 0, locale, 0)} ${launcherData.strings.common.items}`,
       categories: launcherData.upgrades.groups.map((group) => ({
         id: group.key,
         label: group.title,
@@ -109,11 +105,11 @@ export function buildUpgradesSectionProps({
         id: upgrade.type,
         title: upgrade.name,
         emoji: upgrade.emoji,
-        levelLabel: `LVL ${upgrade.currentLevel}`,
+        levelLabel: `${launcherData.strings.common.levelShort} ${upgrade.currentLevel}`,
         priceLabel: `${formatNumber(upgrade.price, locale, 0)} 💵`,
         statusLabel: upgrade.isAffordable
-          ? launcherData.strings.upgrades.buyNow || "Buy now"
-          : launcherData.strings.upgrades.needMore || "Need more",
+          ? launcherData.strings.upgrades.buyNow
+          : launcherData.strings.upgrades.needMore,
         statusTone: upgrade.isAffordable
           ? "#8ff0b7"
           : launcherData.palette.tertiaryTextColor,

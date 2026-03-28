@@ -5,11 +5,14 @@ import {
   ACTIVITY_PUBLIC_BASE_URL,
   ACTIVITY_REDIRECT_URI,
 } from "./src/server/config.ts";
+import { syncActivityLocalizations } from "./src/lib/activityLocalizationSync.ts";
 import { createActivitiesApp } from "./src/server/app/createActivitiesApp.ts";
 
 export { createActivitiesApp } from "./src/server/app/createActivitiesApp.ts";
 
 if (import.meta.main) {
+  await syncActivityLocalizations();
+
   if (!ACTIVITY_CLIENT_ID || !ACTIVITY_CLIENT_SECRET) {
     console.warn(
       "[activities] WARNING: ACTIVITY_CLIENT_ID / ACTIVITY_CLIENT_SECRET are not configured. OAuth token exchange will fail until configured."

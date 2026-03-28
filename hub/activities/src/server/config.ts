@@ -27,6 +27,9 @@ export const DATABASE_SERVICE_URL = (
 export const RENDERING_SERVICE_URL = (
   process.env.RENDERING_SERVICE_URL || DEFAULT_SERVICE_URLS.rendering
 ).replace(/\/$/, "");
+export const LOCALIZATION_SERVICE_URL = (
+  process.env.LOCALIZATION_SERVICE_URL || DEFAULT_SERVICE_URLS.localization
+).replace(/\/$/, "");
 
 export const ACTIVITY_CLIENT_ID =
   process.env.ACTIVITY_CLIENT_ID || process.env.DISCORD_CLIENT_ID || "";

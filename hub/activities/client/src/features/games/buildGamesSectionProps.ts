@@ -40,11 +40,11 @@ export function buildGamesSectionProps({
       coloring: createSectionColoring(launcherData),
       summaryCards: [
         {
-          label: launcherData.strings.nav.playable || "Playable",
+          label: launcherData.strings.nav.playable,
           value: formatNumber(playableGamesCount, locale, 0),
         },
         {
-          label: launcherData.strings.common.highScore || "High Score",
+          label: launcherData.strings.common.highScore,
           value: formatNumber(focusedGame?.highScore || 0, locale, 0),
         },
       ],
@@ -53,28 +53,28 @@ export function buildGamesSectionProps({
             kicker: launcherData.strings.nav.games,
             title: focusedGame.title,
             subtitle: focusedGame.playable
-              ? launcherData.strings.nav.playable || "Playable"
-              : launcherData.strings.nav.comingSoon || "Coming soon",
+              ? launcherData.strings.nav.playable
+              : launcherData.strings.nav.comingSoon,
             emoji: focusedGame.emoji,
-            statusLabel: launcherData.strings.common.dailyLeft || "Daily Left",
+            statusLabel: launcherData.strings.common.dailyLeft,
             statusValue: formatNumber(getStatusDailyRemaining(focusedGame), locale, 0),
             statCards: [
               {
                 icon: "🏆",
-                label: launcherData.strings.common.highScore || "High Score",
+                label: launcherData.strings.common.highScore,
                 value: formatNumber(focusedGame.highScore || 0, locale, 0),
               },
               {
                 icon: "🎯",
-                label: launcherData.strings.common.available || "Available",
+                label: launcherData.strings.common.available,
                 value: focusedGame.playable
-                  ? launcherData.strings.nav.playable || "Playable"
-                  : launcherData.strings.nav.comingSoon || "Coming soon",
+                  ? launcherData.strings.nav.playable
+                  : launcherData.strings.nav.comingSoon,
               },
             ],
             progress: focusedGameDailyProgress
               ? {
-                  label: launcherData.strings.common.dailyLeft || "Daily Left",
+                  label: launcherData.strings.common.dailyLeft,
                   value: `${formatNumber(
                     focusedGameDailyProgress.earnedToday,
                     locale,
@@ -86,10 +86,10 @@ export function buildGamesSectionProps({
             note: {
               label: launcherData.strings.nav.games,
               text: isReadOnly
-                ? launcherData.strings.common.unavailableInPreview || "Unavailable in read-only preview"
+                ? launcherData.strings.common.unavailableInPreview
                 : focusedGame.playable
                 ? launcherData.strings.games.subtitle
-                : launcherData.strings.nav.comingSoon || "Coming soon",
+                : launcherData.strings.nav.comingSoon,
               color:
                 focusedGame.playable && !isReadOnly
                   ? launcherData.palette.secondaryTextColor
@@ -97,8 +97,8 @@ export function buildGamesSectionProps({
             },
             action: {
               label: focusedGame.playable
-                ? launcherData.strings.games.play2048 || "Play 2048"
-                : launcherData.strings.nav.comingSoon || "Coming soon",
+                ? launcherData.strings.games.play2048
+                : launcherData.strings.nav.comingSoon,
               disabled: isReadOnly || !focusedGame.playable,
               onClick: focusedGame.playable ? onPlay2048 : undefined,
             },
@@ -111,20 +111,20 @@ export function buildGamesSectionProps({
         0
       )} ${launcherData.strings.games.title}`,
       collectionHintText: focusedGame?.playable
-        ? launcherData.strings.games.play2048 || "Play 2048"
-        : launcherData.strings.nav.comingSoon || "Coming soon",
+        ? launcherData.strings.games.play2048
+        : launcherData.strings.nav.comingSoon,
       games: launcherData.games.items.map((game) => ({
         id: game.id,
         title: game.title,
         emoji: game.emoji,
-        meta: `${launcherData.strings.common.highScore || "High Score"}: ${formatNumber(
+        meta: `${launcherData.strings.common.highScore}: ${formatNumber(
           game.highScore || 0,
           locale,
           0
         )}`,
         statusLabel: game.playable
-          ? launcherData.strings.nav.playable || "Playable"
-          : launcherData.strings.nav.comingSoon || "Soon",
+          ? launcherData.strings.nav.playable
+          : launcherData.strings.nav.comingSoon,
         isActive: game.id === focusedGame?.id,
         isMuted: !game.playable,
         onSelect: () => setFocusedGameId(game.id),

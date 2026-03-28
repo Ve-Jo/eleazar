@@ -1,10 +1,6 @@
 import type { ActivityLauncherPayload } from "../../../../../shared/src/contracts/hub.ts";
 import { projectBankSnapshot, type MoneyMoveDirection } from "../../lib/activityMath.ts";
-import {
-  createPaletteStyle,
-  formatNumber,
-  getLocaleTag,
-} from "../../lib/activityView.ts";
+import { createPaletteStyle, formatNumber, getLocaleTag } from "../../lib/activityView.ts";
 import { createSectionColoring } from "../launcher/lib/createSectionColoring.ts";
 
 type BuildBalanceSectionPropsOptions = {
@@ -15,28 +11,39 @@ type BuildBalanceSectionPropsOptions = {
   shouldCompactBalance: boolean;
 };
 
-function formatCompactDuration(ms: number): string {
+type DurationLabels = {
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+};
+
+function formatCompactDuration(ms: number, labels: DurationLabels): string {
   const safeMs = Math.max(0, Math.floor(ms));
   const totalMinutes = Math.floor(safeMs / 60000);
   const totalHours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
   if (safeMs <= 0) {
-    return "0m";
+    return `0${labels.minute}`;
   }
   if (totalHours <= 0) {
-    return `${Math.max(1, totalMinutes)}m`;
+    return `${Math.max(1, totalMinutes)}${labels.minute}`;
   }
   if (totalHours >= 24) {
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
-    return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+    return hours > 0
+      ? `${days}${labels.day} ${hours}${labels.hour}`
+      : `${days}${labels.day}`;
   }
 
-  return minutes > 0 ? `${totalHours}h ${minutes}m` : `${totalHours}h`;
+  return minutes > 0
+    ? `${totalHours}${labels.hour} ${minutes}${labels.minute}`
+    : `${totalHours}${labels.hour}`;
 }
 
-function formatElapsedDuration(ms: number): string {
+function formatElapsedDuration(ms: number, labels: DurationLabels): string {
   const safeMs = Math.max(0, Math.floor(ms));
   const totalSeconds = Math.floor(safeMs / 1000);
   const seconds = totalSeconds % 60;
@@ -47,47 +54,15 @@ function formatElapsedDuration(ms: number): string {
   const days = Math.floor(totalHours / 24);
 
   if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    return `${days}${labels.day} ${hours}${labels.hour} ${minutes}${labels.minute} ${seconds}${labels.second}`;
   }
   if (totalHours > 0) {
-    return `${totalHours}h ${minutes}m ${seconds}s`;
+    return `${totalHours}${labels.hour} ${minutes}${labels.minute} ${seconds}${labels.second}`;
   }
   if (totalMinutes > 0) {
-    return `${totalMinutes}m ${seconds}s`;
+    return `${totalMinutes}${labels.minute} ${seconds}${labels.second}`;
   }
-  return `${seconds}s`;
-}
-
-function getMarriedLabel(locale: ActivityLauncherPayload["locale"]): string {
-  if (locale === "uk") {
-    return "У шлюбі";
-  }
-  if (locale === "ru") {
-    return "В браке";
-  }
-  return "Married";
-}
-
-function getLevelTitles(locale: ActivityLauncherPayload["locale"]) {
-  if (locale === "uk") {
-    return {
-      chat: "Чатинг",
-      voice: "Голос",
-      gaming: "Геймінг",
-    };
-  }
-  if (locale === "ru") {
-    return {
-      chat: "Чатинг",
-      voice: "Голос",
-      gaming: "Гейминг",
-    };
-  }
-  return {
-    chat: "Chatting",
-    voice: "Voice",
-    gaming: "Gaming",
-  };
+  return `${seconds}${labels.second}`;
 }
 
 export function buildBalanceSectionProps({
@@ -107,7 +82,17 @@ export function buildBalanceSectionProps({
     0,
     projectedBalance.projectedTotalBankBalance - launcherData.balance.totalBankBalance
   );
-  const levelTitles = getLevelTitles(locale);
+  const levelTitles = {
+    chat: launcherData.strings.level.chat,
+    voice: launcherData.strings.level.voice,
+    gaming: launcherData.strings.level.games,
+  };
+  const durationLabels: DurationLabels = {
+    day: launcherData.strings.common.unitDayShort,
+    hour: launcherData.strings.common.unitHourShort,
+    minute: launcherData.strings.common.unitMinuteShort,
+    second: launcherData.strings.common.unitSecondShort,
+  };
   const levelProgress = launcherData.levelProgress || null;
   const chatLevelData = levelProgress?.chat || null;
   const voiceLevelData = levelProgress?.voice || null;
@@ -143,7 +128,7 @@ export function buildBalanceSectionProps({
   const dailyCaseCard = launcherData.cases.cards.find((card) => card.type === "daily");
   const allUpgradeCards = launcherData.upgrades.groups.flatMap((group) => group.items);
   const affordableUpgrades = allUpgradeCards.filter((item) => item.isAffordable).length;
-  const caseReadyLabel = launcherData.strings.cases.readyNow || "Ready";
+  const caseReadyLabel = launcherData.strings.cases.readyNow;
   const marriageCreatedAtRaw = launcherData.marriage?.createdAt;
   const marriageCreatedAtMs =
     marriageCreatedAtRaw === null || marriageCreatedAtRaw === undefined
@@ -151,7 +136,9 @@ export function buildBalanceSectionProps({
       : Number(new Date(marriageCreatedAtRaw).getTime());
   const isMarried = String(launcherData.marriage?.status || "").toUpperCase() === "MARRIED";
   const marriageElapsed =
-    isMarried && marriageCreatedAtMs > 0 ? formatElapsedDuration(now - marriageCreatedAtMs) : null;
+    isMarried && marriageCreatedAtMs > 0
+      ? formatElapsedDuration(now - marriageCreatedAtMs, durationLabels)
+      : null;
   const casesCooldowns = hints?.casesCooldowns || {};
   const caseAvailableCount =
     typeof hints?.dailyAvailable === "number"
@@ -159,30 +146,22 @@ export function buildBalanceSectionProps({
       : hints?.dailyAvailable
       ? 1
       : 0;
-  const closestCaseRemainingMs = Math.max(
-    0,
-    Number(casesCooldowns.closestRemainingMs || 0)
-  );
+  const closestCaseRemainingMs = Math.max(0, Number(casesCooldowns.closestRemainingMs || 0));
   const caseHintValue =
     caseAvailableCount > 0
       ? formatNumber(caseAvailableCount, locale, 0)
-      : formatCompactDuration(closestCaseRemainingMs);
+      : formatCompactDuration(closestCaseRemainingMs, durationLabels);
   const upgradesAffordable =
     typeof hints?.upgradesAffordable === "number"
       ? hints.upgradesAffordable
       : hints?.upgradesAffordable
       ? 1
       : affordableUpgrades;
-  const workProgress = Math.max(
-    0,
-    Math.min(1, Number(hints?.workEarnings?.progress || 0))
-  );
+  const workProgress = Math.max(0, Math.min(1, Number(hints?.workEarnings?.progress || 0)));
   const workProgressLabel = `${Math.round(workProgress * 100)}%`;
   const crimeRemainingMs = Math.max(0, Number(hints?.crimeRemainingMs || 0));
   const crimeHintValue =
-    crimeRemainingMs > 0
-      ? formatCompactDuration(crimeRemainingMs)
-      : "1";
+    crimeRemainingMs > 0 ? formatCompactDuration(crimeRemainingMs, durationLabels) : "1";
 
   const balanceClassicTopCards = [
     {
@@ -191,12 +170,11 @@ export function buildBalanceSectionProps({
       icon: "💬",
       label: levelTitles.chat,
       value: formatNumber(chatLevelData?.level || 1, locale, 0),
-      suffix: "lvl",
+      suffix: launcherData.strings.level.lvlSuffix,
       rank: chatLevelData?.rank ? `#${chatLevelData.rank}` : undefined,
       progress: chatLevelFill,
       accentColor: "rgba(101, 174, 236, 0.88)",
-      background:
-        "linear-gradient(180deg, rgba(134, 188, 232, 0.35), rgba(97, 142, 176, 0.24))",
+      background: "linear-gradient(180deg, rgba(134, 188, 232, 0.35), rgba(97, 142, 176, 0.24))",
     },
     {
       key: "voice-level",
@@ -204,12 +182,11 @@ export function buildBalanceSectionProps({
       icon: "🎤",
       label: levelTitles.voice,
       value: formatNumber(voiceLevelData?.level || 1, locale, 0),
-      suffix: "lvl",
+      suffix: launcherData.strings.level.lvlSuffix,
       rank: voiceLevelData?.rank ? `#${voiceLevelData.rank}` : undefined,
       progress: voiceLevelFill,
       accentColor: "rgba(118, 202, 212, 0.84)",
-      background:
-        "linear-gradient(180deg, rgba(144, 208, 212, 0.33), rgba(104, 146, 153, 0.22))",
+      background: "linear-gradient(180deg, rgba(144, 208, 212, 0.33), rgba(104, 146, 153, 0.22))",
     },
     {
       key: "gaming-level",
@@ -217,12 +194,11 @@ export function buildBalanceSectionProps({
       icon: "🎮",
       label: levelTitles.gaming,
       value: formatNumber(gameLevelData?.level || 1, locale, 0),
-      suffix: "lvl",
+      suffix: launcherData.strings.level.lvlSuffix,
       rank: gameLevelData?.rank ? `#${gameLevelData.rank}` : undefined,
       progress: gameLevelFill,
       accentColor: "rgba(118, 183, 112, 0.86)",
-      background:
-        "linear-gradient(180deg, rgba(129, 194, 115, 0.33), rgba(92, 141, 84, 0.24))",
+      background: "linear-gradient(180deg, rgba(129, 194, 115, 0.33), rgba(92, 141, 84, 0.24))",
     },
   ] satisfies Array<{
     key: string;
@@ -243,40 +219,36 @@ export function buildBalanceSectionProps({
       size: "half",
       icon: dailyCaseCard?.emoji || "🎁",
       value: caseHintValue,
-      label: launcherData.strings.nav.cases || "Cases",
+      label: launcherData.strings.nav.cases,
       variant: "icon",
-      background:
-        "linear-gradient(180deg, rgba(139, 132, 190, 0.42), rgba(104, 100, 143, 0.30))",
+      background: "linear-gradient(180deg, rgba(139, 132, 190, 0.42), rgba(104, 100, 143, 0.30))",
     },
     {
       key: "hint-upgrades",
       size: "half",
       icon: "🛠️",
       value: formatNumber(upgradesAffordable, locale, 0),
-      label: launcherData.strings.nav.upgrades || "Shop",
+      label: launcherData.strings.nav.upgrades,
       variant: "icon",
-      background:
-        "linear-gradient(180deg, rgba(129, 185, 118, 0.42), rgba(93, 137, 87, 0.30))",
+      background: "linear-gradient(180deg, rgba(129, 185, 118, 0.42), rgba(93, 137, 87, 0.30))",
     },
     {
       key: "hint-work",
       size: "half",
       icon: "🎮",
       value: workProgressLabel,
-      label: launcherData.strings.common.dailyLeft || "Daily",
+      label: launcherData.strings.common.dailyLeft,
       variant: "icon",
-      background:
-        "linear-gradient(180deg, rgba(106, 170, 114, 0.42), rgba(78, 129, 86, 0.30))",
+      background: "linear-gradient(180deg, rgba(106, 170, 114, 0.42), rgba(78, 129, 86, 0.30))",
     },
     {
       key: "hint-crime",
       size: "half",
       icon: "🦹",
       value: crimeHintValue,
-      label: "Crime",
+      label: launcherData.strings.common.crime,
       variant: "icon",
-      background:
-        "linear-gradient(180deg, rgba(164, 164, 164, 0.38), rgba(118, 118, 118, 0.26))",
+      background: "linear-gradient(180deg, rgba(164, 164, 164, 0.38), rgba(118, 118, 118, 0.26))",
     },
   ] satisfies Array<{
     key: string;
@@ -292,18 +264,14 @@ export function buildBalanceSectionProps({
     ? [
         {
           key: "streak",
-          label: launcherData.strings.common.streak || "Streak",
+          label: launcherData.strings.common.streak,
           value: formatNumber(launcherData.cases.dailyStatus.streak || 0, locale, 0),
           icon: "🔥",
         },
         {
           key: "multiplier",
-          label: launcherData.strings.common.rewardMultiplier || "Reward Multiplier",
-          value: `${formatNumber(
-            launcherData.cases.dailyStatus.rewardMultiplier || 1,
-            locale,
-            2
-          )}x`,
+          label: launcherData.strings.common.rewardMultiplier,
+          value: `${formatNumber(launcherData.cases.dailyStatus.rewardMultiplier || 1, locale, 2)}x`,
           icon: "✨",
         },
       ]
@@ -312,23 +280,19 @@ export function buildBalanceSectionProps({
     avatarUrl: launcherData.user.avatarUrl || launcherData.user.avatar || undefined,
     userId: launcherData.user.id || undefined,
     displayName: launcherData.user.displayName || launcherData.user.username || undefined,
-    meta:
-      launcherData.guild?.name ||
-      (isReadOnly ? launcherData.strings.common.readOnly || "Read-only preview" : getLocaleTag(locale)),
+    meta: launcherData.guild?.name || (isReadOnly ? launcherData.strings.nav.readOnly : getLocaleTag(locale)),
     guildName: launcherData.guild?.name || undefined,
   };
-  const balanceClassicMarriageBanner =
-    isMarried
-      ? {
-          icon: "💍",
-          dotColor: "rgba(27, 16, 14, 0.86)",
-          label: getMarriedLabel(locale),
-          value: marriageElapsed ? `(${marriageElapsed})` : "",
-          background:
-            "linear-gradient(90deg, rgba(215, 68, 58, 0.97), rgba(177, 36, 30, 0.90))",
-          captionTone: "rgba(255, 210, 210, 0.78)",
-        }
-      : null;
+  const balanceClassicMarriageBanner = isMarried
+    ? {
+        icon: "💍",
+        dotColor: "rgba(27, 16, 14, 0.86)",
+        label: launcherData.strings.common.married,
+        value: marriageElapsed ? `(${marriageElapsed})` : "",
+        background: "linear-gradient(90deg, rgba(215, 68, 58, 0.97), rgba(177, 36, 30, 0.90))",
+        captionTone: "rgba(255, 210, 210, 0.78)",
+      }
+    : null;
 
   return {
     paletteStyle: createPaletteStyle(launcherData),
@@ -337,7 +301,7 @@ export function buildBalanceSectionProps({
       layout: "classic",
       compact: shouldCompactBalance,
       eyebrow: launcherData.strings.nav.balance,
-      title: launcherData.strings.balance.title || launcherData.strings.nav.balance,
+      title: launcherData.strings.balance.title,
       titleMeta: launcherData.user.displayName || launcherData.user.username || null,
       subtitle: null,
       profilePanel: balanceProfilePanel,
@@ -351,7 +315,7 @@ export function buildBalanceSectionProps({
         {
           key: "wallet-card",
           icon: "💵",
-          label: launcherData.strings.common.wallet || "Wallet",
+          label: launcherData.strings.common.wallet,
           value: formatNumber(launcherData.balance.walletBalance, locale, 2),
           description: launcherData.strings.balance.withdrawHint,
           action: {
@@ -363,9 +327,9 @@ export function buildBalanceSectionProps({
         {
           key: "bank-card",
           icon: "🏦",
-          label: launcherData.strings.common.bank || "Bank",
+          label: launcherData.strings.common.bank,
           value: formatNumber(projectedBalance.projectedTotalBankBalance, locale, 2),
-          subvalue: `(${launcherData.strings.common.total || "Total"}: ${formatNumber(
+          subvalue: `(${launcherData.strings.common.total}: ${formatNumber(
             launcherData.balance.totalBankBalance,
             locale,
             2
@@ -380,28 +344,28 @@ export function buildBalanceSectionProps({
             {
               key: "annual-rate-segment",
               value: `${formatNumber(launcherData.balance.annualRatePercent, locale, 2)}%`,
-              label: launcherData.strings.common.annualRate || "Rate",
+              label: launcherData.strings.common.annualRate,
               background: "rgba(87, 137, 78, 0.56)",
             },
             {
               key: "cycle-segment",
               value: projectedBalance.cycleComplete
                 ? caseReadyLabel
-                : `~${formatCompactDuration(balanceCycleRemainingMs)}`,
-              label: launcherData.strings.balance.cycleTitle || "Cycle",
+                : `~${formatCompactDuration(balanceCycleRemainingMs, durationLabels)}`,
+              label: launcherData.strings.balance.cycleTitle,
               background: "rgba(53, 51, 48, 0.58)",
             },
             {
               key: "gain-segment",
               value: `+${formatNumber(projectedGain, locale, 2)}`,
-              label: launcherData.strings.balance.projectedTitle || "Projected",
+              label: launcherData.strings.balance.projectedTitle,
               background: "rgba(111, 187, 70, 0.56)",
             },
           ],
           supportingItems: [
             {
               key: "annual-rate",
-              label: launcherData.strings.common.annualRate || "Annual Rate",
+              label: launcherData.strings.common.annualRate,
               value: `${formatNumber(launcherData.balance.annualRatePercent, locale, 2)}%`,
               icon: "↗",
             },
@@ -411,24 +375,24 @@ export function buildBalanceSectionProps({
       metricCards: [
         {
           key: "annual-metric",
-          label: launcherData.strings.common.annualRate || "Annual Rate",
+          label: launcherData.strings.common.annualRate,
           value: `${formatNumber(launcherData.balance.annualRatePercent, locale, 2)}%`,
           icon: "📈",
         },
         {
           key: "projected-metric",
-          label: launcherData.strings.balance.projectedTitle || "Projected Total",
+          label: launcherData.strings.balance.projectedTitle,
           value: formatNumber(projectedBalance.projectedTotalBankBalance, locale),
           icon: "✨",
         },
       ],
       progress: {
         label: launcherData.strings.balance.cycleTitle,
-        value: `${formatNumber(projectedBalance.timeIntoCycleMs / 60000, locale, 0)}m / ${formatNumber(
+        value: `${formatNumber(projectedBalance.timeIntoCycleMs / 60000, locale, 0)}${launcherData.strings.common.unitMinuteShort} / ${formatNumber(
           launcherData.balance.maxInactiveMs / 60000,
           locale,
           0
-        )}m`,
+        )}${launcherData.strings.common.unitMinuteShort}`,
         subtitle: launcherData.strings.common.liveGrowth,
         progress: projectedBalance.cycleProgress,
       },

@@ -42,6 +42,7 @@ export function App() {
   const game2048 = useGame2048Controller({
     activeScene,
     auth: setup.auth,
+    launcherData: launcher.launcherData,
     refreshLauncher: launcher.refreshLauncher,
     setActiveScene,
   });

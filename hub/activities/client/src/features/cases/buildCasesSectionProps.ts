@@ -36,10 +36,10 @@ export function buildCasesSectionProps({
     launcherData.cases.cards.find((crate) => crate.available) ||
     launcherData.cases.cards[0];
   const casesCalendar = buildCasesCalendarPresentation(locale, launcherData.cases.dailyStatus, {
-    monthStatus: "Monthly calendar",
-    streak: launcherData.strings.common.streak || "Streak",
-    rewardMultiplier: launcherData.strings.common.rewardMultiplier || "Reward Multiplier",
-    dailyReady: launcherData.strings.cases.readyNow || "Ready now",
+    monthStatus: launcherData.strings.cases.monthlyCalendar,
+    streak: launcherData.strings.common.streak,
+    rewardMultiplier: launcherData.strings.common.rewardMultiplier,
+    dailyReady: launcherData.strings.cases.readyNow,
   });
 
   return {
@@ -47,16 +47,16 @@ export function buildCasesSectionProps({
     sectionProps: {
       compact: shouldCompactPanels,
       eyebrow: launcherData.strings.nav.cases,
-      title: launcherData.strings.cases.title || launcherData.strings.nav.cases,
+      title: launcherData.strings.cases.title,
       subtitle: launcherData.strings.cases.rewardTitle,
       coloring: createSectionColoring(launcherData),
       summaryCards: [
         {
-          label: launcherData.strings.common.available || "Available",
+          label: launcherData.strings.common.available,
           value: formatNumber(availableCasesCount, locale, 0),
         },
         {
-          label: launcherData.strings.common.streak || "Streak",
+          label: launcherData.strings.common.streak,
           value: formatNumber(launcherData.cases.dailyStatus?.streak || 0, locale, 0),
         },
       ],
@@ -67,15 +67,15 @@ export function buildCasesSectionProps({
             title: focusedCrate.name,
             description: focusedCrate.description,
             emoji: focusedCrate.emoji,
-            countLabel: launcherData.strings.common.available || "Available",
+            countLabel: launcherData.strings.common.available,
             countValue: formatNumber(focusedCrate.count, locale, 0),
-            statusLabel: launcherData.strings.cases.openButton || "Open",
+            statusLabel: launcherData.strings.cases.openButton,
             statusValue: focusedCrate.statusLabel,
             statusTone: focusedCrate.available ? "ready" : "cooldown",
             infoCards: [
               {
                 icon: "💵",
-                label: launcherData.strings.common.coins || "coins",
+                label: launcherData.strings.common.coins,
                 value: `${formatNumber(
                   focusedCrate.rewardPreview.minCoins,
                   locale,
@@ -84,7 +84,7 @@ export function buildCasesSectionProps({
               },
               {
                 icon: "✨",
-                label: "XP / Discount",
+                label: launcherData.strings.common.xpDiscount,
                 value: `${formatNumber(
                   focusedCrate.rewardPreview.seasonXpAmount,
                   locale,
@@ -96,7 +96,7 @@ export function buildCasesSectionProps({
               label:
                 pendingCrateType === focusedCrate.type
                   ? "..."
-                  : launcherData.strings.cases.openButton || "Open Case",
+                  : launcherData.strings.cases.openButton,
               disabled:
                 isReadOnly ||
                 !focusedCrate.available ||
@@ -105,13 +105,13 @@ export function buildCasesSectionProps({
             },
           }
         : null,
-      collectionTitle: launcherData.strings.cases.title || launcherData.strings.nav.cases,
-      collectionCountText: `${formatNumber(launcherData.cases.totalCount, locale, 0)} total`,
+      collectionTitle: launcherData.strings.cases.title,
+      collectionCountText: `${formatNumber(launcherData.cases.totalCount, locale, 0)} ${launcherData.strings.common.totalSuffix}`,
       cases: launcherData.cases.cards.map((crate) => ({
         id: crate.type,
         title: crate.name,
         subtitle: crate.available
-          ? launcherData.strings.cases.readyNow || "Ready now"
+          ? launcherData.strings.cases.readyNow
           : crate.statusLabel,
         emoji: crate.emoji,
         countLabel: formatNumber(crate.count, locale, 0),
@@ -122,7 +122,7 @@ export function buildCasesSectionProps({
       detailPanel: {
         title: crateReveal
           ? launcherData.strings.cases.rewardTitle
-          : launcherData.strings.cases.title || launcherData.strings.nav.cases,
+          : launcherData.strings.cases.title,
         subtitle: crateReveal ? crateReveal.type : focusedCrate?.name || "",
         items: crateReveal
           ? getRewardEntries(crateReveal.reward, locale, launcherData).map((entry) => ({
@@ -134,7 +134,7 @@ export function buildCasesSectionProps({
           ? [
               {
                 icon: "💵",
-                label: launcherData.strings.common.coins || "coins",
+                label: launcherData.strings.common.coins,
                 value: `${formatNumber(
                   focusedCrate.rewardPreview.minCoins,
                   locale,
@@ -143,12 +143,12 @@ export function buildCasesSectionProps({
               },
               {
                 icon: "✨",
-                label: "Season XP",
+                label: launcherData.strings.common.seasonXp,
                 value: `+${formatNumber(focusedCrate.rewardPreview.seasonXpAmount, locale, 0)}`,
               },
               {
                 icon: "🏷️",
-                label: "Discount",
+                label: launcherData.strings.common.discount,
                 value: `${formatNumber(focusedCrate.rewardPreview.discountAmount, locale, 0)}%`,
               },
             ]

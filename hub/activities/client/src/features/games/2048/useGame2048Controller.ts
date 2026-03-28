@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
+import type { ActivityLauncherPayload } from "../../../../../../shared/src/contracts/hub.ts";
 import { completeActivity2048Game } from "../../../lib/activityApi.ts";
 import {
   addRandomTile,
@@ -14,6 +15,7 @@ import type { AuthState, ActivityScene, GameState } from "../../../types/activit
 type UseGame2048ControllerOptions = {
   activeScene: ActivityScene;
   auth: AuthState | null;
+  launcherData: ActivityLauncherPayload | null;
   refreshLauncher: () => Promise<void>;
   setActiveScene: (scene: ActivityScene) => void;
 };
@@ -21,6 +23,7 @@ type UseGame2048ControllerOptions = {
 export function useGame2048Controller({
   activeScene,
   auth,
+  launcherData,
   refreshLauncher,
   setActiveScene,
 }: UseGame2048ControllerOptions) {
@@ -100,7 +103,7 @@ export function useGame2048Controller({
 
       await refreshLauncher();
     } catch (error: any) {
-      setNetworkError(error?.message || "Failed to complete game.");
+      setNetworkError(error?.message || launcherData?.strings.errors.failedCompleteGame || null);
       setGameState((previous) =>
         previous
           ? {
