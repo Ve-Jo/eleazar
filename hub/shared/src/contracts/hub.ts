@@ -195,6 +195,7 @@ export type ActivityLauncherStrings = {
   cases: Record<string, string>;
   upgrades: Record<string, string>;
   games: Record<string, string>;
+  level: Record<string, string>;
   modal: Record<string, string>;
 };
 
@@ -210,6 +211,71 @@ export type ActivityUserSummary = {
 export type ActivityGuildSummary = {
   id?: string;
   name?: string;
+};
+
+export type ActivityMarriageStatus = {
+  status: string;
+  partnerId?: string;
+  createdAt?: string | number | null;
+};
+
+export type ActivityLevelProgressEntry = LevelCalculation & {
+  rank?: number | null;
+};
+
+export type ActivityLevelProgress = {
+  chat?: ActivityLevelProgressEntry | null;
+  voice?: ActivityLevelProgressEntry | null;
+  game?: ActivityLevelProgressEntry | null;
+};
+
+export type ActivityProgressionRoleMode =
+  | "text"
+  | "voice"
+  | "gaming"
+  | "combined_activity"
+  | "combined_all"
+  | string;
+
+export type ActivityProgressionRole = {
+  roleId: string;
+  roleName?: string;
+  mode: ActivityProgressionRoleMode;
+  requiredLevel: number;
+  color: string;
+};
+
+export type ActivityLevelProgression = {
+  chat?: ActivityLevelProgressEntry | null;
+  voice?: ActivityLevelProgressEntry | null;
+  game?: ActivityLevelProgressEntry | null;
+  season?: LevelCalculation | null;
+  seasonXp?: number;
+  seasonNumber?: number | null;
+  seasonEnds?: number | null;
+  upcomingRoles?: ActivityProgressionRole[];
+};
+
+export type ActivityLauncherHints = {
+  dailyAvailable?: boolean | number;
+  casesCooldowns?: {
+    dailyRemainingMs?: number;
+    dailyCooldownMs?: number;
+    weeklyRemainingMs?: number;
+    weeklyCooldownMs?: number;
+    closestRemainingMs?: number | null;
+  };
+  upgradesAffordable?: boolean | number;
+  workAvailable?: boolean;
+  workEarnings?: {
+    totalCap?: number;
+    earnedToday?: number;
+    remaining?: number;
+    progress?: number;
+  };
+  crimeAvailable?: boolean | number;
+  crimeRemainingMs?: number;
+  crimeCooldownMs?: number;
 };
 
 export type ActivityBalanceSnapshot = {
@@ -308,6 +374,10 @@ export type ActivityLauncherPayload = {
   palette: ActivityPalette;
   user: ActivityUserSummary;
   guild: ActivityGuildSummary | null;
+  marriage?: ActivityMarriageStatus | null;
+  levelProgress?: ActivityLevelProgress | null;
+  progression?: ActivityLevelProgression | null;
+  hints?: ActivityLauncherHints | null;
   readOnly: boolean;
   unsupportedReason?: string;
   balance: ActivityBalanceSnapshot;

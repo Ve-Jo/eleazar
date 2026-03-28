@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createActivitiesApp } from "../server.ts";
+import { resetDiscordRoleCache } from "./server/services/discordRolesService.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -38,6 +39,8 @@ function installLauncherFetchMock(options?: {
   onDeposit?: (body: Record<string, unknown>) => void;
   onCrateOpen?: (body: Record<string, unknown>) => void;
   onUpgradePurchase?: (body: Record<string, unknown>) => void;
+  discordRolesPayload?: unknown;
+  discordRolesStatus?: number;
 }) {
   const userResponses = options?.users || [
     {
@@ -62,6 +65,17 @@ function installLauncherFetchMock(options?: {
 
     if (url.startsWith("http://127.0.0.1")) {
       return originalFetch(input, init);
+    }
+
+    if (url === "https://discord.com/api/v10/guilds/g1/roles") {
+      return jsonResponse(
+        options?.discordRolesPayload || [
+          { id: "r-text-10", name: "Text Adept", color: 5793266 },
+          { id: "r-voice-4", name: "Voice Scout", color: 3451020 },
+          { id: "r-gaming-12", name: "Gaming Master", color: 8953556 },
+        ],
+        options?.discordRolesStatus ?? 200
+      );
     }
 
     if (url.endsWith("/colors")) {
@@ -98,6 +112,44 @@ function installLauncherFetchMock(options?: {
 
     if (url.includes("/games/earnings/g1/u1/")) {
       return jsonResponse({ cap: 1200, earnedToday: 100, remainingToday: 1100 });
+    }
+
+    if (url.includes("/xp/levels/g1/u1")) {
+      return jsonResponse({
+        text: { level: 5, currentXP: 320, requiredXP: 640, totalXP: 1000 },
+        voice: { level: 1, currentXP: 12, requiredXP: 200, totalXP: 12 },
+        gaming: { level: 10, currentXP: 420, requiredXP: 900, totalXP: 2000 },
+      });
+    }
+
+    if (url.includes("/guilds/g1/users")) {
+      return jsonResponse([
+        { id: "u1", Level: { xp: 1000, voiceXp: 12, gameXp: 2000 } },
+        { id: "u2", Level: { xp: 400, voiceXp: 4, gameXp: 1200 } },
+      ]);
+    }
+
+    if (url.includes("/seasons/current")) {
+      return jsonResponse({
+        seasonNumber: 3,
+        seasonEnds: 1774224000000,
+      });
+    }
+
+    if (url.includes("/levels/roles/g1")) {
+      return jsonResponse([
+        { roleId: "r-text-10", mode: "text", requiredLevel: 10 },
+        { roleId: "r-voice-4", mode: "voice", requiredLevel: 4 },
+        { roleId: "r-gaming-12", mode: "gaming", requiredLevel: 12 },
+      ]);
+    }
+
+    if (url.includes("/cooldowns/g1/u1/crime")) {
+      return jsonResponse({ cooldown: 0 });
+    }
+
+    if (url.includes("/marriage/status/u1?guildId=g1")) {
+      return jsonResponse(null);
     }
 
     if (url.includes("/crates/status/g1/u1/daily")) {
@@ -150,9 +202,12 @@ describe("Activities API integration", () => {
   beforeEach(() => {
     process.env.NODE_ENV = "development";
     process.env.SKIP_AUTH = "true";
+    process.env.ACTIVITY_DISCORD_BOT_TOKEN = "test-bot-token";
   });
 
   afterEach(() => {
+    resetDiscordRoleCache();
+    delete process.env.ACTIVITY_DISCORD_BOT_TOKEN;
     globalThis.fetch = originalFetch;
   });
 
@@ -247,6 +302,35 @@ describe("Activities API integration", () => {
       expect(payload.cases?.cards?.find((crate: any) => crate.type === "daily")?.count).toBe(2);
       expect(payload.games?.items?.find((game: any) => game.id === "2048")?.highScore).toBe(2048);
       expect(payload.palette?.accentColor).toBe("#ffb648");
+      expect(
+        payload.progression?.upcomingRoles?.find((role: any) => role.roleId === "r-gaming-12")?.roleName
+      ).toBe("Gaming Master");
+    } finally {
+      server.close();
+    }
+  });
+
+  test("/api/launcher-data keeps working when Discord role API fails", async () => {
+    const { server, baseUrl } = await startServer();
+
+    installLauncherFetchMock({
+      discordRolesPayload: { message: "Missing Access" },
+      discordRolesStatus: 403,
+    });
+
+    try {
+      const response = await fetch(`${baseUrl}/api/launcher-data?guildId=g1`, {
+        headers: {
+          "x-user-id": "u1",
+        },
+      });
+
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as any;
+      const upcoming = payload.progression?.upcomingRoles || [];
+      expect(upcoming.length).toBeGreaterThan(0);
+      expect(upcoming[0]?.roleName).toBeUndefined();
+      expect(typeof upcoming[0]?.roleId).toBe("string");
     } finally {
       server.close();
     }

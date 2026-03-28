@@ -3,11 +3,18 @@ import type {
   ActivityBalanceSnapshot,
   ActivityCasesState,
   ActivityGameCard,
+  ActivityLauncherHints,
   ActivityLauncherPayload,
+  ActivityLevelProgress,
+  ActivityLevelProgression,
+  ActivityLevelProgressEntry,
+  ActivityMarriageStatus,
   ActivityPalette,
+  ActivityProgressionRole,
   ActivitySupportedLocale,
   ActivityUpgradeCard,
   ActivityUpgradesState,
+  LevelCalculation,
 } from "../../../../shared/src/contracts/hub.ts";
 
 import { ACTIVITY_GAME_CATALOG } from "../../lib/gameCatalog.ts";
@@ -31,6 +38,7 @@ import {
   roundMoney,
 } from "../lib/primitives.ts";
 import { ensureGuildUser, fetchDatabase } from "./databaseGateway.ts";
+import { fetchDiscordGuildRoleMap } from "./discordRolesService.ts";
 import { DEFAULT_ACTIVITY_PALETTE, fetchRenderingPalette } from "./paletteService.ts";
 import type { ActivityAuthUser, ActivityUserRecord, JsonResult } from "../types/activityServer.ts";
 
@@ -68,6 +76,29 @@ const UNIT_LABELS: Record<ActivitySupportedLocale, Record<string, string>> = {
     hours: "год",
   },
 };
+
+const CRIME_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const LEVEL_ROLE_MODES = new Set([
+  "text",
+  "voice",
+  "gaming",
+  "combined_activity",
+  "combined_all",
+]);
+
+function toSerializedNumber(value: unknown, fallback = 0): number {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    if (
+      (record.type === "BigInt" || record.type === "Decimal") &&
+      Object.prototype.hasOwnProperty.call(record, "value")
+    ) {
+      return toNumber(record.value, fallback);
+    }
+  }
+
+  return toNumber(value, fallback);
+}
 
 function buildEmptyBalanceSnapshot(): ActivityBalanceSnapshot {
   return {
@@ -386,6 +417,314 @@ function buildGamesState(
   };
 }
 
+function buildMarriageStatus(statusInput: unknown): ActivityMarriageStatus | null {
+  const statusRecord = asObject(statusInput);
+  const status = String(statusRecord.status || "").trim().toUpperCase();
+  if (!status) {
+    return null;
+  }
+
+  const partnerId =
+    typeof statusRecord.partnerId === "string" && statusRecord.partnerId.length > 0
+      ? statusRecord.partnerId
+      : undefined;
+  const createdAt =
+    typeof statusRecord.createdAt === "number" || typeof statusRecord.createdAt === "string"
+      ? statusRecord.createdAt
+      : null;
+
+  return {
+    status,
+    partnerId,
+    createdAt,
+  };
+}
+
+function toLevelCalculation(input: unknown): LevelCalculation | null {
+  const record = asObject(input);
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+
+  const level = toNumber(record.level, 0);
+  const currentXP = toNumber(record.currentXP, 0);
+  const requiredXP = Math.max(1, toNumber(record.requiredXP, 1));
+  const totalXP = toNumber(record.totalXP, 0);
+
+  if (!Number.isFinite(level) || level <= 0) {
+    return null;
+  }
+
+  return {
+    level,
+    currentXP,
+    requiredXP,
+    totalXP,
+  };
+}
+
+function computeRank(
+  usersInput: unknown,
+  userId: string,
+  extractor: (user: Record<string, unknown>) => number
+): number | null {
+  const users = asArray(usersInput);
+  if (!users.length) {
+    return null;
+  }
+
+  const ranked = users
+    .map((entry) => asObject(entry))
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => ({
+      id:
+        typeof entry.id === "string"
+          ? entry.id
+          : typeof entry.userId === "string"
+          ? entry.userId
+          : "",
+      score: extractor(entry),
+    }))
+    .filter((entry) => entry.id.length > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const rankIndex = ranked.findIndex((entry) => entry.id === userId);
+  return rankIndex >= 0 ? rankIndex + 1 : null;
+}
+
+function buildLevelProgress(
+  levelsInput: unknown,
+  usersInput: unknown,
+  userId: string
+): ActivityLevelProgress | null {
+  const levels = asObject(levelsInput);
+  const chat = toLevelCalculation(levels.text);
+  const voice = toLevelCalculation(levels.voice);
+  const game = toLevelCalculation(levels.gaming);
+
+  if (!chat && !voice && !game) {
+    return null;
+  }
+
+  const chatRank = computeRank(usersInput, userId, (user) => {
+    const level = asObject(user.Level);
+    return toNumber(level.xp, 0);
+  });
+  const voiceRank = computeRank(usersInput, userId, (user) => {
+    const level = asObject(user.Level);
+    return toNumber(level.voiceXp, 0);
+  });
+  const gameRank = computeRank(usersInput, userId, (user) => {
+    const level = asObject(user.Level);
+    return toNumber(level.gameXp, 0);
+  });
+
+  const withRank = (
+    level: LevelCalculation | null,
+    rank: number | null
+  ): ActivityLevelProgressEntry | null =>
+    level
+      ? {
+          ...level,
+          rank,
+        }
+      : null;
+
+  return {
+    chat: withRank(chat, chatRank),
+    voice: withRank(voice, voiceRank),
+    game: withRank(game, gameRank),
+  };
+}
+
+function normalizeRoleMode(input: unknown): string {
+  const raw = String(input || "").trim().toLowerCase();
+  if (LEVEL_ROLE_MODES.has(raw)) {
+    return raw;
+  }
+  return "text";
+}
+
+function roleColorFromId(roleId: string): string {
+  let hash = 0;
+  for (let index = 0; index < roleId.length; index += 1) {
+    hash = (hash * 31 + roleId.charCodeAt(index)) | 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsla(${hue}, 72%, 62%, 0.95)`;
+}
+
+function buildUpcomingRoles(
+  levelRolesInput: unknown,
+  levelProgress: ActivityLevelProgress | null,
+  discordRoleMap: Record<string, { name: string; color?: string }>
+): ActivityProgressionRole[] {
+  type UpcomingRoleCandidate = {
+    roleId: string;
+    roleName: string | undefined;
+    mode: string;
+    requiredLevel: number;
+    color: string;
+    delta: number;
+  };
+  const chatLevel = Math.max(1, toNumber(levelProgress?.chat?.level, 1));
+  const voiceLevel = Math.max(1, toNumber(levelProgress?.voice?.level, 1));
+  const gameLevel = Math.max(1, toNumber(levelProgress?.game?.level, 1));
+  const levelByMode: Record<string, number> = {
+    text: chatLevel,
+    voice: voiceLevel,
+    gaming: gameLevel,
+    combined_activity: chatLevel + voiceLevel,
+    combined_all: chatLevel + voiceLevel + gameLevel,
+  };
+
+  const candidates: UpcomingRoleCandidate[] = [];
+  for (const rawEntry of asArray(levelRolesInput)) {
+    const entry = asObject(rawEntry);
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const roleId = String(entry.roleId || "").trim();
+    const mode = normalizeRoleMode(entry.mode);
+    const requiredLevel = Math.max(0, toNumber(entry.requiredLevel, 0));
+    const currentLevel = Math.max(1, toNumber(levelByMode[mode], chatLevel));
+
+    if (!roleId || requiredLevel <= 0 || requiredLevel <= currentLevel) {
+      continue;
+    }
+
+    candidates.push({
+      roleId,
+      roleName: discordRoleMap[roleId]?.name,
+      mode,
+      requiredLevel,
+      color: discordRoleMap[roleId]?.color || roleColorFromId(roleId),
+      delta: requiredLevel - currentLevel,
+    });
+  }
+
+  const upcoming = candidates
+    .sort(
+      (left, right) =>
+        left.delta - right.delta ||
+        left.requiredLevel - right.requiredLevel ||
+        left.roleId.localeCompare(right.roleId)
+    )
+    .slice(0, 4)
+    .map(({ roleId, roleName, mode, requiredLevel, color }) => ({
+      roleId,
+      roleName,
+      mode,
+      requiredLevel,
+      color,
+    }));
+
+  return upcoming;
+}
+
+function buildLevelProgression(
+  levelsInput: unknown,
+  levelProgress: ActivityLevelProgress | null,
+  seasonInput: unknown,
+  levelRolesInput: unknown,
+  discordRoleMap: Record<string, { name: string; color?: string }>
+): ActivityLevelProgression | null {
+  const levels = asObject(levelsInput);
+  const chat = levelProgress?.chat || toLevelCalculation(levels.text);
+  const voice = levelProgress?.voice || toLevelCalculation(levels.voice);
+  const game = levelProgress?.game || toLevelCalculation(levels.gaming);
+  const season = toLevelCalculation(levels.season);
+  const seasonRecord = asObject(seasonInput);
+  const seasonNumber = toSerializedNumber(seasonRecord.seasonNumber, 0);
+  const seasonEnds = toSerializedNumber(seasonRecord.seasonEnds, 0);
+  const upcomingRoles = buildUpcomingRoles(levelRolesInput, {
+    chat: chat || null,
+    voice: voice || null,
+    game: game || null,
+  }, discordRoleMap);
+
+  const hasAnyData =
+    Boolean(chat) ||
+    Boolean(voice) ||
+    Boolean(game) ||
+    Boolean(season) ||
+    seasonNumber > 0 ||
+    seasonEnds > 0 ||
+    upcomingRoles.length > 0;
+
+  if (!hasAnyData) {
+    return null;
+  }
+
+  return {
+    chat: chat || null,
+    voice: voice || null,
+    game: game || null,
+    season: season || null,
+    seasonXp: Math.max(0, toNumber(season?.totalXP, 0)),
+    seasonNumber: seasonNumber > 0 ? seasonNumber : null,
+    seasonEnds: seasonEnds > 0 ? seasonEnds : null,
+    upcomingRoles,
+  };
+}
+
+function buildLauncherHints(
+  cases: ActivityCasesState,
+  upgrades: ActivityUpgradesState,
+  games: { items: ActivityGameCard[] },
+  crimeCooldownInput: unknown
+): ActivityLauncherHints {
+  const dailyCard = cases.cards.find((card) => card.type === "daily");
+  const weeklyCard = cases.cards.find((card) => card.type === "weekly");
+  const dailyRemainingMs = Math.max(0, toNumber(dailyCard?.cooldownRemainingMs, 0));
+  const weeklyRemainingMs = Math.max(0, toNumber(weeklyCard?.cooldownRemainingMs, 0));
+  const positiveCooldowns = [dailyRemainingMs, weeklyRemainingMs].filter((ms) => ms > 0);
+  const closestRemainingMs =
+    positiveCooldowns.length > 0 ? Math.min(...positiveCooldowns) : 0;
+  const upgradesAffordable = upgrades.groups.reduce((count, group) => {
+    return count + group.items.filter((item) => item.isAffordable).length;
+  }, 0);
+  const workStats = games.items.reduce(
+    (acc, game) => {
+      const status = asObject(game.dailyStatus);
+      const cap = Math.max(0, toNumber(status.cap, 0));
+      const earned = Math.max(0, toNumber(status.earnedToday, 0));
+      acc.totalCap += cap;
+      acc.earnedToday += earned;
+      return acc;
+    },
+    { totalCap: 0, earnedToday: 0 }
+  );
+  const workRemaining = Math.max(0, workStats.totalCap - workStats.earnedToday);
+  const workProgress =
+    workStats.totalCap > 0 ? clamp(0, workStats.earnedToday / workStats.totalCap, 1) : 0;
+
+  const crimeRemainingMs = Math.max(0, toNumber(asObject(crimeCooldownInput).cooldown, 0));
+
+  return {
+    dailyAvailable: cases.availableCount,
+    casesCooldowns: {
+      dailyRemainingMs,
+      dailyCooldownMs: Math.max(1, toNumber(dailyCard?.cooldownDurationMs, 24 * 60 * 60 * 1000)),
+      weeklyRemainingMs,
+      weeklyCooldownMs: Math.max(1, toNumber(weeklyCard?.cooldownDurationMs, 7 * 24 * 60 * 60 * 1000)),
+      closestRemainingMs,
+    },
+    upgradesAffordable,
+    workAvailable: workRemaining > 0,
+    workEarnings: {
+      totalCap: workStats.totalCap,
+      earnedToday: workStats.earnedToday,
+      remaining: workRemaining,
+      progress: workProgress,
+    },
+    crimeAvailable: crimeRemainingMs <= 0,
+    crimeRemainingMs,
+    crimeCooldownMs: CRIME_COOLDOWN_MS,
+  };
+}
+
 export async function buildReadOnlyLauncherPayload(
   guildId: string,
   authUser: ActivityAuthUser | undefined,
@@ -408,6 +747,10 @@ export async function buildReadOnlyLauncherPayload(
       locale,
     },
     guild: guildId ? { id: guildId, name: `Guild ${guildId}` } : null,
+    marriage: null,
+    levelProgress: null,
+    progression: null,
+    hints: null,
     readOnly: true,
     unsupportedReason,
     balance: buildEmptyBalanceSnapshot(),
@@ -438,6 +781,13 @@ export async function buildActivityLauncherPayload(
     recordsResult,
     dailyCaseStatusResult,
     weeklyCooldownResult,
+    marriageStatusResult,
+    levelsResult,
+    guildUsersResult,
+    seasonResult,
+    levelRolesResult,
+    discordRoleMap,
+    crimeCooldownResult,
     ...dailyStatusResults
   ] = await Promise.all([
     fetchDatabase(`/users/${guildId}/${authUser.id}`),
@@ -445,6 +795,13 @@ export async function buildActivityLauncherPayload(
     fetchDatabase(`/games/records/${guildId}/${authUser.id}`),
     fetchDatabase(`/crates/status/${guildId}/${authUser.id}/daily`),
     fetchDatabase(`/cooldowns/crate/${guildId}/${authUser.id}/weekly`),
+    fetchDatabase(`/marriage/status/${authUser.id}?guildId=${guildId}`),
+    fetchDatabase(`/xp/levels/${guildId}/${authUser.id}`),
+    fetchDatabase(`/guilds/${guildId}/users`),
+    fetchDatabase(`/seasons/current`),
+    fetchDatabase(`/levels/roles/${guildId}`),
+    fetchDiscordGuildRoleMap(guildId),
+    fetchDatabase(`/cooldowns/${guildId}/${authUser.id}/crime`),
     ...ACTIVITY_GAME_CATALOG.map((game) =>
       fetchDatabase(`/games/earnings/${guildId}/${authUser.id}/${normalizeGameId(game.id)}`)
     ),
@@ -468,6 +825,31 @@ export async function buildActivityLauncherPayload(
   ]);
 
   const balance = buildBalanceSnapshot(user, bankProjectionResult.ok ? bankProjectionResult.data : null);
+  const cases = buildCasesState(
+    locale,
+    strings,
+    asArray(user.crates),
+    dailyCaseStatusResult.ok ? dailyCaseStatusResult.data : null,
+    weeklyCooldownResult.data
+  );
+  const upgrades = buildUpgradesState(
+    locale,
+    asArray(user.upgrades),
+    balance.walletBalance,
+    balance.upgradeDiscount
+  );
+  const games = buildGamesState(false, recordsResult.data, dailyStatusResults);
+  const levelProgress = levelsResult.ok
+    ? buildLevelProgress(levelsResult.data, guildUsersResult.ok ? guildUsersResult.data : null, authUser.id)
+    : null;
+  const progression = buildLevelProgression(
+    levelsResult.ok ? levelsResult.data : null,
+    levelProgress,
+    seasonResult.ok ? seasonResult.data : null,
+    levelRolesResult.ok ? levelRolesResult.data : null,
+    discordRoleMap
+  );
+  const hints = buildLauncherHints(cases, upgrades, games, crimeCooldownResult.data);
 
   return {
     locale,
@@ -490,22 +872,15 @@ export async function buildActivityLauncherPayload(
               : `Guild ${guildId}`,
         }
       : { id: guildId, name: `Guild ${guildId}` },
+    marriage: marriageStatusResult.ok ? buildMarriageStatus(marriageStatusResult.data) : null,
+    levelProgress,
+    progression,
+    hints,
     readOnly: false,
     balance,
-    cases: buildCasesState(
-      locale,
-      strings,
-      asArray(user.crates),
-      dailyCaseStatusResult.ok ? dailyCaseStatusResult.data : null,
-      weeklyCooldownResult.data
-    ),
-    upgrades: buildUpgradesState(
-      locale,
-      asArray(user.upgrades),
-      balance.walletBalance,
-      balance.upgradeDiscount
-    ),
-    games: buildGamesState(false, recordsResult.data, dailyStatusResults),
+    cases,
+    upgrades,
+    games,
     refreshedAt: Date.now(),
   };
 }

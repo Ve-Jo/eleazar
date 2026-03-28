@@ -18,6 +18,7 @@ const activityLauncherStringsSchema = z.object({
   cases: z.record(z.string(), z.string()),
   upgrades: z.record(z.string(), z.string()),
   games: z.record(z.string(), z.string()),
+  level: z.record(z.string(), z.string()),
   modal: z.record(z.string(), z.string()),
 });
 
@@ -44,6 +45,79 @@ const activityUserSummarySchema = z.object({
 const activityGuildSummarySchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
+});
+
+const activityMarriageStatusSchema = z.object({
+  status: z.string(),
+  partnerId: z.string().optional(),
+  createdAt: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const activityLevelProgressEntrySchema = z.object({
+  level: z.number(),
+  currentXP: z.number(),
+  requiredXP: z.number(),
+  totalXP: z.number(),
+  rank: z.number().nullable().optional(),
+});
+
+const activityLevelProgressSchema = z.object({
+  chat: activityLevelProgressEntrySchema.nullable().optional(),
+  voice: activityLevelProgressEntrySchema.nullable().optional(),
+  game: activityLevelProgressEntrySchema.nullable().optional(),
+});
+
+const activityProgressionRoleSchema = z.object({
+  roleId: z.string(),
+  roleName: z.string().optional(),
+  mode: z.string(),
+  requiredLevel: z.number(),
+  color: z.string(),
+});
+
+const activityLevelProgressionSchema = z.object({
+  chat: activityLevelProgressEntrySchema.nullable().optional(),
+  voice: activityLevelProgressEntrySchema.nullable().optional(),
+  game: activityLevelProgressEntrySchema.nullable().optional(),
+  season: z
+    .object({
+      level: z.number(),
+      currentXP: z.number(),
+      requiredXP: z.number(),
+      totalXP: z.number(),
+    })
+    .nullable()
+    .optional(),
+  seasonXp: z.number().optional(),
+  seasonNumber: z.number().nullable().optional(),
+  seasonEnds: z.number().nullable().optional(),
+  upcomingRoles: z.array(activityProgressionRoleSchema).optional(),
+});
+
+const activityHintsSchema = z.object({
+  dailyAvailable: z.union([z.boolean(), z.number()]).optional(),
+  casesCooldowns: z
+    .object({
+      dailyRemainingMs: z.number().optional(),
+      dailyCooldownMs: z.number().optional(),
+      weeklyRemainingMs: z.number().optional(),
+      weeklyCooldownMs: z.number().optional(),
+      closestRemainingMs: z.number().nullable().optional(),
+    })
+    .optional(),
+  upgradesAffordable: z.union([z.boolean(), z.number()]).optional(),
+  workAvailable: z.boolean().optional(),
+  workEarnings: z
+    .object({
+      totalCap: z.number().optional(),
+      earnedToday: z.number().optional(),
+      remaining: z.number().optional(),
+      progress: z.number().optional(),
+    })
+    .optional(),
+  crimeAvailable: z.union([z.boolean(), z.number()]).optional(),
+  crimeRemainingMs: z.number().optional(),
+  crimeCooldownMs: z.number().optional(),
 });
 
 const activityBalanceSnapshotSchema = z.object({
@@ -142,6 +216,10 @@ export const activityLauncherPayloadSchema = z.object({
   palette: activityPaletteSchema,
   user: activityUserSummarySchema,
   guild: activityGuildSummarySchema.nullable(),
+  marriage: activityMarriageStatusSchema.nullable().optional(),
+  levelProgress: activityLevelProgressSchema.nullable().optional(),
+  progression: activityLevelProgressionSchema.nullable().optional(),
+  hints: activityHintsSchema.nullable().optional(),
   readOnly: z.boolean(),
   unsupportedReason: z.string().optional(),
   balance: activityBalanceSnapshotSchema,

@@ -43,6 +43,10 @@ export const ACTIVITY_REDIRECT_URI =
     : "https://127.0.0.1");
 export const ACTIVITY_SHARED_KEY =
   process.env.ACTIVITY_SHARED_KEY || process.env.ELEAZAR_ACTIVITIES_SHARED_KEY || "";
+export const ACTIVITY_DISCORD_BOT_TOKEN =
+  process.env.ACTIVITY_DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || "";
 
 export const TOKEN_CACHE_TTL_MS = 60 * 1000;
 export const PALETTE_CACHE_TTL_MS = 15 * 60 * 1000;
+export const DISCORD_ROLE_CACHE_TTL_MS = 5 * 60 * 1000;
+export const DISCORD_ROLE_FETCH_TIMEOUT_MS = 2500;

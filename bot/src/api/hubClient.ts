@@ -205,7 +205,7 @@ export type HubClientLike = {
     channelId: string,
     joinTime?: number
   ) => Promise<VoiceSessionRecord>;
-  getVoiceSession: (guildId: string, userId: string) => Promise<VoiceSessionRecord>;
+  getVoiceSession: (guildId: string, userId: string) => Promise<VoiceSessionRecord | null>;
   removeVoiceSession: (guildId: string, userId: string) => Promise<VoiceSessionRecord>;
   getAllGuildVoiceSessions: (guildId: string, channelId?: string) => Promise<VoiceSessionRecord[]>;
   calculateVoiceXP: (
@@ -1011,10 +1011,17 @@ class HubClient {
     });
   }
 
-  async getVoiceSession(guildId: string, userId: string): Promise<VoiceSessionRecord> {
-    return await apiRequest<VoiceSessionRecord>(
-      `${this.databaseUrl}/voice/sessions/${guildId}/${userId}`
-    );
+  async getVoiceSession(guildId: string, userId: string): Promise<VoiceSessionRecord | null> {
+    try {
+      return await apiRequest<VoiceSessionRecord>(
+        `${this.databaseUrl}/voice/sessions/${guildId}/${userId}`
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("404")) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async removeVoiceSession(guildId: string, userId: string): Promise<VoiceSessionRecord> {
