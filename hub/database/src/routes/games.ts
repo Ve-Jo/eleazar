@@ -2,6 +2,7 @@ import express from "express";
 import Database from "../client.ts";
 import { serializeBigInt } from "../utils/serialization.ts";
 import type { RequestLike, ResponseLike } from "../types/http.ts";
+import { notifyLinkedRolesMetricUpdated } from "../services/linkedRolesNotifier.ts";
 
 const router = express.Router();
 
@@ -113,6 +114,12 @@ router.post("/earnings/award", async (req: GamesRouteRequest, res: ResponseLike)
     }
 
     const result = await Database.awardGameDailyEarnings(guildId, userId, gameId, amount);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "game_earnings_award",
+      source: "database/games.earnings.award",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error awarding game earnings:", error);
@@ -134,6 +141,12 @@ router.post("/xp/add", async (req: GamesRouteRequest, res: ResponseLike) => {
     }
 
     const result = await Database.addGameXP(guildId, userId, gameType, xp);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "game_xp_add",
+      source: "database/games.xp.add",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding game XP:", error);

@@ -23,6 +23,7 @@ import transactionRoutes from "./routes/transactions.ts";
 import crateRoutes from "./routes/crates.ts";
 import seasonRoutes from "./routes/seasons.ts";
 import guildVaultRoutes from "./routes/guildVault.ts";
+import linkedRolesRoutes from "./routes/linkedRoles.ts";
 
 type RequestLike = {
   method: string;
@@ -78,6 +79,7 @@ app.use("/transactions", transactionRoutes);
 app.use("/crates", crateRoutes);
 app.use("/seasons", seasonRoutes);
 app.use("/guild-vault", guildVaultRoutes);
+app.use("/linked-roles", linkedRolesRoutes);
 
 // 404 handler
 app.use("*", (_req: RequestLike, res: ResponseLike) => {

@@ -9,6 +9,7 @@ type SiteCopy = {
   nav: {
     features: string;
     dashboard: string;
+    account: string;
     pricing: string;
     login: string;
     logout: string;
@@ -104,6 +105,25 @@ type SiteCopy = {
     localeTitle: string;
     userId: string;
     activeLocale: string;
+    linkedRolesLabel: string;
+    linkedRolesTitle: string;
+    linkedRolesDescription: string;
+    connectLinkedRoles: string;
+    reconnectLinkedRoles: string;
+    linkedRolesConnected: string;
+    linkedRolesDisconnected: string;
+    linkedRolesStatus: string;
+    linkedRolesSelectedGuild: string;
+    linkedRolesSyncNow: string;
+    linkedRolesRefresh: string;
+    linkedRolesLastSync: string;
+    linkedRolesLastError: string;
+    linkedRolesNoGuilds: string;
+    linkedRolesMetadataPreview: string;
+    walletBalance: string;
+    chatLevel: string;
+    voiceLevel: string;
+    totalXp: string;
   };
   guild: {
     kicker: string;
@@ -143,6 +163,7 @@ const copy: Record<Locale, SiteCopy> = {
     nav: {
       features: "Features",
       dashboard: "Dashboard",
+      account: "Account",
       pricing: "Pricing",
       login: "Log in",
       logout: "Log out",
@@ -301,6 +322,26 @@ const copy: Record<Locale, SiteCopy> = {
       localeTitle: "Active web language",
       userId: "User ID",
       activeLocale: "Active locale",
+      linkedRolesLabel: "Linked roles",
+      linkedRolesTitle: "Discord linked role connection",
+      linkedRolesDescription:
+        "Connect Discord role metadata, choose one guild as source, and sync role criteria.",
+      connectLinkedRoles: "Connect linked roles",
+      reconnectLinkedRoles: "Reconnect linked roles",
+      linkedRolesConnected: "Connected",
+      linkedRolesDisconnected: "Disconnected",
+      linkedRolesStatus: "Sync status",
+      linkedRolesSelectedGuild: "Selected guild",
+      linkedRolesSyncNow: "Sync now",
+      linkedRolesRefresh: "Refresh status",
+      linkedRolesLastSync: "Last sync",
+      linkedRolesLastError: "Last error",
+      linkedRolesNoGuilds: "No manageable guilds available.",
+      linkedRolesMetadataPreview: "Metadata preview",
+      walletBalance: "Wallet",
+      chatLevel: "Chat level",
+      voiceLevel: "Voice level",
+      totalXp: "Total XP",
     },
     guild: {
       kicker: "Guild console",
@@ -338,6 +379,7 @@ const copy: Record<Locale, SiteCopy> = {
     nav: {
       features: "Возможности",
       dashboard: "Панель",
+      account: "Аккаунт",
       pricing: "Тарифы",
       login: "Войти",
       logout: "Выйти",
@@ -496,6 +538,26 @@ const copy: Record<Locale, SiteCopy> = {
       localeTitle: "Активный язык веба",
       userId: "ID пользователя",
       activeLocale: "Текущая локаль",
+      linkedRolesLabel: "Linked roles",
+      linkedRolesTitle: "Связка ролей Discord",
+      linkedRolesDescription:
+        "Подключите metadata для linked roles, выберите одну гильдию как источник и синхронизируйте критерии ролей.",
+      connectLinkedRoles: "Подключить linked roles",
+      reconnectLinkedRoles: "Переподключить linked roles",
+      linkedRolesConnected: "Подключено",
+      linkedRolesDisconnected: "Не подключено",
+      linkedRolesStatus: "Статус синхронизации",
+      linkedRolesSelectedGuild: "Выбранная гильдия",
+      linkedRolesSyncNow: "Синхронизировать",
+      linkedRolesRefresh: "Обновить статус",
+      linkedRolesLastSync: "Последняя синхронизация",
+      linkedRolesLastError: "Последняя ошибка",
+      linkedRolesNoGuilds: "Нет доступных управляемых гильдий.",
+      linkedRolesMetadataPreview: "Превью metadata",
+      walletBalance: "Кошелёк",
+      chatLevel: "Уровень чата",
+      voiceLevel: "Уровень голоса",
+      totalXp: "Всего XP",
     },
     guild: {
       kicker: "Консоль гильдии",
@@ -533,6 +595,7 @@ const copy: Record<Locale, SiteCopy> = {
     nav: {
       features: "Можливості",
       dashboard: "Панель",
+      account: "Акаунт",
       pricing: "Тарифи",
       login: "Увійти",
       logout: "Вийти",
@@ -691,6 +754,26 @@ const copy: Record<Locale, SiteCopy> = {
       localeTitle: "Активна мова вебу",
       userId: "ID користувача",
       activeLocale: "Поточна локаль",
+      linkedRolesLabel: "Linked roles",
+      linkedRolesTitle: "Зв'язок ролей Discord",
+      linkedRolesDescription:
+        "Підключіть metadata для linked roles, оберіть одну гільдію як джерело та синхронізуйте критерії ролей.",
+      connectLinkedRoles: "Підключити linked roles",
+      reconnectLinkedRoles: "Перепідключити linked roles",
+      linkedRolesConnected: "Підключено",
+      linkedRolesDisconnected: "Не підключено",
+      linkedRolesStatus: "Статус синхронізації",
+      linkedRolesSelectedGuild: "Обрана гільдія",
+      linkedRolesSyncNow: "Синхронізувати",
+      linkedRolesRefresh: "Оновити статус",
+      linkedRolesLastSync: "Остання синхронізація",
+      linkedRolesLastError: "Остання помилка",
+      linkedRolesNoGuilds: "Немає доступних керованих гільдій.",
+      linkedRolesMetadataPreview: "Прев'ю metadata",
+      walletBalance: "Гаманець",
+      chatLevel: "Рівень чату",
+      voiceLevel: "Рівень голосу",
+      totalXp: "Усього XP",
     },
     guild: {
       kicker: "Консоль гільдії",

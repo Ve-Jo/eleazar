@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client";
 import Database from "../client.ts";
 import { serializeBigInt } from "../utils/serialization.ts";
 import type { RequestLike, ResponseLike } from "../types/http.ts";
+import {
+  notifyLinkedRolesMetricUpdated,
+  notifyLinkedRolesMetricUpdatedMany,
+} from "../services/linkedRolesNotifier.ts";
 
 const router = express.Router();
 
@@ -70,6 +74,12 @@ router.post("/balance/add", async (req: EconomyRouteRequest, res: ResponseLike) 
     }
 
     const result = await Database.addBalance(guildId, userId, amount, source, metadata);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_balance_add",
+      source: "database/economy.balance.add",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding balance:", error);
@@ -124,6 +134,12 @@ router.post("/upgrades/purchase", async (req: EconomyRouteRequest, res: Response
     }
 
     const result = await Database.purchaseUpgrade(guildId, userId, upgradeType);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_upgrade_purchase",
+      source: "database/economy.upgrades.purchase",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error purchasing upgrade:", error);
@@ -159,6 +175,12 @@ router.post("/deposit", async (req: EconomyRouteRequest, res: ResponseLike) => {
     }
 
     const result = await Database.deposit(guildId, userId, amount);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_deposit",
+      source: "database/economy.deposit",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error depositing money:", error);
@@ -177,6 +199,12 @@ router.post("/withdraw", async (req: EconomyRouteRequest, res: ResponseLike) => 
     }
 
     const result = await Database.withdraw(guildId, userId, amount);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_withdraw",
+      source: "database/economy.withdraw",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error withdrawing money:", error);
@@ -198,6 +226,20 @@ router.post("/transfer", async (req: EconomyRouteRequest, res: ResponseLike) => 
     }
 
     const result = await Database.transferBalance(guildId, fromUserId, toUserId, amount);
+    void notifyLinkedRolesMetricUpdatedMany([
+      {
+        userId: fromUserId,
+        guildId,
+        reason: "economy_transfer_out",
+        source: "database/economy.transfer",
+      },
+      {
+        userId: toUserId,
+        guildId,
+        reason: "economy_transfer_in",
+        source: "database/economy.transfer",
+      },
+    ]);
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error transferring balance:", error);
@@ -231,6 +273,12 @@ router.post("/bank/update", async (req: EconomyRouteRequest, res: ResponseLike) 
     }
 
     const result = await Database.updateBankBalance(guildId, userId, tx);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_bank_update",
+      source: "database/economy.bank.update",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error updating bank balance:", error);
@@ -248,6 +296,12 @@ router.post("/bank/continue", async (req: EconomyRouteRequest, res: ResponseLike
     }
 
     const result = await Database.continueBankBalance(guildId, userId);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_bank_continue",
+      source: "database/economy.bank.continue",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error continuing bank balance:", error);
@@ -266,6 +320,12 @@ router.post("/bank/interest", async (req: EconomyRouteRequest, res: ResponseLike
     // Backward-compatible mode used by hubClient.calculateInterest(guildId, userId)
     if (userId && guildId) {
       const result = await Database.updateBankBalance(guildId, userId);
+      void notifyLinkedRolesMetricUpdated({
+        userId,
+        guildId,
+        reason: "economy_bank_interest",
+        source: "database/economy.bank.interest",
+      });
       return res.json(serializeBigInt(result));
     }
 
@@ -312,6 +372,12 @@ router.post("/upgrades/revert", async (req: EconomyRouteRequest, res: ResponseLi
     }
 
     const result = await Database.revertUpgrade(guildId, userId, upgradeType);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "economy_upgrade_revert",
+      source: "database/economy.upgrades.revert",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error reverting upgrade:", error);

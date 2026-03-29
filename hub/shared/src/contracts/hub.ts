@@ -175,6 +175,55 @@ export type BalanceResponse = {
   [key: string]: unknown;
 };
 
+export type LinkedRoleMetadataPayload = {
+  wallet_balance: number;
+  chat_level: number;
+  voice_level: number;
+  total_xp: number;
+};
+
+export type LinkedRoleConnection = {
+  id?: string;
+  userId: string;
+  selectedGuildId?: string | null;
+  manageableGuildIds?: string[];
+  encryptedAccessToken?: string | null;
+  encryptedRefreshToken?: string | null;
+  tokenExpiresAt?: number | string;
+  scopes?: string[];
+  discordUserId?: string | null;
+  discordUsername?: string | null;
+  syncStatus?: string;
+  lastSyncAt?: number | string;
+  lastSyncError?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type LinkedRoleStatus = {
+  connected: boolean;
+  userId: string;
+  selectedGuildId?: string | null;
+  manageableGuildIds: string[];
+  syncStatus: string;
+  lastSyncAt?: number | null;
+  lastSyncError?: string | null;
+  metadataPreview?: LinkedRoleMetadataPayload | null;
+};
+
+export type LinkedRoleSyncRequest = {
+  userId: string;
+  reason?: string;
+};
+
+export type LinkedRoleMetricEvent = {
+  userId: string;
+  guildId?: string;
+  reason?: string;
+  source?: string;
+  at?: number;
+};
+
 export type ActivitySupportedLocale = "en" | "ru" | "uk";
 
 export type ActivityPalette = {

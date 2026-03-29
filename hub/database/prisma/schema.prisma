@@ -340,6 +340,29 @@ model LevelRole {
   @@map("level_roles")
 }
 
+model LinkedRoleConnection {
+  id                    String   @id @default(cuid())
+  userId                String   @unique @map("user_id")
+  selectedGuildId       String?  @map("selected_guild_id")
+  manageableGuildIds    Json     @default("[]") @map("manageable_guild_ids")
+  encryptedAccessToken  String   @map("encrypted_access_token")
+  encryptedRefreshToken String   @map("encrypted_refresh_token")
+  tokenExpiresAt        BigInt   @map("token_expires_at")
+  scopes                Json     @default("[]")
+  discordUserId         String?  @map("discord_user_id")
+  discordUsername       String?  @map("discord_username")
+  syncStatus            String   @default("connected") @map("sync_status")
+  lastSyncAt            BigInt?  @map("last_sync_at")
+  lastSyncError         String?  @map("last_sync_error")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([syncStatus])
+  @@index([selectedGuildId])
+  @@index([updatedAt])
+  @@map("linked_role_connections")
+}
+
 // Guild Vault System - для хранения комиссий от депозитов/выводов
 model GuildVault {
   id                String   @id @default(cuid())

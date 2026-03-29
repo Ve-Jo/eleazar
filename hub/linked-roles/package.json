@@ -1,0 +1,21 @@
+{
+  "name": "@eleazar-hub/linked-roles",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
+    "build": "echo \"Linked roles service build complete\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "metadata:sync": "bun scripts/force-sync-metadata.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/express": "^5.0.3"
+  }
+}

@@ -2,7 +2,7 @@ import express from "express";
 import clientApiRouter from "./router.ts";
 import { authenticateApiKey } from "./middleware.ts";
 import dotenv from "dotenv";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import {
   DEFAULT_SERVICE_PORTS,
   DEFAULT_SERVICE_URLS,
@@ -23,10 +23,15 @@ const RENDERING_SERVICE_URL = (
 const ACTIVITIES_SERVICE_URL = (
   process.env.ACTIVITIES_SERVICE_URL || DEFAULT_SERVICE_URLS.activities
 ).replace(/\/$/, "");
+const LINKED_ROLES_SERVICE_URL = (
+  process.env.LINKED_ROLES_SERVICE_URL || DEFAULT_SERVICE_URLS.linkedRoles
+).replace(/\/$/, "");
 const WEB_APP_URL = (process.env.WEB_APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || "";
 const DISCORD_CLIENT_SECRET =
   process.env.DISCORD_CLIENT_SECRET || process.env.VITE_DISCORD_CLIENT_SECRET || "";
+const LINKED_ROLES_INTERNAL_WEBHOOK_KEY =
+  process.env.LINKED_ROLES_INTERNAL_WEBHOOK_KEY || "";
 const DISCORD_REDIRECT_URI =
   process.env.DISCORD_REDIRECT_URI ||
   `http://localhost:${API_PORT}/api/auth/discord/callback`;
@@ -527,6 +532,34 @@ function hasGuildManagePermission(permissionsRaw?: string) {
   }
 }
 
+function resolveSafeReturnTo(raw: unknown): string {
+  const fallback = `${WEB_APP_URL}/app/account`;
+  if (typeof raw !== "string" || !raw.trim()) {
+    return fallback;
+  }
+
+  try {
+    const parsed = new URL(raw.trim());
+    if (!parsed.href.startsWith(WEB_APP_URL)) {
+      return fallback;
+    }
+    return parsed.href;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildLinkedRolesStartSignature(
+  userId: string,
+  guildIdsCsv: string,
+  timestamp: string,
+  returnTo: string
+): string {
+  return createHmac("sha256", LINKED_ROLES_INTERNAL_WEBHOOK_KEY)
+    .update(`${userId}:${guildIdsCsv}:${timestamp}:${returnTo}`)
+    .digest("hex");
+}
+
 // --- Health Check Route (before auth) ---
 app.get("/health", (req: any, res: any) => {
   res.status(200).json(createHealthResponse("client", "1.0.0"));
@@ -807,6 +840,161 @@ app.post(["/api/auth/logout", "/.proxy/api/auth/logout"], (req: any, res: any) =
   clearSessionCookie(res);
   return res.json({ success: true });
 });
+
+app.get(
+  ["/api/linked-roles/oauth/start", "/.proxy/api/linked-roles/oauth/start"],
+  (req: any, res: any) => {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!LINKED_ROLES_INTERNAL_WEBHOOK_KEY) {
+      return res.status(500).json({
+        error: "LINKED_ROLES_INTERNAL_WEBHOOK_KEY is not configured",
+      });
+    }
+
+    const manageableGuildIds = session.guilds
+      .filter((guild) => hasGuildManagePermission(guild.permissions))
+      .map((guild) => guild.id);
+
+    const guildIdsCsv = manageableGuildIds.join(",");
+    const ts = Date.now().toString();
+    const returnTo = resolveSafeReturnTo(req.query?.returnTo);
+    const sig = buildLinkedRolesStartSignature(
+      session.user.id,
+      guildIdsCsv,
+      ts,
+      returnTo
+    );
+
+    const target = new URL(`${LINKED_ROLES_SERVICE_URL}/oauth/discord/start`);
+    target.searchParams.set("userId", session.user.id);
+    target.searchParams.set("guildIds", guildIdsCsv);
+    target.searchParams.set("ts", ts);
+    target.searchParams.set("sig", sig);
+    target.searchParams.set("returnTo", returnTo);
+
+    return res.redirect(target.toString());
+  }
+);
+
+app.get(
+  ["/api/linked-roles/status", "/.proxy/api/linked-roles/status"],
+  async (req: any, res: any) => {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const response = await fetch(
+        `${LINKED_ROLES_SERVICE_URL}/api/linked-roles/status?userId=${encodeURIComponent(session.user.id)}`
+      );
+
+      const payloadText = await response.text();
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: payloadText || "Failed to load linked roles status",
+        });
+      }
+
+      return res.type("application/json").send(payloadText);
+    } catch (error) {
+      console.error("[Web API] Failed to load linked roles status:", error);
+      return res.status(500).json({ error: "Failed to load linked roles status" });
+    }
+  }
+);
+
+app.put(
+  ["/api/linked-roles/selected-guild", "/.proxy/api/linked-roles/selected-guild"],
+  express.json(),
+  async (req: any, res: any) => {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const selectedGuildId =
+      typeof req.body?.selectedGuildId === "string"
+        ? req.body.selectedGuildId.trim()
+        : "";
+    if (!selectedGuildId) {
+      return res.status(400).json({ error: "selectedGuildId is required" });
+    }
+
+    const manageableGuild = getManageableGuild(session, selectedGuildId);
+    if (!manageableGuild) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    try {
+      const response = await fetch(
+        `${LINKED_ROLES_SERVICE_URL}/api/linked-roles/selected-guild`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: session.user.id,
+            selectedGuildId,
+          }),
+        }
+      );
+
+      const payloadText = await response.text();
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: payloadText || "Failed to update selected guild",
+        });
+      }
+
+      return res.type("application/json").send(payloadText);
+    } catch (error) {
+      console.error("[Web API] Failed to update linked role selected guild:", error);
+      return res.status(500).json({ error: "Failed to update selected guild" });
+    }
+  }
+);
+
+app.post(
+  ["/api/linked-roles/sync-now", "/.proxy/api/linked-roles/sync-now"],
+  express.json(),
+  async (req: any, res: any) => {
+    const session = getSessionFromRequest(req);
+    if (!session || !session.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const response = await fetch(`${LINKED_ROLES_SERVICE_URL}/api/linked-roles/sync-now`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: session.user.id,
+          reason: typeof req.body?.reason === "string" ? req.body.reason : "manual_sync",
+        }),
+      });
+
+      const payloadText = await response.text();
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: payloadText || "Failed to sync linked roles metadata",
+        });
+      }
+
+      return res.type("application/json").send(payloadText);
+    } catch (error) {
+      console.error("[Web API] Failed to sync linked roles metadata:", error);
+      return res.status(500).json({ error: "Failed to sync linked roles metadata" });
+    }
+  }
+);
 
 app.get(["/api/guilds", "/.proxy/api/guilds"], (req: any, res: any) => {
   const session = getSessionFromRequest(req);

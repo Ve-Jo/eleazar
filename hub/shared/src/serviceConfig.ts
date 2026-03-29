@@ -4,7 +4,8 @@ export type ServiceName =
   | "localization"
   | "ai"
   | "client"
-  | "activities";
+  | "activities"
+  | "linkedRoles";
 
 export const SERVICE_NAMES = {
   DATABASE: "database",
@@ -13,6 +14,7 @@ export const SERVICE_NAMES = {
   AI: "ai",
   CLIENT: "client",
   ACTIVITIES: "activities",
+  LINKED_ROLES: "linkedRoles",
 } as const;
 
 export const DEFAULT_SERVICE_PORTS: Record<ServiceName, number> = {
@@ -22,6 +24,7 @@ export const DEFAULT_SERVICE_PORTS: Record<ServiceName, number> = {
   ai: 8080,
   client: 3006,
   activities: 3007,
+  linkedRoles: 3008,
 };
 
 export const DEFAULT_SERVICE_URLS: Record<ServiceName, string> = {
@@ -31,6 +34,7 @@ export const DEFAULT_SERVICE_URLS: Record<ServiceName, string> = {
   ai: `http://localhost:${DEFAULT_SERVICE_PORTS.ai}`,
   client: `http://localhost:${DEFAULT_SERVICE_PORTS.client}`,
   activities: `http://localhost:${DEFAULT_SERVICE_PORTS.activities}`,
+  linkedRoles: `http://localhost:${DEFAULT_SERVICE_PORTS.linkedRoles}`,
 };
 
 export function buildServiceUrl(

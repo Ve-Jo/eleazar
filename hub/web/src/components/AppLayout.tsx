@@ -31,6 +31,11 @@ export default function AppLayout() {
             <NavLink className={({ isActive }) => `nav-link${isActive ? " active" : ""}`} to="/app">
               {copy.nav.dashboard}
             </NavLink>
+            {session.authenticated ? (
+              <NavLink className={({ isActive }) => `nav-link${isActive ? " active" : ""}`} to="/app/account">
+                {copy.nav.account}
+              </NavLink>
+            ) : null}
             <NavLink className={({ isActive }) => `nav-link${isActive ? " active" : ""}`} to="/pricing">
               {copy.nav.pricing}
             </NavLink>

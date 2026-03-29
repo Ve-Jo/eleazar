@@ -2575,6 +2575,83 @@ class Database {
   }
   // #endregion Level Roles
 
+  // #region Linked Roles
+  async getLinkedRoleConnection(userId) {
+    if (!userId) {
+      return null;
+    }
+
+    return this.client.linkedRoleConnection.findUnique({
+      where: { userId },
+    });
+  }
+
+  async upsertLinkedRoleConnection(userId, data = {}) {
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+
+    return this.client.linkedRoleConnection.upsert({
+      where: { userId },
+      create: {
+        userId,
+        ...data,
+      },
+      update: {
+        ...data,
+      },
+    });
+  }
+
+  async updateLinkedRoleConnection(userId, data = {}) {
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+
+    return this.client.linkedRoleConnection.update({
+      where: { userId },
+      data,
+    });
+  }
+
+  async setLinkedRoleSelectedGuild(userId, selectedGuildId) {
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+
+    return this.client.linkedRoleConnection.update({
+      where: { userId },
+      data: { selectedGuildId: selectedGuildId || null },
+    });
+  }
+
+  async deleteLinkedRoleConnection(userId) {
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+
+    return this.client.linkedRoleConnection.delete({
+      where: { userId },
+    });
+  }
+
+  async listStaleLinkedRoleConnections(beforeMs, limit = 100) {
+    const effectiveBefore = Number(beforeMs) || Date.now();
+    const effectiveLimit = Math.max(1, Math.min(1000, Number(limit) || 100));
+
+    return this.client.linkedRoleConnection.findMany({
+      where: {
+        OR: [
+          { lastSyncAt: null },
+          { lastSyncAt: { lt: BigInt(effectiveBefore) } },
+        ],
+      },
+      orderBy: [{ lastSyncAt: "asc" }, { updatedAt: "asc" }],
+      take: effectiveLimit,
+    });
+  }
+  // #endregion Linked Roles
+
   // #region Guild Users
   /**
    * Get all users in a guild

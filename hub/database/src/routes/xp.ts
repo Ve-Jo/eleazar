@@ -2,6 +2,7 @@ import express from "express";
 import Database from "../client.ts";
 import { serializeBigInt } from "../utils/serialization.ts";
 import type { RequestLike, ResponseLike } from "../types/http.ts";
+import { notifyLinkedRolesMetricUpdated } from "../services/linkedRolesNotifier.ts";
 
 const router = express.Router();
 
@@ -24,6 +25,12 @@ router.post("/add", async (req: XPRouteRequest, res: ResponseLike) => {
     }
 
     const result = await Database.addXP(guildId, userId, amount);
+    void notifyLinkedRolesMetricUpdated({
+      userId,
+      guildId,
+      reason: "xp_add",
+      source: "database/xp.add",
+    });
     res.json(serializeBigInt(result));
   } catch (error) {
     console.error("Error adding XP:", error);
